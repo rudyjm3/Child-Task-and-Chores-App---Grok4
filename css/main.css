@@ -1,0 +1,47 @@
+/* css/main.css - Global styles for the app
+   Purpose: Ensure mobile/tablet/desktop compatibility and accessibility
+   Notes: Builds on reset.css with media queries and high-contrast options */
+
+@import url('reset.css');
+
+/* App-specific styles */
+body {
+  font-family: Arial, sans-serif;
+  color: #333;
+  background-color: #f9f9f9;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+header,
+main,
+footer {
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+a {
+  color: #0066cc;
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+/* Mobile-friendly adjustments */
+@media (max-width: 768px) {
+  body {
+    padding: 10px;
+  }
+  h1 {
+    font-size: 1.5em;
+  }
+}
+
+/* High-contrast mode (toggleable later) */
+.high-contrast {
+  background-color: #000;
+  color: #fff;
+}
