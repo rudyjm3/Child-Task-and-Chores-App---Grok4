@@ -14,11 +14,18 @@ try {
     // Create PDO connection with error handling
     $pdo = new PDO("mysql:host=" . DB_HOST . ";dbname=" . DB_NAME, DB_USER, DB_PASS);
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION); // Enable exceptions
-    // Set to UTF-8 for character support
     $pdo->exec("SET NAMES 'utf8'");
 } catch (PDOException $e) {
-    // Terminate with error message (log in production)
-    die("Connection failed: " . $e->getMessage());
+    // Check if database exists, create if not (temporary for setup)
+    if ($e->getCode() == 1049) { // Unknown database
+        $pdo = new PDO("mysql:host=" . DB_HOST, DB_USER, DB_PASS);
+        $pdo->exec("CREATE DATABASE IF NOT EXISTS " . DB_NAME);
+        $pdo = new PDO("mysql:host=" . DB_HOST . ";dbname=" . DB_NAME, DB_USER, DB_PASS);
+        $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+        $pdo->exec("SET NAMES 'utf8'");
+    } else {
+        die("Connection failed: " . $e->getMessage());
+    }
 }
 
 // Make connection available globally (refine with dependency injection later)
