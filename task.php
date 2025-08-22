@@ -6,7 +6,9 @@
 
 require_once __DIR__ . '/includes/functions.php';
 
-session_start();
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 if (!isset($_SESSION['user_id'])) {
     header("Location: login.php");
     exit;
@@ -20,7 +22,6 @@ if (!isset($_SESSION['username'])) {
     if ($username) {
         $_SESSION['username'] = $username;
     } else {
-        // Debug: Log if username not found
         error_log("Username not found for user_id: " . $_SESSION['user_id']);
         $_SESSION['username'] = "Unknown User";
     }
@@ -126,7 +127,7 @@ $tasks = getTasks($_SESSION['user_id']);
 <body>
     <header>
         <h1>Task Management</h1>
-        <p>Welcome, <?php echo htmlspecialchars($_SESSION['username']); ?> (<?php echo htmlspecialchars($_SESSION['role']); ?>)</p>
+        <p>Welcome, <?php echo htmlspecialchars($_SESSION['username'] ?? 'Unknown User'); ?> (<?php echo htmlspecialchars($_SESSION['role']); ?>)</p>
         <a href="profile.php">Profile</a> | <a href="logout.php">Logout</a>
     </header>
     <main>
@@ -167,10 +168,7 @@ $tasks = getTasks($_SESSION['user_id']);
         <?php endif; ?>
         <div class="task-list">
             <h2>Your Tasks</h2>
-            <?php
-            // Add debug line here to inspect $tasks array
-            echo "<pre>"; print_r($tasks); echo "</pre>";
-            ?>
+            
             <?php foreach ($tasks as $task): ?>
                 <div class="task" data-task-id="<?php echo $task['id']; ?>">
                     <p>Title: <?php echo htmlspecialchars($task['title']); ?></p>
