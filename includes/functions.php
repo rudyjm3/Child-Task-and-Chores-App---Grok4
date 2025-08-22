@@ -65,6 +65,20 @@ function createChildProfile($user_id, $avatar, $age, $preferences) {
     return $stmt->execute([':user_id' => $user_id, ':avatar' => $avatar, ':age' => $age, ':preferences' => $preferences]);
 }
 
+// Fetch user and child profiles for dashboard
+function getDashboardData($user_id) {
+    global $db;
+    $userStmt = $db->prepare("SELECT * FROM users WHERE id = :id");
+    $userStmt->execute([':id' => $user_id]);
+    $user = $userStmt->fetch(PDO::FETCH_ASSOC);
+
+    $childStmt = $db->prepare("SELECT * FROM child_profiles WHERE user_id = :user_id");
+    $childStmt->execute([':user_id' => $user_id]);
+    $children = $childStmt->fetchAll(PDO::FETCH_ASSOC);
+
+    return ['user' => $user, 'children' => $children];
+}
+
 // Start session if not already started
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
