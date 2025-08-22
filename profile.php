@@ -6,7 +6,9 @@
 
 require_once __DIR__ . '/includes/functions.php';
 
-session_start();
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 if (!isset($_SESSION['user_id'])) {
     header("Location: login.php");
     exit;
@@ -23,6 +25,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $_SESSION['role'] === 'parent') {
     } else {
         $message = "Failed to create child profile.";
     }
+}
+
+// Set username in session if not already set
+if (!isset($_SESSION['username'])) {
+    $userStmt = $db->prepare("SELECT username FROM users WHERE id = :id");
+    $userStmt->execute([':id' => $_SESSION['user_id']]);
+    $_SESSION['username'] = $userStmt->fetchColumn() ?: 'Unknown User';
 }
 
 // Fetch user and child profiles
@@ -45,7 +54,7 @@ $children = $childStmt->fetchAll(PDO::FETCH_ASSOC);
 <body>
     <header>
         <h1>Profile</h1>
-        <p>Welcome, <?php echo htmlspecialchars($user['username']); ?> (<?php echo htmlspecialchars($user['role']); ?>)</p>
+        <p>Welcome, <?php echo htmlspecialchars($_SESSION['username'] ?? 'Unknown User'); ?> (<?php echo htmlspecialchars($_SESSION['role']); ?>)</p>
         <a href="logout.php">Logout</a>
     </header>
     <main>
