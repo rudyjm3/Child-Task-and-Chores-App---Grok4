@@ -1,17 +1,34 @@
 <?php
 // login.php - User login page
-// Purpose: Allow users to log in
-// Inputs: Username, password
-// Outputs: Login form and success/error messages
+// Purpose: Handle user authentication and session management
+// Inputs: Username and password from form
+// Outputs: Redirect to dashboard or error message
 
 require_once __DIR__ . '/includes/functions.php';
+
+session_start();
+$message = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $username = filter_input(INPUT_POST, 'username', FILTER_SANITIZE_STRING);
     $password = filter_input(INPUT_POST, 'password', FILTER_SANITIZE_STRING);
 
     if (loginUser($username, $password)) {
-        header("Location: profile.php");
+        // Fetch user details to set username in session
+        $userStmt = $db->prepare("SELECT id, username, role FROM users WHERE username = :username");
+        $userStmt->execute([':username' => $username]);
+        $user = $userStmt->fetch(PDO::FETCH_ASSOC);
+        
+        $_SESSION['user_id'] = $user['id'];
+        $_SESSION['role'] = $user['role'];
+        $_SESSION['username'] = $user['username'];
+
+        // Redirect based on role
+        if ($user['role'] === 'parent') {
+            header("Location: dashboard_parent.php");
+        } else {
+            header("Location: dashboard_child.php");
+        }
         exit;
     } else {
         $message = "Invalid username or password.";
@@ -25,24 +42,49 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Login</title>
     <link rel="stylesheet" href="css/main.css">
+    <style>
+        .login-form {
+            padding: 20px;
+            max-width: 400px;
+            margin: 0 auto;
+        }
+        .login-form label {
+            display: block;
+            margin-bottom: 5px;
+        }
+        .login-form input {
+            width: 100%;
+            margin-bottom: 10px;
+            padding: 8px;
+        }
+        .button {
+            padding: 10px 20px;
+            background-color: #4caf50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+    </style>
 </head>
 <body>
     <header>
         <h1>Login</h1>
     </header>
     <main>
-        <?php if (isset($message)) echo "<p>$message</p>"; ?>
-        <form method="POST" action="login.php">
-            <label for="username">Username:</label><br>
-            <input type="text" id="username" name="username" required><br>
-            <label for="password">Password:</label><br>
-            <input type="password" id="password" name="password" required><br>
-            <button type="submit">Login</button>
-        </form>
-        <p><a href="register.php">Register</a> if you don’t have an account.</p>
+        <?php if ($message) echo "<p>$message</p>"; ?>
+        <div class="login-form">
+            <form method="POST" action="login.php">
+                <label for="username">Username:</label>
+                <input type="text" id="username" name="username" required>
+                <label for="password">Password:</label>
+                <input type="password" id="password" name="password" required>
+                <button type="submit" class="button">Login</button>
+            </form>
+        </div>
     </main>
     <footer>
-        <p>Child Task and Chore App - Ver 1.1.0</p>
+        <p>Child Task and Chore App - Ver 2.0.0</p>
     </footer>
 </body>
 </html>

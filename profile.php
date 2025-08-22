@@ -17,7 +17,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $_SESSION['role'] === 'parent') {
     $age = filter_input(INPUT_POST, 'age', FILTER_VALIDATE_INT);
     $preferences = filter_input(INPUT_POST, 'preferences', FILTER_SANITIZE_STRING);
 
-    if (createChildProfile($_SESSION['user_id'], $avatar, $age, $preferences)) {
+    // Use the parent's user_id for the child profile
+    if (createChildProfile($_SESSION['user_id'], $avatar, $age, $preferences, $_SESSION['user_id'])) {
         $message = "Child profile created successfully!";
     } else {
         $message = "Failed to create child profile.";
@@ -29,7 +30,7 @@ $userStmt = $db->prepare("SELECT * FROM users WHERE id = :id");
 $userStmt->execute([':id' => $_SESSION['user_id']]);
 $user = $userStmt->fetch(PDO::FETCH_ASSOC);
 
-$childStmt = $db->prepare("SELECT * FROM child_profiles WHERE user_id = :user_id");
+$childStmt = $db->prepare("SELECT * FROM child_profiles WHERE parent_user_id = :user_id");
 $childStmt->execute([':user_id' => $_SESSION['user_id']]);
 $children = $childStmt->fetchAll(PDO::FETCH_ASSOC);
 ?>
@@ -45,7 +46,7 @@ $children = $childStmt->fetchAll(PDO::FETCH_ASSOC);
     <header>
         <h1>Profile</h1>
         <p>Welcome, <?php echo htmlspecialchars($user['username']); ?> (<?php echo htmlspecialchars($user['role']); ?>)</p>
-        <a href="logout.php">Logout</a> <!-- Placeholder, create logout.php later -->
+        <a href="logout.php">Logout</a>
     </header>
     <main>
         <?php if (isset($message)) echo "<p>$message</p>"; ?>
@@ -68,7 +69,7 @@ $children = $childStmt->fetchAll(PDO::FETCH_ASSOC);
         <?php endif; ?>
     </main>
     <footer>
-        <p>Child Task and Chore App - Ver 1.1.0</p>
+        <p>Child Task and Chore App - Ver 2.0.0</p>
     </footer>
 </body>
 </html>
