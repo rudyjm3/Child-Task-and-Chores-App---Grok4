@@ -61,10 +61,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             max-width: 800px;
             margin: 0 auto;
         }
-        .children-overview, .management-links {
+        .children-overview, .management-links, .redeemed-rewards {
             margin-top: 20px;
         }
-        .child-item {
+        .child-item, .reward-item {
             background-color: #f5f5f5;
             padding: 10px;
             margin: 5px 0;
@@ -182,9 +182,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <p>Points Earned: <?php echo isset($data['tasks']) && is_array($data['tasks']) ? array_sum(array_column($data['tasks'], 'points')) : 0; ?></p>
             <p>Goals Met: <?php echo 0; // Placeholder, to be implemented ?></p>
         </div>
+        <div class="redeemed-rewards">
+            <h2>Redeemed Rewards</h2>
+            <?php if (isset($data['redeemed_rewards']) && is_array($data['redeemed_rewards']) && !empty($data['redeemed_rewards'])): ?>
+                <?php foreach ($data['redeemed_rewards'] as $reward): ?>
+                    <div class="reward-item">
+                        <p>Reward: <?php echo htmlspecialchars($reward['title']); ?> (<?php echo htmlspecialchars($reward['point_cost']); ?> points)</p>
+                        <p>Description: <?php echo htmlspecialchars($reward['description']); ?></p>
+                        <p>Redeemed by: <?php echo htmlspecialchars($reward['child_username']); ?></p>
+                        <!-- Add management options (e.g., acknowledge) in future step -->
+                    </div>
+                <?php endforeach; ?>
+            <?php else: ?>
+                <p>No rewards redeemed yet.</p>
+            <?php endif; ?>
+        </div>
     </main>
     <footer>
-        <p>Child Task and Chore App - Ver 3.0.0</p>
+        <p>Child Task and Chore App - Ver 3.1.0</p>
     </footer>
 </body>
 </html>
