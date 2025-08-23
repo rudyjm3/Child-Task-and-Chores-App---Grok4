@@ -22,6 +22,16 @@ if (!isset($_SESSION['username'])) {
 }
 
 $data = getDashboardData($_SESSION['user_id']);
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['redeem_reward'])) {
+    $reward_id = filter_input(INPUT_POST, 'reward_id', FILTER_VALIDATE_INT);
+    if (redeemReward($_SESSION['user_id'], $reward_id)) {
+        $message = "Reward redeemed successfully! Refresh to see updates.";
+        $data = getDashboardData($_SESSION['user_id]); // Refresh data
+    } else {
+        $message = "Not enough points to redeem this reward.";
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -62,6 +72,9 @@ $data = getDashboardData($_SESSION['user_id']);
             text-decoration: none;
             display: inline-block;
         }
+        .redeem-button {
+            background-color: #2196f3;
+        }
     </style>
 </head>
 <body>
@@ -74,6 +87,7 @@ $data = getDashboardData($_SESSION['user_id']);
         <?php if (isset($message)) echo "<p>$message</p>"; ?>
         <div class="progress">
             <p>Points Progress: <?php echo isset($data['points_progress']) ? htmlspecialchars($data['points_progress']) . '%' : '0%'; ?></p>
+            <p>Remaining Points: <?php echo isset($data['remaining_points']) ? htmlspecialchars($data['remaining_points']) : '0'; ?></p>
         </div>
         <div class="rewards">
             <h2>Available Rewards</h2>
@@ -82,7 +96,10 @@ $data = getDashboardData($_SESSION['user_id']);
                     <div class="reward-item">
                         <p><?php echo htmlspecialchars($reward['title']); ?> (<?php echo htmlspecialchars($reward['point_cost']); ?> points)</p>
                         <p><?php echo htmlspecialchars($reward['description']); ?></p>
-                        <!-- Add redeem button in next step -->
+                        <form method="POST" action="dashboard_child.php">
+                            <input type="hidden" name="reward_id" value="<?php echo $reward['id']; ?>">
+                            <button type="submit" name="redeem_reward" class="button redeem-button">Redeem</button>
+                        </form>
                     </div>
                 <?php endforeach; ?>
             <?php else: ?>
@@ -109,7 +126,7 @@ $data = getDashboardData($_SESSION['user_id']);
         </div>
     </main>
     <footer>
-        <p>Child Task and Chore App - Ver 2.0.0</p>
+        <p>Child Task and Chore App - Ver 3.0.0</p>
     </footer>
 </body>
 </html>

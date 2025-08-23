@@ -44,7 +44,7 @@ function createChildProfile($child_user_id, $avatar, $age, $preferences, $parent
 }
 
 // Fetch dashboard data based on user role
-// Update getDashboardData for child to include rewards and goals
+// Update getDashboardData for child to include remaining points
 function getDashboardData($user_id) {
     global $db;
     $data = [];
@@ -76,9 +76,20 @@ function getDashboardData($user_id) {
         $stmt->execute([':child_id' => $user_id]);
         $total_points = $stmt->fetchColumn();
 
+        // Calculate remaining points after redemptions (simplified, to be refined)
+        $stmt = $db->prepare("SELECT COALESCE(SUM(r.point_cost), 0) as redeemed_points 
+                             FROM rewards r 
+                             JOIN goals g ON r.id = g.reward_id 
+                             JOIN child_profiles cp ON g.child_user_id = cp.child_user_id 
+                             WHERE cp.child_user_id = :child_id AND r.status = 'redeemed'");
+        $stmt->execute([':child_id' => $user_id]);
+        $redeemed_points = $stmt->fetchColumn();
+        $remaining_points = max(0, $total_points - $redeemed_points);
+
         $max_points = 100; // Define a max points threshold (adjust as needed)
-        $points_progress = ($total_points > 0 && $max_points > 0) ? min(100, round(($total_points / $max_points) * 100)) : 0;
+        $points_progress = ($remaining_points > 0 && $max_points > 0) ? min(100, round(($remaining_points / $max_points) * 100)) : 0;
         $data['points_progress'] = $points_progress;
+        $data['remaining_points'] = $remaining_points;
 
         // Fetch available rewards for the child
         $parentStmt = $db->prepare("SELECT parent_user_id FROM child_profiles WHERE child_user_id = :child_id LIMIT 1");
@@ -197,6 +208,40 @@ function createGoal($parent_user_id, $child_user_id, $title, $target_points, $st
         ':end_date' => $end_date,
         ':reward_id' => $reward_id
     ]);
+}
+
+// Redeem a reward
+function redeemReward($child_user_id, $reward_id) {
+    global $db;
+    $db->beginTransaction();
+    try {
+        // Check if the child has enough points
+        $stmt = $db->prepare("SELECT COALESCE(SUM(t.points), 0) as total_points 
+                             FROM tasks t 
+                             JOIN child_profiles cp ON t.user_id = cp.parent_user_id 
+                             WHERE cp.child_user_id = :child_id AND t.status = 'approved'");
+        $stmt->execute([':child_id' => $child_user_id]);
+        $total_points = $stmt->fetchColumn();
+
+        $stmt = $db->prepare("SELECT point_cost FROM rewards WHERE id = :reward_id AND status = 'available' FOR UPDATE");
+        $stmt->execute([':reward_id' => $reward_id]);
+        $reward = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (!$reward || $total_points < $reward['point_cost']) {
+            $db->rollBack();
+            return false;
+        }
+
+        // Update reward status
+        $stmt = $db->prepare("UPDATE rewards SET status = 'redeemed' WHERE id = :reward_id");
+        $stmt->execute([':reward_id' => $reward_id]);
+
+        $db->commit();
+        return true;
+    } catch (Exception $e) {
+        $db->rollBack();
+        error_log("Reward redemption failed: " . $e->getMessage());
+        return false;
+    }
 }
 
 // Start session if not already started
