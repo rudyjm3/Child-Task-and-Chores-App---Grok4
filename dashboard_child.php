@@ -21,7 +21,7 @@ if (!isset($_SESSION['username'])) {
     $_SESSION['username'] = $userStmt->fetchColumn() ?: 'Unknown User';
 }
 
-$data = getDashboardData($_SESSION['user_id']); // Fetch child-specific dashboard data
+$data = getDashboardData($_SESSION['user_id']);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -41,6 +41,15 @@ $data = getDashboardData($_SESSION['user_id']); // Fetch child-specific dashboar
             margin: 20px 0;
             font-size: 1.2em;
             color: #4caf50;
+        }
+        .rewards, .goals {
+            margin: 20px 0;
+        }
+        .reward-item, .goal-item {
+            background-color: #f5f5f5;
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 5px;
         }
         .button {
             padding: 10px 20px;
@@ -65,6 +74,34 @@ $data = getDashboardData($_SESSION['user_id']); // Fetch child-specific dashboar
         <?php if (isset($message)) echo "<p>$message</p>"; ?>
         <div class="progress">
             <p>Points Progress: <?php echo isset($data['points_progress']) ? htmlspecialchars($data['points_progress']) . '%' : '0%'; ?></p>
+        </div>
+        <div class="rewards">
+            <h2>Available Rewards</h2>
+            <?php if (isset($data['rewards']) && is_array($data['rewards']) && !empty($data['rewards'])): ?>
+                <?php foreach ($data['rewards'] as $reward): ?>
+                    <div class="reward-item">
+                        <p><?php echo htmlspecialchars($reward['title']); ?> (<?php echo htmlspecialchars($reward['point_cost']); ?> points)</p>
+                        <p><?php echo htmlspecialchars($reward['description']); ?></p>
+                        <!-- Add redeem button in next step -->
+                    </div>
+                <?php endforeach; ?>
+            <?php else: ?>
+                <p>No rewards available.</p>
+            <?php endif; ?>
+        </div>
+        <div class="goals">
+            <h2>Your Goals</h2>
+            <?php if (isset($data['goals']) && is_array($data['goals']) && !empty($data['goals'])): ?>
+                <?php foreach ($data['goals'] as $goal): ?>
+                    <div class="goal-item">
+                        <p><?php echo htmlspecialchars($goal['title']); ?> (Target: <?php echo htmlspecialchars($goal['target_points']); ?> points)</p>
+                        <p>Period: <?php echo htmlspecialchars($goal['start_date']); ?> to <?php echo htmlspecialchars($goal['end_date']); ?></p>
+                        <p>Reward: <?php echo htmlspecialchars($goal['reward_title'] ?? 'None'); ?></p>
+                    </div>
+                <?php endforeach; ?>
+            <?php else: ?>
+                <p>No active goals.</p>
+            <?php endif; ?>
         </div>
         <div class="links">
             <a href="task.php" class="button">View Tasks</a>

@@ -44,6 +44,7 @@ function createChildProfile($child_user_id, $avatar, $age, $preferences, $parent
 }
 
 // Fetch dashboard data based on user role
+// Update getDashboardData for child to include rewards and goals
 function getDashboardData($user_id) {
     global $db;
     $data = [];
@@ -53,7 +54,6 @@ function getDashboardData($user_id) {
     $role = $userStmt->fetchColumn();
 
     if ($role === 'parent') {
-        // Fetch child profiles for the parent
         $stmt = $db->prepare("SELECT cp.id, cp.child_user_id, u.username, cp.avatar, cp.age, cp.preferences 
                              FROM child_profiles cp 
                              JOIN users u ON cp.child_user_id = u.id 
@@ -61,7 +61,6 @@ function getDashboardData($user_id) {
         $stmt->execute([':parent_user_id' => $user_id]);
         $data['children'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-        // Fetch pending tasks for the parent's children
         $stmt = $db->prepare("SELECT t.id, t.title, t.due_date, t.points, t.status, u.username as assigned_to 
                              FROM tasks t 
                              JOIN child_profiles cp ON t.user_id = cp.parent_user_id 
@@ -70,7 +69,6 @@ function getDashboardData($user_id) {
         $stmt->execute([':parent_user_id' => $user_id]);
         $data['tasks'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
     } elseif ($role === 'child') {
-        // Fetch points progress for the child (based on completed tasks)
         $stmt = $db->prepare("SELECT COALESCE(SUM(t.points), 0) as total_points 
                              FROM tasks t 
                              JOIN child_profiles cp ON t.user_id = cp.parent_user_id 
@@ -78,10 +76,27 @@ function getDashboardData($user_id) {
         $stmt->execute([':child_id' => $user_id]);
         $total_points = $stmt->fetchColumn();
 
-        // Simple progress calculation (e.g., 50% as a placeholder, to be refined)
         $max_points = 100; // Define a max points threshold (adjust as needed)
         $points_progress = ($total_points > 0 && $max_points > 0) ? min(100, round(($total_points / $max_points) * 100)) : 0;
         $data['points_progress'] = $points_progress;
+
+        // Fetch available rewards for the child
+        $parentStmt = $db->prepare("SELECT parent_user_id FROM child_profiles WHERE child_user_id = :child_id LIMIT 1");
+        $parentStmt->execute([':child_id' => $user_id]);
+        $parent_id = $parentStmt->fetchColumn();
+        if ($parent_id) {
+            $stmt = $db->prepare("SELECT id, title, description, point_cost FROM rewards WHERE parent_user_id = :parent_id AND status = 'available'");
+            $stmt->execute([':parent_id' => $parent_id]);
+            $data['rewards'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        }
+
+        // Fetch active goals for the child
+        $stmt = $db->prepare("SELECT g.id, g.title, g.target_points, g.start_date, g.end_date, r.title as reward_title 
+                             FROM goals g 
+                             LEFT JOIN rewards r ON g.reward_id = r.id 
+                             WHERE g.child_user_id = :child_id AND g.status = 'active'");
+        $stmt->execute([':child_id' => $user_id]);
+        $data['goals'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
     return $data;
@@ -148,6 +163,42 @@ function approveTask($task_id) {
     return $stmt->execute([':task_id' => $task_id]);
 }
 
+// Create a new reward
+function createReward($parent_user_id, $title, $description, $point_cost) {
+    global $db;
+    $stmt = $db->prepare("INSERT INTO rewards (parent_user_id, title, description, point_cost) VALUES (:parent_user_id, :title, :description, :point_cost)");
+    return $stmt->execute([
+        ':parent_user_id' => $parent_user_id,
+        ':title' => $title,
+        ':description' => $description,
+        ':point_cost' => $point_cost
+    ]);
+}
+
+// Create a new goal
+function createGoal($parent_user_id, $child_user_id, $title, $target_points, $start_date, $end_date, $reward_id = null) {
+    global $db;
+    // Validate date range
+    $start_datetime = new DateTime($start_date);
+    $end_datetime = new DateTime($end_date);
+    if ($end_datetime < $start_datetime) {
+        error_log("Invalid date range: end_date ($end_date) is before start_date ($start_date) for goal creation.");
+        return false;
+    }
+    // Ensure reward_id is null if not provided or invalid
+    $reward_id = ($reward_id && is_numeric($reward_id)) ? $reward_id : null;
+    $stmt = $db->prepare("INSERT INTO goals (parent_user_id, child_user_id, title, target_points, start_date, end_date, reward_id) VALUES (:parent_user_id, :child_user_id, :title, :target_points, :start_date, :end_date, :reward_id)");
+    return $stmt->execute([
+        ':parent_user_id' => $parent_user_id,
+        ':child_user_id' => $child_user_id,
+        ':title' => $title,
+        ':target_points' => $target_points,
+        ':start_date' => $start_date,
+        ':end_date' => $end_date,
+        ':reward_id' => $reward_id
+    ]);
+}
+
 // Start session if not already started
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
@@ -197,6 +248,35 @@ $sql = "CREATE TABLE IF NOT EXISTS tasks (
     completed_by INT,
     completed_at DATETIME,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+)";
+$db->exec($sql);
+
+// Create rewards table if not exists
+$sql = "CREATE TABLE IF NOT EXISTS rewards (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    parent_user_id INT NOT NULL,
+    title VARCHAR(100) NOT NULL,
+    description TEXT,
+    point_cost INT NOT NULL,
+    status ENUM('available', 'redeemed') DEFAULT 'available',
+    FOREIGN KEY (parent_user_id) REFERENCES users(id) ON DELETE CASCADE
+)";
+$db->exec($sql);
+
+// Create goals table if not exists
+$sql = "CREATE TABLE IF NOT EXISTS goals (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    parent_user_id INT NOT NULL,
+    child_user_id INT NOT NULL,
+    title VARCHAR(100) NOT NULL,
+    target_points INT NOT NULL,
+    start_date DATETIME,
+    end_date DATETIME,
+    status ENUM('active', 'completed') DEFAULT 'active',
+    reward_id INT,
+    FOREIGN KEY (parent_user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (child_user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (reward_id) REFERENCES rewards(id) ON DELETE SET NULL
 )";
 $db->exec($sql);
 ?>
