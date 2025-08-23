@@ -27,7 +27,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['redeem_reward'])) {
     $reward_id = filter_input(INPUT_POST, 'reward_id', FILTER_VALIDATE_INT);
     if (redeemReward($_SESSION['user_id'], $reward_id)) {
         $message = "Reward redeemed successfully! Refresh to see updates.";
-        $data = getDashboardData($_SESSION['user_id]); // Refresh data
+        $data = getDashboardData($_SESSION['user_id']); // Refresh data
     } else {
         $message = "Not enough points to redeem this reward.";
     }
