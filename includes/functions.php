@@ -43,27 +43,46 @@ function createChildProfile($child_user_id, $avatar, $age, $preferences, $parent
     ]);
 }
 
-// Fetch dashboard data for a parent
-function getDashboardData($parent_user_id) {
+// Fetch dashboard data based on user role
+function getDashboardData($user_id) {
     global $db;
     $data = [];
-    
-    // Fetch child profiles for the parent
-    $stmt = $db->prepare("SELECT cp.id, cp.child_user_id, u.username, cp.avatar, cp.age, cp.preferences 
-                         FROM child_profiles cp 
-                         JOIN users u ON cp.child_user_id = u.id 
-                         WHERE cp.parent_user_id = :parent_user_id");
-    $stmt->execute([':parent_user_id' => $parent_user_id]);
-    $data['children'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    // Fetch pending tasks for the parent's children
-    $stmt = $db->prepare("SELECT t.id, t.title, t.due_date, t.points, t.status, u.username as assigned_to 
-                         FROM tasks t 
-                         JOIN child_profiles cp ON t.user_id = cp.parent_user_id 
-                         JOIN users u ON cp.child_user_id = u.id 
-                         WHERE t.user_id = :parent_user_id AND t.status = 'pending'");
-    $stmt->execute([':parent_user_id' => $parent_user_id]);
-    $data['tasks'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $userStmt = $db->prepare("SELECT role FROM users WHERE id = :id");
+    $userStmt->execute([':id' => $user_id]);
+    $role = $userStmt->fetchColumn();
+
+    if ($role === 'parent') {
+        // Fetch child profiles for the parent
+        $stmt = $db->prepare("SELECT cp.id, cp.child_user_id, u.username, cp.avatar, cp.age, cp.preferences 
+                             FROM child_profiles cp 
+                             JOIN users u ON cp.child_user_id = u.id 
+                             WHERE cp.parent_user_id = :parent_user_id");
+        $stmt->execute([':parent_user_id' => $user_id]);
+        $data['children'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        // Fetch pending tasks for the parent's children
+        $stmt = $db->prepare("SELECT t.id, t.title, t.due_date, t.points, t.status, u.username as assigned_to 
+                             FROM tasks t 
+                             JOIN child_profiles cp ON t.user_id = cp.parent_user_id 
+                             JOIN users u ON cp.child_user_id = u.id 
+                             WHERE t.user_id = :parent_user_id AND t.status = 'pending'");
+        $stmt->execute([':parent_user_id' => $user_id]);
+        $data['tasks'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    } elseif ($role === 'child') {
+        // Fetch points progress for the child (based on completed tasks)
+        $stmt = $db->prepare("SELECT COALESCE(SUM(t.points), 0) as total_points 
+                             FROM tasks t 
+                             JOIN child_profiles cp ON t.user_id = cp.parent_user_id 
+                             WHERE cp.child_user_id = :child_id AND t.status = 'approved'");
+        $stmt->execute([':child_id' => $user_id]);
+        $total_points = $stmt->fetchColumn();
+
+        // Simple progress calculation (e.g., 50% as a placeholder, to be refined)
+        $max_points = 100; // Define a max points threshold (adjust as needed)
+        $points_progress = ($total_points > 0 && $max_points > 0) ? min(100, round(($total_points / $max_points) * 100)) : 0;
+        $data['points_progress'] = $points_progress;
+    }
 
     return $data;
 }
