@@ -52,10 +52,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['redeem_reward'])) {
             font-size: 1.2em;
             color: #4caf50;
         }
-        .rewards, .goals {
+        .rewards, .redeemed-rewards, .goals {
             margin: 20px 0;
         }
-        .reward-item, .goal-item {
+        .reward-item, .redeemed-item, .goal-item {
             background-color: #f5f5f5;
             padding: 10px;
             margin: 5px 0;
@@ -106,6 +106,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['redeem_reward'])) {
                 <p>No rewards available.</p>
             <?php endif; ?>
         </div>
+        <div class="redeemed-rewards">
+            <h2>Redeemed Rewards</h2>
+            <?php if (isset($data['redeemed_rewards']) && is_array($data['redeemed_rewards']) && !empty($data['redeemed_rewards'])): ?>
+                <?php foreach ($data['redeemed_rewards'] as $reward): ?>
+                    <div class="redeemed-item">
+                        <p>Reward: <?php echo htmlspecialchars($reward['title']); ?> (<?php echo htmlspecialchars($reward['point_cost']); ?> points)</p>
+                        <p>Description: <?php echo htmlspecialchars($reward['description']); ?></p>
+                        <p>Redeemed on: <?php echo isset($reward['redemption_date']) ? htmlspecialchars($reward['redemption_date']) : 'Date unavailable'; ?></p>
+                    </div>
+                <?php endforeach; ?>
+            <?php else: ?>
+                <p>No rewards redeemed yet.</p>
+            <?php endif; ?>
+        </div>
         <div class="goals">
             <h2>Your Goals</h2>
             <?php if (isset($data['goals']) && is_array($data['goals']) && !empty($data['goals'])): ?>
@@ -126,7 +140,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['redeem_reward'])) {
         </div>
     </main>
     <footer>
-        <p>Child Task and Chore App - Ver 3.0.0</p>
+        <p>Child Task and Chore App - Ver 3.1.0</p>
     </footer>
 </body>
 </html>

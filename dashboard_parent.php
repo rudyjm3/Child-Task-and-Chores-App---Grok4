@@ -61,7 +61,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             max-width: 800px;
             margin: 0 auto;
         }
-        .children-overview, .management-links, .redeemed-rewards {
+        .children-overview, .management-links, .active-rewards, .redeemed-rewards {
             margin-top: 20px;
         }
         .child-item, .reward-item {
@@ -182,6 +182,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <p>Points Earned: <?php echo isset($data['tasks']) && is_array($data['tasks']) ? array_sum(array_column($data['tasks'], 'points')) : 0; ?></p>
             <p>Goals Met: <?php echo 0; // Placeholder, to be implemented ?></p>
         </div>
+        <div class="active-rewards">
+            <h2>Active Rewards</h2>
+            <?php if (isset($data['active_rewards']) && is_array($data['active_rewards']) && !empty($data['active_rewards'])): ?>
+                <?php foreach ($data['active_rewards'] as $reward): ?>
+                    <div class="reward-item">
+                        <p><?php echo htmlspecialchars($reward['title']); ?> (<?php echo htmlspecialchars($reward['point_cost']); ?> points)</p>
+                        <p><?php echo htmlspecialchars($reward['description']); ?></p>
+                    </div>
+                <?php endforeach; ?>
+            <?php else: ?>
+                <p>No active rewards available.</p>
+            <?php endif; ?>
+        </div>
         <div class="redeemed-rewards">
             <h2>Redeemed Rewards</h2>
             <?php if (isset($data['redeemed_rewards']) && is_array($data['redeemed_rewards']) && !empty($data['redeemed_rewards'])): ?>
@@ -190,7 +203,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         <p>Reward: <?php echo htmlspecialchars($reward['title']); ?> (<?php echo htmlspecialchars($reward['point_cost']); ?> points)</p>
                         <p>Description: <?php echo htmlspecialchars($reward['description']); ?></p>
                         <p>Redeemed by: <?php echo htmlspecialchars($reward['child_username']); ?></p>
-                        <!-- Add management options (e.g., acknowledge) in future step -->
                     </div>
                 <?php endforeach; ?>
             <?php else: ?>

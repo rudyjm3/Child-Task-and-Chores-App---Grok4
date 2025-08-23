@@ -44,7 +44,7 @@ function createChildProfile($child_user_id, $avatar, $age, $preferences, $parent
 }
 
 // Fetch dashboard data based on user role
-// Update getDashboardData for parent to include redeemed rewards
+// Update getDashboardData for parent and child to include detailed reward data
 function getDashboardData($user_id) {
     global $db;
     $data = [];
@@ -57,20 +57,25 @@ function getDashboardData($user_id) {
         $stmt = $db->prepare("SELECT cp.id, cp.child_user_id, u.username, cp.avatar, cp.age, cp.preferences 
                              FROM child_profiles cp 
                              JOIN users u ON cp.child_user_id = u.id 
-                             WHERE cp.parent_user_id = :parent_user_id");
-        $stmt->execute([':parent_user_id' => $user_id]);
+                             WHERE cp.parent_user_id = :parent_id");
+        $stmt->execute([':parent_id' => $user_id]);
         $data['children'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
         $stmt = $db->prepare("SELECT t.id, t.title, t.due_date, t.points, t.status, u.username as assigned_to 
                              FROM tasks t 
                              JOIN child_profiles cp ON t.user_id = cp.parent_user_id 
                              JOIN users u ON cp.child_user_id = u.id 
-                             WHERE t.user_id = :parent_user_id AND t.status = 'pending'");
-        $stmt->execute([':parent_user_id' => $user_id]);
+                             WHERE t.user_id = :parent_id AND t.status = 'pending'");
+        $stmt->execute([':parent_id' => $user_id]);
         $data['tasks'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-        // Fetch redeemed rewards for the parent's children
-        $stmt = $db->prepare("SELECT r.id, r.title, r.description, r.point_cost, u.username as child_username, r.status 
+        // Fetch active (unredeemed) rewards
+        $stmt = $db->prepare("SELECT id, title, description, point_cost FROM rewards WHERE parent_user_id = :parent_id AND status = 'available'");
+        $stmt->execute([':parent_id' => $user_id]);
+        $data['active_rewards'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        // Fetch redeemed rewards
+        $stmt = $db->prepare("SELECT r.id, r.title, r.description, r.point_cost, u.username as child_username 
                              FROM rewards r 
                              JOIN child_profiles cp ON r.parent_user_id = cp.parent_user_id 
                              JOIN users u ON cp.child_user_id = u.id 
@@ -85,7 +90,7 @@ function getDashboardData($user_id) {
         $stmt->execute([':child_id' => $user_id]);
         $total_points = $stmt->fetchColumn();
 
-        // Calculate remaining points after redemptions (simplified)
+        // Calculate remaining points after redemptions
         $stmt = $db->prepare("SELECT COALESCE(SUM(r.point_cost), 0) as redeemed_points 
                              FROM rewards r 
                              JOIN goals g ON r.id = g.reward_id 
@@ -110,6 +115,15 @@ function getDashboardData($user_id) {
             $data['rewards'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
         }
 
+        // Fetch redeemed rewards with redemption dates
+        $stmt = $db->prepare("SELECT r.id, r.title, r.description, r.point_cost, r.status, t.completed_at as redemption_date 
+                             FROM rewards r 
+                             LEFT JOIN tasks t ON r.id = t.id -- Approximation; adjust join as needed
+                             JOIN child_profiles cp ON r.parent_user_id = cp.parent_user_id 
+                             WHERE cp.child_user_id = :child_id AND r.status = 'redeemed'");
+        $stmt->execute([':child_id' => $user_id]);
+        $data['redeemed_rewards'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        
         // Fetch active goals for the child
         $stmt = $db->prepare("SELECT g.id, g.title, g.target_points, g.start_date, g.end_date, r.title as reward_title 
                              FROM goals g 
