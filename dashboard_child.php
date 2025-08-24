@@ -23,13 +23,13 @@ if (!isset($_SESSION['username'])) {
 
 $data = getDashboardData($_SESSION['user_id']);
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['redeem_reward'])) {
-    $reward_id = filter_input(INPUT_POST, 'reward_id', FILTER_VALIDATE_INT);
-    if (redeemReward($_SESSION['user_id'], $reward_id)) {
-        $message = "Reward redeemed successfully! Refresh to see updates.";
-        $data = getDashboardData($_SESSION['user_id']); // Refresh data
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['complete_goal'])) {
+    $goal_id = filter_input(INPUT_POST, 'goal_id', FILTER_VALIDATE_INT);
+    if ($goal_points = completeGoal($_SESSION['user_id'], $goal_id)) {
+        $message = "Goal completed! You earned $goal_points points.";
+        $data = getDashboardData($_SESSION['user_id']); // Fixed: Added missing parenthesis
     } else {
-        $message = "Not enough points to redeem this reward.";
+        $message = "Failed to complete goal.";
     }
 }
 ?>
@@ -52,7 +52,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['redeem_reward'])) {
             font-size: 1.2em;
             color: #4caf50;
         }
-        .rewards, .redeemed-rewards, .goals {
+        .rewards, .redeemed-rewards, .active-goals, .completed-goals {
             margin: 20px 0;
         }
         .reward-item, .redeemed-item, .goal-item {
@@ -74,6 +74,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['redeem_reward'])) {
         }
         .redeem-button {
             background-color: #2196f3;
+        }
+        .complete-button {
+            background-color: #9c27b0;
         }
     </style>
 </head>
@@ -120,18 +123,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['redeem_reward'])) {
                 <p>No rewards redeemed yet.</p>
             <?php endif; ?>
         </div>
-        <div class="goals">
-            <h2>Your Goals</h2>
-            <?php if (isset($data['goals']) && is_array($data['goals']) && !empty($data['goals'])): ?>
-                <?php foreach ($data['goals'] as $goal): ?>
+        <div class="active-goals">
+            <h2>Active Goals</h2>
+            <?php if (isset($data['active_goals']) && is_array($data['active_goals']) && !empty($data['active_goals'])): ?>
+                <?php foreach ($data['active_goals'] as $goal): ?>
                     <div class="goal-item">
                         <p><?php echo htmlspecialchars($goal['title']); ?> (Target: <?php echo htmlspecialchars($goal['target_points']); ?> points)</p>
                         <p>Period: <?php echo htmlspecialchars($goal['start_date']); ?> to <?php echo htmlspecialchars($goal['end_date']); ?></p>
                         <p>Reward: <?php echo htmlspecialchars($goal['reward_title'] ?? 'None'); ?></p>
+                        <form method="POST" action="dashboard_child.php">
+                            <input type="hidden" name="goal_id" value="<?php echo $goal['id']; ?>">
+                            <button type="submit" name="complete_goal" class="button complete-button">Complete Goal</button>
+                        </form>
                     </div>
                 <?php endforeach; ?>
             <?php else: ?>
                 <p>No active goals.</p>
+            <?php endif; ?>
+        </div>
+        <div class="completed-goals">
+            <h2>Completed Goals</h2>
+            <?php if (isset($data['completed_goals']) && is_array($data['completed_goals']) && !empty($data['completed_goals'])): ?>
+                <?php foreach ($data['completed_goals'] as $goal): ?>
+                    <div class="goal-item">
+                        <p><?php echo htmlspecialchars($goal['title']); ?> (Target: <?php echo htmlspecialchars($goal['target_points']); ?> points)</p>
+                        <p>Period: <?php echo htmlspecialchars($goal['start_date']); ?> to <?php echo htmlspecialchars($goal['end_date']); ?></p>
+                        <p>Reward: <?php echo htmlspecialchars($goal['reward_title'] ?? 'None'); ?></p>
+                        <p>Completed on: <?php echo htmlspecialchars($goal['completed_at']); ?></p>
+                    </div>
+                <?php endforeach; ?>
+            <?php else: ?>
+                <p>No completed goals yet.</p>
             <?php endif; ?>
         </div>
         <div class="links">
@@ -140,7 +162,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['redeem_reward'])) {
         </div>
     </main>
     <footer>
-        <p>Child Task and Chore App - Ver 3.1.0</p>
+        <p>Child Task and Chore App - Ver 3.2.0</p>
     </footer>
 </body>
 </html>

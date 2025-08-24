@@ -44,7 +44,7 @@ function createChildProfile($child_user_id, $avatar, $age, $preferences, $parent
 }
 
 // Fetch dashboard data based on user role
-// Update getDashboardData for parent and child to include detailed reward data
+// Update getDashboardData to include completed goals and adjust points
 function getDashboardData($user_id) {
     global $db;
     $data = [];
@@ -90,6 +90,14 @@ function getDashboardData($user_id) {
         $stmt->execute([':child_id' => $user_id]);
         $total_points = $stmt->fetchColumn();
 
+        // Include points from completed goals
+        $stmt = $db->prepare("SELECT COALESCE(SUM(g.target_points), 0) as goal_points 
+                             FROM goals g 
+                             WHERE g.child_user_id = :child_id AND g.status = 'completed'");
+        $stmt->execute([':child_id' => $user_id]);
+        $goal_points = $stmt->fetchColumn();
+        $total_points += $goal_points;
+
         // Calculate remaining points after redemptions
         $stmt = $db->prepare("SELECT COALESCE(SUM(r.point_cost), 0) as redeemed_points 
                              FROM rewards r 
@@ -115,6 +123,22 @@ function getDashboardData($user_id) {
             $data['rewards'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
         }
 
+        // Fetch active goals for the child
+        $stmt = $db->prepare("SELECT g.id, g.title, g.target_points, g.start_date, g.end_date, r.title as reward_title 
+                             FROM goals g 
+                             LEFT JOIN rewards r ON g.reward_id = r.id 
+                             WHERE g.child_user_id = :child_id AND g.status = 'active'");
+        $stmt->execute([':child_id' => $user_id]);
+        $data['active_goals'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        // Fetch completed goals for the child
+        $stmt = $db->prepare("SELECT g.id, g.title, g.target_points, g.start_date, g.end_date, g.completed_at, r.title as reward_title 
+                             FROM goals g 
+                             LEFT JOIN rewards r ON g.reward_id = r.id 
+                             WHERE g.child_user_id = :child_id AND g.status = 'completed'");
+        $stmt->execute([':child_id' => $user_id]);
+        $data['completed_goals'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
         // Fetch redeemed rewards with redemption dates
         $stmt = $db->prepare("SELECT r.id, r.title, r.description, r.point_cost, r.status, t.completed_at as redemption_date 
                              FROM rewards r 
@@ -123,14 +147,6 @@ function getDashboardData($user_id) {
                              WHERE cp.child_user_id = :child_id AND r.status = 'redeemed'");
         $stmt->execute([':child_id' => $user_id]);
         $data['redeemed_rewards'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        
-        // Fetch active goals for the child
-        $stmt = $db->prepare("SELECT g.id, g.title, g.target_points, g.start_date, g.end_date, r.title as reward_title 
-                             FROM goals g 
-                             LEFT JOIN rewards r ON g.reward_id = r.id 
-                             WHERE g.child_user_id = :child_id AND g.status = 'active'");
-        $stmt->execute([':child_id' => $user_id]);
-        $data['goals'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
     return $data;
@@ -267,6 +283,35 @@ function redeemReward($child_user_id, $reward_id) {
     }
 }
 
+// Complete a goal
+function completeGoal($child_user_id, $goal_id) {
+    global $db;
+    $db->beginTransaction();
+    try {
+        // Check if the goal exists and is active for the child
+        $stmt = $db->prepare("SELECT target_points FROM goals WHERE id = :goal_id AND child_user_id = :child_id AND status = 'active'");
+        $stmt->execute([':goal_id' => $goal_id, ':child_id' => $child_user_id]);
+        $goal = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (!$goal) {
+            $db->rollBack();
+            return false;
+        }
+
+        // Update goal status to completed
+        $stmt = $db->prepare("UPDATE goals SET status = 'completed', completed_at = NOW() WHERE id = :goal_id");
+        $stmt->execute([':goal_id' => $goal_id]);
+
+        // Award points (simplified; adjust logic as needed)
+        $target_points = $goal['target_points'];
+        $db->commit();
+        return $target_points; // Return points for updating child points
+    } catch (Exception $e) {
+        $db->rollBack();
+        error_log("Goal completion failed: " . $e->getMessage());
+        return false;
+    }
+}
+
 // Start session if not already started
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
@@ -276,6 +321,10 @@ if (session_status() === PHP_SESSION_NONE) {
 // if (!createDatabaseTables()) {
 //     die("Failed to initialize database tables.");
 // }
+
+// Ensure goals table includes status and completed_at columns
+$db->exec("ALTER TABLE goals ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'active'");
+$db->exec("ALTER TABLE goals ADD COLUMN IF NOT EXISTS completed_at DATETIME DEFAULT NULL");
 
 // Create users table if not exists
 $sql = "CREATE TABLE IF NOT EXISTS users (

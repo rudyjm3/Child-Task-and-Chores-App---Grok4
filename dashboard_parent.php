@@ -61,10 +61,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             max-width: 800px;
             margin: 0 auto;
         }
-        .children-overview, .management-links, .active-rewards, .redeemed-rewards {
+        .children-overview, .management-links, .active-rewards, .redeemed-rewards, .completed-goals {
             margin-top: 20px;
         }
-        .child-item, .reward-item {
+        .child-item, .reward-item, .goal-item {
             background-color: #f5f5f5;
             padding: 10px;
             margin: 5px 0;
@@ -180,7 +180,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </div>
             <a href="#" class="button">Summary Charts</a>
             <p>Points Earned: <?php echo isset($data['tasks']) && is_array($data['tasks']) ? array_sum(array_column($data['tasks'], 'points')) : 0; ?></p>
-            <p>Goals Met: <?php echo 0; // Placeholder, to be implemented ?></p>
+            <p>Goals Met: <?php echo isset($data['children']) && is_array($data['children']) ? count(array_filter($data['children'], fn($c) => /* Add goal completion check */ true)) : 0; // Placeholder ?></p>
         </div>
         <div class="active-rewards">
             <h2>Active Rewards</h2>
@@ -209,9 +209,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <p>No rewards redeemed yet.</p>
             <?php endif; ?>
         </div>
+        <div class="completed-goals">
+            <h2>Completed Goals</h2>
+            <?php
+            $all_completed_goals = [];
+            $parent_id = $_SESSION['user_id']; // Define $user_id as the parent's session ID
+            foreach ($data['children'] as $child) {
+                $stmt = $db->prepare("SELECT g.id, g.title, g.target_points, g.start_date, g.end_date, g.completed_at, u.username as child_username 
+                                     FROM goals g 
+                                     JOIN users u ON g.child_user_id = u.id 
+                                     WHERE g.parent_user_id = :parent_id AND g.status = 'completed'");
+                $stmt->execute([':parent_id' => $parent_id]); // Use the defined $parent_id
+                $all_completed_goals = array_merge($all_completed_goals, $stmt->fetchAll(PDO::FETCH_ASSOC));
+            }
+            ?>
+            <?php if (!empty($all_completed_goals)): ?>
+                <?php foreach ($all_completed_goals as $goal): ?>
+                    <div class="goal-item">
+                        <p>Goal: <?php echo htmlspecialchars($goal['title']); ?> (Target: <?php echo htmlspecialchars($goal['target_points']); ?> points)</p>
+                        <p>Child: <?php echo htmlspecialchars($goal['child_username']); ?></p>
+                        <p>Period: <?php echo htmlspecialchars($goal['start_date']); ?> to <?php echo htmlspecialchars($goal['end_date']); ?></p>
+                        <p>Completed on: <?php echo htmlspecialchars($goal['completed_at']); ?></p>
+                    </div>
+                <?php endforeach; ?>
+            <?php else: ?>
+                <p>No goals completed yet.</p>
+            <?php endif; ?>
+        </div>
     </main>
     <footer>
-        <p>Child Task and Chore App - Ver 3.1.0</p>
+        <p>Child Task and Chore App - Ver 3.2.0</p>
     </footer>
 </body>
 </html>
