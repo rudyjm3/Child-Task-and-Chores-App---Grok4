@@ -44,7 +44,7 @@ function createChildProfile($child_user_id, $avatar, $age, $preferences, $parent
 }
 
 // Fetch dashboard data based on user role
-// Update getDashboardData to include completed goals and adjust points
+// Update getDashboardData to include pending approvals
 function getDashboardData($user_id) {
     global $db;
     $data = [];
@@ -82,6 +82,15 @@ function getDashboardData($user_id) {
                              WHERE r.parent_user_id = :parent_id AND r.status = 'redeemed'");
         $stmt->execute([':parent_id' => $user_id]);
         $data['redeemed_rewards'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        // Fetch pending approvals
+        $stmt = $db->prepare("SELECT g.id, g.title, g.target_points, g.requested_at, u.username as child_username 
+                             FROM goals g 
+                             JOIN child_profiles cp ON g.child_user_id = cp.child_user_id 
+                             JOIN users u ON g.child_user_id = u.id 
+                             WHERE cp.parent_user_id = :parent_id AND g.status = 'pending_approval'");
+        $stmt->execute([':parent_id' => $user_id]);
+        $data['pending_approvals'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
     } elseif ($role === 'child') {
         $stmt = $db->prepare("SELECT COALESCE(SUM(t.points), 0) as total_points 
                              FROM tasks t 
@@ -151,6 +160,12 @@ function getDashboardData($user_id) {
 
     return $data;
 }
+
+// Ensure goals table includes necessary columns
+$db->exec("ALTER TABLE goals ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'active'");
+$db->exec("ALTER TABLE goals ADD COLUMN IF NOT EXISTS requested_at DATETIME DEFAULT NULL");
+$db->exec("ALTER TABLE goals ADD COLUMN IF NOT EXISTS completed_at DATETIME DEFAULT NULL");
+$db->exec("ALTER TABLE goals ADD COLUMN IF NOT EXISTS rejected_at DATETIME DEFAULT NULL");
 
 // Create a new task
 function createTask($user_id, $title, $description, $due_date, $points, $recurrence, $category, $timing_mode) {
@@ -279,6 +294,61 @@ function redeemReward($child_user_id, $reward_id) {
     } catch (Exception $e) {
         $db->rollBack();
         error_log("Reward redemption failed: " . $e->getMessage());
+        return false;
+    }
+}
+
+// Request goal completion
+function requestGoalCompletion($child_user_id, $goal_id) {
+    global $db;
+    $db->beginTransaction();
+    try {
+        $stmt = $db->prepare("UPDATE goals SET status = 'pending_approval', requested_at = NOW() WHERE id = :goal_id AND child_user_id = :child_id AND status = 'active'");
+        $result = $stmt->execute([':goal_id' => $goal_id, ':child_id' => $child_user_id]);
+        if ($result) {
+            $db->commit();
+            return true;
+        }
+        $db->rollBack();
+        return false;
+    } catch (Exception $e) {
+        $db->rollBack();
+        error_log("Goal completion request failed: " . $e->getMessage());
+        return false;
+    }
+}
+
+// Approve or reject goal completion
+function approveGoal($parent_user_id, $goal_id, $approve = true) {
+    global $db;
+    $db->beginTransaction();
+    try {
+        // Check if the goal is pending approval and belongs to the parent's child
+        $stmt = $db->prepare("SELECT g.target_points, cp.child_user_id FROM goals g 
+                             JOIN child_profiles cp ON g.child_user_id = cp.child_user_id 
+                             WHERE g.id = :goal_id AND cp.parent_user_id = :parent_id AND g.status = 'pending_approval'");
+        $stmt->execute([':goal_id' => $goal_id, ':parent_id' => $parent_user_id]);
+        $goal = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (!$goal) {
+            $db->rollBack();
+            return false;
+        }
+
+        $new_status = $approve ? 'completed' : 'rejected';
+        $stmt = $db->prepare("UPDATE goals SET status = :status, " . ($approve ? "completed_at = NOW()" : "rejected_at = NOW()") . " WHERE id = :goal_id");
+        $stmt->execute([':status' => $new_status, ':goal_id' => $goal_id]);
+
+        if ($approve) {
+            // Award points (simplified; adjust logic as needed)
+            $target_points = $goal['target_points'];
+            $db->commit();
+            return $target_points; // Return points for updating child points
+        }
+        $db->commit();
+        return 0; // No points for rejection
+    } catch (Exception $e) {
+        $db->rollBack();
+        error_log("Goal approval failed: " . $e->getMessage());
         return false;
     }
 }

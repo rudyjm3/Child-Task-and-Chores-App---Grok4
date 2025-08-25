@@ -23,13 +23,23 @@ if (!isset($_SESSION['username'])) {
 
 $data = getDashboardData($_SESSION['user_id']);
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['complete_goal'])) {
-    $goal_id = filter_input(INPUT_POST, 'goal_id', FILTER_VALIDATE_INT);
-    if ($goal_points = completeGoal($_SESSION['user_id'], $goal_id)) {
-        $message = "Goal completed! You earned $goal_points points.";
-        $data = getDashboardData($_SESSION['user_id']); // Fixed: Added missing parenthesis
-    } else {
-        $message = "Failed to complete goal.";
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (isset($_POST['request_completion'])) {
+        $goal_id = filter_input(INPUT_POST, 'goal_id', FILTER_VALIDATE_INT);
+        if (requestGoalCompletion($_SESSION['user_id'], $goal_id)) {
+            $message = "Completion requested! Awaiting parent approval.";
+            $data = getDashboardData($_SESSION['user_id']); // Refresh data
+        } else {
+            $message = "Failed to request completion.";
+        }
+    } elseif (isset($_POST['redeem_reward'])) {
+        $reward_id = filter_input(INPUT_POST, 'reward_id', FILTER_VALIDATE_INT);
+        if (redeemReward($_SESSION['user_id'], $reward_id)) {
+            $message = "Reward redeemed successfully! Refresh to see updates.";
+            $data = getDashboardData($_SESSION['user_id']); // Refresh data
+        } else {
+            $message = "Not enough points to redeem this reward.";
+        }
     }
 }
 ?>
@@ -41,43 +51,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['complete_goal'])) {
     <title>Child Dashboard</title>
     <link rel="stylesheet" href="css/main.css">
     <style>
-        .dashboard {
-            padding: 20px;
-            max-width: 600px;
-            margin: 0 auto;
-            text-align: center;
-        }
-        .progress {
-            margin: 20px 0;
-            font-size: 1.2em;
-            color: #4caf50;
-        }
-        .rewards, .redeemed-rewards, .active-goals, .completed-goals {
-            margin: 20px 0;
-        }
-        .reward-item, .redeemed-item, .goal-item {
-            background-color: #f5f5f5;
-            padding: 10px;
-            margin: 5px 0;
-            border-radius: 5px;
-        }
-        .button {
-            padding: 10px 20px;
-            margin: 5px;
-            background-color: #ff9800;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            text-decoration: none;
-            display: inline-block;
-        }
-        .redeem-button {
-            background-color: #2196f3;
-        }
-        .complete-button {
-            background-color: #9c27b0;
-        }
+        .dashboard { padding: 20px; max-width: 600px; margin: 0 auto; text-align: center; }
+        .progress { margin: 20px 0; font-size: 1.2em; color: #4caf50; }
+        .rewards, .redeemed-rewards, .active-goals, .completed-goals { margin: 20px 0; }
+        .reward-item, .redeemed-item, .goal-item { background-color: #f5f5f5; padding: 10px; margin: 5px 0; border-radius: 5px; }
+        .button { padding: 10px 20px; margin: 5px; background-color: #ff9800; color: white; border: none; border-radius: 5px; cursor: pointer; text-decoration: none; display: inline-block; }
+        .redeem-button { background-color: #2196f3; }
+        .request-button { background-color: #9c27b0; }
     </style>
 </head>
 <body>
@@ -133,7 +113,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['complete_goal'])) {
                         <p>Reward: <?php echo htmlspecialchars($goal['reward_title'] ?? 'None'); ?></p>
                         <form method="POST" action="dashboard_child.php">
                             <input type="hidden" name="goal_id" value="<?php echo $goal['id']; ?>">
-                            <button type="submit" name="complete_goal" class="button complete-button">Complete Goal</button>
+                            <button type="submit" name="request_completion" class="button request-button">Request Completion</button>
                         </form>
                     </div>
                 <?php endforeach; ?>
@@ -162,7 +142,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['complete_goal'])) {
         </div>
     </main>
     <footer>
-        <p>Child Task and Chore App - Ver 3.2.0</p>
+        <p>Child Task and Chore App - Ver 3.3.0</p>
     </footer>
 </body>
 </html>

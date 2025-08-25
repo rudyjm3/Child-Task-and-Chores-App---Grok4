@@ -45,6 +45,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             $message = "Failed to create goal. Check date range or reward ID.";
         }
+    } elseif (isset($_POST['approve_goal']) || isset($_POST['reject_goal'])) {
+        $goal_id = filter_input(INPUT_POST, 'goal_id', FILTER_VALIDATE_INT);
+        $action = isset($_POST['approve_goal']) ? 'approve' : 'reject';
+        $points = approveGoal($_SESSION['user_id'], $goal_id, $action === 'approve');
+        if ($points !== false) {
+            $message = $action === 'approve' ? "Goal approved! Child earned $points points." : "Goal rejected.";
+            $data = getDashboardData($_SESSION['user_id']); // Refresh data
+        } else {
+            $message = "Failed to $action goal.";
+        }
     }
 }
 ?>
@@ -56,42 +66,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <title>Parent Dashboard</title>
     <link rel="stylesheet" href="css/main.css">
     <style>
-        .dashboard {
-            padding: 20px;
-            max-width: 800px;
-            margin: 0 auto;
-        }
-        .children-overview, .management-links, .active-rewards, .redeemed-rewards, .completed-goals {
-            margin-top: 20px;
-        }
-        .child-item, .reward-item, .goal-item {
-            background-color: #f5f5f5;
-            padding: 10px;
-            margin: 5px 0;
-            border-radius: 5px;
-        }
-        .button {
-            padding: 10px 20px;
-            margin: 5px;
-            background-color: #4caf50;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            text-decoration: none;
-            display: inline-block;
-        }
-        .form-group {
-            margin-bottom: 15px;
-        }
-        .form-group label {
-            display: block;
-            margin-bottom: 5px;
-        }
-        .form-group input, .form-group select, .form-group textarea {
-            width: 100%;
-            padding: 8px;
-        }
+        .dashboard { padding: 20px; max-width: 800px; margin: 0 auto; }
+        .children-overview, .management-links, .active-rewards, .redeemed-rewards, .pending-approvals, .completed-goals { margin-top: 20px; }
+        .child-item, .reward-item, .goal-item { background-color: #f5f5f5; padding: 10px; margin: 5px 0; border-radius: 5px; }
+        .button { padding: 10px 20px; margin: 5px; background-color: #4caf50; color: white; border: none; border-radius: 5px; cursor: pointer; text-decoration: none; display: inline-block; }
+        .approve-button { background-color: #4caf50; }
+        .reject-button { background-color: #f44336; }
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; margin-bottom: 5px; }
+        .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 8px; }
     </style>
 </head>
 <body>
@@ -209,17 +192,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <p>No rewards redeemed yet.</p>
             <?php endif; ?>
         </div>
+        <div class="pending-approvals">
+            <h2>Pending Goal Approvals</h2>
+            <?php if (isset($data['pending_approvals']) && is_array($data['pending_approvals']) && !empty($data['pending_approvals'])): ?>
+                <?php foreach ($data['pending_approvals'] as $approval): ?>
+                    <div class="goal-item">
+                        <p>Goal: <?php echo htmlspecialchars($approval['title']); ?> (Target: <?php echo htmlspecialchars($approval['target_points']); ?> points)</p>
+                        <p>Child: <?php echo htmlspecialchars($approval['child_username']); ?></p>
+                        <p>Requested on: <?php echo htmlspecialchars($approval['requested_at']); ?></p>
+                        <form method="POST" action="dashboard_parent.php">
+                            <input type="hidden" name="goal_id" value="<?php echo $approval['id']; ?>">
+                            <button type="submit" name="approve_goal" class="button approve-button">Approve</button>
+                            <button type="submit" name="reject_goal" class="button reject-button">Reject</button>
+                        </form>
+                    </div>
+                <?php endforeach; ?>
+            <?php else: ?>
+                <p>No pending approvals.</p>
+            <?php endif; ?>
+        </div>
         <div class="completed-goals">
             <h2>Completed Goals</h2>
             <?php
             $all_completed_goals = [];
-            $parent_id = $_SESSION['user_id']; // Define $user_id as the parent's session ID
+            $parent_id = $_SESSION['user_id'];
             foreach ($data['children'] as $child) {
                 $stmt = $db->prepare("SELECT g.id, g.title, g.target_points, g.start_date, g.end_date, g.completed_at, u.username as child_username 
                                      FROM goals g 
                                      JOIN users u ON g.child_user_id = u.id 
                                      WHERE g.parent_user_id = :parent_id AND g.status = 'completed'");
-                $stmt->execute([':parent_id' => $parent_id]); // Use the defined $parent_id
+                $stmt->execute([':parent_id' => $parent_id]);
                 $all_completed_goals = array_merge($all_completed_goals, $stmt->fetchAll(PDO::FETCH_ASSOC));
             }
             ?>
@@ -238,7 +240,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </div>
     </main>
     <footer>
-        <p>Child Task and Chore App - Ver 3.2.0</p>
+        <p>Child Task and Chore App - Ver 3.3.0</p>
     </footer>
 </body>
 </html>
