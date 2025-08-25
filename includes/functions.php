@@ -44,9 +44,13 @@ function createChildProfile($child_user_id, $avatar, $age, $preferences, $parent
 }
 
 // Fetch dashboard data based on user role
-// Update getDashboardData to include pending approvals
+// Update getDashboardData to include pending approvals and improve points tracking
 function getDashboardData($user_id) {
     global $db;
+    if (!isset($db) || !$db) {
+        error_log("Database connection not available in getDashboardData");
+        return [];
+    }
     $data = [];
 
     $userStmt = $db->prepare("SELECT role FROM users WHERE id = :id");
@@ -65,16 +69,14 @@ function getDashboardData($user_id) {
                              FROM tasks t 
                              JOIN child_profiles cp ON t.user_id = cp.parent_user_id 
                              JOIN users u ON cp.child_user_id = u.id 
-                             WHERE t.user_id = :parent_id AND t.status = 'pending'");
+                             WHERE t.user_id = :parent_id AND t.status = 'approved'");
         $stmt->execute([':parent_id' => $user_id]);
         $data['tasks'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-        // Fetch active (unredeemed) rewards
         $stmt = $db->prepare("SELECT id, title, description, point_cost FROM rewards WHERE parent_user_id = :parent_id AND status = 'available'");
         $stmt->execute([':parent_id' => $user_id]);
         $data['active_rewards'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-        // Fetch redeemed rewards
         $stmt = $db->prepare("SELECT r.id, r.title, r.description, r.point_cost, u.username as child_username 
                              FROM rewards r 
                              JOIN child_profiles cp ON r.parent_user_id = cp.parent_user_id 
@@ -83,7 +85,6 @@ function getDashboardData($user_id) {
         $stmt->execute([':parent_id' => $user_id]);
         $data['redeemed_rewards'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-        // Fetch pending approvals
         $stmt = $db->prepare("SELECT g.id, g.title, g.target_points, g.requested_at, u.username as child_username 
                              FROM goals g 
                              JOIN child_profiles cp ON g.child_user_id = cp.child_user_id 
@@ -91,6 +92,25 @@ function getDashboardData($user_id) {
                              WHERE cp.parent_user_id = :parent_id AND g.status = 'pending_approval'");
         $stmt->execute([':parent_id' => $user_id]);
         $data['pending_approvals'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        $stmt = $db->prepare("SELECT COALESCE(SUM(t.points), 0) as task_points 
+                             FROM tasks t 
+                             JOIN child_profiles cp ON t.user_id = cp.parent_user_id 
+                             WHERE cp.parent_user_id = :parent_id AND t.status = 'approved'");
+        $stmt->execute([':parent_id' => $user_id]);
+        $task_points = $stmt->fetchColumn();
+
+        $stmt = $db->prepare("SELECT COALESCE(SUM(g.target_points), 0) as goal_points 
+                             FROM goals g 
+                             JOIN child_profiles cp ON g.child_user_id = cp.child_user_id 
+                             WHERE cp.parent_user_id = :parent_id AND g.status = 'completed'");
+        $stmt->execute([':parent_id' => $user_id]);
+        $goal_points = $stmt->fetchColumn();
+
+        $data['total_points_earned'] = $task_points + $goal_points;
+        $stmt = $db->prepare("SELECT COUNT(*) FROM goals WHERE parent_user_id = :parent_id AND status = 'completed'");
+        $stmt->execute([':parent_id' => $user_id]);
+        $data['goals_met'] = $stmt->fetchColumn();
     } elseif ($role === 'child') {
         $stmt = $db->prepare("SELECT COALESCE(SUM(t.points), 0) as total_points 
                              FROM tasks t 
@@ -99,7 +119,6 @@ function getDashboardData($user_id) {
         $stmt->execute([':child_id' => $user_id]);
         $total_points = $stmt->fetchColumn();
 
-        // Include points from completed goals
         $stmt = $db->prepare("SELECT COALESCE(SUM(g.target_points), 0) as goal_points 
                              FROM goals g 
                              WHERE g.child_user_id = :child_id AND g.status = 'completed'");
@@ -107,7 +126,6 @@ function getDashboardData($user_id) {
         $goal_points = $stmt->fetchColumn();
         $total_points += $goal_points;
 
-        // Calculate remaining points after redemptions
         $stmt = $db->prepare("SELECT COALESCE(SUM(r.point_cost), 0) as redeemed_points 
                              FROM rewards r 
                              JOIN goals g ON r.id = g.reward_id 
@@ -122,7 +140,6 @@ function getDashboardData($user_id) {
         $data['points_progress'] = $points_progress;
         $data['remaining_points'] = $remaining_points;
 
-        // Fetch available rewards for the child
         $parentStmt = $db->prepare("SELECT parent_user_id FROM child_profiles WHERE child_user_id = :child_id LIMIT 1");
         $parentStmt->execute([':child_id' => $user_id]);
         $parent_id = $parentStmt->fetchColumn();
@@ -132,7 +149,6 @@ function getDashboardData($user_id) {
             $data['rewards'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
         }
 
-        // Fetch active goals for the child
         $stmt = $db->prepare("SELECT g.id, g.title, g.target_points, g.start_date, g.end_date, r.title as reward_title 
                              FROM goals g 
                              LEFT JOIN rewards r ON g.reward_id = r.id 
@@ -140,7 +156,6 @@ function getDashboardData($user_id) {
         $stmt->execute([':child_id' => $user_id]);
         $data['active_goals'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-        // Fetch completed goals for the child
         $stmt = $db->prepare("SELECT g.id, g.title, g.target_points, g.start_date, g.end_date, g.completed_at, r.title as reward_title 
                              FROM goals g 
                              LEFT JOIN rewards r ON g.reward_id = r.id 
@@ -148,7 +163,6 @@ function getDashboardData($user_id) {
         $stmt->execute([':child_id' => $user_id]);
         $data['completed_goals'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-        // Fetch redeemed rewards with redemption dates
         $stmt = $db->prepare("SELECT r.id, r.title, r.description, r.point_cost, r.status, t.completed_at as redemption_date 
                              FROM rewards r 
                              LEFT JOIN tasks t ON r.id = t.id -- Approximation; adjust join as needed
@@ -161,8 +175,7 @@ function getDashboardData($user_id) {
     return $data;
 }
 
-// Ensure goals table includes necessary columns
-$db->exec("ALTER TABLE goals ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'active'");
+// Ensure goals table integrity (no changes needed after manual alter)
 $db->exec("ALTER TABLE goals ADD COLUMN IF NOT EXISTS requested_at DATETIME DEFAULT NULL");
 $db->exec("ALTER TABLE goals ADD COLUMN IF NOT EXISTS completed_at DATETIME DEFAULT NULL");
 $db->exec("ALTER TABLE goals ADD COLUMN IF NOT EXISTS rejected_at DATETIME DEFAULT NULL");
@@ -301,19 +314,45 @@ function redeemReward($child_user_id, $reward_id) {
 // Request goal completion
 function requestGoalCompletion($child_user_id, $goal_id) {
     global $db;
+    if (!isset($db) || !$db) {
+        error_log("Database connection not available in requestGoalCompletion");
+        return false;
+    }
     $db->beginTransaction();
     try {
-        $stmt = $db->prepare("UPDATE goals SET status = 'pending_approval', requested_at = NOW() WHERE id = :goal_id AND child_user_id = :child_id AND status = 'active'");
-        $result = $stmt->execute([':goal_id' => $goal_id, ':child_id' => $child_user_id]);
-        if ($result) {
+        error_log("Attempting to request completion for goal $goal_id by child $child_user_id");
+        // Verify current status before update
+        $checkStmt = $db->prepare("SELECT status, requested_at FROM goals WHERE id = :goal_id AND child_user_id = :child_user_id");
+        $checkStmt->execute([':goal_id' => $goal_id, ':child_user_id' => $child_user_id]);
+        $current_data = $checkStmt->fetch(PDO::FETCH_ASSOC);
+        $current_status = $current_data['status'] ?? 'NULL';
+        $current_requested_at = $current_data['requested_at'] ?? 'NULL';
+        error_log("Current status for goal $goal_id: $current_status, requested_at: $current_requested_at");
+
+        $stmt = $db->prepare("UPDATE goals SET status = :status, requested_at = NOW() WHERE id = :goal_id AND child_user_id = :child_user_id");
+        $result = $stmt->execute([
+            ':goal_id' => $goal_id,
+            ':child_user_id' => $child_user_id,
+            ':status' => 'pending_approval'
+        ]);
+        $rows_affected = $stmt->rowCount();
+        if ($result && $rows_affected > 0) {
             $db->commit();
+            error_log("Goal $goal_id requested for approval by child $child_user_id. Rows affected: $rows_affected");
+            // Verify post-update status
+            $checkStmt->execute([':goal_id' => $goal_id, ':child_user_id' => $child_user_id]);
+            $post_update_data = $checkStmt->fetch(PDO::FETCH_ASSOC);
+            $post_status = $post_update_data['status'] ?? 'NULL';
+            $post_requested_at = $post_update_data['requested_at'] ?? 'NULL';
+            error_log("Post-update status for goal $goal_id: $post_status, requested_at: $post_requested_at");
             return true;
         }
         $db->rollBack();
+        error_log("Failed to request goal $goal_id approval for child $child_user_id. Rows affected: $rows_affected. Current status: $current_status");
         return false;
     } catch (Exception $e) {
         $db->rollBack();
-        error_log("Goal completion request failed: " . $e->getMessage());
+        error_log("Goal completion request failed for goal $goal_id by child $child_user_id: " . $e->getMessage());
         return false;
     }
 }
@@ -321,16 +360,21 @@ function requestGoalCompletion($child_user_id, $goal_id) {
 // Approve or reject goal completion
 function approveGoal($parent_user_id, $goal_id, $approve = true) {
     global $db;
+    if (!isset($db) || !$db) {
+        error_log("Database connection not available in approveGoal");
+        return false;
+    }
     $db->beginTransaction();
     try {
-        // Check if the goal is pending approval and belongs to the parent's child
+        error_log("Attempting to approve/reject goal $goal_id by parent $parent_user_id");
         $stmt = $db->prepare("SELECT g.target_points, cp.child_user_id FROM goals g 
                              JOIN child_profiles cp ON g.child_user_id = cp.child_user_id 
-                             WHERE g.id = :goal_id AND cp.parent_user_id = :parent_id AND g.status = 'pending_approval'");
-        $stmt->execute([':goal_id' => $goal_id, ':parent_id' => $parent_user_id]);
+                             WHERE g.id = :goal_id AND cp.parent_user_id = :parent_user_id AND g.status = 'pending_approval'");
+        $stmt->execute([':goal_id' => $goal_id, ':parent_user_id' => $parent_user_id]);
         $goal = $stmt->fetch(PDO::FETCH_ASSOC);
         if (!$goal) {
             $db->rollBack();
+            error_log("No pending goal $goal_id found for parent $parent_user_id");
             return false;
         }
 
@@ -339,16 +383,17 @@ function approveGoal($parent_user_id, $goal_id, $approve = true) {
         $stmt->execute([':status' => $new_status, ':goal_id' => $goal_id]);
 
         if ($approve) {
-            // Award points (simplified; adjust logic as needed)
             $target_points = $goal['target_points'];
             $db->commit();
-            return $target_points; // Return points for updating child points
+            error_log("Goal $goal_id approved for child {$goal['child_user_id']} with $target_points points");
+            return $target_points;
         }
         $db->commit();
-        return 0; // No points for rejection
+        error_log("Goal $goal_id rejected for child {$goal['child_user_id']}");
+        return 0;
     } catch (Exception $e) {
         $db->rollBack();
-        error_log("Goal approval failed: " . $e->getMessage());
+        error_log("Goal approval failed for goal $goal_id by parent $parent_user_id: " . $e->getMessage());
         return false;
     }
 }

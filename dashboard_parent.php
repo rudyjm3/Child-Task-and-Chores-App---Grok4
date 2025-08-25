@@ -162,8 +162,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 </form>
             </div>
             <a href="#" class="button">Summary Charts</a>
-            <p>Points Earned: <?php echo isset($data['tasks']) && is_array($data['tasks']) ? array_sum(array_column($data['tasks'], 'points')) : 0; ?></p>
-            <p>Goals Met: <?php echo isset($data['children']) && is_array($data['children']) ? count(array_filter($data['children'], fn($c) => /* Add goal completion check */ true)) : 0; // Placeholder ?></p>
+            <p>Points Earned: <?php echo isset($data['total_points_earned']) ? htmlspecialchars($data['total_points_earned']) : '0'; ?></p>
+            <p>Goals Met: <?php echo isset($data['goals_met']) ? htmlspecialchars($data['goals_met']) : '0'; ?></p>
         </div>
         <div class="active-rewards">
             <h2>Active Rewards</h2>
