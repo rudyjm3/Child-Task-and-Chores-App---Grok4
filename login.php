@@ -6,7 +6,7 @@
 
 require_once __DIR__ . '/includes/functions.php';
 
-session_start();
+session_start(); // Keep this here as the first session_start
 $message = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -84,7 +84,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </div>
     </main>
     <footer>
-        <p>Child Task and Chore App - Ver 2.0.0</p>
+        <p>Child Task and Chore App - Ver 3.3.1</p>
     </footer>
 </body>
 </html>

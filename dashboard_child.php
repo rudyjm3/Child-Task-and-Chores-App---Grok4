@@ -22,6 +22,10 @@ if (!isset($_SESSION['username'])) {
 }
 
 $data = getDashboardData($_SESSION['user_id']);
+// Log tasks for debugging
+if (isset($data['tasks'])) {
+    error_log("Tasks retrieved in dashboard_child.php for user_id " . $_SESSION['user_id'] . ": " . print_r($data['tasks'], true));
+}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['request_completion'])) {
@@ -53,8 +57,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <style>
         .dashboard { padding: 20px; max-width: 600px; margin: 0 auto; text-align: center; }
         .progress { margin: 20px 0; font-size: 1.2em; color: #4caf50; }
-        .rewards, .redeemed-rewards, .active-goals, .completed-goals { margin: 20px 0; }
-        .reward-item, .redeemed-item, .goal-item { background-color: #f5f5f5; padding: 10px; margin: 5px 0; border-radius: 5px; }
+        .rewards, .redeemed-rewards, .active-goals, .completed-goals, .assigned-tasks { margin: 20px 0; }
+        .reward-item, .redeemed-item, .goal-item, .task { background-color: #f5f5f5; padding: 10px; margin: 5px 0; border-radius: 5px; }
         .button { padding: 10px 20px; margin: 5px; background-color: #ff9800; color: white; border: none; border-radius: 5px; cursor: pointer; text-decoration: none; display: inline-block; }
         .redeem-button { background-color: #2196f3; }
         .request-button { background-color: #9c27b0; }
@@ -134,6 +138,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <?php endforeach; ?>
             <?php else: ?>
                 <p>No completed goals yet.</p>
+            <?php endif; ?>
+        </div>
+        <div class="assigned-tasks">
+            <h2>Assigned Tasks</h2>
+            <?php if (isset($data['tasks']) && is_array($data['tasks']) && !empty($data['tasks'])): ?>
+                <?php foreach ($data['tasks'] as $task): ?>
+                    <div class="task">
+                        <h3><?php echo htmlspecialchars($task['title']); ?></h3>
+                        <p>Due: <?php echo htmlspecialchars($task['due_date_formatted']); ?></p>
+                        <p>Points: <?php echo htmlspecialchars($task['points']); ?></p>
+                        <p>Category: <?php echo htmlspecialchars($task['category']); ?></p>
+                        <p>Timing Mode: <?php echo htmlspecialchars($task['timing_mode']); ?></p>
+                        <button>Finish Task</button>
+                    </div>
+                <?php endforeach; ?>
+            <?php else: ?>
+                <p>No assigned tasks.</p>
             <?php endif; ?>
         </div>
         <div class="links">

@@ -171,7 +171,7 @@ foreach ($tasks as &$task) {
             </div>
         <?php endif; ?>
         <div class="task-list">
-            <h2>Your Tasks</h2>
+            <h2><?php echo ($_SESSION['role'] === 'parent') ? 'Created Tasks' : 'Assigned Tasks'; ?></h2>
             <?php foreach ($tasks as $task): ?>
                 <div class="task" data-task-id="<?php echo $task['id']; ?>">
                     <p>Title: <?php echo htmlspecialchars($task['title']); ?></p>
