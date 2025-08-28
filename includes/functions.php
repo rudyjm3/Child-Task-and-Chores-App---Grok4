@@ -44,7 +44,7 @@ function createChildProfile($child_user_id, $avatar, $age, $preferences, $parent
 }
 
 // Fetch dashboard data based on user role
-// Update getDashboardData to include pending approvals and improve points tracking
+// Update getDashboardData to include task due date formatting
 function getDashboardData($user_id) {
     global $db;
     if (!isset($db) || !$db) {
@@ -71,7 +71,11 @@ function getDashboardData($user_id) {
                              JOIN users u ON cp.child_user_id = u.id 
                              WHERE t.user_id = :parent_id AND t.status = 'approved'");
         $stmt->execute([':parent_id' => $user_id]);
-        $data['tasks'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $tasks = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        foreach ($tasks as &$task) {
+            $task['due_date_formatted'] = date('m/d/Y h:i A', strtotime($task['due_date']));
+        }
+        $data['tasks'] = $tasks;
 
         $stmt = $db->prepare("SELECT id, title, description, point_cost FROM rewards WHERE parent_user_id = :parent_id AND status = 'available'");
         $stmt->execute([':parent_id' => $user_id]);
@@ -170,12 +174,23 @@ function getDashboardData($user_id) {
                              WHERE cp.child_user_id = :child_id AND r.status = 'redeemed'");
         $stmt->execute([':child_id' => $user_id]);
         $data['redeemed_rewards'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        $stmt = $db->prepare("SELECT t.id, t.title, t.due_date, t.points, t.status, t.category, t.timing_mode 
+                             FROM tasks t 
+                             JOIN child_profiles cp ON t.user_id = cp.parent_user_id 
+                             WHERE cp.child_user_id = :child_id AND t.status = 'approved'");
+        $stmt->execute([':child_id' => $user_id]);
+        $tasks = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        foreach ($tasks as &$task) {
+            $task['due_date_formatted'] = date('m/d/Y h:i A', strtotime($task['due_date']));
+        }
+        $data['tasks'] = $tasks;
     }
 
     return $data;
 }
 
-// Ensure goals table integrity (no changes needed after manual alter)
+// Ensure goals table integrity
 $db->exec("ALTER TABLE goals ADD COLUMN IF NOT EXISTS requested_at DATETIME DEFAULT NULL");
 $db->exec("ALTER TABLE goals ADD COLUMN IF NOT EXISTS completed_at DATETIME DEFAULT NULL");
 $db->exec("ALTER TABLE goals ADD COLUMN IF NOT EXISTS rejected_at DATETIME DEFAULT NULL");
@@ -321,7 +336,6 @@ function requestGoalCompletion($child_user_id, $goal_id) {
     $db->beginTransaction();
     try {
         error_log("Attempting to request completion for goal $goal_id by child $child_user_id");
-        // Verify current status before update
         $checkStmt = $db->prepare("SELECT status, requested_at FROM goals WHERE id = :goal_id AND child_user_id = :child_user_id");
         $checkStmt->execute([':goal_id' => $goal_id, ':child_user_id' => $child_user_id]);
         $current_data = $checkStmt->fetch(PDO::FETCH_ASSOC);
@@ -339,7 +353,6 @@ function requestGoalCompletion($child_user_id, $goal_id) {
         if ($result && $rows_affected > 0) {
             $db->commit();
             error_log("Goal $goal_id requested for approval by child $child_user_id. Rows affected: $rows_affected");
-            // Verify post-update status
             $checkStmt->execute([':goal_id' => $goal_id, ':child_user_id' => $child_user_id]);
             $post_update_data = $checkStmt->fetch(PDO::FETCH_ASSOC);
             $post_status = $post_update_data['status'] ?? 'NULL';

@@ -64,6 +64,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $tasks = getTasks($_SESSION['user_id']);
+// Format due_date for display
+foreach ($tasks as &$task) {
+    $task['due_date_formatted'] = date('m/d/Y h:i A', strtotime($task['due_date']));
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -168,11 +172,10 @@ $tasks = getTasks($_SESSION['user_id']);
         <?php endif; ?>
         <div class="task-list">
             <h2>Your Tasks</h2>
-            
             <?php foreach ($tasks as $task): ?>
                 <div class="task" data-task-id="<?php echo $task['id']; ?>">
                     <p>Title: <?php echo htmlspecialchars($task['title']); ?></p>
-                    <p>Due: <?php echo htmlspecialchars($task['due_date']); ?></p>
+                    <p>Due: <?php echo htmlspecialchars($task['due_date_formatted']); ?></p>
                     <p>Points: <?php echo htmlspecialchars($task['points']); ?></p>
                     <p>Category: <?php echo htmlspecialchars($task['category']); ?></p>
                     <p>Timing Mode: <?php echo htmlspecialchars($task['timing_mode']); ?></p>
@@ -181,8 +184,6 @@ $tasks = getTasks($_SESSION['user_id']);
                         <button onclick="startTimer(<?php echo $task['id']; ?>, 5)">Start Timer</button>
                     <?php elseif ($task['timing_mode'] === 'suggested'): ?>
                         <p>Suggested Time: 10min (guideline)</p>
-                    <?php elseif ($task['timing_mode'] === 'no_limit'): ?>
-                        <p>Due Today (11:59 PM)</p>
                     <?php endif; ?>
                     <?php if ($_SESSION['role'] === 'child' && $task['status'] === 'pending'): ?>
                         <form method="POST" action="task.php" enctype="multipart/form-data">
@@ -204,7 +205,7 @@ $tasks = getTasks($_SESSION['user_id']);
         </div>
     </main>
     <footer>
-        <p>Child Task and Chore App - Ver 2.0.0</p>
+        <p>Child Task and Chore App - Ver 3.3.0</p>
     </footer>
 </body>
 </html>
