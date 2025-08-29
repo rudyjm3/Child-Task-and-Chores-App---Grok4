@@ -4,11 +4,10 @@
 // Inputs: POST data for task creation, task ID for completion
 // Outputs: Task management interface
 
+session_start(); // Ensure session is started to load existing session
+
 require_once __DIR__ . '/includes/functions.php';
 
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
 if (!isset($_SESSION['user_id'])) {
     header("Location: login.php");
     exit;
@@ -29,6 +28,7 @@ if (!isset($_SESSION['username'])) {
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['create_task'])) {
+        $child_user_id = filter_input(INPUT_POST, 'child_user_id', FILTER_VALIDATE_INT);
         $title = filter_input(INPUT_POST, 'title', FILTER_SANITIZE_STRING);
         $description = filter_input(INPUT_POST, 'description', FILTER_SANITIZE_STRING);
         $due_date = filter_input(INPUT_POST, 'due_date', FILTER_SANITIZE_STRING);
@@ -37,7 +37,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $category = filter_input(INPUT_POST, 'category', FILTER_SANITIZE_STRING);
         $timing_mode = filter_input(INPUT_POST, 'timing_mode', FILTER_SANITIZE_STRING);
 
-        if (createTask($_SESSION['user_id'], $title, $description, $due_date, $points, $recurrence, $category, $timing_mode)) {
+        if (createTask($_SESSION['user_id'], $child_user_id, $title, $description, $due_date, $points, $recurrence, $category, $timing_mode)) {
             $message = "Task created successfully!";
         } else {
             $message = "Failed to create task.";
@@ -140,6 +140,16 @@ foreach ($tasks as &$task) {
             <div class="task-form">
                 <h2>Create Task</h2>
                 <form method="POST" action="task.php" enctype="multipart/form-data">
+                    <label for="child_user_id">Child:</label>
+                    <select id="child_user_id" name="child_user_id" required>
+                        <?php
+                        $stmt = $db->prepare("SELECT cp.child_user_id, u.username FROM child_profiles cp JOIN users u ON cp.child_user_id = u.id WHERE cp.parent_user_id = :parent_id");
+                        $stmt->execute([':parent_id' => $_SESSION['user_id']]);
+                        $children = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                        foreach ($children as $child): ?>
+                            <option value="<?php echo $child['child_user_id']; ?>"><?php echo htmlspecialchars($child['username']); ?></option>
+                        <?php endforeach; ?>
+                    </select>
                     <label for="title">Title:</label>
                     <input type="text" id="title" name="title" required>
                     <label for="description">Description:</label>
@@ -172,40 +182,54 @@ foreach ($tasks as &$task) {
         <?php endif; ?>
         <div class="task-list">
             <h2><?php echo ($_SESSION['role'] === 'parent') ? 'Created Tasks' : 'Assigned Tasks'; ?></h2>
-            <?php foreach ($tasks as $task): ?>
-                <div class="task" data-task-id="<?php echo $task['id']; ?>">
-                    <p>Title: <?php echo htmlspecialchars($task['title']); ?></p>
-                    <p>Due: <?php echo htmlspecialchars($task['due_date_formatted']); ?></p>
-                    <p>Points: <?php echo htmlspecialchars($task['points']); ?></p>
-                    <p>Category: <?php echo htmlspecialchars($task['category']); ?></p>
-                    <p>Timing Mode: <?php echo htmlspecialchars($task['timing_mode']); ?></p>
-                    <?php if ($task['timing_mode'] === 'timer' && $task['status'] === 'pending'): ?>
-                        <p class="timer" id="timer-<?php echo $task['id']; ?>">5:00</p>
-                        <button onclick="startTimer(<?php echo $task['id']; ?>, 5)">Start Timer</button>
-                    <?php elseif ($task['timing_mode'] === 'suggested'): ?>
-                        <p>Suggested Time: 10min (guideline)</p>
-                    <?php endif; ?>
-                    <?php if ($_SESSION['role'] === 'child' && $task['status'] === 'pending'): ?>
-                        <form method="POST" action="task.php" enctype="multipart/form-data">
-                            <input type="hidden" name="task_id" value="<?php echo $task['id']; ?>">
-                            <input type="file" name="photo_proof">
-                            <button type="submit" name="complete_task">Finish Task</button>
-                        </form>
-                    <?php elseif ($_SESSION['role'] === 'parent' && $task['status'] === 'completed'): ?>
-                        <form method="POST" action="task.php">
-                            <input type="hidden" name="task_id" value="<?php echo $task['id']; ?>">
-                            <button type="submit" name="approve_task">Approve Task</button>
-                        </form>
-                    <?php endif; ?>
-                    <?php if ($task['status'] === 'approved'): ?>
-                        <p class="completed">Approved!</p>
-                    <?php endif; ?>
-                </div>
-            <?php endforeach; ?>
+            <?php if (empty($tasks)): ?>
+                <p>No tasks available.</p>
+            <?php else: ?>
+                <?php
+                $unique_tasks = []; // To avoid duplicates
+                foreach ($tasks as $task): ?>
+                    <?php
+                    // Use task id as the unique key to avoid duplicates
+                    if (!isset($unique_tasks[$task['id']])) {
+                        $unique_tasks[$task['id']] = $task;
+                    }
+                    ?>
+                <?php endforeach; ?>
+                <?php foreach ($unique_tasks as $task): ?>
+                    <div class="task" data-task-id="<?php echo $task['id']; ?>">
+                        <p>Title: <?php echo htmlspecialchars($task['title']); ?></p>
+                        <p>Due: <?php echo htmlspecialchars($task['due_date_formatted']); ?></p>
+                        <p>Points: <?php echo htmlspecialchars($task['points']); ?></p>
+                        <p>Category: <?php echo htmlspecialchars($task['category']); ?></p>
+                        <p>Timing Mode: <?php echo htmlspecialchars($task['timing_mode']); ?></p>
+                        <?php if ($task['timing_mode'] === 'timer' && $task['status'] === 'pending'): ?>
+                            <p class="timer" id="timer-<?php echo $task['id']; ?>">5:00</p>
+                            <button onclick="startTimer(<?php echo $task['id']; ?>, 5)">Start Timer</button>
+                        <?php elseif ($task['timing_mode'] === 'suggested'): ?>
+                            <p>Suggested Time: 10min (guideline)</p>
+                        <?php endif; ?>
+                        <?php if ($_SESSION['role'] === 'child' && $task['status'] === 'pending'): ?>
+                            <form method="POST" action="task.php" enctype="multipart/form-data">
+                                <input type="hidden" name="task_id" value="<?php echo $task['id']; ?>">
+                                <input type="file" name="photo_proof">
+                                <button type="submit" name="complete_task">Finish Task</button>
+                            </form>
+                        <?php elseif ($_SESSION['role'] === 'parent' && $task['status'] === 'completed'): ?>
+                            <form method="POST" action="task.php">
+                                <input type="hidden" name="task_id" value="<?php echo $task['id']; ?>">
+                                <button type="submit" name="approve_task">Approve Task</button>
+                            </form>
+                        <?php endif; ?>
+                        <?php if ($task['status'] === 'approved'): ?>
+                            <p class="completed">Approved!</p>
+                        <?php endif; ?>
+                    </div>
+                <?php endforeach; ?>
+            <?php endif; ?>
         </div>
     </main>
     <footer>
-        <p>Child Task and Chore App - Ver 3.3.0</p>
+        <p>Child Task and Chore App - Ver 3.3.2</p>
     </footer>
 </body>
 </html>

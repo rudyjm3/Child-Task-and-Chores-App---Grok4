@@ -6,9 +6,8 @@
 
 require_once __DIR__ . '/includes/functions.php';
 
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
+session_start(); // Force session start to load existing session
+error_log("Dashboard Child: user_id=" . (isset($_SESSION['user_id']) ? $_SESSION['user_id'] : 'null') . ", role=" . (isset($_SESSION['role']) ? $_SESSION['role'] : 'null') . ", session_id=" . session_id() . ", cookie=" . (isset($_SERVER['HTTP_COOKIE']) ? $_SERVER['HTTP_COOKIE'] : 'none'));
 if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'child') {
     header("Location: login.php");
     exit;
@@ -22,10 +21,6 @@ if (!isset($_SESSION['username'])) {
 }
 
 $data = getDashboardData($_SESSION['user_id']);
-// Log tasks for debugging
-if (isset($data['tasks'])) {
-    error_log("Tasks retrieved in dashboard_child.php for user_id " . $_SESSION['user_id'] . ": " . print_r($data['tasks'], true));
-}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['request_completion'])) {
@@ -57,8 +52,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <style>
         .dashboard { padding: 20px; max-width: 600px; margin: 0 auto; text-align: center; }
         .progress { margin: 20px 0; font-size: 1.2em; color: #4caf50; }
-        .rewards, .redeemed-rewards, .active-goals, .completed-goals, .assigned-tasks { margin: 20px 0; }
-        .reward-item, .redeemed-item, .goal-item, .task { background-color: #f5f5f5; padding: 10px; margin: 5px 0; border-radius: 5px; }
+        .rewards, .redeemed-rewards, .active-goals, .completed-goals { margin: 20px 0; }
+        .reward-item, .redeemed-item, .goal-item { background-color: #f5f5f5; padding: 10px; margin: 5px 0; border-radius: 5px; }
         .button { padding: 10px 20px; margin: 5px; background-color: #ff9800; color: white; border: none; border-radius: 5px; cursor: pointer; text-decoration: none; display: inline-block; }
         .redeem-button { background-color: #2196f3; }
         .request-button { background-color: #9c27b0; }
@@ -140,30 +135,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <p>No completed goals yet.</p>
             <?php endif; ?>
         </div>
-        <div class="assigned-tasks">
-            <h2>Assigned Tasks</h2>
-            <?php if (isset($data['tasks']) && is_array($data['tasks']) && !empty($data['tasks'])): ?>
-                <?php foreach ($data['tasks'] as $task): ?>
-                    <div class="task">
-                        <h3><?php echo htmlspecialchars($task['title']); ?></h3>
-                        <p>Due: <?php echo htmlspecialchars($task['due_date_formatted']); ?></p>
-                        <p>Points: <?php echo htmlspecialchars($task['points']); ?></p>
-                        <p>Category: <?php echo htmlspecialchars($task['category']); ?></p>
-                        <p>Timing Mode: <?php echo htmlspecialchars($task['timing_mode']); ?></p>
-                        <button>Finish Task</button>
-                    </div>
-                <?php endforeach; ?>
-            <?php else: ?>
-                <p>No assigned tasks.</p>
-            <?php endif; ?>
-        </div>
         <div class="links">
             <a href="task.php" class="button">View Tasks</a>
             <a href="#" class="button">View Rewards</a>
         </div>
     </main>
     <footer>
-        <p>Child Task and Chore App - Ver 3.3.0</p>
+        <p>Child Task and Chore App - Ver 3.3.2</p>
     </footer>
 </body>
 </html>

@@ -6,9 +6,8 @@
 
 require_once __DIR__ . '/includes/functions.php';
 
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
+session_start(); // Force session start to load existing session
+error_log("Dashboard Parent: user_id=" . (isset($_SESSION['user_id']) ? $_SESSION['user_id'] : 'null') . ", role=" . (isset($_SESSION['role']) ? $_SESSION['role'] : 'null') . ", session_id=" . session_id() . ", cookie=" . (isset($_SERVER['HTTP_COOKIE']) ? $_SERVER['HTTP_COOKIE'] : 'none'));
 if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'parent') {
     header("Location: login.php");
     exit;
@@ -240,7 +239,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </div>
     </main>
     <footer>
-        <p>Child Task and Chore App - Ver 3.3.0</p>
+        <p>Child Task and Chores App - Ver 3.3.2</p>
     </footer>
 </body>
 </html>

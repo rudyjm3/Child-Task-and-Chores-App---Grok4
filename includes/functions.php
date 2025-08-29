@@ -80,7 +80,6 @@ function getDashboardData($user_id) {
         $stmt->execute([':parent_id' => $user_id]);
         $data['pending_approvals'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-        // Updated query to use parent_user_id instead of user_id
         $stmt = $db->prepare("SELECT COALESCE(SUM(t.points), 0) as task_points 
                              FROM tasks t 
                              JOIN child_profiles cp ON t.parent_user_id = cp.parent_user_id 
@@ -100,7 +99,6 @@ function getDashboardData($user_id) {
         $stmt->execute([':parent_id' => $user_id]);
         $data['goals_met'] = $stmt->fetchColumn();
     } elseif ($role === 'child') {
-        // Updated query to use parent_user_id instead of user_id
         $stmt = $db->prepare("SELECT COALESCE(SUM(t.points), 0) as total_points 
                              FROM tasks t 
                              JOIN child_profiles cp ON t.parent_user_id = cp.parent_user_id 
@@ -164,13 +162,8 @@ function getDashboardData($user_id) {
     return $data;
 }
 
-// Ensure tasks table includes necessary columns and enforce integrity
-$db->exec("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'pending' NOT NULL");
-$db->exec("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS created_at DATETIME DEFAULT NOW()");
-$db->exec("UPDATE tasks SET status = 'pending' WHERE status IS NULL OR status = ''");
-
 // Create a new task
-function createTask($parent_user_id, $title, $description, $due_date, $points, $recurrence, $category, $timing_mode) {
+function createTask($parent_user_id, $child_user_id, $title, $description, $due_date, $points, $recurrence, $category, $timing_mode) {
     global $db;
     if (!isset($db) || !$db) {
         error_log("Database connection not available in createTask");
@@ -178,10 +171,11 @@ function createTask($parent_user_id, $title, $description, $due_date, $points, $
     }
     $db->beginTransaction();
     try {
-        $stmt = $db->prepare("INSERT INTO tasks (parent_user_id, title, description, due_date, points, recurrence, category, timing_mode, status, created_at) 
-                             VALUES (:parent_user_id, :title, :description, :due_date, :points, :recurrence, :category, :timing_mode, 'pending', NOW())");
+        $stmt = $db->prepare("INSERT INTO tasks (parent_user_id, child_user_id, title, description, due_date, points, recurrence, category, timing_mode, status, created_at) 
+                             VALUES (:parent_user_id, :child_user_id, :title, :description, :due_date, :points, :recurrence, :category, :timing_mode, 'pending', NOW())");
         $stmt->execute([
             ':parent_user_id' => $parent_user_id,
+            ':child_user_id' => $child_user_id,
             ':title' => $title,
             ':description' => $description,
             ':due_date' => $due_date,
@@ -191,11 +185,11 @@ function createTask($parent_user_id, $title, $description, $due_date, $points, $
             ':timing_mode' => $timing_mode
         ]);
         $db->commit();
-        error_log("Task created by parent $parent_user_id: $title");
+        error_log("Task created by parent $parent_user_id for child $child_user_id: $title");
         return true;
     } catch (Exception $e) {
         $db->rollBack();
-        error_log("Failed to create task by parent $parent_user_id: " . $e->getMessage());
+        error_log("Failed to create task by parent $parent_user_id for child $child_user_id: " . $e->getMessage());
         return false;
     }
 }
@@ -204,30 +198,42 @@ function createTask($parent_user_id, $title, $description, $due_date, $points, $
 function getTasks($user_id) {
     global $db;
     if (!isset($db) || !$db) {
-        error_log("Database connection not available in getTasks");
+        error_log("Database connection not available in getTasks for user_id $user_id");
         return [];
     }
-    $role = $_SESSION['role'] ?? '';
-    $query = "SELECT t.id, t.parent_user_id, t.title, t.due_date, t.points, t.status, t.category, t.timing_mode 
-              FROM tasks t 
-              WHERE t.parent_user_id = :user_id";
-    if ($role === 'child') {
-        $query .= " AND EXISTS (SELECT 1 FROM child_profiles cp WHERE cp.child_user_id = :user_id AND cp.parent_user_id = t.parent_user_id)";
+    $role = $_SESSION['role'] ?? 'unknown';
+    $tasks = [];
+
+    if ($role === 'parent') {
+        $query = "SELECT t.id, t.parent_user_id, t.child_user_id, t.title, t.due_date, t.points, t.status, t.category, t.timing_mode 
+                  FROM tasks t 
+                  WHERE t.parent_user_id = :user_id";
+        $stmt = $db->prepare($query);
+        $stmt->execute([':user_id' => $user_id]);
+        $tasks = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        error_log("Parent getTasks query for user_id $user_id: " . $query . ", Result: " . print_r($tasks, true));
+    } elseif ($role === 'child') {
+        $query = "SELECT t.id, t.parent_user_id, t.child_user_id, t.title, t.due_date, t.points, t.status, t.category, t.timing_mode 
+                  FROM tasks t 
+                  WHERE t.child_user_id = :user_id";
+        $stmt = $db->prepare($query);
+        $stmt->execute([':user_id' => $user_id]);
+        $tasks = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        error_log("Child getTasks query for user_id $user_id: " . $query . ", Result: " . print_r($tasks, true));
+    } else {
+        error_log("Unknown role for user_id $user_id in getTasks");
     }
-    $stmt = $db->prepare($query);
-    $stmt->execute([':user_id' => $user_id]);
-    $tasks = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    error_log("getTasks returned for user_id $user_id: " . print_r($tasks, true));
+
     return $tasks;
 }
 
 // Complete a task
-function completeTask($task_id, $completed_by, $photo_proof) {
+function completeTask($task_id, $child_user_id, $photo_proof) {
     global $db;
-    $stmt = $db->prepare("UPDATE tasks SET status = 'completed', completed_by = :completed_by, photo_proof = :photo_proof, completed_at = NOW() WHERE id = :task_id");
+    $stmt = $db->prepare("UPDATE tasks SET status = 'completed', photo_proof = :photo_proof, completed_at = NOW() WHERE id = :task_id AND child_user_id = :child_user_id");
     return $stmt->execute([
         ':task_id' => $task_id,
-        ':completed_by' => $completed_by,
+        ':child_user_id' => $child_user_id,
         ':photo_proof' => $photo_proof
     ]);
 }
@@ -465,6 +471,7 @@ $db->exec($sql);
 $sql = "CREATE TABLE IF NOT EXISTS tasks (
     id INT AUTO_INCREMENT PRIMARY KEY,
     parent_user_id INT NOT NULL,
+    child_user_id INT NOT NULL,
     title VARCHAR(100) NOT NULL,
     description TEXT,
     due_date DATETIME,
@@ -474,9 +481,10 @@ $sql = "CREATE TABLE IF NOT EXISTS tasks (
     timing_mode ENUM('timer', 'suggested', 'no_limit') DEFAULT 'no_limit',
     status ENUM('pending', 'completed', 'approved') DEFAULT 'pending',
     photo_proof VARCHAR(255),
-    completed_by INT,
     completed_at DATETIME,
-    FOREIGN KEY (parent_user_id) REFERENCES users(id) ON DELETE CASCADE
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (parent_user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (child_user_id) REFERENCES users(id) ON DELETE CASCADE
 )";
 $db->exec($sql);
 

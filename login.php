@@ -6,7 +6,7 @@
 
 require_once __DIR__ . '/includes/functions.php';
 
-session_start(); // Keep this here as the first session_start
+session_start(); // Ensure session starts here
 $message = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -22,13 +22,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $_SESSION['user_id'] = $user['id'];
         $_SESSION['role'] = $user['role'];
         $_SESSION['username'] = $user['username'];
+        error_log("Login successful for user_id={$user['id']}, role={$user['role']}");
 
-        // Redirect based on role
+        // Debug session data and ID
+        error_log("Session data before redirect: " . print_r($_SESSION, true));
+        error_log("Session ID before redirect: " . session_id());
+
+        // Debug before redirect
+        error_log("Before redirect for user_id={$_SESSION['user_id']}, role={$_SESSION['role']}");
         if ($user['role'] === 'parent') {
-            header("Location: dashboard_parent.php");
+            error_log("Redirecting to dashboard_parent.php");
+            header("Location: http://localhost/Child Task and Chores App - Grok4/dashboard_parent.php");
         } else {
-            header("Location: dashboard_child.php");
+            error_log("Redirecting to dashboard_child.php");
+            header("Location: http://localhost/Child Task and Chores App - Grok4/dashboard_child.php");
         }
+        error_log("After header call for user_id={$_SESSION['user_id']}, role={$_SESSION['role']}");
         exit;
     } else {
         $message = "Invalid username or password.";
@@ -84,7 +93,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </div>
     </main>
     <footer>
-        <p>Child Task and Chore App - Ver 3.3.1</p>
+        <p>Child Task and Chore App - Ver 3.3.2</p>
     </footer>
 </body>
 </html>
