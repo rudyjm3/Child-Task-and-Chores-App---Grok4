@@ -68,6 +68,11 @@ $tasks = getTasks($_SESSION['user_id']);
 foreach ($tasks as &$task) {
     $task['due_date_formatted'] = date('m/d/Y h:i A', strtotime($task['due_date']));
 }
+
+// Group tasks by status for sectioned display
+$pending_tasks = array_filter($tasks, function($t) { return $t['status'] === 'pending'; });
+$completed_tasks = array_filter($tasks, function($t) { return $t['status'] === 'completed'; }); // Waiting approval
+$approved_tasks = array_filter($tasks, function($t) { return $t['status'] === 'approved'; });
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -108,6 +113,42 @@ foreach ($tasks as &$task) {
             border: none;
             border-radius: 5px;
             cursor: pointer;
+        }
+        /* Improved task card styling for spacing and readability */
+        .task-card {
+            padding: 15px;
+            margin-bottom: 20px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            background: #f9f9f9;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        /* Overdue styles (role-specific colors for autism-friendliness) */
+        .overdue {
+            border-left: 5px solid <?php echo ($_SESSION['role'] === 'parent') ? '#d9534f' : '#ff9900'; ?>; /* Red for parent, orange for child */
+        }
+        .overdue-label {
+            background-color: <?php echo ($_SESSION['role'] === 'parent') ? '#d9534f' : '#ff9900'; ?>;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.9em;
+            margin-left: 10px;
+        }
+        .waiting-label {
+            color: #ff9800;
+            font-style: italic;
+        }
+        .edit-delete {
+            margin-top: 10px;
+        }
+        .edit-delete a {
+            margin-right: 10px;
+            color: #007bff;
+            text-decoration: none;
+        }
+        .edit-delete a:hover {
+            text-decoration: underline;
         }
     </style>
     <script>
@@ -185,51 +226,87 @@ foreach ($tasks as &$task) {
             <?php if (empty($tasks)): ?>
                 <p>No tasks available.</p>
             <?php else: ?>
-                <?php
-                $unique_tasks = []; // To avoid duplicates
-                foreach ($tasks as $task): ?>
-                    <?php
-                    // Use task id as the unique key to avoid duplicates
-                    if (!isset($unique_tasks[$task['id']])) {
-                        $unique_tasks[$task['id']] = $task;
-                    }
-                    ?>
-                <?php endforeach; ?>
-                <?php foreach ($unique_tasks as $task): ?>
-                    <div class="task" data-task-id="<?php echo $task['id']; ?>">
-                        <p>Title: <?php echo htmlspecialchars($task['title']); ?></p>
-                        <p>Due: <?php echo htmlspecialchars($task['due_date_formatted']); ?></p>
-                        <p>Points: <?php echo htmlspecialchars($task['points']); ?></p>
-                        <p>Category: <?php echo htmlspecialchars($task['category']); ?></p>
-                        <p>Timing Mode: <?php echo htmlspecialchars($task['timing_mode']); ?></p>
-                        <?php if ($task['timing_mode'] === 'timer' && $task['status'] === 'pending'): ?>
-                            <p class="timer" id="timer-<?php echo $task['id']; ?>">5:00</p>
-                            <button onclick="startTimer(<?php echo $task['id']; ?>, 5)">Start Timer</button>
-                        <?php elseif ($task['timing_mode'] === 'suggested'): ?>
-                            <p>Suggested Time: 10min (guideline)</p>
-                        <?php endif; ?>
-                        <?php if ($_SESSION['role'] === 'child' && $task['status'] === 'pending'): ?>
-                            <form method="POST" action="task.php" enctype="multipart/form-data">
-                                <input type="hidden" name="task_id" value="<?php echo $task['id']; ?>">
-                                <input type="file" name="photo_proof">
-                                <button type="submit" name="complete_task">Finish Task</button>
-                            </form>
-                        <?php elseif ($_SESSION['role'] === 'parent' && $task['status'] === 'completed'): ?>
-                            <form method="POST" action="task.php">
-                                <input type="hidden" name="task_id" value="<?php echo $task['id']; ?>">
-                                <button type="submit" name="approve_task">Approve Task</button>
-                            </form>
-                        <?php endif; ?>
-                        <?php if ($task['status'] === 'approved'): ?>
+                <h3>Pending Tasks</h3>
+                <?php if (empty($pending_tasks)): ?>
+                    <p>No pending tasks.</p>
+                <?php else: ?>
+                    <?php foreach ($pending_tasks as $task): ?>
+                        <div class="task-card<?php if (strtotime($task['due_date']) < time()) { echo ' overdue'; } ?>" data-task-id="<?php echo $task['id']; ?>">
+                            <p>Title: <?php echo htmlspecialchars($task['title']); ?></p>
+                            <p>Due: <?php echo htmlspecialchars($task['due_date_formatted']); ?><?php if (strtotime($task['due_date']) < time()) { echo '<span class="overdue-label">Overdue!</span>'; } ?></p>
+                            <p>Points: <?php echo htmlspecialchars($task['points']); ?></p>
+                            <p>Category: <?php echo htmlspecialchars($task['category']); ?></p>
+                            <p>Timing Mode: <?php echo htmlspecialchars($task['timing_mode']); ?></p>
+                            <?php if ($task['timing_mode'] === 'timer'): ?>
+                                <p class="timer" id="timer-<?php echo $task['id']; ?>">5:00</p>
+                                <button onclick="startTimer(<?php echo $task['id']; ?>, 5)">Start Timer</button>
+                            <?php elseif ($task['timing_mode'] === 'suggested'): ?>
+                                <p>Suggested Time: 10min (guideline)</p>
+                            <?php endif; ?>
+                            <?php if ($_SESSION['role'] === 'child'): ?>
+                                <form method="POST" action="task.php" enctype="multipart/form-data">
+                                    <input type="hidden" name="task_id" value="<?php echo $task['id']; ?>">
+                                    <input type="file" name="photo_proof">
+                                    <button type="submit" name="complete_task">Finish Task</button>
+                                </form>
+                            <?php endif; ?>
+                            <?php if ($_SESSION['role'] === 'parent'): ?>
+                                <div class="edit-delete">
+                                    <a href="edit_task.php?id=<?php echo $task['id']; ?>">Edit</a>
+                                    <a href="delete_task.php?id=<?php echo $task['id']; ?>">Delete</a>
+                                </div>
+                            <?php endif; ?>
+                        </div>
+                    <?php endforeach; ?>
+                <?php endif; ?>
+
+                <h3>Tasks Waiting Approval</h3>
+                <?php if (empty($completed_tasks)): ?>
+                    <p>No tasks waiting approval.</p>
+                <?php else: ?>
+                    <?php foreach ($completed_tasks as $task): ?>
+                        <div class="task-card" data-task-id="<?php echo $task['id']; ?>">
+                            <p>Title: <?php echo htmlspecialchars($task['title']); ?></p>
+                            <p>Due: <?php echo htmlspecialchars($task['due_date_formatted']); ?></p>
+                            <p>Points: <?php echo htmlspecialchars($task['points']); ?></p>
+                            <p>Category: <?php echo htmlspecialchars($task['category']); ?></p>
+                            <p>Timing Mode: <?php echo htmlspecialchars($task['timing_mode']); ?></p>
+                            <?php if ($_SESSION['role'] === 'parent'): ?>
+                                <form method="POST" action="task.php">
+                                    <input type="hidden" name="task_id" value="<?php echo $task['id']; ?>">
+                                    <button type="submit" name="approve_task">Approve Task</button>
+                                </form>
+                                <div class="edit-delete">
+                                    <a href="edit_task.php?id=<?php echo $task['id']; ?>">Edit</a>
+                                    <a href="delete_task.php?id=<?php echo $task['id']; ?>">Delete</a>
+                                </div>
+                            <?php else: ?>
+                                <p class="waiting-label">Waiting for approval</p>
+                            <?php endif; ?>
+                        </div>
+                    <?php endforeach; ?>
+                <?php endif; ?>
+
+                <h3>Approved Tasks</h3>
+                <?php if (empty($approved_tasks)): ?>
+                    <p>No approved tasks.</p>
+                <?php else: ?>
+                    <?php foreach ($approved_tasks as $task): ?>
+                        <div class="task-card" data-task-id="<?php echo $task['id']; ?>">
+                            <p>Title: <?php echo htmlspecialchars($task['title']); ?></p>
+                            <p>Due: <?php echo htmlspecialchars($task['due_date_formatted']); ?></p>
+                            <p>Points: <?php echo htmlspecialchars($task['points']); ?></p>
+                            <p>Category: <?php echo htmlspecialchars($task['category']); ?></p>
+                            <p>Timing Mode: <?php echo htmlspecialchars($task['timing_mode']); ?></p>
                             <p class="completed">Approved!</p>
-                        <?php endif; ?>
-                    </div>
-                <?php endforeach; ?>
+                        </div>
+                    <?php endforeach; ?>
+                <?php endif; ?>
             <?php endif; ?>
         </div>
     </main>
     <footer>
-        <p>Child Task and Chore App - Ver 3.3.2</p>
+        <p>Child Task and Chore App - Ver 3.3.4</p>
     </footer>
 </body>
 </html>
