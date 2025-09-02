@@ -60,11 +60,11 @@ function getDashboardData($user_id) {
         $stmt->execute([':parent_id' => $user_id]);
         $data['children'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-        $stmt = $db->prepare("SELECT id, title, description, point_cost FROM rewards WHERE parent_user_id = :parent_id AND status = 'available'");
+        $stmt = $db->prepare("SELECT id, title, description, point_cost,  created_on FROM rewards WHERE parent_user_id = :parent_id AND status = 'available'");
         $stmt->execute([':parent_id' => $user_id]);
         $data['active_rewards'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-        $stmt = $db->prepare("SELECT r.id, r.title, r.description, r.point_cost, u.username as child_username 
+        $stmt = $db->prepare("SELECT r.id, r.title, r.description, r.point_cost, r.created_on, u.username as child_username 
                              FROM rewards r 
                              JOIN child_profiles cp ON r.parent_user_id = cp.parent_user_id 
                              JOIN users u ON cp.child_user_id = u.id 

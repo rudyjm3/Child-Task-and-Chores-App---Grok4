@@ -149,7 +149,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         <select id="reward_id" name="reward_id">
                             <option value="">None</option>
                             <?php
-                            $stmt = $db->prepare("SELECT id, title FROM rewards WHERE parent_user_id = :parent_id AND status = 'available'");
+                            $stmt = $db->prepare("SELECT id, title, description, point_cost, created_on FROM rewards WHERE parent_user_id = :parent_id AND status = 'available'");
                             $stmt->execute([':parent_id' => $_SESSION['user_id']]);
                             $rewards = $stmt->fetchAll(PDO::FETCH_ASSOC);
                             foreach ($rewards as $reward): ?>
@@ -171,6 +171,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <div class="reward-item">
                         <p><?php echo htmlspecialchars($reward['title']); ?> (<?php echo htmlspecialchars($reward['point_cost']); ?> points)</p>
                         <p><?php echo htmlspecialchars($reward['description']); ?></p>
+                        <p><?php echo htmlspecialchars($reward['created_on']); ?></p>
                     </div>
                 <?php endforeach; ?>
             <?php else: ?>
