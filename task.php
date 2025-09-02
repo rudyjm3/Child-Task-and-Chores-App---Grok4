@@ -68,6 +68,7 @@ $tasks = getTasks($_SESSION['user_id']);
 foreach ($tasks as &$task) {
     $task['due_date_formatted'] = date('m/d/Y h:i A', strtotime($task['due_date']));
 }
+unset($task);
 
 // Group tasks by status for sectioned display
 $pending_tasks = array_filter($tasks, function($t) { return $t['status'] === 'pending'; });
