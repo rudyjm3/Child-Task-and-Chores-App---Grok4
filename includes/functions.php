@@ -205,7 +205,7 @@ function getTasks($user_id) {
     $tasks = [];
 
     if ($role === 'parent') {
-        $query = "SELECT t.id, t.parent_user_id, t.child_user_id, t.title, t.due_date, t.points, t.status, t.category, t.timing_mode 
+        $query = "SELECT t.id, t.parent_user_id, t.child_user_id, t.title, t.description, t.due_date, t.points, t.status, t.category, t.timing_mode 
                   FROM tasks t 
                   WHERE t.parent_user_id = :parent_user_id 
                   ORDER BY t.due_date ASC";
@@ -214,7 +214,7 @@ function getTasks($user_id) {
         $tasks = $stmt->fetchAll(PDO::FETCH_ASSOC);
         error_log("Parent getTasks query for user_id $user_id: " . $query . ", Result: " . print_r($tasks, true));
     } elseif ($role === 'child') {
-        $query = "SELECT t.id, t.parent_user_id, t.child_user_id, t.title, t.due_date, t.points, t.status, t.category, t.timing_mode 
+        $query = "SELECT t.id, t.parent_user_id, t.child_user_id, t.title, t.description, t.due_date, t.points, t.status, t.category, t.timing_mode 
                   FROM tasks t 
                   WHERE t.child_user_id = :user_id 
                   ORDER BY t.due_date ASC";

@@ -237,6 +237,7 @@ $approved_tasks = array_filter($tasks, function($t) { return $t['status'] === 'a
                             <p>Due: <?php echo htmlspecialchars($task['due_date_formatted']); ?><?php if (strtotime($task['due_date']) < time()) { echo '<span class="overdue-label">Overdue!</span>'; } ?></p>
                             <p>Points: <?php echo htmlspecialchars($task['points']); ?></p>
                             <p>Category: <?php echo htmlspecialchars($task['category']); ?></p>
+                            <p>Task Description: <?php echo htmlspecialchars($task['description']); ?></p>
                             <p>Timing Mode: <?php echo htmlspecialchars($task['timing_mode']); ?></p>
                             <?php if ($task['timing_mode'] === 'timer'): ?>
                                 <p class="timer" id="timer-<?php echo $task['id']; ?>">5:00</p>
@@ -270,6 +271,7 @@ $approved_tasks = array_filter($tasks, function($t) { return $t['status'] === 'a
                             <p>Title: <?php echo htmlspecialchars($task['title']); ?></p>
                             <p>Due: <?php echo htmlspecialchars($task['due_date_formatted']); ?></p>
                             <p>Points: <?php echo htmlspecialchars($task['points']); ?></p>
+                            <p>Task Description: <?php echo htmlspecialchars($task['description']); ?></p>
                             <p>Category: <?php echo htmlspecialchars($task['category']); ?></p>
                             <p>Timing Mode: <?php echo htmlspecialchars($task['timing_mode']); ?></p>
                             <?php if ($_SESSION['role'] === 'parent'): ?>
@@ -297,6 +299,7 @@ $approved_tasks = array_filter($tasks, function($t) { return $t['status'] === 'a
                             <p>Title: <?php echo htmlspecialchars($task['title']); ?></p>
                             <p>Due: <?php echo htmlspecialchars($task['due_date_formatted']); ?></p>
                             <p>Points: <?php echo htmlspecialchars($task['points']); ?></p>
+                            <p>Task Description: <?php echo htmlspecialchars($task['description']); ?></p>
                             <p>Category: <?php echo htmlspecialchars($task['category']); ?></p>
                             <p>Timing Mode: <?php echo htmlspecialchars($task['timing_mode']); ?></p>
                             <p class="completed">Approved!</p>
