@@ -171,7 +171,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <div class="reward-item">
                         <p><?php echo htmlspecialchars($reward['title']); ?> (<?php echo htmlspecialchars($reward['point_cost']); ?> points)</p>
                         <p><?php echo htmlspecialchars($reward['description']); ?></p>
-                        <p>
+                        <p>Created on: 
                             <?php 
                                 echo htmlspecialchars(
                                     date('m/d/Y h:i A', strtotime($reward['created_on']))
