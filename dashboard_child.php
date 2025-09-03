@@ -108,7 +108,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <?php foreach ($data['active_goals'] as $goal): ?>
                     <div class="goal-item">
                         <p><?php echo htmlspecialchars($goal['title']); ?> (Target: <?php echo htmlspecialchars($goal['target_points']); ?> points)</p>
-                        <p>Period: <?php echo htmlspecialchars($goal['start_date']); ?> to <?php echo htmlspecialchars($goal['end_date']); ?></p>
+                        <p>Period: <?php echo htmlspecialchars(date('m/d/Y h:i A', strtotime($goal['start_date']))); ?> to <?php echo htmlspecialchars(date('m/d/Y h:i A', strtotime($goal['end_date']))); ?></p>
                         <p>Reward: <?php echo htmlspecialchars($goal['reward_title'] ?? 'None'); ?></p>
                         <form method="POST" action="dashboard_child.php">
                             <input type="hidden" name="goal_id" value="<?php echo $goal['id']; ?>">
@@ -126,7 +126,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <?php foreach ($data['completed_goals'] as $goal): ?>
                     <div class="goal-item">
                         <p><?php echo htmlspecialchars($goal['title']); ?> (Target: <?php echo htmlspecialchars($goal['target_points']); ?> points)</p>
-                        <p>Period: <?php echo htmlspecialchars($goal['start_date']); ?> to <?php echo htmlspecialchars($goal['end_date']); ?></p>
+                        <p>Period: <?php echo htmlspecialchars(date('m/d/Y h:i A', strtotime($goal['start_date']))); ?> to <?php echo htmlspecialchars(date('m/d/Y h:i A', strtotime($goal['end_date']))); ?></p>
                         <p>Reward: <?php echo htmlspecialchars($goal['reward_title'] ?? 'None'); ?></p>
                         <p>Completed on: <?php echo htmlspecialchars(date('m/d/Y h:i A', strtotime($goal['completed_at']))); ?></p>
                     </div>
