@@ -128,7 +128,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         <p><?php echo htmlspecialchars($goal['title']); ?> (Target: <?php echo htmlspecialchars($goal['target_points']); ?> points)</p>
                         <p>Period: <?php echo htmlspecialchars($goal['start_date']); ?> to <?php echo htmlspecialchars($goal['end_date']); ?></p>
                         <p>Reward: <?php echo htmlspecialchars($goal['reward_title'] ?? 'None'); ?></p>
-                        <p>Completed on: <?php echo htmlspecialchars($goal['completed_at']); ?></p>
+                        <p>Completed on: <?php echo htmlspecialchars(date('m/d/Y h:i A', strtotime($goal['completed_at']))); ?></p>
                     </div>
                 <?php endforeach; ?>
             <?php else: ?>
