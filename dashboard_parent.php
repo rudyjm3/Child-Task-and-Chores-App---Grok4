@@ -3,6 +3,7 @@
 // Purpose: Display parent dashboard with child overview and management links
 // Inputs: Session data
 // Outputs: Dashboard interface
+// Version: 3.3.13
 
 require_once __DIR__ . '/includes/functions.php';
 
@@ -80,7 +81,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <header>
         <h1>Parent Dashboard</h1>
         <p>Welcome, <?php echo htmlspecialchars($_SESSION['username'] ?? 'Unknown User'); ?> (<?php echo htmlspecialchars($_SESSION['role']); ?>)</p>
-        <a href="profile.php">Profile</a> | <a href="logout.php">Logout</a>
+        <a href="task.php">Tasks</a> | <a href="routine.php">Routines</a> | <a href="profile.php">Profile</a> | <a href="logout.php">Logout</a>
     </header>
     <main class="dashboard">
         <?php if (isset($message)) echo "<p>$message</p>"; ?>
@@ -137,19 +138,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         <input type="number" id="target_points" name="target_points" min="1" required>
                     </div>
                     <div class="form-group">
-                        <label for="start_date">Start Date/Time:</label>
-                        <input type="datetime-local" id="start_date" name="start_date">
+                        <label for="start_date">Start Date:</label>
+                        <input type="datetime-local" id="start_date" name="start_date" required>
                     </div>
                     <div class="form-group">
-                        <label for="end_date">End Date/Time:</label>
-                        <input type="datetime-local" id="end_date" name="end_date">
+                        <label for="end_date">End Date:</label>
+                        <input type="datetime-local" id="end_date" name="end_date" required>
                     </div>
                     <div class="form-group">
-                        <label for="reward_id">Reward (Optional):</label>
+                        <label for="reward_id">Reward (optional):</label>
                         <select id="reward_id" name="reward_id">
                             <option value="">None</option>
                             <?php
-                            $stmt = $db->prepare("SELECT id, title, description, point_cost, created_on FROM rewards WHERE parent_user_id = :parent_id AND status = 'available'");
+                            $stmt = $db->prepare("SELECT id, title FROM rewards WHERE parent_user_id = :parent_id AND status = 'available'");
                             $stmt->execute([':parent_id' => $_SESSION['user_id']]);
                             $rewards = $stmt->fetchAll(PDO::FETCH_ASSOC);
                             foreach ($rewards as $reward): ?>
@@ -191,8 +192,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <div class="reward-item">
                         <p>Reward: <?php echo htmlspecialchars($reward['title']); ?> (<?php echo htmlspecialchars($reward['point_cost']); ?> points)</p>
                         <p>Description: <?php echo htmlspecialchars($reward['description']); ?></p>
-                        <p>Redeemed by: <?php echo htmlspecialchars($reward['child_username']); ?></p>
-                        <p>Redeemed on: <?php echo isset($reward['redeemed_on']) ? htmlspecialchars(date('m/d/Y h:i A', strtotime($reward['redeemed_on']))) : 'Date unavailable'; ?></p>
+                        <p>Redeemed by: <?php echo htmlspecialchars($reward['child_username'] ?? 'Unknown'); ?></p>
+                        <p>Redeemed on: <?php echo !empty($reward['redeemed_on']) ? htmlspecialchars(date('m/d/Y h:i A', strtotime($reward['redeemed_on']))) : 'Date unavailable'; ?></p>
                     </div>
                 <?php endforeach; ?>
             <?php else: ?>
@@ -223,22 +224,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <?php
             $all_completed_goals = [];
             $parent_id = $_SESSION['user_id'];
-            foreach ($data['children'] as $child) {
-                $stmt = $db->prepare("SELECT g.id, g.title, g.target_points, g.start_date, g.end_date, g.completed_at, u.username as child_username 
-                                     FROM goals g 
-                                     JOIN users u ON g.child_user_id = u.id 
-                                     WHERE g.parent_user_id = :parent_id AND g.status = 'completed'");
-                $stmt->execute([':parent_id' => $parent_id]);
-                $all_completed_goals = array_merge($all_completed_goals, $stmt->fetchAll(PDO::FETCH_ASSOC));
-            }
+            $stmt = $db->prepare("SELECT g.id, g.title, g.target_points, g.start_date, g.end_date, g.completed_at, u.username as child_username 
+                                 FROM goals g 
+                                 JOIN users u ON g.child_user_id = u.id 
+                                 WHERE g.parent_user_id = :parent_id AND g.status = 'completed'");
+            $stmt->execute([':parent_id' => $parent_id]);
+            $all_completed_goals = $stmt->fetchAll(PDO::FETCH_ASSOC);
             ?>
             <?php if (!empty($all_completed_goals)): ?>
                 <?php foreach ($all_completed_goals as $goal): ?>
                     <div class="goal-item">
                         <p>Goal: <?php echo htmlspecialchars($goal['title']); ?> (Target: <?php echo htmlspecialchars($goal['target_points']); ?> points)</p>
                         <p>Child: <?php echo htmlspecialchars($goal['child_username']); ?></p>
-                        <p>Period: <?php echo htmlspecialchars($goal['start_date']); ?> to <?php echo htmlspecialchars($goal['end_date']); ?></p>
-                        <p>Completed on: <?php echo htmlspecialchars($goal['completed_at']); ?></p>
+                        <p>Period: <?php echo htmlspecialchars(date('m/d/Y h:i A', strtotime($goal['start_date']))); ?> to <?php echo htmlspecialchars(date('m/d/Y h:i A', strtotime($goal['end_date']))); ?></p>
+                        <p>Completed on: <?php echo htmlspecialchars(date('m/d/Y h:i A', strtotime($goal['completed_at']))); ?></p>
                     </div>
                 <?php endforeach; ?>
             <?php else: ?>
@@ -247,7 +246,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </div>
     </main>
     <footer>
-        <p>Child Task and Chores App - Ver 3.3.9</p>
+        <p>Child Task and Chores App - Ver 3.3.13</p>
     </footer>
 </body>
 </html>

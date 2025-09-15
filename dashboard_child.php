@@ -3,6 +3,7 @@
 // Purpose: Display child dashboard with progress and task/reward links
 // Inputs: Session data
 // Outputs: Dashboard interface
+// Version: 3.3.13
 
 require_once __DIR__ . '/includes/functions.php';
 
@@ -63,7 +64,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <header>
         <h1>Child Dashboard</h1>
         <p>Hi, <?php echo htmlspecialchars($_SESSION['username'] ?? 'Unknown User'); ?>!</p>
-        <a href="profile.php">Profile</a> | <a href="logout.php">Logout</a>
+        <a href="task.php">Tasks</a> | <a href="routine.php">Routines</a> | <a href="profile.php">Profile</a> | <a href="logout.php">Logout</a>
     </header>
     <main class="dashboard">
         <?php if (isset($message)) echo "<p>$message</p>"; ?>
@@ -95,7 +96,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <div class="redeemed-item">
                         <p>Reward: <?php echo htmlspecialchars($reward['title']); ?> (<?php echo htmlspecialchars($reward['point_cost']); ?> points)</p>
                         <p>Description: <?php echo htmlspecialchars($reward['description']); ?></p>
-                        <p>Redeemed on: <?php echo htmlspecialchars(date('m/d/Y h:i A', strtotime($reward['redeemed_on']))) ?? 'Date unavailable'; ?></p>
+                        <p>Redeemed on: <?php echo !empty($reward['redeemed_on']) ? htmlspecialchars(date('m/d/Y h:i A', strtotime($reward['redeemed_on']))) : 'Date unavailable'; ?></p>
                     </div>
                 <?php endforeach; ?>
             <?php else: ?>
@@ -137,11 +138,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </div>
         <div class="links">
             <a href="task.php" class="button">View Tasks</a>
-            <a href="#" class="button">View Rewards</a>
+            <a href="routine.php" class="button">View Routines</a>
         </div>
     </main>
     <footer>
-      <p>Child Task and Chores App - Ver 3.3.9</p>
+        <p>Child Task and Chore App - Ver 3.3.13</p>
     </footer>
 </body>
 </html>

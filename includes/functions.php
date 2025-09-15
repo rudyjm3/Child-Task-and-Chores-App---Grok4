@@ -3,7 +3,7 @@
 // Purpose: Centralize common operations for maintainability
 // Inputs: None initially
 // Outputs: Functions for app logic
-// Version: 3.3.9
+// Version: 3.3.13
 
 require_once __DIR__ . '/db_connect.php';
 
@@ -129,7 +129,7 @@ function getDashboardData($user_id) {
         $stmt->execute([':child_id' => $user_id]);
         $data['completed_goals'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-        $stmt = $db->prepare("SELECT r.id, r.title, r.description, r.point_cost, r.status, r.redeemed_on as redemption_date 
+        $stmt = $db->prepare("SELECT r.id, r.title, r.description, r.point_cost, r.status, r.redeemed_on 
                              FROM rewards r 
                              JOIN child_profiles cp ON r.parent_user_id = cp.parent_user_id 
                              WHERE cp.child_user_id = :child_id AND r.status = 'redeemed'");
@@ -676,20 +676,6 @@ function completeRoutine($routine_id, $child_id) {
     }
 }
 
-// New: Update child points (positive to add, negative to deduct)
-// function updateChildPoints($child_id, $points) {
-//     global $db;
-//     try {
-//         $stmt = $db->prepare("INSERT INTO child_points (child_user_id, total_points) VALUES (:child_id, :points) 
-//                               ON DUPLICATE KEY UPDATE total_points = total_points + :points");
-//         $stmt->execute([':child_id' => $child_id, ':points' => $points]);
-//         return true;
-//     } catch (Exception $e) {
-//         error_log("Failed to update points for child $child_id by $points: " . $e->getMessage());
-//         return false;
-//     }
-// }
-
 // Below code commented out so Notice message does not show up on the login page
 // Start session if not already started
 // if (session_status() === PHP_SESSION_NONE) {
@@ -712,6 +698,21 @@ $db->exec("ALTER TABLE rewards ADD COLUMN IF NOT EXISTS created_on TIMESTAMP DEF
 $db->exec("ALTER TABLE rewards ADD COLUMN IF NOT EXISTS redeemed_by INT NULL");
 $db->exec("ALTER TABLE rewards ADD COLUMN IF NOT EXISTS redeemed_on DATETIME NULL");
 $db->exec("ALTER TABLE rewards ADD FOREIGN KEY IF NOT EXISTS (redeemed_by) REFERENCES users(id) ON DELETE SET NULL");
+
+// Remove redeemed_by_child_id column and its foreign key
+try {
+    $stmt = $db->query("SHOW CREATE TABLE rewards");
+    $create_table = $stmt->fetch(PDO::FETCH_ASSOC)['Create Table'];
+    if (preg_match("/CONSTRAINT `([^`]+)` FOREIGN KEY \(`redeemed_by_child_id`\)/", $create_table, $matches)) {
+        $fk_name = $matches[1];
+        $db->exec("ALTER TABLE rewards DROP FOREIGN KEY `$fk_name`");
+        error_log("Dropped foreign key $fk_name on rewards.redeemed_by_child_id");
+    }
+    $db->exec("ALTER TABLE rewards DROP COLUMN IF EXISTS redeemed_by_child_id");
+    error_log("Dropped column redeemed_by_child_id from rewards table");
+} catch (Exception $e) {
+    error_log("Failed to drop foreign key or column redeemed_by_child_id: " . $e->getMessage());
+}
 
 // Create users table if not exists
 $sql = "CREATE TABLE IF NOT EXISTS users (
@@ -764,7 +765,11 @@ $sql = "CREATE TABLE IF NOT EXISTS rewards (
     description TEXT,
     point_cost INT NOT NULL,
     status ENUM('available', 'redeemed') DEFAULT 'available',
-    FOREIGN KEY (parent_user_id) REFERENCES users(id) ON DELETE CASCADE
+    created_on TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    redeemed_by INT,
+    redeemed_on DATETIME,
+    FOREIGN KEY (parent_user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (redeemed_by) REFERENCES users(id) ON DELETE SET NULL
 )";
 $db->exec($sql);
 

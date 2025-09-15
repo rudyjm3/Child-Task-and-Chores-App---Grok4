@@ -320,7 +320,7 @@ $approved_tasks = array_filter($tasks, function($t) { return $t['status'] === 'a
         </div>
     </main>
     <footer>
-        <p>Child Task and Chore App - Ver 3.3.9</p>
+      <p>Child Task and Chore App - Ver 3.3.10</p>
     </footer>
 </body>
 </html>
