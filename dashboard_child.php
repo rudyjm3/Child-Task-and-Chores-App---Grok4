@@ -95,7 +95,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <div class="redeemed-item">
                         <p>Reward: <?php echo htmlspecialchars($reward['title']); ?> (<?php echo htmlspecialchars($reward['point_cost']); ?> points)</p>
                         <p>Description: <?php echo htmlspecialchars($reward['description']); ?></p>
-                        <p>Redeemed on: <?php echo isset($reward['redemption_date']) ? htmlspecialchars($reward['redemption_date']) : 'Date unavailable'; ?></p>
+                        <p>Redeemed on: <?php echo htmlspecialchars(date('m/d/Y h:i A', strtotime($reward['redeemed_on']))) ?? 'Date unavailable'; ?></p>
                     </div>
                 <?php endforeach; ?>
             <?php else: ?>
@@ -141,7 +141,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </div>
     </main>
     <footer>
-        <p>Child Task and Chore App - Ver 3.3.2</p>
+        <p>Child Task and Chore App - Ver 3.3.4</p>
     </footer>
 </body>
 </html>
