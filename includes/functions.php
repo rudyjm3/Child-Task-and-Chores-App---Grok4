@@ -3,6 +3,7 @@
 // Purpose: Centralize common operations for maintainability
 // Inputs: None initially
 // Outputs: Functions for app logic
+// Version: 3.3.9
 
 require_once __DIR__ . '/db_connect.php';
 
@@ -34,13 +35,18 @@ function loginUser($username, $password) {
 function createChildProfile($child_user_id, $avatar, $age, $preferences, $parent_user_id) {
     global $db;
     $stmt = $db->prepare("INSERT INTO child_profiles (child_user_id, parent_user_id, avatar, age, preferences) VALUES (:child_user_id, :parent_user_id, :avatar, :age, :preferences)");
-    return $stmt->execute([
+    $result = $stmt->execute([
         ':child_user_id' => $child_user_id,
         ':parent_user_id' => $parent_user_id,
         ':avatar' => $avatar,
         ':age' => $age,
         ':preferences' => $preferences
     ]);
+    if ($result) {
+        // Initialize points
+        updateChildPoints($child_user_id, 0);
+    }
+    return $result;
 }
 
 // Fetch dashboard data based on user role
@@ -79,50 +85,26 @@ function getDashboardData($user_id) {
         $stmt->execute([':parent_id' => $user_id]);
         $data['pending_approvals'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-        $stmt = $db->prepare("SELECT COALESCE(SUM(t.points), 0) as task_points 
-                             FROM tasks t 
-                             JOIN child_profiles cp ON t.parent_user_id = cp.parent_user_id 
-                             WHERE cp.parent_user_id = :parent_id AND t.status = 'approved'");
-        $stmt->execute([':parent_id' => $user_id]);
-        $task_points = $stmt->fetchColumn();
+        // Sum total_points_earned from child_points
+        $data['total_points_earned'] = 0;
+        foreach ($data['children'] as $child) {
+            $stmt = $db->prepare("SELECT total_points FROM child_points WHERE child_user_id = :child_id");
+            $stmt->execute([':child_id' => $child['child_user_id']]);
+            $data['total_points_earned'] += $stmt->fetchColumn() ?: 0;
+        }
 
-        $stmt = $db->prepare("SELECT COALESCE(SUM(g.target_points), 0) as goal_points 
-                             FROM goals g 
-                             JOIN child_profiles cp ON g.child_user_id = cp.child_user_id 
-                             WHERE cp.parent_user_id = :parent_id AND g.status = 'completed'");
-        $stmt->execute([':parent_id' => $user_id]);
-        $goal_points = $stmt->fetchColumn();
-
-        $data['total_points_earned'] = $task_points + $goal_points;
         $stmt = $db->prepare("SELECT COUNT(*) FROM goals WHERE parent_user_id = :parent_id AND status = 'completed'");
         $stmt->execute([':parent_id' => $user_id]);
         $data['goals_met'] = $stmt->fetchColumn();
     } elseif ($role === 'child') {
-        $stmt = $db->prepare("SELECT COALESCE(SUM(t.points), 0) as task_points 
-                             FROM tasks t 
-                             JOIN child_profiles cp ON t.parent_user_id = cp.parent_user_id 
-                             WHERE cp.child_user_id = :child_id AND t.status = 'approved'");
+        // Fetch remaining_points from child_points
+        $stmt = $db->prepare("SELECT total_points FROM child_points WHERE child_user_id = :child_id");
         $stmt->execute([':child_id' => $user_id]);
-        $task_points = $stmt->fetchColumn();
-
-        $stmt = $db->prepare("SELECT COALESCE(SUM(g.target_points), 0) as goal_points 
-                             FROM goals g 
-                             WHERE g.child_user_id = :child_id AND g.status = 'completed'");
-        $stmt->execute([':child_id' => $user_id]);
-        $goal_points = $stmt->fetchColumn();
-        $total_points = $task_points + $goal_points;
-
-        $stmt = $db->prepare("SELECT COALESCE(SUM(r.point_cost), 0) as redeemed_points 
-                             FROM rewards r 
-                             WHERE r.redeemed_by = :child_id AND r.status = 'redeemed'");
-        $stmt->execute([':child_id' => $user_id]);
-        $redeemed_points = $stmt->fetchColumn();
-        $remaining_points = max(0, $total_points - $redeemed_points);
+        $data['remaining_points'] = $stmt->fetchColumn() ?: 0;
 
         $max_points = 100; // Define a max points threshold (adjust as needed)
-        $points_progress = ($remaining_points > 0 && $max_points > 0) ? min(100, round(($remaining_points / $max_points) * 100)) : 0;
+        $points_progress = ($data['remaining_points'] > 0 && $max_points > 0) ? min(100, round(($data['remaining_points'] / $max_points) * 100)) : 0;
         $data['points_progress'] = $points_progress;
-        $data['remaining_points'] = $remaining_points;
 
         $parentStmt = $db->prepare("SELECT parent_user_id FROM child_profiles WHERE child_user_id = :child_id LIMIT 1");
         $parentStmt->execute([':child_id' => $user_id]);
@@ -147,9 +129,10 @@ function getDashboardData($user_id) {
         $stmt->execute([':child_id' => $user_id]);
         $data['completed_goals'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-        $stmt = $db->prepare("SELECT r.id, r.title, r.description, r.point_cost, r.redeemed_on 
+        $stmt = $db->prepare("SELECT r.id, r.title, r.description, r.point_cost, r.status, r.redeemed_on as redemption_date 
                              FROM rewards r 
-                             WHERE r.redeemed_by = :child_id AND r.status = 'redeemed'");
+                             JOIN child_profiles cp ON r.parent_user_id = cp.parent_user_id 
+                             WHERE cp.child_user_id = :child_id AND r.status = 'redeemed'");
         $stmt->execute([':child_id' => $user_id]);
         $data['redeemed_rewards'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
@@ -166,6 +149,16 @@ function createTask($parent_user_id, $child_user_id, $title, $description, $due_
     }
     $db->beginTransaction();
     try {
+        // Validate due_date
+        $due_date_obj = DateTime::createFromFormat('Y-m-d\TH:i', $due_date);
+        if (!$due_date_obj) {
+            error_log("Invalid due_date format in createTask: $due_date");
+            $db->rollBack();
+            return false;
+        }
+        $formatted_due_date = $due_date_obj->format('Y-m-d H:i:s');
+        error_log("createTask due_date input: $due_date, formatted: $formatted_due_date");
+
         $stmt = $db->prepare("INSERT INTO tasks (parent_user_id, child_user_id, title, description, due_date, points, recurrence, category, timing_mode, status, created_at) 
                              VALUES (:parent_user_id, :child_user_id, :title, :description, :due_date, :points, :recurrence, :category, :timing_mode, 'pending', NOW())");
         $stmt->execute([
@@ -173,14 +166,14 @@ function createTask($parent_user_id, $child_user_id, $title, $description, $due_
             ':child_user_id' => $child_user_id,
             ':title' => $title,
             ':description' => $description,
-            ':due_date' => $due_date,
+            ':due_date' => $formatted_due_date,
             ':points' => $points,
             ':recurrence' => $recurrence,
             ':category' => $category,
             ':timing_mode' => $timing_mode
         ]);
         $db->commit();
-        error_log("Task created by parent $parent_user_id for child $child_user_id: $title");
+        error_log("Task created by parent $parent_user_id for child $child_user_id: $title, due_date: $formatted_due_date");
         return true;
     } catch (Exception $e) {
         $db->rollBack();
@@ -253,17 +246,50 @@ function approveTask($task_id) {
     global $db;
     $db->beginTransaction();
     try {
-        $stmt = $db->prepare("UPDATE tasks SET status = 'approved' WHERE id = :id AND status = 'completed'");
+        $stmt = $db->prepare("SELECT child_user_id, points FROM tasks WHERE id = :id AND status = 'completed'");
         $stmt->execute([':id' => $task_id]);
-        if ($stmt->rowCount() > 0) {
-            $db->commit();
-            return true;
+        $task = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (!$task) {
+            $db->rollBack();
+            return false;
         }
-        $db->rollBack();
-        return false;
+
+        $stmt = $db->prepare("UPDATE tasks SET status = 'approved' WHERE id = :id");
+        $stmt->execute([':id' => $task_id]);
+
+        updateChildPoints($task['child_user_id'], $task['points']);
+        $db->commit();
+        return true;
     } catch (Exception $e) {
         $db->rollBack();
         error_log("Task approval failed: " . $e->getMessage());
+        return false;
+    }
+}
+
+// New: Create a new reward
+function createReward($parent_user_id, $title, $description, $point_cost) {
+    global $db;
+    if (!isset($db) || !$db) {
+        error_log("Database connection not available in createReward");
+        return false;
+    }
+    $db->beginTransaction();
+    try {
+        $stmt = $db->prepare("INSERT INTO rewards (parent_user_id, title, description, point_cost, status, created_on) 
+                             VALUES (:parent_user_id, :title, :description, :point_cost, 'available', NOW())");
+        $stmt->execute([
+            ':parent_user_id' => $parent_user_id,
+            ':title' => $title,
+            ':description' => $description,
+            ':point_cost' => $point_cost
+        ]);
+        $db->commit();
+        error_log("Reward created by parent $parent_user_id: $title");
+        return true;
+    } catch (Exception $e) {
+        $db->rollBack();
+        error_log("Failed to create reward by parent $parent_user_id: " . $e->getMessage());
         return false;
     }
 }
@@ -283,59 +309,27 @@ function createGoal($parent_user_id, $child_user_id, $title, $target_points, $st
     ]);
 }
 
-// Create a new reward (added for reward creation functionality)
-function createReward($parent_user_id, $title, $description, $point_cost) {
-    global $db;
-    $stmt = $db->prepare("INSERT INTO rewards (parent_user_id, title, description, point_cost) VALUES (:parent_user_id, :title, :description, :point_cost)");
-    return $stmt->execute([
-        ':parent_user_id' => $parent_user_id,
-        ':title' => $title,
-        ':description' => $description,
-        ':point_cost' => $point_cost
-    ]);
-}
-
 // Redeem a reward
 function redeemReward($child_user_id, $reward_id) {
     global $db;
     $db->beginTransaction();
     try {
-        // Calculate total points: tasks + goals
-        $stmt = $db->prepare("SELECT COALESCE(SUM(t.points), 0) as task_points 
-                             FROM tasks t 
-                             JOIN child_profiles cp ON t.parent_user_id = cp.parent_user_id 
-                             WHERE cp.child_user_id = :child_id AND t.status = 'approved'");
+        $stmt = $db->prepare("SELECT total_points FROM child_points WHERE child_user_id = :child_id");
         $stmt->execute([':child_id' => $child_user_id]);
-        $task_points = $stmt->fetchColumn();
+        $total_points = $stmt->fetchColumn() ?: 0;
 
-        $stmt = $db->prepare("SELECT COALESCE(SUM(g.target_points), 0) as goal_points 
-                             FROM goals g 
-                             WHERE g.child_user_id = :child_id AND g.status = 'completed'");
-        $stmt->execute([':child_id' => $child_user_id]);
-        $goal_points = $stmt->fetchColumn();
-        $total_points = $task_points + $goal_points;
-
-        // Calculate already redeemed points
-        $stmt = $db->prepare("SELECT COALESCE(SUM(r.point_cost), 0) as redeemed_points 
-                             FROM rewards r 
-                             WHERE r.redeemed_by = :child_id AND r.status = 'redeemed'");
-        $stmt->execute([':child_id' => $child_user_id]);
-        $redeemed_points = $stmt->fetchColumn();
-        $available_points = max(0, $total_points - $redeemed_points);
-
-        // Get reward cost
-        $stmt = $db->prepare("SELECT point_cost, parent_user_id FROM rewards WHERE id = :reward_id AND status = 'available' FOR UPDATE");
+        $stmt = $db->prepare("SELECT point_cost FROM rewards WHERE id = :reward_id AND status = 'available' FOR UPDATE");
         $stmt->execute([':reward_id' => $reward_id]);
         $reward = $stmt->fetch(PDO::FETCH_ASSOC);
-        if (!$reward || $available_points < $reward['point_cost']) {
+        if (!$reward || $total_points < $reward['point_cost']) {
             $db->rollBack();
             return false;
         }
 
-        // Update reward status, redeemed_by, and redeemed_on
         $stmt = $db->prepare("UPDATE rewards SET status = 'redeemed', redeemed_by = :child_id, redeemed_on = NOW() WHERE id = :reward_id");
-        $stmt->execute([':child_id' => $child_user_id, ':reward_id' => $reward_id]);
+        $stmt->execute([':reward_id' => $reward_id, ':child_id' => $child_user_id]);
 
+        updateChildPoints($child_user_id, -$reward['point_cost']);
         $db->commit();
         return true;
     } catch (Exception $e) {
@@ -416,6 +410,7 @@ function approveGoal($parent_user_id, $goal_id, $approve = true) {
 
         if ($approve) {
             $target_points = $goal['target_points'];
+            updateChildPoints($goal['child_user_id'], $target_points);
             $db->commit();
             error_log("Goal $goal_id approved for child {$goal['child_user_id']} with $target_points points");
             return $target_points;
@@ -448,13 +443,28 @@ function completeGoal($child_user_id, $goal_id) {
         $stmt = $db->prepare("UPDATE goals SET status = 'completed', completed_at = NOW() WHERE id = :goal_id");
         $stmt->execute([':goal_id' => $goal_id]);
 
-        // Award points (simplified; adjust logic as needed)
+        // Award points
         $target_points = $goal['target_points'];
+        updateChildPoints($child_user_id, $target_points);
         $db->commit();
-        return $target_points; // Return points for updating child points
+        return $target_points;
     } catch (Exception $e) {
         $db->rollBack();
         error_log("Goal completion failed: " . $e->getMessage());
+        return false;
+    }
+}
+
+// New: Update child points (positive to add, negative to deduct)
+function updateChildPoints($child_id, $points) {
+    global $db;
+    try {
+        $stmt = $db->prepare("INSERT INTO child_points (child_user_id, total_points) VALUES (:child_id, :points) 
+                              ON DUPLICATE KEY UPDATE total_points = total_points + :points");
+        $stmt->execute([':child_id' => $child_id, ':points' => $points]);
+        return true;
+    } catch (Exception $e) {
+        error_log("Failed to update points for child $child_id by $points: " . $e->getMessage());
         return false;
     }
 }
@@ -628,6 +638,7 @@ function completeRoutine($routine_id, $child_id) {
         $routine = $stmt->fetch(PDO::FETCH_ASSOC);
         if (!$routine) {
             $db->rollBack();
+            error_log("Routine $routine_id not found for child $child_id");
             return false;
         }
 
@@ -637,16 +648,23 @@ function completeRoutine($routine_id, $child_id) {
         $stmt->execute([':routine_id' => $routine_id]);
         if ($stmt->fetchColumn() > 0) {
             $db->rollBack();
+            error_log("Not all tasks approved for routine $routine_id");
             return false; // Not all tasks approved
         }
 
-        // Check if current time is within start-end (assuming daily time, ignore date)
-        $current_time = date('H:i:s');
-        $start = $routine['start_time'];
-        $end = $routine['end_time'];
+        // Check if current time is within start-end (combine with current date for comparison)
+        $current_time = new DateTime();
+        $start = new DateTime(date('Y-m-d') . ' ' . $routine['start_time']);
+        $end = new DateTime(date('Y-m-d') . ' ' . $routine['end_time']);
+        // Handle case where end time is past midnight
+        if ($end < $start) {
+            $end->modify('+1 day');
+        }
         $bonus = ($current_time >= $start && $current_time <= $end) ? $routine['bonus_points'] : 0;
 
-        // Award bonus (add to child's points; assume a points table or update total, here simplify as log)
+        // Award bonus to child's points
+        updateChildPoints($child_id, $bonus);
+
         error_log("Routine $routine_id completed by child $child_id with bonus $bonus");
 
         $db->commit();
@@ -657,6 +675,20 @@ function completeRoutine($routine_id, $child_id) {
         return false;
     }
 }
+
+// New: Update child points (positive to add, negative to deduct)
+// function updateChildPoints($child_id, $points) {
+//     global $db;
+//     try {
+//         $stmt = $db->prepare("INSERT INTO child_points (child_user_id, total_points) VALUES (:child_id, :points) 
+//                               ON DUPLICATE KEY UPDATE total_points = total_points + :points");
+//         $stmt->execute([':child_id' => $child_id, ':points' => $points]);
+//         return true;
+//     } catch (Exception $e) {
+//         error_log("Failed to update points for child $child_id by $points: " . $e->getMessage());
+//         return false;
+//     }
+// }
 
 // Below code commented out so Notice message does not show up on the login page
 // Start session if not already started
@@ -777,6 +809,14 @@ $sql = "CREATE TABLE IF NOT EXISTS routine_tasks (
     PRIMARY KEY (routine_id, task_id),
     FOREIGN KEY (routine_id) REFERENCES routines(id) ON DELETE CASCADE,
     FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
+)";
+$db->exec($sql);
+
+// New: Create child_points table if not exists
+$sql = "CREATE TABLE IF NOT EXISTS child_points (
+    child_user_id INT PRIMARY KEY,
+    total_points INT DEFAULT 0,
+    FOREIGN KEY (child_user_id) REFERENCES users(id) ON DELETE CASCADE
 )";
 $db->exec($sql);
 ?>

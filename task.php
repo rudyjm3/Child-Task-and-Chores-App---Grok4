@@ -3,8 +3,12 @@
 // Purpose: Allow parents to create tasks and children to view/complete them
 // Inputs: POST data for task creation, task ID for completion
 // Outputs: Task management interface
+// Version: 3.3.9
 
 session_start(); // Ensure session is started to load existing session
+
+// Set timezone to avoid mismatches
+date_default_timezone_set('America/New_York'); // Adjust to your server's timezone
 
 require_once __DIR__ . '/includes/functions.php';
 
@@ -232,9 +236,15 @@ $approved_tasks = array_filter($tasks, function($t) { return $t['status'] === 'a
                     <p>No pending tasks.</p>
                 <?php else: ?>
                     <?php foreach ($pending_tasks as $task): ?>
-                        <div class="task-card<?php if (strtotime($task['due_date']) < time()) { echo ' overdue'; } ?>" data-task-id="<?php echo $task['id']; ?>">
+                        <?php
+                        // Debug overdue check
+                        $due_time = strtotime($task['due_date']);
+                        $current_time = time();
+                        error_log("Task ID {$task['id']}: due_date={$task['due_date']}, due_time=$due_time, current_time=$current_time, overdue=" . ($due_time < $current_time ? 'true' : 'false'));
+                        ?>
+                        <div class="task-card<?php if ($due_time < $current_time) { echo ' overdue'; } ?>" data-task-id="<?php echo $task['id']; ?>">
                             <p>Title: <?php echo htmlspecialchars($task['title']); ?></p>
-                            <p>Due: <?php echo htmlspecialchars($task['due_date_formatted']); ?><?php if (strtotime($task['due_date']) < time()) { echo '<span class="overdue-label">Overdue!</span>'; } ?></p>
+                            <p>Due: <?php echo htmlspecialchars($task['due_date_formatted']); ?><?php if ($due_time < $current_time) { echo '<span class="overdue-label">Overdue!</span>'; } ?></p>
                             <p>Points: <?php echo htmlspecialchars($task['points']); ?></p>
                             <p>Category: <?php echo htmlspecialchars($task['category']); ?></p>
                             <p>Task Description: <?php echo htmlspecialchars($task['description']); ?></p>
@@ -271,8 +281,8 @@ $approved_tasks = array_filter($tasks, function($t) { return $t['status'] === 'a
                             <p>Title: <?php echo htmlspecialchars($task['title']); ?></p>
                             <p>Due: <?php echo htmlspecialchars($task['due_date_formatted']); ?></p>
                             <p>Points: <?php echo htmlspecialchars($task['points']); ?></p>
-                            <p>Task Description: <?php echo htmlspecialchars($task['description']); ?></p>
                             <p>Category: <?php echo htmlspecialchars($task['category']); ?></p>
+                            <p>Task Description: <?php echo htmlspecialchars($task['description']); ?></p>
                             <p>Timing Mode: <?php echo htmlspecialchars($task['timing_mode']); ?></p>
                             <?php if ($_SESSION['role'] === 'parent'): ?>
                                 <form method="POST" action="task.php">
@@ -299,8 +309,8 @@ $approved_tasks = array_filter($tasks, function($t) { return $t['status'] === 'a
                             <p>Title: <?php echo htmlspecialchars($task['title']); ?></p>
                             <p>Due: <?php echo htmlspecialchars($task['due_date_formatted']); ?></p>
                             <p>Points: <?php echo htmlspecialchars($task['points']); ?></p>
-                            <p>Task Description: <?php echo htmlspecialchars($task['description']); ?></p>
                             <p>Category: <?php echo htmlspecialchars($task['category']); ?></p>
+                            <p>Task Description: <?php echo htmlspecialchars($task['description']); ?></p>
                             <p>Timing Mode: <?php echo htmlspecialchars($task['timing_mode']); ?></p>
                             <p class="completed">Approved!</p>
                         </div>
@@ -310,7 +320,7 @@ $approved_tasks = array_filter($tasks, function($t) { return $t['status'] === 'a
         </div>
     </main>
     <footer>
-        <p>Child Task and Chore App - Ver 3.3.4</p>
+        <p>Child Task and Chore App - Ver 3.3.9</p>
     </footer>
 </body>
 </html>
