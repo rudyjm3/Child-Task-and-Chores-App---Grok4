@@ -3,7 +3,7 @@
 // Purpose: Centralize common operations for maintainability
 // Inputs: None initially
 // Outputs: Functions for app logic
-// Version: 3.3.13
+// Version: 3.4.0
 
 require_once __DIR__ . '/db_connect.php';
 
@@ -297,16 +297,103 @@ function createReward($parent_user_id, $title, $description, $point_cost) {
 // Create a new goal
 function createGoal($parent_user_id, $child_user_id, $title, $target_points, $start_date, $end_date, $reward_id) {
     global $db;
-    $stmt = $db->prepare("INSERT INTO goals (parent_user_id, child_user_id, title, target_points, start_date, end_date, reward_id) VALUES (:parent_user_id, :child_user_id, :title, :target_points, :start_date, :end_date, :reward_id)");
-    return $stmt->execute([
-        ':parent_user_id' => $parent_user_id,
-        ':child_user_id' => $child_user_id,
-        ':title' => $title,
-        ':target_points' => $target_points,
-        ':start_date' => $start_date,
-        ':end_date' => $end_date,
-        ':reward_id' => $reward_id
-    ]);
+    $db->beginTransaction();
+    try {
+        // Validate dates
+        $start_date_obj = DateTime::createFromFormat('Y-m-d\TH:i', $start_date);
+        $end_date_obj = DateTime::createFromFormat('Y-m-d\TH:i', $end_date);
+        if (!$start_date_obj || !$end_date_obj || $start_date_obj >= $end_date_obj) {
+            error_log("Invalid date range in createGoal: start_date=$start_date, end_date=$end_date");
+            $db->rollBack();
+            return false;
+        }
+        $formatted_start_date = $start_date_obj->format('Y-m-d H:i:s');
+        $formatted_end_date = $end_date_obj->format('Y-m-d H:i:s');
+
+        $stmt = $db->prepare("INSERT INTO goals (parent_user_id, child_user_id, title, target_points, start_date, end_date, reward_id, status) 
+                             VALUES (:parent_user_id, :child_user_id, :title, :target_points, :start_date, :end_date, :reward_id, 'active')");
+        $stmt->execute([
+            ':parent_user_id' => $parent_user_id,
+            ':child_user_id' => $child_user_id,
+            ':title' => $title,
+            ':target_points' => $target_points,
+            ':start_date' => $formatted_start_date,
+            ':end_date' => $formatted_end_date,
+            ':reward_id' => $reward_id
+        ]);
+        $db->commit();
+        error_log("Goal created by parent $parent_user_id for child $child_user_id: $title");
+        return true;
+    } catch (Exception $e) {
+        $db->rollBack();
+        error_log("Failed to create goal by parent $parent_user_id for child $child_user_id: " . $e->getMessage());
+        return false;
+    }
+}
+
+// New: Update a goal
+function updateGoal($goal_id, $parent_user_id, $title, $target_points, $start_date, $end_date, $reward_id) {
+    global $db;
+    $db->beginTransaction();
+    try {
+        // Validate dates
+        $start_date_obj = DateTime::createFromFormat('Y-m-d\TH:i', $start_date);
+        $end_date_obj = DateTime::createFromFormat('Y-m-d\TH:i', $end_date);
+        if (!$start_date_obj || !$end_date_obj || $start_date_obj >= $end_date_obj) {
+            error_log("Invalid date range in updateGoal: start_date=$start_date, end_date=$end_date");
+            $db->rollBack();
+            return false;
+        }
+        $formatted_start_date = $start_date_obj->format('Y-m-d H:i:s');
+        $formatted_end_date = $end_date_obj->format('Y-m-d H:i:s');
+
+        $stmt = $db->prepare("UPDATE goals SET title = :title, target_points = :target_points, start_date = :start_date, 
+                             end_date = :end_date, reward_id = :reward_id 
+                             WHERE id = :goal_id AND parent_user_id = :parent_user_id AND status IN ('active', 'pending_approval')");
+        $stmt->execute([
+            ':title' => $title,
+            ':target_points' => $target_points,
+            ':start_date' => $formatted_start_date,
+            ':end_date' => $formatted_end_date,
+            ':reward_id' => $reward_id,
+            ':goal_id' => $goal_id,
+            ':parent_user_id' => $parent_user_id
+        ]);
+        if ($stmt->rowCount() > 0) {
+            $db->commit();
+            error_log("Goal $goal_id updated by parent $parent_user_id");
+            return true;
+        }
+        $db->rollBack();
+        error_log("No rows affected when updating goal $goal_id by parent $parent_user_id");
+        return false;
+    } catch (Exception $e) {
+        $db->rollBack();
+        error_log("Failed to update goal $goal_id by parent $parent_user_id: " . $e->getMessage());
+        return false;
+    }
+}
+
+// New: Delete a goal
+function deleteGoal($goal_id, $parent_user_id) {
+    global $db;
+    $db->beginTransaction();
+    try {
+        $stmt = $db->prepare("DELETE FROM goals WHERE id = :goal_id AND parent_user_id = :parent_user_id AND status IN ('active', 'pending_approval')");
+        $stmt->execute([':goal_id' => $goal_id, ':parent_user_id' => $parent_user_id]);
+        if ($stmt->rowCount() > 0) {
+            $db->commit();
+            error_log("Goal $goal_id deleted by parent $parent_user_id");
+            return true;
+        }
+        $db->rollBack();
+        error_log("No rows affected when deleting goal $goal_id by parent $parent_user_id");
+        return false;
+    } catch (Exception $e) {
+        $db->rollBack();
+        error_log("Failed to delete goal $goal_id by parent $parent_user_id: " . $e->getMessage());
+        return false;
+    }
 }
 
 // Redeem a reward
@@ -356,7 +443,7 @@ function requestGoalCompletion($child_user_id, $goal_id) {
         $current_requested_at = $current_data['requested_at'] ?? 'NULL';
         error_log("Current status for goal $goal_id: $current_status, requested_at: $current_requested_at");
 
-        $stmt = $db->prepare("UPDATE goals SET status = :status, requested_at = NOW() WHERE id = :goal_id AND child_user_id = :child_user_id");
+        $stmt = $db->prepare("UPDATE goals SET status = :status, requested_at = NOW() WHERE id = :goal_id AND child_user_id = :child_user_id AND status = 'active'");
         $result = $stmt->execute([
             ':goal_id' => $goal_id,
             ':child_user_id' => $child_user_id,
@@ -690,6 +777,8 @@ function completeRoutine($routine_id, $child_id) {
 // Ensure goals table includes status and completed_at columns
 $db->exec("ALTER TABLE goals ADD COLUMN IF NOT EXISTS status ENUM('active', 'pending_approval', 'completed', 'rejected') DEFAULT 'active'");
 $db->exec("ALTER TABLE goals ADD COLUMN IF NOT EXISTS completed_at DATETIME DEFAULT NULL");
+$db->exec("ALTER TABLE goals ADD COLUMN IF NOT EXISTS requested_at DATETIME DEFAULT NULL");
+$db->exec("ALTER TABLE goals ADD COLUMN IF NOT EXISTS rejected_at DATETIME DEFAULT NULL");
 
 // Ensure rewards table includes created_on column (added for timestamping)
 $db->exec("ALTER TABLE rewards ADD COLUMN IF NOT EXISTS created_on TIMESTAMP DEFAULT CURRENT_TIMESTAMP");
@@ -782,7 +871,7 @@ $sql = "CREATE TABLE IF NOT EXISTS goals (
     target_points INT NOT NULL,
     start_date DATETIME,
     end_date DATETIME,
-    status ENUM('active', 'completed') DEFAULT 'active',
+    status ENUM('active', 'pending_approval', 'completed', 'rejected') DEFAULT 'active',
     reward_id INT,
     FOREIGN KEY (parent_user_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (child_user_id) REFERENCES users(id) ON DELETE CASCADE,

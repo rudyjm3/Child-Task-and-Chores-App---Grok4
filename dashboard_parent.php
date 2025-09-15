@@ -79,9 +79,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 </head>
 <body>
     <header>
-        <h1>Parent Dashboard</h1>
-        <p>Welcome, <?php echo htmlspecialchars($_SESSION['username'] ?? 'Unknown User'); ?> (<?php echo htmlspecialchars($_SESSION['role']); ?>)</p>
-        <a href="task.php">Tasks</a> | <a href="routine.php">Routines</a> | <a href="profile.php">Profile</a> | <a href="logout.php">Logout</a>
+      <h1>Parent Dashboard</h1>
+      <p>Welcome, <?php echo htmlspecialchars($_SESSION['username'] ?? 'Unknown User'); ?> (<?php echo htmlspecialchars($_SESSION['role']); ?>)</p>
+      <a href="goal.php">Goals</a> | <a href="task.php">Tasks</a> | <a href="routine.php">Routines</a> | <a href="profile.php">Profile</a> | <a href="logout.php">Logout</a>
     </header>
     <main class="dashboard">
         <?php if (isset($message)) echo "<p>$message</p>"; ?>
@@ -246,7 +246,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </div>
     </main>
     <footer>
-        <p>Child Task and Chores App - Ver 3.3.13</p>
+        <p>Child Task and Chores App - Ver 3.4.0</p>
     </footer>
 </body>
 </html>
