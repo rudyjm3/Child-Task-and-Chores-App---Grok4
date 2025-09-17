@@ -152,7 +152,7 @@ $completed_goals = array_filter($goals, function($g) { return $g['status'] === '
     <header>
       <h1>Goal Management</h1>
       <p>Welcome, <?php echo htmlspecialchars($_SESSION['username'] ?? 'Unknown User'); ?> (<?php echo htmlspecialchars($_SESSION['role']); ?>)</p>
-      <a href="dashboard_<?php echo $_SESSION['role']; ?>.php">Dashboard</a> | <a href="goal.php">Goals</a> | <a href="routine.php">Routines</a> | <a href="profile.php">Profile</a> | <a href="logout.php">Logout</a>
+      <a href="dashboard_<?php echo $_SESSION['role']; ?>.php">Dashboard</a> | <a href="task.php">Tasks</a> | <a href="routine.php">Routines</a> | <a href="profile.php">Profile</a> | <a href="logout.php">Logout</a>
     </header>
     <main class="<?php echo ($_SESSION['role'] === 'child') ? 'child-view' : ''; ?>">
         <?php if (isset($message)) echo "<p>$message</p>"; ?>
