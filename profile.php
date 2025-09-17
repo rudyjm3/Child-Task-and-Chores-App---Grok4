@@ -83,7 +83,7 @@ $children = $childStmt->fetchAll(PDO::FETCH_ASSOC);
         <?php endif; ?>
     </main>
     <footer>
-        <p>Child Task and Chore App - Ver 3.4.5</p>
+        <p>Child Task and Chore App - Ver 3.4.6</p>
     </footer>
 </body>
 </html>

@@ -3,7 +3,7 @@
 // Purpose: Centralize common operations for maintainability
 // Inputs: None initially
 // Outputs: Functions for app logic
-// Version: 3.4.2
+// Version: 3.4.6
 
 require_once __DIR__ . '/db_connect.php';
 
@@ -501,7 +501,7 @@ function approveGoal($parent_user_id, $goal_id, $approve = true, $rejection_comm
         $stmt = $db->prepare("UPDATE goals SET $update_fields WHERE id = :goal_id");
         $execute_params = [':status' => $new_status, ':goal_id' => $goal_id];
         if (!$approve) {
-            $execute_params[':rejection_comment'] = $rejection_comment ?: '';
+            $execute_params[':rejection_comment'] = $rejection_comment !== null ? $rejection_comment : '';
         }
         $stmt->execute($execute_params);
 
@@ -513,7 +513,7 @@ function approveGoal($parent_user_id, $goal_id, $approve = true, $rejection_comm
             return $target_points;
         }
         $db->commit();
-        error_log("Goal $goal_id rejected for child {$goal['child_user_id']}, comment: $rejection_comment");
+        error_log("Goal $goal_id rejected for child {$goal['child_user_id']}, comment: " . ($rejection_comment ?? 'none'));
         return 0;
     } catch (Exception $e) {
         $db->rollBack();
