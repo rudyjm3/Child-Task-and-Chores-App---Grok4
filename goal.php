@@ -3,7 +3,7 @@
 // Purpose: Allow parents to create/edit/delete/reactivate goals and children to view/request completion
 // Inputs: POST for create/update/delete/reactivate, goal ID for request completion
 // Outputs: Goal management interface
-// Version: 3.4.2
+// Version: 3.4.3
 
 session_start();
 require_once __DIR__ . '/includes/functions.php';
@@ -108,7 +108,7 @@ if ($_SESSION['role'] === 'parent') {
     $all_goals = $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
-// Format dates for display
+// Format dates for all goals
 foreach ($goals as &$goal) {
     $goal['start_date_formatted'] = date('m/d/Y h:i A', strtotime($goal['start_date']));
     $goal['end_date_formatted'] = date('m/d/Y h:i A', strtotime($goal['end_date']));
@@ -119,10 +119,46 @@ foreach ($goals as &$goal) {
 }
 unset($goal);
 
-// Group goals by status
-$active_goals = array_filter($all_goals, function($g) { return $g['status'] === 'active' || $g['status'] === 'pending_approval'; });
-$completed_goals = array_filter($all_goals, function($g) { return $g['status'] === 'completed'; });
-$rejected_goals = array_filter($all_goals, function($g) { return $g['status'] === 'rejected'; });
+// Group goals by status for parent view
+$active_goals = [];
+$completed_goals = [];
+$rejected_goals = [];
+if ($_SESSION['role'] === 'parent') {
+    $active_goals = array_filter($all_goals, function($g) { return $g['status'] === 'active' || $g['status'] === 'pending_approval'; });
+    $completed_goals = array_filter($all_goals, function($g) { return $g['status'] === 'completed'; });
+    $rejected_goals = array_filter($all_goals, function($g) { return $g['status'] === 'rejected'; });
+
+    // Apply date formatting to grouped arrays
+    foreach ($active_goals as &$goal) {
+        $goal['start_date_formatted'] = date('m/d/Y h:i A', strtotime($goal['start_date']));
+        $goal['end_date_formatted'] = date('m/d/Y h:i A', strtotime($goal['end_date']));
+        if (isset($goal['rejected_at'])) {
+            $goal['rejected_at_formatted'] = date('m/d/Y h:i A', strtotime($goal['rejected_at']));
+        }
+        $goal['created_at_formatted'] = date('m/d/Y h:i A', strtotime($goal['created_at']));
+    }
+    unset($goal);
+
+    foreach ($completed_goals as &$goal) {
+        $goal['start_date_formatted'] = date('m/d/Y h:i A', strtotime($goal['start_date']));
+        $goal['end_date_formatted'] = date('m/d/Y h:i A', strtotime($goal['end_date']));
+        if (isset($goal['rejected_at'])) {
+            $goal['rejected_at_formatted'] = date('m/d/Y h:i A', strtotime($goal['rejected_at']));
+        }
+        $goal['created_at_formatted'] = date('m/d/Y h:i A', strtotime($goal['created_at']));
+    }
+    unset($goal);
+
+    foreach ($rejected_goals as &$goal) {
+        $goal['start_date_formatted'] = date('m/d/Y h:i A', strtotime($goal['start_date']));
+        $goal['end_date_formatted'] = date('m/d/Y h:i A', strtotime($goal['end_date']));
+        if (isset($goal['rejected_at'])) {
+            $goal['rejected_at_formatted'] = date('m/d/Y h:i A', strtotime($goal['rejected_at']));
+        }
+        $goal['created_at_formatted'] = date('m/d/Y h:i A', strtotime($goal['created_at']));
+    }
+    unset($goal);
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -336,7 +372,7 @@ $rejected_goals = array_filter($all_goals, function($g) { return $g['status'] ==
         </div>
     </main>
     <footer>
-        <p>Child Task and Chore App - Ver 3.4.2</p>
+        <p>Child Task and Chore App - Ver 3.4.3</p>
     </footer>
 </body>
 </html>
