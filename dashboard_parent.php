@@ -78,175 +78,212 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </style>
 </head>
 <body>
-    <header>
+   <header>
       <h1>Parent Dashboard</h1>
       <p>Welcome, <?php echo htmlspecialchars($_SESSION['username'] ?? 'Unknown User'); ?> (<?php echo htmlspecialchars($_SESSION['role']); ?>)</p>
       <a href="goal.php">Goals</a> | <a href="task.php">Tasks</a> | <a href="routine.php">Routines</a> | <a href="profile.php">Profile</a> | <a href="logout.php">Logout</a>
-    </header>
-    <main class="dashboard">
-        <?php if (isset($message)) echo "<p>$message</p>"; ?>
-        <div class="children-overview">
-            <h2>Children Overview</h2>
-            <?php if (isset($data['children']) && is_array($data['children']) && !empty($data['children'])): ?>
-                <?php foreach ($data['children'] as $child): ?>
-                    <div class="child-item">
-                        <p>Child: <?php echo htmlspecialchars($child['username']); ?>, Avatar=<?php echo htmlspecialchars($child['avatar'] ?? 'No Avatar'); ?>, Age=<?php echo htmlspecialchars($child['age'] ?? 'N/A'); ?></p>
-                    </div>
-                <?php endforeach; ?>
-            <?php else: ?>
-                <p>No children registered.</p>
-            <?php endif; ?>
-        </div>
-        <div class="management-links">
-            <h2>Management Links</h2>
-            <a href="task.php" class="button">Create Task</a>
-            <div>
-                <h3>Create Reward</h3>
-                <form method="POST" action="dashboard_parent.php">
-                    <div class="form-group">
-                        <label for="reward_title">Title:</label>
-                        <input type="text" id="reward_title" name="reward_title" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="reward_description">Description:</label>
-                        <textarea id="reward_description" name="reward_description"></textarea>
-                    </div>
-                    <div class="form-group">
-                        <label for="point_cost">Point Cost:</label>
-                        <input type="number" id="point_cost" name="point_cost" min="1" required>
-                    </div>
-                    <button type="submit" name="create_reward">Create Reward</button>
-                </form>
-            </div>
-            <div>
-                <h3>Create Goal</h3>
-                <form method="POST" action="dashboard_parent.php">
-                    <div class="form-group">
-                        <label for="child_user_id">Child:</label>
-                        <select id="child_user_id" name="child_user_id" required>
-                            <?php foreach ($data['children'] as $child): ?>
-                                <option value="<?php echo $child['child_user_id']; ?>"><?php echo htmlspecialchars($child['username']); ?></option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label for="goal_title">Title:</label>
-                        <input type="text" id="goal_title" name="goal_title" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="target_points">Target Points:</label>
-                        <input type="number" id="target_points" name="target_points" min="1" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="start_date">Start Date:</label>
-                        <input type="datetime-local" id="start_date" name="start_date" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="end_date">End Date:</label>
-                        <input type="datetime-local" id="end_date" name="end_date" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="reward_id">Reward (optional):</label>
-                        <select id="reward_id" name="reward_id">
-                            <option value="">None</option>
-                            <?php
-                            $stmt = $db->prepare("SELECT id, title FROM rewards WHERE parent_user_id = :parent_id AND status = 'available'");
-                            $stmt->execute([':parent_id' => $_SESSION['user_id']]);
-                            $rewards = $stmt->fetchAll(PDO::FETCH_ASSOC);
-                            foreach ($rewards as $reward): ?>
-                                <option value="<?php echo $reward['id']; ?>"><?php echo htmlspecialchars($reward['title']); ?></option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-                    <button type="submit" name="create_goal">Create Goal</button>
-                </form>
-            </div>
-            <a href="#" class="button">Summary Charts</a>
-            <p>Points Earned: <?php echo isset($data['total_points_earned']) ? htmlspecialchars($data['total_points_earned']) : '0'; ?></p>
-            <p>Goals Met: <?php echo isset($data['goals_met']) ? htmlspecialchars($data['goals_met']) : '0'; ?></p>
-        </div>
-        <div class="active-rewards">
-            <h2>Active Rewards</h2>
-            <?php if (isset($data['active_rewards']) && is_array($data['active_rewards']) && !empty($data['active_rewards'])): ?>
-                <?php foreach ($data['active_rewards'] as $reward): ?>
-                    <div class="reward-item">
-                        <p><?php echo htmlspecialchars($reward['title']); ?> (<?php echo htmlspecialchars($reward['point_cost']); ?> points)</p>
-                        <p><?php echo htmlspecialchars($reward['description']); ?></p>
-                        <p>Created on: 
-                            <?php 
-                                echo htmlspecialchars(
-                                    date('m/d/Y h:i A', strtotime($reward['created_on']))
-                                ); 
-                            ?>
-                        </p>
-                    </div>
-                <?php endforeach; ?>
-            <?php else: ?>
-                <p>No active rewards available.</p>
-            <?php endif; ?>
-        </div>
-        <div class="redeemed-rewards">
-            <h2>Redeemed Rewards</h2>
-            <?php if (isset($data['redeemed_rewards']) && is_array($data['redeemed_rewards']) && !empty($data['redeemed_rewards'])): ?>
-                <?php foreach ($data['redeemed_rewards'] as $reward): ?>
-                    <div class="reward-item">
-                        <p>Reward: <?php echo htmlspecialchars($reward['title']); ?> (<?php echo htmlspecialchars($reward['point_cost']); ?> points)</p>
-                        <p>Description: <?php echo htmlspecialchars($reward['description']); ?></p>
-                        <p>Redeemed by: <?php echo htmlspecialchars($reward['child_username'] ?? 'Unknown'); ?></p>
-                        <p>Redeemed on: <?php echo !empty($reward['redeemed_on']) ? htmlspecialchars(date('m/d/Y h:i A', strtotime($reward['redeemed_on']))) : 'Date unavailable'; ?></p>
-                    </div>
-                <?php endforeach; ?>
-            <?php else: ?>
-                <p>No rewards redeemed yet.</p>
-            <?php endif; ?>
-        </div>
-        <div class="pending-approvals">
-            <h2>Pending Goal Approvals</h2>
-            <?php if (isset($data['pending_approvals']) && is_array($data['pending_approvals']) && !empty($data['pending_approvals'])): ?>
-                <?php foreach ($data['pending_approvals'] as $approval): ?>
-                    <div class="goal-item">
-                        <p>Goal: <?php echo htmlspecialchars($approval['title']); ?> (Target: <?php echo htmlspecialchars($approval['target_points']); ?> points)</p>
-                        <p>Child: <?php echo htmlspecialchars($approval['child_username']); ?></p>
-                        <p>Requested on: <?php echo htmlspecialchars($approval['requested_at']); ?></p>
-                        <form method="POST" action="dashboard_parent.php">
-                            <input type="hidden" name="goal_id" value="<?php echo $approval['id']; ?>">
-                            <button type="submit" name="approve_goal" class="button approve-button">Approve</button>
-                            <button type="submit" name="reject_goal" class="button reject-button">Reject</button>
-                        </form>
-                    </div>
-                <?php endforeach; ?>
-            <?php else: ?>
-                <p>No pending approvals.</p>
-            <?php endif; ?>
-        </div>
-        <div class="completed-goals">
-            <h2>Completed Goals</h2>
-            <?php
-            $all_completed_goals = [];
-            $parent_id = $_SESSION['user_id'];
-            $stmt = $db->prepare("SELECT g.id, g.title, g.target_points, g.start_date, g.end_date, g.completed_at, u.username as child_username 
-                                 FROM goals g 
-                                 JOIN users u ON g.child_user_id = u.id 
-                                 WHERE g.parent_user_id = :parent_id AND g.status = 'completed'");
-            $stmt->execute([':parent_id' => $parent_id]);
-            $all_completed_goals = $stmt->fetchAll(PDO::FETCH_ASSOC);
-            ?>
-            <?php if (!empty($all_completed_goals)): ?>
-                <?php foreach ($all_completed_goals as $goal): ?>
-                    <div class="goal-item">
-                        <p>Goal: <?php echo htmlspecialchars($goal['title']); ?> (Target: <?php echo htmlspecialchars($goal['target_points']); ?> points)</p>
-                        <p>Child: <?php echo htmlspecialchars($goal['child_username']); ?></p>
-                        <p>Period: <?php echo htmlspecialchars(date('m/d/Y h:i A', strtotime($goal['start_date']))); ?> to <?php echo htmlspecialchars(date('m/d/Y h:i A', strtotime($goal['end_date']))); ?></p>
-                        <p>Completed on: <?php echo htmlspecialchars(date('m/d/Y h:i A', strtotime($goal['completed_at']))); ?></p>
-                    </div>
-                <?php endforeach; ?>
-            <?php else: ?>
-                <p>No goals completed yet.</p>
-            <?php endif; ?>
-        </div>
-    </main>
-    <footer>
-        <p>Child Task and Chores App - Ver 3.4.0</p>
-    </footer>
+   </header>
+   <main class="dashboard">
+      <?php if (isset($message)) echo "<p>$message</p>"; ?>
+      <div class="children-overview">
+         <h2>Children Overview</h2>
+         <?php if (isset($data['children']) && is_array($data['children']) && !empty($data['children'])): ?>
+               <?php foreach ($data['children'] as $child): ?>
+                  <div class="child-item">
+                     <p>Child: <?php echo htmlspecialchars($child['username']); ?>, Avatar=<?php echo htmlspecialchars($child['avatar'] ?? 'No Avatar'); ?>, Age=<?php echo htmlspecialchars($child['age'] ?? 'N/A'); ?></p>
+                  </div>
+               <?php endforeach; ?>
+         <?php else: ?>
+               <p>No children registered.</p>
+         <?php endif; ?>
+      </div>
+      <div class="management-links">
+         <h2>Management Links</h2>
+         <a href="task.php" class="button">Create Task</a>
+         <div>
+               <h3>Create Reward</h3>
+               <form method="POST" action="dashboard_parent.php">
+                  <div class="form-group">
+                     <label for="reward_title">Title:</label>
+                     <input type="text" id="reward_title" name="reward_title" required>
+                  </div>
+                  <div class="form-group">
+                     <label for="reward_description">Description:</label>
+                     <textarea id="reward_description" name="reward_description"></textarea>
+                  </div>
+                  <div class="form-group">
+                     <label for="point_cost">Point Cost:</label>
+                     <input type="number" id="point_cost" name="point_cost" min="1" required>
+                  </div>
+                  <button type="submit" name="create_reward">Create Reward</button>
+               </form>
+         </div>
+         <div>
+               <h3>Create Goal</h3>
+               <form method="POST" action="dashboard_parent.php">
+                  <div class="form-group">
+                     <label for="child_user_id">Child:</label>
+                     <select id="child_user_id" name="child_user_id" required>
+                           <?php foreach ($data['children'] as $child): ?>
+                              <option value="<?php echo $child['child_user_id']; ?>"><?php echo htmlspecialchars($child['username']); ?></option>
+                           <?php endforeach; ?>
+                     </select>
+                  </div>
+                  <div class="form-group">
+                     <label for="goal_title">Title:</label>
+                     <input type="text" id="goal_title" name="goal_title" required>
+                  </div>
+                  <div class="form-group">
+                     <label for="target_points">Target Points:</label>
+                     <input type="number" id="target_points" name="target_points" min="1" required>
+                  </div>
+                  <div class="form-group">
+                     <label for="start_date">Start Date:</label>
+                     <input type="datetime-local" id="start_date" name="start_date" required>
+                  </div>
+                  <div class="form-group">
+                     <label for="end_date">End Date:</label>
+                     <input type="datetime-local" id="end_date" name="end_date" required>
+                  </div>
+                  <div class="form-group">
+                     <label for="reward_id">Reward (optional):</label>
+                     <select id="reward_id" name="reward_id">
+                           <option value="">None</option>
+                           <?php
+                           $stmt = $db->prepare("SELECT id, title FROM rewards WHERE parent_user_id = :parent_id AND status = 'available'");
+                           $stmt->execute([':parent_id' => $_SESSION['user_id']]);
+                           $rewards = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                           foreach ($rewards as $reward): ?>
+                              <option value="<?php echo $reward['id']; ?>"><?php echo htmlspecialchars($reward['title']); ?></option>
+                           <?php endforeach; ?>
+                     </select>
+                  </div>
+                  <button type="submit" name="create_goal">Create Goal</button>
+               </form>
+         </div>
+         <a href="#" class="button">Summary Charts</a>
+         <p>Points Earned: <?php echo isset($data['total_points_earned']) ? htmlspecialchars($data['total_points_earned']) : '0'; ?></p>
+         <p>Goals Met: <?php echo isset($data['goals_met']) ? htmlspecialchars($data['goals_met']) : '0'; ?></p>
+      </div>
+      <div class="active-rewards">
+         <h2>Active Rewards</h2>
+         <?php if (isset($data['active_rewards']) && is_array($data['active_rewards']) && !empty($data['active_rewards'])): ?>
+               <?php foreach ($data['active_rewards'] as $reward): ?>
+                  <div class="reward-item">
+                     <p><?php echo htmlspecialchars($reward['title']); ?> (<?php echo htmlspecialchars($reward['point_cost']); ?> points)</p>
+                     <p><?php echo htmlspecialchars($reward['description']); ?></p>
+                     <p>Created on: 
+                           <?php 
+                              echo htmlspecialchars(
+                                 date('m/d/Y h:i A', strtotime($reward['created_on']))
+                              ); 
+                           ?>
+                     </p>
+                  </div>
+               <?php endforeach; ?>
+         <?php else: ?>
+               <p>No active rewards available.</p>
+         <?php endif; ?>
+      </div>
+      <div class="redeemed-rewards">
+         <h2>Redeemed Rewards</h2>
+         <?php if (isset($data['redeemed_rewards']) && is_array($data['redeemed_rewards']) && !empty($data['redeemed_rewards'])): ?>
+               <?php foreach ($data['redeemed_rewards'] as $reward): ?>
+                  <div class="reward-item">
+                     <p>Reward: <?php echo htmlspecialchars($reward['title']); ?> (<?php echo htmlspecialchars($reward['point_cost']); ?> points)</p>
+                     <p>Description: <?php echo htmlspecialchars($reward['description']); ?></p>
+                     <p>Redeemed by: <?php echo htmlspecialchars($reward['child_username'] ?? 'Unknown'); ?></p>
+                     <p>Redeemed on: <?php echo !empty($reward['redeemed_on']) ? htmlspecialchars(date('m/d/Y h:i A', strtotime($reward['redeemed_on']))) : 'Date unavailable'; ?></p>
+                  </div>
+               <?php endforeach; ?>
+         <?php else: ?>
+               <p>No rewards redeemed yet.</p>
+         <?php endif; ?>
+      </div>
+      <div class="pending-approvals">
+         <h2>Pending Goal Approvals</h2>
+         <?php if (isset($data['pending_approvals']) && is_array($data['pending_approvals']) && !empty($data['pending_approvals'])): ?>
+               <?php foreach ($data['pending_approvals'] as $approval): ?>
+                  <div class="goal-item">
+                     <p>Goal: <?php echo htmlspecialchars($approval['title']); ?> (Target: <?php echo htmlspecialchars($approval['target_points']); ?> points)</p>
+                     <p>Child: <?php echo htmlspecialchars($approval['child_username']); ?></p>
+                     <p>Requested on: <?php echo htmlspecialchars($approval['requested_at']); ?></p>
+                     <form method="POST" action="dashboard_parent.php">
+                           <input type="hidden" name="goal_id" value="<?php echo $approval['id']; ?>">
+                           <button type="submit" name="approve_goal" class="button approve-button">Approve</button>
+                           <button type="submit" name="reject_goal" class="button reject-button">Reject</button>
+                           <div class="reject-comment">
+                              <label for="rejection_comment_<?php echo $approval['id']; ?>">Comment (optional):</label>
+                              <textarea id="rejection_comment_<?php echo $approval['id']; ?>" name="rejection_comment"></textarea>
+                           </div>
+                     </form>
+                  </div>
+               <?php endforeach; ?>
+         <?php else: ?>
+               <p>No pending approvals.</p>
+         <?php endif; ?>
+      </div>
+      <div class="completed-goals">
+         <h2>Completed Goals</h2>
+         <?php
+         $all_completed_goals = [];
+         $parent_id = $_SESSION['user_id'];
+         $stmt = $db->prepare("SELECT g.id, g.title, g.target_points, g.start_date, g.end_date, g.completed_at, u.username as child_username 
+                              FROM goals g 
+                              JOIN users u ON g.child_user_id = u.id 
+                              WHERE g.parent_user_id = :parent_id AND g.status = 'completed'");
+         $stmt->execute([':parent_id' => $parent_id]);
+         $all_completed_goals = $stmt->fetchAll(PDO::FETCH_ASSOC);
+         ?>
+         <?php if (!empty($all_completed_goals)): ?>
+               <?php foreach ($all_completed_goals as $goal): ?>
+                  <div class="goal-item">
+                     <p>Goal: <?php echo htmlspecialchars($goal['title']); ?> (Target: <?php echo htmlspecialchars($goal['target_points']); ?> points)</p>
+                     <p>Child: <?php echo htmlspecialchars($goal['child_username']); ?></p>
+                     <p>Period: <?php echo htmlspecialchars(date('m/d/Y h:i A', strtotime($goal['start_date']))); ?> to <?php echo htmlspecialchars(date('m/d/Y h:i A', strtotime($goal['end_date']))); ?></p>
+                     <p>Completed on: <?php echo htmlspecialchars(date('m/d/Y h:i A', strtotime($goal['completed_at']))); ?></p>
+                  </div>
+               <?php endforeach; ?>
+         <?php else: ?>
+               <p>No goals completed yet.</p>
+         <?php endif; ?>
+      </div>
+      <div class="rejected-goals">
+         <h2>Rejected Goals</h2>
+         <?php
+         $stmt = $db->prepare("SELECT g.id, g.title, g.target_points, g.start_date, g.end_date, g.rejected_at, g.rejection_comment, u.username as child_username, r.title as reward_title 
+                              FROM goals g 
+                              JOIN users u ON g.child_user_id = u.id 
+                              LEFT JOIN rewards r ON g.reward_id = r.id 
+                              WHERE g.parent_user_id = :parent_id AND g.status = 'rejected'");
+         $stmt->execute([':parent_id' => $_SESSION['user_id']]);
+         $rejected_goals = $stmt->fetchAll(PDO::FETCH_ASSOC);
+         foreach ($rejected_goals as &$goal) {
+               $goal['start_date_formatted'] = date('m/d/Y h:i A', strtotime($goal['start_date']));
+               $goal['end_date_formatted'] = date('m/d/Y h:i A', strtotime($goal['end_date']));
+               $goal['rejected_at_formatted'] = date('m/d/Y h:i A', strtotime($goal['rejected_at']));
+         }
+         unset($goal);
+         ?>
+         <?php if (empty($rejected_goals)): ?>
+               <p>No rejected goals.</p>
+         <?php else: ?>
+               <?php foreach ($rejected_goals as $goal): ?>
+                  <div class="goal-item">
+                     <p>Goal: <?php echo htmlspecialchars($goal['title']); ?> (Target: <?php echo htmlspecialchars($goal['target_points']); ?> points)</p>
+                     <p>Child: <?php echo htmlspecialchars($goal['child_username']); ?></p>
+                     <p>Period: <?php echo htmlspecialchars($goal['start_date_formatted']); ?> to <?php echo htmlspecialchars($goal['end_date_formatted']); ?></p>
+                     <p>Reward: <?php echo htmlspecialchars($goal['reward_title'] ?? 'None'); ?></p>
+                     <p>Status: Rejected</p>
+                     <p>Rejected on: <?php echo htmlspecialchars($goal['rejected_at_formatted']); ?></p>
+                     <p>Comment: <?php echo htmlspecialchars($goal['rejection_comment'] ?? 'No comments available.'); ?></p>
+                  </div>
+               <?php endforeach; ?>
+         <?php endif; ?>
+      </div>
+   </main>
+   <footer>
+      <p>Child Task and Chores App - Ver 3.4.1</p>
+   </footer>
 </body>
 </html>

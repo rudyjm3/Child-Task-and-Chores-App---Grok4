@@ -1,9 +1,9 @@
 <?php
 // goal.php - Goal management
-// Purpose: Allow parents to create/edit/delete goals and children to view/request completion
-// Inputs: POST for create/update/delete, goal ID for request completion
+// Purpose: Allow parents to create/edit/delete/reactivate goals and children to view/request completion
+// Inputs: POST for create/update/delete/reactivate, goal ID for request completion
 // Outputs: Goal management interface
-// Version: 3.4.0
+// Version: 3.4.1
 
 session_start();
 require_once __DIR__ . '/includes/functions.php';
@@ -47,6 +47,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             $message = "Failed to delete goal.";
         }
+    } elseif (isset($_POST['reactivate_goal']) && $_SESSION['role'] === 'parent') {
+        $goal_id = filter_input(INPUT_POST, 'goal_id', FILTER_VALIDATE_INT);
+        if (reactivateGoal($goal_id, $_SESSION['user_id'])) {
+            $message = "Goal reactivated successfully!";
+        } else {
+            $message = "Failed to reactivate goal.";
+        }
     } elseif (isset($_POST['request_completion']) && $_SESSION['role'] === 'child') {
         $goal_id = filter_input(INPUT_POST, 'goal_id', FILTER_VALIDATE_INT);
         if (requestGoalCompletion($_SESSION['user_id'], $goal_id)) {
@@ -54,13 +61,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             $message = "Failed to request completion.";
         }
+    } elseif (isset($_POST['approve_goal']) || isset($_POST['reject_goal'])) {
+        $goal_id = filter_input(INPUT_POST, 'goal_id', FILTER_VALIDATE_INT);
+        $action = isset($_POST['approve_goal']) ? 'approve' : 'reject';
+        $rejection_comment = $action === 'reject' ? filter_input(INPUT_POST, 'rejection_comment', FILTER_SANITIZE_STRING) : null;
+        $points = approveGoal($_SESSION['user_id'], $goal_id, $action === 'approve', $rejection_comment);
+        if ($points !== false) {
+            $message = $action === 'approve' ? "Goal approved! Child earned $points points." : "Goal rejected.";
+        } else {
+            $message = "Failed to $action goal.";
+        }
     }
 }
 
 // Fetch goals for the user
 $goals = [];
 if ($_SESSION['role'] === 'parent') {
-    $stmt = $db->prepare("SELECT g.id, g.title, g.target_points, g.start_date, g.end_date, g.status, g.reward_id, r.title as reward_title, u.username as child_username 
+    $stmt = $db->prepare("SELECT g.id, g.title, g.target_points, g.start_date, g.end_date, g.status, g.reward_id, r.title as reward_title, u.username as child_username, g.rejected_at, g.rejection_comment, g.created_at 
                          FROM goals g 
                          JOIN users u ON g.child_user_id = u.id 
                          LEFT JOIN rewards r ON g.reward_id = r.id 
@@ -69,25 +86,42 @@ if ($_SESSION['role'] === 'parent') {
     $stmt->execute([':parent_id' => $_SESSION['user_id']]);
     $goals = $stmt->fetchAll(PDO::FETCH_ASSOC);
 } elseif ($_SESSION['role'] === 'child') {
-    $stmt = $db->prepare("SELECT g.id, g.title, g.target_points, g.start_date, g.end_date, g.status, g.reward_id, r.title as reward_title 
+    $stmt = $db->prepare("SELECT g.id, g.title, g.start_date, g.rejected_at, g.rejection_comment, g.created_at 
                          FROM goals g 
-                         LEFT JOIN rewards r ON g.reward_id = r.id 
-                         WHERE g.child_user_id = :child_id 
+                         WHERE g.child_user_id = :child_id AND g.status = 'rejected' 
                          ORDER BY g.start_date ASC");
     $stmt->execute([':child_id' => $_SESSION['user_id']]);
     $goals = $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
+// Fetch all goals for parent view (including active, pending, completed, rejected)
+$all_goals = [];
+if ($_SESSION['role'] === 'parent') {
+    $stmt = $db->prepare("SELECT g.id, g.title, g.target_points, g.start_date, g.end_date, g.status, g.reward_id, r.title as reward_title, u.username as child_username, g.rejected_at, g.rejection_comment, g.created_at 
+                         FROM goals g 
+                         JOIN users u ON g.child_user_id = u.id 
+                         LEFT JOIN rewards r ON g.reward_id = r.id 
+                         WHERE g.parent_user_id = :parent_id 
+                         ORDER BY g.start_date ASC");
+    $stmt->execute([':parent_id' => $_SESSION['user_id']]);
+    $all_goals = $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
 // Format dates for display
 foreach ($goals as &$goal) {
     $goal['start_date_formatted'] = date('m/d/Y h:i A', strtotime($goal['start_date']));
     $goal['end_date_formatted'] = date('m/d/Y h:i A', strtotime($goal['end_date']));
+    if (isset($goal['rejected_at'])) {
+        $goal['rejected_at_formatted'] = date('m/d/Y h:i A', strtotime($goal['rejected_at']));
+    }
+    $goal['created_at_formatted'] = date('m/d/Y h:i A', strtotime($goal['created_at']));
 }
 unset($goal);
 
 // Group goals by status
-$active_goals = array_filter($goals, function($g) { return $g['status'] === 'active' || $g['status'] === 'pending_approval'; });
-$completed_goals = array_filter($goals, function($g) { return $g['status'] === 'completed'; });
+$active_goals = array_filter($all_goals, function($g) { return $g['status'] === 'active' || $g['status'] === 'pending_approval'; });
+$completed_goals = array_filter($all_goals, function($g) { return $g['status'] === 'completed'; });
+$rejected_goals = array_filter($all_goals, function($g) { return $g['status'] === 'rejected'; });
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -136,6 +170,9 @@ $completed_goals = array_filter($goals, function($g) { return $g['status'] === '
         .edit-delete a:hover {
             text-decoration: underline;
         }
+        .reject-comment {
+            margin-top: 10px;
+        }
         /* Autism-friendly styles for children */
         .child-view .goal-card {
             background-color: #e6f3fa;
@@ -146,13 +183,21 @@ $completed_goals = array_filter($goals, function($g) { return $g['status'] === '
             font-size: 1.1em;
             padding: 12px 24px;
         }
+        .rejected-card {
+            background-color: #ffebee; /* Light red for rejected goals */
+            border-left: 5px solid #f44336;
+        }
     </style>
 </head>
 <body>
     <header>
-      <h1>Goal Management</h1>
-      <p>Welcome, <?php echo htmlspecialchars($_SESSION['username'] ?? 'Unknown User'); ?> (<?php echo htmlspecialchars($_SESSION['role']); ?>)</p>
-      <a href="dashboard_<?php echo $_SESSION['role']; ?>.php">Dashboard</a> | <a href="task.php">Tasks</a> | <a href="routine.php">Routines</a> | <a href="profile.php">Profile</a> | <a href="logout.php">Logout</a>
+        <h1>Goal Management</h1>
+        <p>Welcome, <?php echo htmlspecialchars($_SESSION['username'] ?? 'Unknown User'); ?> (<?php echo htmlspecialchars($_SESSION['role']); ?>)</p>
+        <a href="dashboard_<?php echo $_SESSION['role']; ?>.php">Dashboard</a> | 
+        <a href="task.php">Tasks</a> | 
+        <a href="routine.php">Routines</a> | 
+        <a href="profile.php">Profile</a> | 
+        <a href="logout.php">Logout</a>
     </header>
     <main class="<?php echo ($_SESSION['role'] === 'child') ? 'child-view' : ''; ?>">
         <?php if (isset($message)) echo "<p>$message</p>"; ?>
@@ -195,7 +240,7 @@ $completed_goals = array_filter($goals, function($g) { return $g['status'] === '
         <?php endif; ?>
         <div class="goal-list">
             <h2><?php echo ($_SESSION['role'] === 'parent') ? 'Created Goals' : 'Your Goals'; ?></h2>
-            <?php if (empty($goals)): ?>
+            <?php if (empty($all_goals)): ?>
                 <p>No goals available.</p>
             <?php else: ?>
                 <h3>Active Goals</h3>
@@ -211,30 +256,24 @@ $completed_goals = array_filter($goals, function($g) { return $g['status'] === '
                             <p>Status: <?php echo htmlspecialchars($goal['status']); ?></p>
                             <?php if ($_SESSION['role'] === 'parent'): ?>
                                 <p>Child: <?php echo htmlspecialchars($goal['child_username']); ?></p>
-                                <form method="POST" action="goal.php">
-                                    <input type="hidden" name="goal_id" value="<?php echo $goal['id']; ?>">
-                                    <input type="text" name="title" value="<?php echo htmlspecialchars($goal['title']); ?>" required>
-                                    <input type="number" name="target_points" value="<?php echo htmlspecialchars($goal['target_points']); ?>" min="1" required>
-                                    <input type="datetime-local" name="start_date" value="<?php echo date('Y-m-d\TH:i', strtotime($goal['start_date'])); ?>" required>
-                                    <input type="datetime-local" name="end_date" value="<?php echo date('Y-m-d\TH:i', strtotime($goal['end_date'])); ?>" required>
-                                    <select name="reward_id">
-                                        <option value="">None</option>
-                                        <?php
-                                        $stmt = $db->prepare("SELECT id, title FROM rewards WHERE parent_user_id = :parent_id AND status = 'available'");
-                                        $stmt->execute([':parent_id' => $_SESSION['user_id']]);
-                                        $rewards = $stmt->fetchAll(PDO::FETCH_ASSOC);
-                                        foreach ($rewards as $reward): ?>
-                                            <option value="<?php echo $reward['id']; ?>" <?php if ($reward['id'] == $goal['reward_id']) echo 'selected'; ?>>
-                                                <?php echo htmlspecialchars($reward['title']); ?>
-                                            </option>
-                                        <?php endforeach; ?>
-                                    </select>
-                                    <button type="submit" name="update_goal" class="button">Update Goal</button>
-                                </form>
-                                <form method="POST" action="goal.php">
-                                    <input type="hidden" name="goal_id" value="<?php echo $goal['id']; ?>">
-                                    <button type="submit" name="delete_goal" class="button" style="background-color: #f44336;">Delete Goal</button>
-                                </form>
+                                <?php if ($goal['status'] === 'pending_approval'): ?>
+                                    <form method="POST" action="goal.php">
+                                        <input type="hidden" name="goal_id" value="<?php echo $goal['id']; ?>">
+                                        <button type="submit" name="approve_goal" class="button">Approve</button>
+                                        <button type="submit" name="reject_goal" class="button" style="background-color: #f44336;">Reject</button>
+                                        <div class="reject-comment">
+                                            <label for="rejection_comment_<?php echo $goal['id']; ?>">Comment (optional):</label>
+                                            <textarea id="rejection_comment_<?php echo $goal['id']; ?>" name="rejection_comment"></textarea>
+                                        </div>
+                                    </form>
+                                <?php endif; ?>
+                                <div class="edit-delete">
+                                    <a href="edit_goal.php?id=<?php echo $goal['id']; ?>">Edit</a>
+                                    <form method="POST" action="goal.php" style="display:inline;">
+                                        <input type="hidden" name="goal_id" value="<?php echo $goal['id']; ?>">
+                                        <button type="submit" name="delete_goal" class="button" style="background-color: #f44336;">Delete</button>
+                                    </form>
+                                </div>
                             <?php elseif ($_SESSION['role'] === 'child' && $goal['status'] === 'active'): ?>
                                 <form method="POST" action="goal.php">
                                     <input type="hidden" name="goal_id" value="<?php echo $goal['id']; ?>">
@@ -261,11 +300,41 @@ $completed_goals = array_filter($goals, function($g) { return $g['status'] === '
                         </div>
                     <?php endforeach; ?>
                 <?php endif; ?>
+                <h3>Rejected Goals</h3>
+                <?php if (empty($rejected_goals)): ?>
+                    <p>No rejected goals.</p>
+                <?php else: ?>
+                    <?php foreach ($rejected_goals as $goal): ?>
+                        <div class="goal-card rejected-card">
+                            <p>Title: <?php echo htmlspecialchars($goal['title']); ?></p>
+                            <p>Target Points: <?php echo htmlspecialchars($goal['target_points']); ?></p>
+                            <p>Period: <?php echo htmlspecialchars($goal['start_date_formatted']); ?> to <?php echo htmlspecialchars($goal['end_date_formatted']); ?></p>
+                            <p>Reward: <?php echo htmlspecialchars($goal['reward_title'] ?? 'None'); ?></p>
+                            <p>Status: Rejected</p>
+                            <p>Rejected on: <?php echo htmlspecialchars($goal['rejected_at_formatted']); ?></p>
+                            <p>Comment: <?php echo htmlspecialchars($goal['rejection_comment'] ?? 'No comments available.'); ?></p>
+                            <?php if ($_SESSION['role'] === 'parent'): ?>
+                                <p>Child: <?php echo htmlspecialchars($goal['child_username']); ?></p>
+                                <form method="POST" action="goal.php">
+                                    <input type="hidden" name="goal_id" value="<?php echo $goal['id']; ?>">
+                                    <button type="submit" name="reactivate_goal" class="button">Reactivate</button>
+                                </form>
+                                <div class="edit-delete">
+                                    <a href="edit_goal.php?id=<?php echo $goal['id']; ?>">Edit</a>
+                                    <form method="POST" action="goal.php" style="display:inline;">
+                                        <input type="hidden" name="goal_id" value="<?php echo $goal['id']; ?>">
+                                        <button type="submit" name="delete_goal" class="button" style="background-color: #f44336;">Delete</button>
+                                    </form>
+                                </div>
+                            <?php endif; ?>
+                        </div>
+                    <?php endforeach; ?>
+                <?php endif; ?>
             <?php endif; ?>
         </div>
     </main>
     <footer>
-        <p>Child Task and Chore App - Ver 3.4.0</p>
+        <p>Child Task and Chore App - Ver 3.4.1</p>
     </footer>
 </body>
 </html>

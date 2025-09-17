@@ -61,88 +61,116 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </style>
 </head>
 <body>
-    <header>
-      <h1>Child Dashboard</h1>
-      <p>Hi, <?php echo htmlspecialchars($_SESSION['username'] ?? 'Unknown User'); ?>!</p>
-      <a href="goal.php">Goals</a> | <a href="task.php">Tasks</a> | <a href="routine.php">Routines</a> | <a href="profile.php">Profile</a> | <a href="logout.php">Logout</a>
-    </header>
-    <main class="dashboard">
-        <?php if (isset($message)) echo "<p>$message</p>"; ?>
-        <div class="progress">
-            <p>Points Progress: <?php echo isset($data['points_progress']) ? htmlspecialchars($data['points_progress']) . '%' : '0%'; ?></p>
-            <p>Remaining Points: <?php echo isset($data['remaining_points']) ? htmlspecialchars($data['remaining_points']) : '0'; ?></p>
-        </div>
-        <div class="rewards">
-            <h2>Available Rewards</h2>
-            <?php if (isset($data['rewards']) && is_array($data['rewards']) && !empty($data['rewards'])): ?>
-                <?php foreach ($data['rewards'] as $reward): ?>
-                    <div class="reward-item">
-                        <p><?php echo htmlspecialchars($reward['title']); ?> (<?php echo htmlspecialchars($reward['point_cost']); ?> points)</p>
-                        <p><?php echo htmlspecialchars($reward['description']); ?></p>
-                        <form method="POST" action="dashboard_child.php">
-                            <input type="hidden" name="reward_id" value="<?php echo $reward['id']; ?>">
-                            <button type="submit" name="redeem_reward" class="button redeem-button">Redeem</button>
-                        </form>
-                    </div>
-                <?php endforeach; ?>
-            <?php else: ?>
-                <p>No rewards available.</p>
-            <?php endif; ?>
-        </div>
-        <div class="redeemed-rewards">
-            <h2>Redeemed Rewards</h2>
-            <?php if (isset($data['redeemed_rewards']) && is_array($data['redeemed_rewards']) && !empty($data['redeemed_rewards'])): ?>
-                <?php foreach ($data['redeemed_rewards'] as $reward): ?>
-                    <div class="redeemed-item">
-                        <p>Reward: <?php echo htmlspecialchars($reward['title']); ?> (<?php echo htmlspecialchars($reward['point_cost']); ?> points)</p>
-                        <p>Description: <?php echo htmlspecialchars($reward['description']); ?></p>
-                        <p>Redeemed on: <?php echo !empty($reward['redeemed_on']) ? htmlspecialchars(date('m/d/Y h:i A', strtotime($reward['redeemed_on']))) : 'Date unavailable'; ?></p>
-                    </div>
-                <?php endforeach; ?>
-            <?php else: ?>
-                <p>No rewards redeemed yet.</p>
-            <?php endif; ?>
-        </div>
-        <div class="active-goals">
-            <h2>Active Goals</h2>
-            <?php if (isset($data['active_goals']) && is_array($data['active_goals']) && !empty($data['active_goals'])): ?>
-                <?php foreach ($data['active_goals'] as $goal): ?>
-                    <div class="goal-item">
-                        <p><?php echo htmlspecialchars($goal['title']); ?> (Target: <?php echo htmlspecialchars($goal['target_points']); ?> points)</p>
-                        <p>Period: <?php echo htmlspecialchars(date('m/d/Y h:i A', strtotime($goal['start_date']))); ?> to <?php echo htmlspecialchars(date('m/d/Y h:i A', strtotime($goal['end_date']))); ?></p>
-                        <p>Reward: <?php echo htmlspecialchars($goal['reward_title'] ?? 'None'); ?></p>
-                        <form method="POST" action="dashboard_child.php">
-                            <input type="hidden" name="goal_id" value="<?php echo $goal['id']; ?>">
-                            <button type="submit" name="request_completion" class="button request-button">Request Completion</button>
-                        </form>
-                    </div>
-                <?php endforeach; ?>
-            <?php else: ?>
-                <p>No active goals.</p>
-            <?php endif; ?>
-        </div>
-        <div class="completed-goals">
-            <h2>Completed Goals</h2>
-            <?php if (isset($data['completed_goals']) && is_array($data['completed_goals']) && !empty($data['completed_goals'])): ?>
-                <?php foreach ($data['completed_goals'] as $goal): ?>
-                    <div class="goal-item">
-                        <p><?php echo htmlspecialchars($goal['title']); ?> (Target: <?php echo htmlspecialchars($goal['target_points']); ?> points)</p>
-                        <p>Period: <?php echo htmlspecialchars(date('m/d/Y h:i A', strtotime($goal['start_date']))); ?> to <?php echo htmlspecialchars(date('m/d/Y h:i A', strtotime($goal['end_date']))); ?></p>
-                        <p>Reward: <?php echo htmlspecialchars($goal['reward_title'] ?? 'None'); ?></p>
-                        <p>Completed on: <?php echo htmlspecialchars(date('m/d/Y h:i A', strtotime($goal['completed_at']))); ?></p>
-                    </div>
-                <?php endforeach; ?>
-            <?php else: ?>
-                <p>No completed goals yet.</p>
-            <?php endif; ?>
-        </div>
-        <div class="links">
-            <a href="task.php" class="button">View Tasks</a>
-            <a href="routine.php" class="button">View Routines</a>
-        </div>
-    </main>
-    <footer>
-        <p>Child Task and Chore App - Ver 3.4.0</p>
-    </footer>
+   <header>
+   <h1>Child Dashboard</h1>
+   <p>Hi, <?php echo htmlspecialchars($_SESSION['username'] ?? 'Unknown User'); ?>!</p>
+   <a href="goal.php">Goals</a> | <a href="task.php">Tasks</a> | <a href="routine.php">Routines</a> | <a href="profile.php">Profile</a> | <a href="logout.php">Logout</a>
+   </header>
+   <main class="dashboard">
+      <?php if (isset($message)) echo "<p>$message</p>"; ?>
+      <div class="progress">
+         <p>Points Progress: <?php echo isset($data['points_progress']) ? htmlspecialchars($data['points_progress']) . '%' : '0%'; ?></p>
+         <p>Remaining Points: <?php echo isset($data['remaining_points']) ? htmlspecialchars($data['remaining_points']) : '0'; ?></p>
+      </div>
+      <div class="rewards">
+         <h2>Available Rewards</h2>
+         <?php if (isset($data['rewards']) && is_array($data['rewards']) && !empty($data['rewards'])): ?>
+            <?php foreach ($data['rewards'] as $reward): ?>
+                  <div class="reward-item">
+                     <p><?php echo htmlspecialchars($reward['title']); ?> (<?php echo htmlspecialchars($reward['point_cost']); ?> points)</p>
+                     <p><?php echo htmlspecialchars($reward['description']); ?></p>
+                     <form method="POST" action="dashboard_child.php">
+                        <input type="hidden" name="reward_id" value="<?php echo $reward['id']; ?>">
+                        <button type="submit" name="redeem_reward" class="button redeem-button">Redeem</button>
+                     </form>
+                  </div>
+            <?php endforeach; ?>
+         <?php else: ?>
+            <p>No rewards available.</p>
+         <?php endif; ?>
+      </div>
+      <div class="redeemed-rewards">
+         <h2>Redeemed Rewards</h2>
+         <?php if (isset($data['redeemed_rewards']) && is_array($data['redeemed_rewards']) && !empty($data['redeemed_rewards'])): ?>
+            <?php foreach ($data['redeemed_rewards'] as $reward): ?>
+                  <div class="redeemed-item">
+                     <p>Reward: <?php echo htmlspecialchars($reward['title']); ?> (<?php echo htmlspecialchars($reward['point_cost']); ?> points)</p>
+                     <p>Description: <?php echo htmlspecialchars($reward['description']); ?></p>
+                     <p>Redeemed on: <?php echo !empty($reward['redeemed_on']) ? htmlspecialchars(date('m/d/Y h:i A', strtotime($reward['redeemed_on']))) : 'Date unavailable'; ?></p>
+                  </div>
+            <?php endforeach; ?>
+         <?php else: ?>
+            <p>No rewards redeemed yet.</p>
+         <?php endif; ?>
+      </div>
+      <div class="active-goals">
+         <h2>Active Goals</h2>
+         <?php if (isset($data['active_goals']) && is_array($data['active_goals']) && !empty($data['active_goals'])): ?>
+            <?php foreach ($data['active_goals'] as $goal): ?>
+                  <div class="goal-item">
+                     <p><?php echo htmlspecialchars($goal['title']); ?> (Target: <?php echo htmlspecialchars($goal['target_points']); ?> points)</p>
+                     <p>Period: <?php echo htmlspecialchars(date('m/d/Y h:i A', strtotime($goal['start_date']))); ?> to <?php echo htmlspecialchars(date('m/d/Y h:i A', strtotime($goal['end_date']))); ?></p>
+                     <p>Reward: <?php echo htmlspecialchars($goal['reward_title'] ?? 'None'); ?></p>
+                     <form method="POST" action="dashboard_child.php">
+                        <input type="hidden" name="goal_id" value="<?php echo $goal['id']; ?>">
+                        <button type="submit" name="request_completion" class="button request-button">Request Completion</button>
+                     </form>
+                  </div>
+            <?php endforeach; ?>
+         <?php else: ?>
+            <p>No active goals.</p>
+         <?php endif; ?>
+      </div>
+      <div class="completed-goals">
+         <h2>Completed Goals</h2>
+         <?php if (isset($data['completed_goals']) && is_array($data['completed_goals']) && !empty($data['completed_goals'])): ?>
+            <?php foreach ($data['completed_goals'] as $goal): ?>
+                  <div class="goal-item">
+                     <p><?php echo htmlspecialchars($goal['title']); ?> (Target: <?php echo htmlspecialchars($goal['target_points']); ?> points)</p>
+                     <p>Period: <?php echo htmlspecialchars(date('m/d/Y h:i A', strtotime($goal['start_date']))); ?> to <?php echo htmlspecialchars(date('m/d/Y h:i A', strtotime($goal['end_date']))); ?></p>
+                     <p>Reward: <?php echo htmlspecialchars($goal['reward_title'] ?? 'None'); ?></p>
+                     <p>Completed on: <?php echo htmlspecialchars(date('m/d/Y h:i A', strtotime($goal['completed_at']))); ?></p>
+                  </div>
+            <?php endforeach; ?>
+         <?php else: ?>
+            <p>No completed goals yet.</p>
+         <?php endif; ?>
+      </div>
+      <div class="rejected-goals">
+         <h2>Rejected Goals</h2>
+         <?php
+         $stmt = $db->prepare("SELECT g.id, g.title, g.created_at, g.rejected_at, g.rejection_comment 
+                              FROM goals g 
+                              WHERE g.child_user_id = :child_id AND g.status = 'rejected'");
+         $stmt->execute([':child_id' => $_SESSION['user_id']]);
+         $rejected_goals = $stmt->fetchAll(PDO::FETCH_ASSOC);
+         foreach ($rejected_goals as &$goal) {
+            $goal['created_at_formatted'] = date('m/d/Y h:i A', strtotime($goal['created_at']));
+            $goal['rejected_at_formatted'] = date('m/d/Y h:i A', strtotime($goal['rejected_at']));
+         }
+         unset($goal);
+         ?>
+         <?php if (empty($rejected_goals)): ?>
+            <p>No rejected goals.</p>
+         <?php else: ?>
+            <?php foreach ($rejected_goals as $goal): ?>
+                  <div class="goal-item">
+                     <p>Title: <?php echo htmlspecialchars($goal['title']); ?></p>
+                     <p>Created on: <?php echo htmlspecialchars($goal['created_at_formatted']); ?></p>
+                     <p>Rejected on: <?php echo htmlspecialchars($goal['rejected_at_formatted']); ?></p>
+                     <p>Comment: <?php echo htmlspecialchars($goal['rejection_comment'] ?? 'No comments available.'); ?></p>
+                  </div>
+            <?php endforeach; ?>
+         <?php endif; ?>
+      </div>
+      <div class="links">
+         <a href="goal.php" class="button">View Goals</a>
+         <a href="task.php" class="button">View Tasks</a>
+         <a href="routine.php" class="button">View Routines</a>
+      </div>
+   </main>
+   <footer>
+   <p>Child Task and Chore App - Ver 3.4.1</p>
+   </footer>
 </body>
 </html>

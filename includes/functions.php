@@ -3,7 +3,7 @@
 // Purpose: Centralize common operations for maintainability
 // Inputs: None initially
 // Outputs: Functions for app logic
-// Version: 3.4.0
+// Version: 3.4.1
 
 require_once __DIR__ . '/db_connect.php';
 
@@ -310,8 +310,8 @@ function createGoal($parent_user_id, $child_user_id, $title, $target_points, $st
         $formatted_start_date = $start_date_obj->format('Y-m-d H:i:s');
         $formatted_end_date = $end_date_obj->format('Y-m-d H:i:s');
 
-        $stmt = $db->prepare("INSERT INTO goals (parent_user_id, child_user_id, title, target_points, start_date, end_date, reward_id, status) 
-                             VALUES (:parent_user_id, :child_user_id, :title, :target_points, :start_date, :end_date, :reward_id, 'active')");
+        $stmt = $db->prepare("INSERT INTO goals (parent_user_id, child_user_id, title, target_points, start_date, end_date, reward_id, status, created_at) 
+                             VALUES (:parent_user_id, :child_user_id, :title, :target_points, :start_date, :end_date, :reward_id, 'active', NOW())");
         $stmt->execute([
             ':parent_user_id' => $parent_user_id,
             ':child_user_id' => $child_user_id,
@@ -349,7 +349,7 @@ function updateGoal($goal_id, $parent_user_id, $title, $target_points, $start_da
 
         $stmt = $db->prepare("UPDATE goals SET title = :title, target_points = :target_points, start_date = :start_date, 
                              end_date = :end_date, reward_id = :reward_id 
-                             WHERE id = :goal_id AND parent_user_id = :parent_user_id AND status IN ('active', 'pending_approval')");
+                             WHERE id = :goal_id AND parent_user_id = :parent_user_id AND status IN ('active', 'pending_approval', 'rejected')");
         $stmt->execute([
             ':title' => $title,
             ':target_points' => $target_points,
@@ -379,7 +379,7 @@ function deleteGoal($goal_id, $parent_user_id) {
     global $db;
     $db->beginTransaction();
     try {
-        $stmt = $db->prepare("DELETE FROM goals WHERE id = :goal_id AND parent_user_id = :parent_user_id AND status IN ('active', 'pending_approval')");
+        $stmt = $db->prepare("DELETE FROM goals WHERE id = :goal_id AND parent_user_id = :parent_user_id AND status IN ('active', 'pending_approval', 'rejected')");
         $stmt->execute([':goal_id' => $goal_id, ':parent_user_id' => $parent_user_id]);
         if ($stmt->rowCount() > 0) {
             $db->commit();
@@ -471,7 +471,7 @@ function requestGoalCompletion($child_user_id, $goal_id) {
 }
 
 // Approve or reject goal completion
-function approveGoal($parent_user_id, $goal_id, $approve = true) {
+function approveGoal($parent_user_id, $goal_id, $approve = true, $rejection_comment = null) {
     global $db;
     if (!isset($db) || !$db) {
         error_log("Database connection not available in approveGoal");
@@ -492,8 +492,18 @@ function approveGoal($parent_user_id, $goal_id, $approve = true) {
         }
 
         $new_status = $approve ? 'completed' : 'rejected';
-        $stmt = $db->prepare("UPDATE goals SET status = :status, " . ($approve ? "completed_at = NOW()" : "rejected_at = NOW()") . " WHERE id = :goal_id");
-        $stmt->execute([':status' => $new_status, ':goal_id' => $goal_id]);
+        $update_fields = "status = :status";
+        if ($approve) {
+            $update_fields .= ", completed_at = NOW(), rejected_at = NULL, rejection_comment = NULL";
+        } else {
+            $update_fields .= ", rejected_at = NOW(), rejection_comment = :rejection_comment";
+        }
+        $stmt = $db->prepare("UPDATE goals SET $update_fields WHERE id = :goal_id");
+        $execute_params = [':status' => $new_status, ':goal_id' => $goal_id];
+        if (!$approve) {
+            $execute_params[':rejection_comment'] = $rejection_comment ?: '';
+        }
+        $stmt->execute($execute_params);
 
         if ($approve) {
             $target_points = $goal['target_points'];
@@ -503,11 +513,37 @@ function approveGoal($parent_user_id, $goal_id, $approve = true) {
             return $target_points;
         }
         $db->commit();
-        error_log("Goal $goal_id rejected for child {$goal['child_user_id']}");
+        error_log("Goal $goal_id rejected for child {$goal['child_user_id']}, comment: $rejection_comment");
         return 0;
     } catch (Exception $e) {
         $db->rollBack();
-        error_log("Goal approval failed for goal $goal_id by parent $parent_user_id: " . $e->getMessage());
+        error_log("Goal approval/rejection failed for goal $goal_id by parent $parent_user_id: " . $e->getMessage());
+        return false;
+    }
+}
+
+// New: Reactivate a rejected goal
+function reactivateGoal($goal_id, $parent_user_id) {
+    global $db;
+    $db->beginTransaction();
+    try {
+        $stmt = $db->prepare("UPDATE goals SET status = 'active', rejected_at = NULL, rejection_comment = NULL 
+                             WHERE id = :goal_id AND parent_user_id = :parent_user_id AND status = 'rejected'");
+        $stmt->execute([
+            ':goal_id' => $goal_id,
+            ':parent_user_id' => $parent_user_id
+        ]);
+        if ($stmt->rowCount() > 0) {
+            $db->commit();
+            error_log("Goal $goal_id reactivated by parent $parent_user_id");
+            return true;
+        }
+        $db->rollBack();
+        error_log("No rows affected when reactivating goal $goal_id by parent $parent_user_id");
+        return false;
+    } catch (Exception $e) {
+        $db->rollBack();
+        error_log("Failed to reactivate goal $goal_id by parent $parent_user_id: " . $e->getMessage());
         return false;
     }
 }
@@ -774,11 +810,11 @@ function completeRoutine($routine_id, $child_id) {
 //     die("Failed to initialize database tables.");
 // }
 
-// Ensure goals table includes status and completed_at columns
+// Ensure goals table includes status, completed_at, rejected_at, and rejection_comment columns
 $db->exec("ALTER TABLE goals ADD COLUMN IF NOT EXISTS status ENUM('active', 'pending_approval', 'completed', 'rejected') DEFAULT 'active'");
 $db->exec("ALTER TABLE goals ADD COLUMN IF NOT EXISTS completed_at DATETIME DEFAULT NULL");
-$db->exec("ALTER TABLE goals ADD COLUMN IF NOT EXISTS requested_at DATETIME DEFAULT NULL");
 $db->exec("ALTER TABLE goals ADD COLUMN IF NOT EXISTS rejected_at DATETIME DEFAULT NULL");
+$db->exec("ALTER TABLE goals ADD COLUMN IF NOT EXISTS rejection_comment TEXT DEFAULT NULL");
 
 // Ensure rewards table includes created_on column (added for timestamping)
 $db->exec("ALTER TABLE rewards ADD COLUMN IF NOT EXISTS created_on TIMESTAMP DEFAULT CURRENT_TIMESTAMP");
@@ -787,21 +823,6 @@ $db->exec("ALTER TABLE rewards ADD COLUMN IF NOT EXISTS created_on TIMESTAMP DEF
 $db->exec("ALTER TABLE rewards ADD COLUMN IF NOT EXISTS redeemed_by INT NULL");
 $db->exec("ALTER TABLE rewards ADD COLUMN IF NOT EXISTS redeemed_on DATETIME NULL");
 $db->exec("ALTER TABLE rewards ADD FOREIGN KEY IF NOT EXISTS (redeemed_by) REFERENCES users(id) ON DELETE SET NULL");
-
-// Remove redeemed_by_child_id column and its foreign key
-try {
-    $stmt = $db->query("SHOW CREATE TABLE rewards");
-    $create_table = $stmt->fetch(PDO::FETCH_ASSOC)['Create Table'];
-    if (preg_match("/CONSTRAINT `([^`]+)` FOREIGN KEY \(`redeemed_by_child_id`\)/", $create_table, $matches)) {
-        $fk_name = $matches[1];
-        $db->exec("ALTER TABLE rewards DROP FOREIGN KEY `$fk_name`");
-        error_log("Dropped foreign key $fk_name on rewards.redeemed_by_child_id");
-    }
-    $db->exec("ALTER TABLE rewards DROP COLUMN IF EXISTS redeemed_by_child_id");
-    error_log("Dropped column redeemed_by_child_id from rewards table");
-} catch (Exception $e) {
-    error_log("Failed to drop foreign key or column redeemed_by_child_id: " . $e->getMessage());
-}
 
 // Create users table if not exists
 $sql = "CREATE TABLE IF NOT EXISTS users (
@@ -873,6 +894,11 @@ $sql = "CREATE TABLE IF NOT EXISTS goals (
     end_date DATETIME,
     status ENUM('active', 'pending_approval', 'completed', 'rejected') DEFAULT 'active',
     reward_id INT,
+    completed_at DATETIME DEFAULT NULL,
+    requested_at DATETIME DEFAULT NULL,
+    rejected_at DATETIME DEFAULT NULL,
+    rejection_comment TEXT DEFAULT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (parent_user_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (child_user_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (reward_id) REFERENCES rewards(id) ON DELETE SET NULL
