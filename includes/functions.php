@@ -3,7 +3,7 @@
 // Purpose: Centralize common operations for maintainability
 // Inputs: None initially
 // Outputs: Functions for app logic
-// Version: 3.4.1
+// Version: 3.4.2
 
 require_once __DIR__ . '/db_connect.php';
 

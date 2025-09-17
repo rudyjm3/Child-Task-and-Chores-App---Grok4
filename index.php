@@ -23,7 +23,7 @@ require_once __DIR__ . '/includes/functions.php';
         <p>This app helps children aged 5-13 manage tasks and routines, with autism-friendly features.</p>
     </main>
     <footer>
-        <p>Child Task and Chore App - Ver 3.4.0</p>
+        <p>Child Task and Chore App - Ver 3.4.2</p>
     </footer>
 </body>
 </html>
