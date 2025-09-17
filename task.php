@@ -176,9 +176,13 @@ $approved_tasks = array_filter($tasks, function($t) { return $t['status'] === 'a
 </head>
 <body>
     <header>
-        <h1>Task Management</h1>
-        <p>Welcome, <?php echo htmlspecialchars($_SESSION['username'] ?? 'Unknown User'); ?> (<?php echo htmlspecialchars($_SESSION['role']); ?>)</p>
-        <a href="profile.php">Profile</a> | <a href="logout.php">Logout</a>
+         <h1>Task Management</h1>
+         <p>Welcome, <?php echo htmlspecialchars($_SESSION['username'] ?? 'Unknown User'); ?> (<?php echo htmlspecialchars($_SESSION['role']); ?>)</p>
+         <a href="dashboard_<?php echo $_SESSION['role']; ?>.php">Dashboard</a> | 
+         <a href="goal.php">Goals</a> | 
+         <a href="routine.php">Routines</a> |
+         <a href="profile.php">Profile</a> | 
+         <a href="logout.php">Logout</a>
     </header>
     <main>
         <?php if (isset($message)) echo "<p>$message</p>"; ?>
@@ -320,7 +324,7 @@ $approved_tasks = array_filter($tasks, function($t) { return $t['status'] === 'a
         </div>
     </main>
     <footer>
-      <p>Child Task and Chore App - Ver 3.3.10</p>
+      <p>Child Task and Chore App - Ver 3.4.0</p>
     </footer>
 </body>
 </html>

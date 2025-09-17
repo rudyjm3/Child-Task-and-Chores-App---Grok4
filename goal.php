@@ -150,7 +150,7 @@ $completed_goals = array_filter($goals, function($g) { return $g['status'] === '
 </head>
 <body>
     <header>
-      <h1>Task Management</h1>
+      <h1>Goal Management</h1>
       <p>Welcome, <?php echo htmlspecialchars($_SESSION['username'] ?? 'Unknown User'); ?> (<?php echo htmlspecialchars($_SESSION['role']); ?>)</p>
       <a href="dashboard_<?php echo $_SESSION['role']; ?>.php">Dashboard</a> | <a href="goal.php">Goals</a> | <a href="routine.php">Routines</a> | <a href="profile.php">Profile</a> | <a href="logout.php">Logout</a>
     </header>

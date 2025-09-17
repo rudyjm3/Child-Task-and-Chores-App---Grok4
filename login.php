@@ -93,7 +93,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </div>
     </main>
     <footer>
-        <p>Child Task and Chore App - Ver 3.3.2</p>
+        <p>Child Task and Chore App - Ver 3.4.0</p>
     </footer>
 </body>
 </html>

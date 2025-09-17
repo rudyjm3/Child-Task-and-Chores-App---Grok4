@@ -52,10 +52,15 @@ $children = $childStmt->fetchAll(PDO::FETCH_ASSOC);
     <link rel="stylesheet" href="css/main.css">
 </head>
 <body>
+    
     <header>
-        <h1>Profile</h1>
-        <p>Welcome, <?php echo htmlspecialchars($_SESSION['username'] ?? 'Unknown User'); ?> (<?php echo htmlspecialchars($_SESSION['role']); ?>)</p>
-        <a href="logout.php">Logout</a>
+         <h1>Profile</h1>
+         <p>Hi, <?php echo htmlspecialchars($_SESSION['username'] ?? 'Unknown User'); ?>! (<?php echo htmlspecialchars($_SESSION['role']); ?>)</p>
+         <a href="dashboard_<?php echo $_SESSION['role']; ?>.php">Dashboard</a> | 
+         <a href="goal.php">Goals</a> | 
+         <a href="task.php">Tasks</a> |
+         <a href="routine.php">Routines</a> | 
+         <a href="logout.php">Logout</a>
     </header>
     <main>
         <?php if (isset($message)) echo "<p>$message</p>"; ?>
@@ -78,7 +83,7 @@ $children = $childStmt->fetchAll(PDO::FETCH_ASSOC);
         <?php endif; ?>
     </main>
     <footer>
-        <p>Child Task and Chore App - Ver 2.0.0</p>
+        <p>Child Task and Chore App - Ver 3.4.0</p>
     </footer>
 </body>
 </html>
