@@ -3,7 +3,7 @@
 // Purpose: Allow parents to create/edit/delete/reactivate goals and children to view/request completion
 // Inputs: POST for create/update/delete/reactivate, goal ID for request completion
 // Outputs: Goal management interface
-// Version: 3.4.3
+// Version: 3.4.4
 
 session_start();
 require_once __DIR__ . '/includes/functions.php';
@@ -93,6 +93,7 @@ if ($_SESSION['role'] === 'parent') {
                          ORDER BY g.start_date ASC");
     $stmt->execute([':child_id' => $_SESSION['user_id']]);
     $goals = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    error_log("Child goals fetched: " . print_r($goals, true)); // Debugging log
 }
 
 // Fetch all goals for parent view (including active, pending, completed, rejected)
@@ -372,7 +373,7 @@ if ($_SESSION['role'] === 'parent') {
         </div>
     </main>
     <footer>
-        <p>Child Task and Chore App - Ver 3.4.3</p>
+        <p>Child Task and Chore App - Ver 3.4.4</p>
     </footer>
 </body>
 </html>
