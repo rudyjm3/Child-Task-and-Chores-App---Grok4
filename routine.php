@@ -256,7 +256,7 @@ if ($_SESSION['role'] === 'parent') {
         </div>
     </main>
     <footer>
-      <p>Child Task and Chore App - Ver 3.4.2</p>
+      <p>Child Task and Chore App - Ver 3.4.5</p>
     </footer>
 </body>
 </html>
