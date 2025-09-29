@@ -121,6 +121,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <p>No active goals.</p>
          <?php endif; ?>
       </div>
+
+      <!-- ROUTINES SECTION -->
+      <div class="routines">
+         <h2>Routines</h2>
+         <?php $routines = getRoutines($_SESSION['user_id']); ?>
+         <?php if (!empty($routines)): ?>
+            <?php foreach ($routines as $routine): ?>
+                  <div class="routine-item">
+                     <p><?php echo htmlspecialchars($routine['title']); ?></p>
+                     <button onclick="startRoutineTimer(<?php echo $routine['id']; ?>, <?php echo (strtotime($routine['end_time']) - strtotime($routine['start_time'])) / 60; ?>)">Start</button>
+                     <form method="POST">
+                        <input type="hidden" name="routine_id" value="<?php echo $routine['id']; ?>">
+                        <button type="submit" name="complete_routine">Complete</button>
+                     </form>
+                  </div>
+            <?php endforeach; ?>
+         <?php else: ?>
+            <p>No routines assigned.</p>
+         <?php endif; ?>
+      </div>  
+
+
       <div class="completed-goals">
          <h2>Completed Goals</h2>
          <?php if (isset($data['completed_goals']) && is_array($data['completed_goals']) && !empty($data['completed_goals'])): ?>

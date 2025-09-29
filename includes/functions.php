@@ -3,7 +3,7 @@
 // Purpose: Centralize common operations for maintainability
 // Inputs: None initially
 // Outputs: Functions for app logic
-// Version: 3.4.6
+// Version: 3.4.7 (Updated for separate Routine Tasks, fixed pre-population logic, removed old junction table, added status to routine_tasks for approval flow)
 
 require_once __DIR__ . '/db_connect.php';
 
@@ -522,6 +522,52 @@ function approveGoal($parent_user_id, $goal_id, $approve = true, $rejection_comm
     }
 }
 
+// NEW 9/28
+// **[New] Routine Task Functions **
+function createRoutineTask($parent_user_id, $title, $description, $time_limit, $point_value, $category, $icon_url = null, $audio_url = null) {
+    global $db;
+    $stmt = $db->prepare("INSERT INTO routine_tasks (parent_user_id, title, description, time_limit, point_value, category, icon_url, audio_url) VALUES (:parent_id, :title, :description, :time_limit, :point_value, :category, :icon_url, :audio_url)");
+    return $stmt->execute([
+        ':parent_id' => $parent_user_id,
+        ':title' => $title,
+        ':description' => $description,
+        ':time_limit' => $time_limit,
+        ':point_value' => $point_value,
+        ':category' => $category,
+        ':icon_url' => $icon_url,
+        ':audio_url' => $audio_url
+    ]);
+}
+
+function getRoutineTasks($parent_user_id) {
+    global $db;
+    // Include global defaults (parent_id = 0) and parent-specific
+    $stmt = $db->prepare("SELECT * FROM routine_tasks WHERE parent_user_id = 0 OR parent_user_id = :parent_id");
+    $stmt->execute([':parent_id' => $parent_user_id]);
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
+function updateRoutineTask($routine_task_id, $updates) {
+    global $db;
+    $fields = [];
+    $params = [':id' => $routine_task_id];
+    foreach ($updates as $key => $value) {
+        $fields[] = "$key = :$key";
+        $params[":$key"] = $value;
+    }
+    $stmt = $db->prepare("UPDATE routine_tasks SET " . implode(', ', $fields) . " WHERE id = :id");
+    return $stmt->execute($params);
+}
+
+function deleteRoutineTask($routine_task_id, $parent_user_id) {
+    global $db;
+    $stmt = $db->prepare("DELETE FROM routine_tasks WHERE id = :id AND parent_user_id = :parent_id");
+    return $stmt->execute([':id' => $routine_task_id, ':parent_id' => $parent_user_id]);
+}
+
+
+
+
 // New: Reactivate a rejected goal
 function reactivateGoal($goal_id, $parent_user_id) {
     global $db;
@@ -592,194 +638,342 @@ function updateChildPoints($child_id, $points) {
     }
 }
 
+
+
+// REMOVED BELOW CODE 9/28 
 // New: Create a new routine
-function createRoutine($parent_id, $child_id, $title, $start_time, $end_time, $recurrence, $bonus_points) {
+// function createRoutine($parent_id, $child_id, $title, $start_time, $end_time, $recurrence, $bonus_points) {
+//     global $db;
+//     if (!isset($db) || !$db) {
+//         error_log("Database connection not available in createRoutine");
+//         return false;
+//     }
+//     $db->beginTransaction();
+//     try {
+//         $stmt = $db->prepare("INSERT INTO routines (parent_user_id, child_user_id, title, start_time, end_time, recurrence, bonus_points, created_at) 
+//                              VALUES (:parent_id, :child_id, :title, :start_time, :end_time, :recurrence, :bonus_points, NOW())");
+//         $stmt->execute([
+//             ':parent_id' => $parent_id,
+//             ':child_id' => $child_id,
+//             ':title' => $title,
+//             ':start_time' => $start_time,
+//             ':end_time' => $end_time,
+//             ':recurrence' => $recurrence,
+//             ':bonus_points' => $bonus_points
+//         ]);
+//         $routine_id = $db->lastInsertId();
+//         $db->commit();
+//         error_log("Routine created by parent $parent_id for child $child_id: $title (ID: $routine_id)");
+//         return $routine_id;
+//     } catch (Exception $e) {
+//         $db->rollBack();
+//         error_log("Failed to create routine by parent $parent_id for child $child_id: " . $e->getMessage());
+//         return false;
+//     }
+// }
+
+// // New: Update a routine
+// function updateRoutine($routine_id, $title, $start_time, $end_time, $recurrence, $bonus_points, $parent_id) {
+//     global $db;
+//     $db->beginTransaction();
+//     try {
+//         $stmt = $db->prepare("UPDATE routines SET title = :title, start_time = :start_time, end_time = :end_time, recurrence = :recurrence, bonus_points = :bonus_points 
+//                              WHERE id = :routine_id AND parent_user_id = :parent_id");
+//         $stmt->execute([
+//             ':title' => $title,
+//             ':start_time' => $start_time,
+//             ':end_time' => $end_time,
+//             ':recurrence' => $recurrence,
+//             ':bonus_points' => $bonus_points,
+//             ':routine_id' => $routine_id,
+//             ':parent_id' => $parent_id
+//         ]);
+//         if ($stmt->rowCount() > 0) {
+//             $db->commit();
+//             return true;
+//         }
+//         $db->rollBack();
+//         return false;
+//     } catch (Exception $e) {
+//         $db->rollBack();
+//         error_log("Routine update failed for ID $routine_id: " . $e->getMessage());
+//         return false;
+//     }
+// }
+
+// // New: Delete a routine
+// function deleteRoutine($routine_id, $parent_id) {
+//     global $db;
+//     $db->beginTransaction();
+//     try {
+//         $stmt = $db->prepare("DELETE FROM routines WHERE id = :routine_id AND parent_user_id = :parent_id");
+//         $stmt->execute([':routine_id' => $routine_id, ':parent_id' => $parent_id]);
+//         if ($stmt->rowCount() > 0) {
+//             $db->commit();
+//             return true;
+//         }
+//         $db->rollBack();
+//         return false;
+//     } catch (Exception $e) {
+//         $db->rollBack();
+//         error_log("Routine deletion failed for ID $routine_id: " . $e->getMessage());
+//         return false;
+//     }
+// }
+
+// // New: Add task to routine with order
+// function addTaskToRoutine($routine_id, $task_id, $order) {
+//     global $db;
+//     try {
+//         $stmt = $db->prepare("INSERT INTO routine_tasks (routine_id, task_id, sequence_order) VALUES (:routine_id, :task_id, :order)");
+//         $stmt->execute([':routine_id' => $routine_id, ':task_id' => $task_id, ':order' => $order]);
+//         return true;
+//     } catch (Exception $e) {
+//         error_log("Failed to add task $task_id to routine $routine_id: " . $e->getMessage());
+//         return false;
+//     }
+// }
+
+// // New: Remove task from routine
+// function removeTaskFromRoutine($routine_id, $task_id) {
+//     global $db;
+//     try {
+//         $stmt = $db->prepare("DELETE FROM routine_tasks WHERE routine_id = :routine_id AND task_id = :task_id");
+//         $stmt->execute([':routine_id' => $routine_id, ':task_id' => $task_id]);
+//         return true;
+//     } catch (Exception $e) {
+//         error_log("Failed to remove task $task_id from routine $routine_id: " . $e->getMessage());
+//         return false;
+//     }
+// }
+
+// // New: Reorder tasks in routine (update orders)
+// function reorderRoutineTasks($routine_id, $task_orders) { // $task_orders = array(task_id => new_order)
+//     global $db;
+//     $db->beginTransaction();
+//     try {
+//         foreach ($task_orders as $task_id => $order) {
+//             $stmt = $db->prepare("UPDATE routine_tasks SET sequence_order = :order WHERE routine_id = :routine_id AND task_id = :task_id");
+//             $stmt->execute([':order' => $order, ':routine_id' => $routine_id, ':task_id' => $task_id]);
+//         }
+//         $db->commit();
+//         return true;
+//     } catch (Exception $e) {
+//         $db->rollBack();
+//         error_log("Routine task reorder failed for ID $routine_id: " . $e->getMessage());
+//         return false;
+//     }
+// }
+
+// // New: Get routines for user (with associated tasks sorted by order)
+// function getRoutines($user_id) {
+//     global $db;
+//     if (!isset($db) || !$db) {
+//         error_log("Database connection not available in getRoutines for user_id $user_id");
+//         return [];
+//     }
+//     $role = $_SESSION['role'] ?? 'unknown';
+//     $routines = [];
+
+//     if ($role === 'parent') {
+//         $stmt = $db->prepare("SELECT r.* FROM routines r WHERE r.parent_user_id = :user_id ORDER BY r.title ASC");
+//         $stmt->execute([':user_id' => $user_id]);
+//         $routines = $stmt->fetchAll(PDO::FETCH_ASSOC);
+//     } elseif ($role === 'child') {
+//         $stmt = $db->prepare("SELECT r.* FROM routines r WHERE r.child_user_id = :user_id ORDER BY r.title ASC");
+//         $stmt->execute([':user_id' => $user_id]);
+//         $routines = $stmt->fetchAll(PDO::FETCH_ASSOC);
+//     }
+
+//     // Fetch associated tasks for each routine
+//     foreach ($routines as &$routine) {
+//         $stmt = $db->prepare("SELECT t.* FROM tasks t 
+//                              JOIN routine_tasks rt ON t.id = rt.task_id 
+//                              WHERE rt.routine_id = :routine_id ORDER BY rt.sequence_order ASC");
+//         $stmt->execute([':routine_id' => $routine['id']]);
+//         $routine['tasks'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
+//     }
+//     unset($routine);
+
+//     error_log("getRoutines for user_id $user_id (" . $role . "): " . print_r($routines, true));
+//     return $routines;
+// }
+
+// // New: Complete a routine (check all tasks approved, award bonus if within timeframe)
+// function completeRoutine($routine_id, $child_id) {
+//     global $db;
+//     $db->beginTransaction();
+//     try {
+//         // Fetch routine and check if all tasks are approved
+//         $stmt = $db->prepare("SELECT r.start_time, r.end_time, r.bonus_points FROM routines r WHERE r.id = :routine_id AND r.child_user_id = :child_id");
+//         $stmt->execute([':routine_id' => $routine_id, ':child_id' => $child_id]);
+//         $routine = $stmt->fetch(PDO::FETCH_ASSOC);
+//         if (!$routine) {
+//             $db->rollBack();
+//             error_log("Routine $routine_id not found for child $child_id");
+//             return false;
+//         }
+
+//         $stmt = $db->prepare("SELECT COUNT(*) FROM routine_tasks rt 
+//                              JOIN tasks t ON rt.task_id = t.id 
+//                              WHERE rt.routine_id = :routine_id AND t.status != 'approved'");
+//         $stmt->execute([':routine_id' => $routine_id]);
+//         if ($stmt->fetchColumn() > 0) {
+//             $db->rollBack();
+//             error_log("Not all tasks approved for routine $routine_id");
+//             return false; // Not all tasks approved
+//         }
+
+//         // Check if current time is within start-end (combine with current date for comparison)
+//         $current_time = new DateTime();
+//         $start = new DateTime(date('Y-m-d') . ' ' . $routine['start_time']);
+//         $end = new DateTime(date('Y-m-d') . ' ' . $routine['end_time']);
+//         // Handle case where end time is past midnight
+//         if ($end < $start) {
+//             $end->modify('+1 day');
+//         }
+//         $bonus = ($current_time >= $start && $current_time <= $end) ? $routine['bonus_points'] : 0;
+
+//         // Award bonus to child's points
+//         updateChildPoints($child_id, $bonus);
+
+//         error_log("Routine $routine_id completed by child $child_id with bonus $bonus");
+
+//         $db->commit();
+//         return $bonus;
+//     } catch (Exception $e) {
+//         $db->rollBack();
+//         error_log("Routine completion failed for ID $routine_id: " . $e->getMessage());
+//         return false;
+//     }
+// }
+// REMOVED ABOVE CODE 9/28
+
+// ADDED BELOW CODE NEW ROUTINE FUNCTION 9/28
+// **[Revised] Routine Functions (now use routine_task_id instead of task_id) **
+function createRoutine($parent_user_id, $child_user_id, $title, $start_time, $end_time, $recurrence, $bonus_points) {
     global $db;
-    if (!isset($db) || !$db) {
-        error_log("Database connection not available in createRoutine");
-        return false;
-    }
-    $db->beginTransaction();
-    try {
-        $stmt = $db->prepare("INSERT INTO routines (parent_user_id, child_user_id, title, start_time, end_time, recurrence, bonus_points, created_at) 
-                             VALUES (:parent_id, :child_id, :title, :start_time, :end_time, :recurrence, :bonus_points, NOW())");
-        $stmt->execute([
-            ':parent_id' => $parent_id,
-            ':child_id' => $child_id,
-            ':title' => $title,
-            ':start_time' => $start_time,
-            ':end_time' => $end_time,
-            ':recurrence' => $recurrence,
-            ':bonus_points' => $bonus_points
-        ]);
-        $routine_id = $db->lastInsertId();
-        $db->commit();
-        error_log("Routine created by parent $parent_id for child $child_id: $title (ID: $routine_id)");
-        return $routine_id;
-    } catch (Exception $e) {
-        $db->rollBack();
-        error_log("Failed to create routine by parent $parent_id for child $child_id: " . $e->getMessage());
-        return false;
-    }
+    $stmt = $db->prepare("INSERT INTO routines (parent_user_id, child_user_id, title, start_time, end_time, recurrence, bonus_points) VALUES (:parent_id, :child_id, :title, :start_time, :end_time, :recurrence, :bonus_points)");
+    $stmt->execute([
+        ':parent_id' => $parent_user_id,
+        ':child_id' => $child_user_id,
+        ':title' => $title,
+        ':start_time' => $start_time,
+        ':end_time' => $end_time,
+        ':recurrence' => $recurrence,
+        ':bonus_points' => $bonus_points
+    ]);
+    return $db->lastInsertId();
 }
 
-// New: Update a routine
-function updateRoutine($routine_id, $title, $start_time, $end_time, $recurrence, $bonus_points, $parent_id) {
+function updateRoutine($routine_id, $title, $start_time, $end_time, $recurrence, $bonus_points, $parent_user_id) {
     global $db;
-    $db->beginTransaction();
-    try {
-        $stmt = $db->prepare("UPDATE routines SET title = :title, start_time = :start_time, end_time = :end_time, recurrence = :recurrence, bonus_points = :bonus_points 
-                             WHERE id = :routine_id AND parent_user_id = :parent_id");
-        $stmt->execute([
-            ':title' => $title,
-            ':start_time' => $start_time,
-            ':end_time' => $end_time,
-            ':recurrence' => $recurrence,
-            ':bonus_points' => $bonus_points,
-            ':routine_id' => $routine_id,
-            ':parent_id' => $parent_id
-        ]);
-        if ($stmt->rowCount() > 0) {
-            $db->commit();
-            return true;
-        }
-        $db->rollBack();
-        return false;
-    } catch (Exception $e) {
-        $db->rollBack();
-        error_log("Routine update failed for ID $routine_id: " . $e->getMessage());
-        return false;
-    }
+    $stmt = $db->prepare("UPDATE routines SET title = :title, start_time = :start_time, end_time = :end_time, recurrence = :recurrence, bonus_points = :bonus_points WHERE id = :id AND parent_user_id = :parent_id");
+    return $stmt->execute([
+        ':title' => $title,
+        ':start_time' => $start_time,
+        ':end_time' => $end_time,
+        ':recurrence' => $recurrence,
+        ':bonus_points' => $bonus_points,
+        ':id' => $routine_id,
+        ':parent_id' => $parent_user_id
+    ]);
 }
 
-// New: Delete a routine
-function deleteRoutine($routine_id, $parent_id) {
+function deleteRoutine($routine_id, $parent_user_id) {
     global $db;
-    $db->beginTransaction();
-    try {
-        $stmt = $db->prepare("DELETE FROM routines WHERE id = :routine_id AND parent_user_id = :parent_id");
-        $stmt->execute([':routine_id' => $routine_id, ':parent_id' => $parent_id]);
-        if ($stmt->rowCount() > 0) {
-            $db->commit();
-            return true;
-        }
-        $db->rollBack();
-        return false;
-    } catch (Exception $e) {
-        $db->rollBack();
-        error_log("Routine deletion failed for ID $routine_id: " . $e->getMessage());
-        return false;
-    }
+    $stmt = $db->prepare("DELETE FROM routines WHERE id = :id AND parent_user_id = :parent_id");
+    return $stmt->execute([':id' => $routine_id, ':parent_id' => $parent_user_id]);
 }
 
-// New: Add task to routine with order
-function addTaskToRoutine($routine_id, $task_id, $order) {
+function addRoutineTaskToRoutine($routine_id, $routine_task_id, $sequence_order, $dependency_id = null) {
     global $db;
-    try {
-        $stmt = $db->prepare("INSERT INTO routine_tasks (routine_id, task_id, sequence_order) VALUES (:routine_id, :task_id, :order)");
-        $stmt->execute([':routine_id' => $routine_id, ':task_id' => $task_id, ':order' => $order]);
-        return true;
-    } catch (Exception $e) {
-        error_log("Failed to add task $task_id to routine $routine_id: " . $e->getMessage());
-        return false;
-    }
+    $stmt = $db->prepare("INSERT INTO routines_routine_tasks (routine_id, routine_task_id, sequence_order, dependency_id) VALUES (:routine_id, :routine_task_id, :sequence_order, :dependency_id)");
+    return $stmt->execute([
+        ':routine_id' => $routine_id,
+        ':routine_task_id' => $routine_task_id,
+        ':sequence_order' => $sequence_order,
+        ':dependency_id' => $dependency_id
+    ]);
 }
 
-// New: Remove task from routine
-function removeTaskFromRoutine($routine_id, $task_id) {
+function removeRoutineTaskFromRoutine($routine_id, $routine_task_id) {
     global $db;
-    try {
-        $stmt = $db->prepare("DELETE FROM routine_tasks WHERE routine_id = :routine_id AND task_id = :task_id");
-        $stmt->execute([':routine_id' => $routine_id, ':task_id' => $task_id]);
-        return true;
-    } catch (Exception $e) {
-        error_log("Failed to remove task $task_id from routine $routine_id: " . $e->getMessage());
-        return false;
-    }
+    $stmt = $db->prepare("DELETE FROM routines_routine_tasks WHERE routine_id = :routine_id AND routine_task_id = :routine_task_id");
+    return $stmt->execute([':routine_id' => $routine_id, ':routine_task_id' => $routine_task_id]);
 }
 
-// New: Reorder tasks in routine (update orders)
-function reorderRoutineTasks($routine_id, $task_orders) { // $task_orders = array(task_id => new_order)
+function reorderRoutineTasks($routine_id, $new_order) {  // $new_order = array(routine_task_id => order)
     global $db;
-    $db->beginTransaction();
-    try {
-        foreach ($task_orders as $task_id => $order) {
-            $stmt = $db->prepare("UPDATE routine_tasks SET sequence_order = :order WHERE routine_id = :routine_id AND task_id = :task_id");
-            $stmt->execute([':order' => $order, ':routine_id' => $routine_id, ':task_id' => $task_id]);
-        }
-        $db->commit();
-        return true;
-    } catch (Exception $e) {
-        $db->rollBack();
-        error_log("Routine task reorder failed for ID $routine_id: " . $e->getMessage());
-        return false;
+    foreach ($new_order as $routine_task_id => $order) {
+        $stmt = $db->prepare("UPDATE routines_routine_tasks SET sequence_order = :order WHERE routine_id = :routine_id AND routine_task_id = :routine_task_id");
+        $stmt->execute([':order' => $order, ':routine_id' => $routine_id, ':routine_task_id' => $routine_task_id]);
     }
+    return true;
 }
 
-// New: Get routines for user (with associated tasks sorted by order)
 function getRoutines($user_id) {
     global $db;
-    if (!isset($db) || !$db) {
-        error_log("Database connection not available in getRoutines for user_id $user_id");
-        return [];
-    }
-    $role = $_SESSION['role'] ?? 'unknown';
-    $routines = [];
+    $userStmt = $db->prepare("SELECT role FROM users WHERE id = :id");
+    $userStmt->execute([':id' => $user_id]);
+    $role = $userStmt->fetchColumn();
 
     if ($role === 'parent') {
-        $stmt = $db->prepare("SELECT r.* FROM routines r WHERE r.parent_user_id = :user_id ORDER BY r.title ASC");
-        $stmt->execute([':user_id' => $user_id]);
-        $routines = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    } elseif ($role === 'child') {
-        $stmt = $db->prepare("SELECT r.* FROM routines r WHERE r.child_user_id = :user_id ORDER BY r.title ASC");
-        $stmt->execute([':user_id' => $user_id]);
-        $routines = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $stmt = $db->prepare("SELECT * FROM routines WHERE parent_user_id = :parent_id");
+        $stmt->execute([':parent_id' => $user_id]);
+    } else {
+        $stmt = $db->prepare("SELECT * FROM routines WHERE child_user_id = :child_id");
+        $stmt->execute([':child_id' => $user_id]);
     }
+    $routines = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    // Fetch associated tasks for each routine
     foreach ($routines as &$routine) {
-        $stmt = $db->prepare("SELECT t.* FROM tasks t 
-                             JOIN routine_tasks rt ON t.id = rt.task_id 
-                             WHERE rt.routine_id = :routine_id ORDER BY rt.sequence_order ASC");
-        $stmt->execute([':routine_id' => $routine['id']]);
-        $routine['tasks'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $taskStmt = $db->prepare("SELECT rt.*, rrt.sequence_order, rrt.dependency_id FROM routine_tasks rt JOIN routines_routine_tasks rrt ON rt.id = rrt.routine_task_id WHERE rrt.routine_id = :routine_id ORDER BY rrt.sequence_order");
+        $taskStmt->execute([':routine_id' => $routine['id']]);
+        $routine['tasks'] = $taskStmt->fetchAll(PDO::FETCH_ASSOC);
     }
-    unset($routine);
-
-    error_log("getRoutines for user_id $user_id (" . $role . "): " . print_r($routines, true));
     return $routines;
 }
 
-// New: Complete a routine (check all tasks approved, award bonus if within timeframe)
+function getRoutineWithTasks($routine_id) {
+    global $db;
+    $stmt = $db->prepare("SELECT * FROM routines WHERE id = :id");
+    $stmt->execute([':id' => $routine_id]);
+    $routine = $stmt->fetch(PDO::FETCH_ASSOC);
+    if ($routine) {
+        $taskStmt = $db->prepare("SELECT rt.*, rrt.sequence_order FROM routine_tasks rt JOIN routines_routine_tasks rrt ON rt.id = rrt.routine_task_id WHERE rrt.routine_id = :routine_id ORDER BY rrt.sequence_order");
+        $taskStmt->execute([':routine_id' => $routine_id]);
+        $routine['tasks'] = $taskStmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+    return $routine;
+}
+
 function completeRoutine($routine_id, $child_id) {
     global $db;
-    $db->beginTransaction();
     try {
-        // Fetch routine and check if all tasks are approved
-        $stmt = $db->prepare("SELECT r.start_time, r.end_time, r.bonus_points FROM routines r WHERE r.id = :routine_id AND r.child_user_id = :child_id");
-        $stmt->execute([':routine_id' => $routine_id, ':child_id' => $child_id]);
+        $db->beginTransaction();
+        $stmt = $db->prepare("SELECT * FROM routines WHERE id = :id AND child_user_id = :child_id");
+        $stmt->execute([':id' => $routine_id, ':child_id' => $child_id]);
         $routine = $stmt->fetch(PDO::FETCH_ASSOC);
         if (!$routine) {
             $db->rollBack();
-            error_log("Routine $routine_id not found for child $child_id");
             return false;
         }
 
-        $stmt = $db->prepare("SELECT COUNT(*) FROM routine_tasks rt 
-                             JOIN tasks t ON rt.task_id = t.id 
-                             WHERE rt.routine_id = :routine_id AND t.status != 'approved'");
+        // Check if all routine tasks are approved
+        $stmt = $db->prepare("SELECT COUNT(*) FROM routines_routine_tasks rrt 
+                             JOIN routine_tasks rt ON rrt.routine_task_id = rt.id 
+                             WHERE rrt.routine_id = :routine_id AND rt.status != 'approved'");
         $stmt->execute([':routine_id' => $routine_id]);
         if ($stmt->fetchColumn() > 0) {
             $db->rollBack();
-            error_log("Not all tasks approved for routine $routine_id");
-            return false; // Not all tasks approved
+            return false;
         }
 
-        // Check if current time is within start-end (combine with current date for comparison)
+        // Check if current time is within start-end
         $current_time = new DateTime();
         $start = new DateTime(date('Y-m-d') . ' ' . $routine['start_time']);
         $end = new DateTime(date('Y-m-d') . ' ' . $routine['end_time']);
-        // Handle case where end time is past midnight
         if ($end < $start) {
             $end->modify('+1 day');
         }
@@ -798,6 +992,8 @@ function completeRoutine($routine_id, $child_id) {
         return false;
     }
 }
+// ADDED ABOVE CODE NEW ROUTINE FUNCTION 9/28
+
 
 // Below code commented out so Notice message does not show up on the login page
 // Start session if not already started
@@ -805,138 +1001,157 @@ function completeRoutine($routine_id, $child_id) {
 //     session_start();
 // }
 
-// Initial table creation (remove after setup)
-// if (!createDatabaseTables()) {
-//     die("Failed to initialize database tables.");
-// }
+// Ensure all dependent tables are created in correct order with error handling
+try {
+    // Create users table if not exists
+    $sql = "CREATE TABLE IF NOT EXISTS users (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        username VARCHAR(50) NOT NULL UNIQUE,
+        password VARCHAR(255) NOT NULL,
+        role ENUM('parent', 'child') NOT NULL
+    )";
+    $db->exec($sql);
+    error_log("Created/verified users table successfully");
 
-// Ensure goals table includes status, completed_at, rejected_at, and rejection_comment columns
-$db->exec("ALTER TABLE goals ADD COLUMN IF NOT EXISTS status ENUM('active', 'pending_approval', 'completed', 'rejected') DEFAULT 'active'");
-$db->exec("ALTER TABLE goals ADD COLUMN IF NOT EXISTS completed_at DATETIME DEFAULT NULL");
-$db->exec("ALTER TABLE goals ADD COLUMN IF NOT EXISTS rejected_at DATETIME DEFAULT NULL");
-$db->exec("ALTER TABLE goals ADD COLUMN IF NOT EXISTS rejection_comment TEXT DEFAULT NULL");
+    // Create child_profiles table if not exists
+    $sql = "CREATE TABLE IF NOT EXISTS child_profiles (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        child_user_id INT NOT NULL,
+        parent_user_id INT NOT NULL,
+        avatar VARCHAR(50),
+        age INT,
+        preferences TEXT,
+        FOREIGN KEY (parent_user_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (child_user_id) REFERENCES users(id) ON DELETE CASCADE
+    )";
+    $db->exec($sql);
+    error_log("Created/verified child_profiles table successfully");
 
-// Ensure rewards table includes created_on column (added for timestamping)
-$db->exec("ALTER TABLE rewards ADD COLUMN IF NOT EXISTS created_on TIMESTAMP DEFAULT CURRENT_TIMESTAMP");
+    // Create tasks table if not exists
+    $sql = "CREATE TABLE IF NOT EXISTS tasks (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        parent_user_id INT NOT NULL,
+        child_user_id INT NOT NULL,
+        title VARCHAR(100) NOT NULL,
+        description TEXT,
+        due_date DATETIME,
+        points INT,
+        recurrence ENUM('daily', 'weekly', '') DEFAULT '',
+        category ENUM('hygiene', 'homework', 'household') DEFAULT 'household',
+        timing_mode ENUM('timer', 'suggested', 'no_limit') DEFAULT 'no_limit',
+        status ENUM('pending', 'completed', 'approved') DEFAULT 'pending',
+        photo_proof VARCHAR(255),
+        completed_at DATETIME,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (parent_user_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (child_user_id) REFERENCES users(id) ON DELETE CASCADE
+    )";
+    $db->exec($sql);
+    error_log("Created/verified tasks table successfully");
 
-// Ensure rewards table includes redeemed_by and redeemed_on
-$db->exec("ALTER TABLE rewards ADD COLUMN IF NOT EXISTS redeemed_by INT NULL");
-$db->exec("ALTER TABLE rewards ADD COLUMN IF NOT EXISTS redeemed_on DATETIME NULL");
-$db->exec("ALTER TABLE rewards ADD FOREIGN KEY IF NOT EXISTS (redeemed_by) REFERENCES users(id) ON DELETE SET NULL");
+    // Create rewards table if not exists
+    $sql = "CREATE TABLE IF NOT EXISTS rewards (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        parent_user_id INT NOT NULL,
+        title VARCHAR(100) NOT NULL,
+        description TEXT,
+        point_cost INT NOT NULL,
+        status ENUM('available', 'redeemed') DEFAULT 'available',
+        created_on TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        redeemed_by INT,
+        redeemed_on DATETIME,
+        FOREIGN KEY (parent_user_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (redeemed_by) REFERENCES users(id) ON DELETE SET NULL
+    )";
+    $db->exec($sql);
+    error_log("Created/verified rewards table successfully");
 
-// Create users table if not exists
-$sql = "CREATE TABLE IF NOT EXISTS users (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    username VARCHAR(50) NOT NULL UNIQUE,
-    password VARCHAR(255) NOT NULL,
-    role ENUM('parent', 'child') NOT NULL
-)";
-$db->exec($sql);
+    // Create goals table if not exists
+    $sql = "CREATE TABLE IF NOT EXISTS goals (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        parent_user_id INT NOT NULL,
+        child_user_id INT NOT NULL,
+        title VARCHAR(100) NOT NULL,
+        target_points INT NOT NULL,
+        start_date DATETIME,
+        end_date DATETIME,
+        status ENUM('active', 'pending_approval', 'completed', 'rejected') DEFAULT 'active',
+        reward_id INT,
+        completed_at DATETIME DEFAULT NULL,
+        requested_at DATETIME DEFAULT NULL,
+        rejected_at DATETIME DEFAULT NULL,
+        rejection_comment TEXT DEFAULT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (parent_user_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (child_user_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (reward_id) REFERENCES rewards(id) ON DELETE SET NULL
+    )";
+    $db->exec($sql);
+    error_log("Created/verified goals table successfully");
 
-// Create child_profiles table if not exists
-$sql = "CREATE TABLE IF NOT EXISTS child_profiles (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    child_user_id INT NOT NULL,
-    parent_user_id INT NOT NULL,
-    avatar VARCHAR(50),
-    age INT,
-    preferences TEXT,
-    FOREIGN KEY (parent_user_id) REFERENCES users(id) ON DELETE CASCADE,
-    FOREIGN KEY (child_user_id) REFERENCES users(id) ON DELETE CASCADE
-)";
-$db->exec($sql);
+    // Create routines table if not exists
+    $sql = "CREATE TABLE IF NOT EXISTS routines (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        parent_user_id INT NOT NULL,
+        child_user_id INT NOT NULL,
+        title VARCHAR(100) NOT NULL,
+        start_time TIME,
+        end_time TIME,
+        recurrence ENUM('daily', 'weekly', '') DEFAULT '',
+        bonus_points INT DEFAULT 0,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (parent_user_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (child_user_id) REFERENCES users(id) ON DELETE CASCADE
+    )";
+    $db->exec($sql);
+    error_log("Created/verified routines table successfully");
 
-// Create tasks table if not exists
-$sql = "CREATE TABLE IF NOT EXISTS tasks (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    parent_user_id INT NOT NULL,
-    child_user_id INT NOT NULL,
-    title VARCHAR(100) NOT NULL,
-    description TEXT,
-    due_date DATETIME,
-    points INT,
-    recurrence ENUM('daily', 'weekly', '') DEFAULT '',
-    category ENUM('hygiene', 'homework', 'household') DEFAULT 'household',
-    timing_mode ENUM('timer', 'suggested', 'no_limit') DEFAULT 'no_limit',
-    status ENUM('pending', 'completed', 'approved') DEFAULT 'pending',
-    photo_proof VARCHAR(255),
-    completed_at DATETIME,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (parent_user_id) REFERENCES users(id) ON DELETE CASCADE,
-    FOREIGN KEY (child_user_id) REFERENCES users(id) ON DELETE CASCADE
-)";
-$db->exec($sql);
+    // Create routine_tasks table if not exists
+    $sql = "CREATE TABLE IF NOT EXISTS routine_tasks (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        parent_user_id INT NOT NULL,
+        title VARCHAR(100) NOT NULL,
+        description TEXT,
+        time_limit INT,  -- in minutes
+        point_value INT,
+        category ENUM('hygiene', 'homework', 'household') DEFAULT 'household',
+        icon_url VARCHAR(255),
+        audio_url VARCHAR(255),
+        status ENUM('pending', 'completed', 'approved') DEFAULT 'pending',
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (parent_user_id) REFERENCES users(id) ON DELETE CASCADE
+    )";
+    $db->exec($sql);
+    error_log("Created/verified routine_tasks table successfully");
 
-// Create rewards table if not exists
-$sql = "CREATE TABLE IF NOT EXISTS rewards (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    parent_user_id INT NOT NULL,
-    title VARCHAR(100) NOT NULL,
-    description TEXT,
-    point_cost INT NOT NULL,
-    status ENUM('available', 'redeemed') DEFAULT 'available',
-    created_on TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    redeemed_by INT,
-    redeemed_on DATETIME,
-    FOREIGN KEY (parent_user_id) REFERENCES users(id) ON DELETE CASCADE,
-    FOREIGN KEY (redeemed_by) REFERENCES users(id) ON DELETE SET NULL
-)";
-$db->exec($sql);
-
-// Create goals table if not exists
-$sql = "CREATE TABLE IF NOT EXISTS goals (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    parent_user_id INT NOT NULL,
-    child_user_id INT NOT NULL,
-    title VARCHAR(100) NOT NULL,
-    target_points INT NOT NULL,
-    start_date DATETIME,
-    end_date DATETIME,
-    status ENUM('active', 'pending_approval', 'completed', 'rejected') DEFAULT 'active',
-    reward_id INT,
-    completed_at DATETIME DEFAULT NULL,
-    requested_at DATETIME DEFAULT NULL,
-    rejected_at DATETIME DEFAULT NULL,
-    rejection_comment TEXT DEFAULT NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (parent_user_id) REFERENCES users(id) ON DELETE CASCADE,
-    FOREIGN KEY (child_user_id) REFERENCES users(id) ON DELETE CASCADE,
-    FOREIGN KEY (reward_id) REFERENCES rewards(id) ON DELETE SET NULL
-)";
-$db->exec($sql);
-
-// New: Create routines table if not exists
-$sql = "CREATE TABLE IF NOT EXISTS routines (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    parent_user_id INT NOT NULL,
-    child_user_id INT NOT NULL,
-    title VARCHAR(100) NOT NULL,
-    start_time TIME,
-    end_time TIME,
-    recurrence ENUM('daily', 'weekly', '') DEFAULT '',
-    bonus_points INT DEFAULT 0,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (parent_user_id) REFERENCES users(id) ON DELETE CASCADE,
-    FOREIGN KEY (child_user_id) REFERENCES users(id) ON DELETE CASCADE
-)";
-$db->exec($sql);
-
-// New: Create routine_tasks association table if not exists
-$sql = "CREATE TABLE IF NOT EXISTS routine_tasks (
+    // New: Create routines_routine_tasks association table if not exists
+$sql = "CREATE TABLE IF NOT EXISTS routines_routine_tasks (
     routine_id INT NOT NULL,
-    task_id INT NOT NULL,
+    routine_task_id INT NOT NULL,
     sequence_order INT NOT NULL,
-    PRIMARY KEY (routine_id, task_id),
+    dependency_id INT DEFAULT NULL,
+    PRIMARY KEY (routine_id, routine_task_id),
     FOREIGN KEY (routine_id) REFERENCES routines(id) ON DELETE CASCADE,
-    FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
+    FOREIGN KEY (routine_task_id) REFERENCES routine_tasks(id) ON DELETE CASCADE,
+    FOREIGN KEY (dependency_id) REFERENCES routine_tasks(id) ON DELETE SET NULL
 )";
 $db->exec($sql);
+error_log("Created/verified routines_routine_tasks table successfully");
 
-// New: Create child_points table if not exists
-$sql = "CREATE TABLE IF NOT EXISTS child_points (
-    child_user_id INT PRIMARY KEY,
-    total_points INT DEFAULT 0,
-    FOREIGN KEY (child_user_id) REFERENCES users(id) ON DELETE CASCADE
-)";
-$db->exec($sql);
+    // Create child_points table if not exists
+    $sql = "CREATE TABLE IF NOT EXISTS child_points (
+        child_user_id INT PRIMARY KEY,
+        total_points INT DEFAULT 0,
+        FOREIGN KEY (child_user_id) REFERENCES users(id) ON DELETE CASCADE
+    )";
+    $db->exec($sql);
+    error_log("Created/verified child_points table successfully");
+
+// Note: Pre-population of default Routine Tasks skipped to avoid foreign key constraint violation with parent_user_id = 0.
+// Parents can create initial tasks via the UI.
+error_log("Skipped pre-population of default Routine Tasks to avoid foreign key issues");
+} catch (PDOException $e) {
+    error_log("Table creation failed: " . $e->getMessage() . " at line " . $e->getLine());
+    throw $e; // Re-throw to preserve the original error handling
+}
 ?>
