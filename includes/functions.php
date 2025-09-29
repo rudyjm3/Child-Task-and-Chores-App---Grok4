@@ -57,6 +57,12 @@ function getDashboardData($user_id) {
     $userStmt = $db->prepare("SELECT role FROM users WHERE id = :id");
     $userStmt->execute([':id' => $user_id]);
     $role = $userStmt->fetchColumn();
+    if ($role === false) {
+        $role = 'unknown'; // Default if query fails
+        error_log("Warning: No role found for user_id=$user_id, defaulting to 'unknown'");
+    }
+
+    error_log("Fetching dashboard data for user_id=$user_id, role=$role");
 
     if ($role === 'parent') {
         $stmt = $db->prepare("SELECT cp.id, cp.child_user_id, u.username, cp.avatar, cp.age, cp.preferences 
