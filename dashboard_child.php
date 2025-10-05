@@ -3,7 +3,7 @@
 // Purpose: Display child dashboard with progress and task/reward links
 // Inputs: Session data
 // Outputs: Dashboard interface
-// Version: 3.3.13
+// Version: 3.4.8 (Added Routines section with start/complete buttons)
 
 require_once __DIR__ . '/includes/functions.php';
 
@@ -23,6 +23,9 @@ if (!isset($_SESSION['username'])) {
 
 $data = getDashboardData($_SESSION['user_id']);
 
+// Fetch routines for child dashboard
+$routines = getRoutines($_SESSION['user_id']);
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['request_completion'])) {
         $goal_id = filter_input(INPUT_POST, 'goal_id', FILTER_VALIDATE_INT);
@@ -40,6 +43,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             $message = "Not enough points to redeem this reward.";
         }
+    } elseif (isset($_POST['complete_routine'])) {
+        $routine_id = filter_input(INPUT_POST, 'routine_id', FILTER_VALIDATE_INT);
+        $bonus = completeRoutine($routine_id, $_SESSION['user_id']);
+        if ($bonus !== false) {
+            $message = "Routine completed! Bonus points awarded: $bonus";
+            $routines = getRoutines($_SESSION['user_id']); // Refresh
+        } else {
+            $message = "Failed to complete routine (ensure all tasks are approved).";
+        }
     }
 }
 ?>
@@ -53,12 +65,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <style>
         .dashboard { padding: 20px; max-width: 600px; margin: 0 auto; text-align: center; }
         .progress { margin: 20px 0; font-size: 1.2em; color: #4caf50; }
-        .rewards, .redeemed-rewards, .active-goals, .completed-goals { margin: 20px 0; }
-        .reward-item, .redeemed-item, .goal-item { background-color: #f5f5f5; padding: 10px; margin: 5px 0; border-radius: 5px; }
-        .button { padding: 10px 20px; margin: 5px; background-color: #ff9800; color: white; border: none; border-radius: 5px; cursor: pointer; text-decoration: none; display: inline-block; }
+        .rewards, .redeemed-rewards, .active-goals, .completed-goals, .rejected-goals, .routines { margin: 20px 0; }
+        .reward-item, .redeemed-item, .goal-item, .routine-item { background-color: #f5f5f5; padding: 10px; margin: 5px 0; border-radius: 5px; }
+        .button { padding: 10px 20px; margin: 5px; background-color: #ff9800; color: white; border: none; border-radius: 5px; cursor: pointer; text-decoration: none; display: inline-block; font-size: 16px; min-height: 44px; }
         .redeem-button { background-color: #2196f3; }
         .request-button { background-color: #9c27b0; }
+        .start-routine-button { background-color: #4caf50; }
+        .complete-routine-button { background-color: #ffeb3b; color: #333; }
+        /* Kid-Friendly Styles - Autism-Friendly: Bright pastels, large buttons */
+        .routine-item { background: linear-gradient(135deg, #e3f2fd, #f3e5f5); border: 2px solid #bbdefb; margin: 10px 0; }
+        .routine-item h3 { color: #1976d2; font-size: 1.5em; }
+        .routine-item p { font-size: 1.1em; }
+        @media (max-width: 768px) { .dashboard { padding: 10px; } .button { width: 100%; } }
     </style>
+    <script>
+        // JS for routine start (basic timer placeholder)
+        function startRoutine(routineId) {
+            // Redirect to routine.php for full flow
+            window.location.href = 'routine.php?start=' + routineId;
+        }
+    </script>
 </head>
 <body>
    <header>
@@ -121,28 +147,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <p>No active goals.</p>
          <?php endif; ?>
       </div>
-
-      <!-- ROUTINES SECTION -->
-      <div class="routines">
-         <h2>Routines</h2>
-         <?php $routines = getRoutines($_SESSION['user_id']); ?>
-         <?php if (!empty($routines)): ?>
-            <?php foreach ($routines as $routine): ?>
-                  <div class="routine-item">
-                     <p><?php echo htmlspecialchars($routine['title']); ?></p>
-                     <button onclick="startRoutineTimer(<?php echo $routine['id']; ?>, <?php echo (strtotime($routine['end_time']) - strtotime($routine['start_time'])) / 60; ?>)">Start</button>
-                     <form method="POST">
-                        <input type="hidden" name="routine_id" value="<?php echo $routine['id']; ?>">
-                        <button type="submit" name="complete_routine">Complete</button>
-                     </form>
-                  </div>
-            <?php endforeach; ?>
-         <?php else: ?>
-            <p>No routines assigned.</p>
-         <?php endif; ?>
-      </div>  
-
-
       <div class="completed-goals">
          <h2>Completed Goals</h2>
          <?php if (isset($data['completed_goals']) && is_array($data['completed_goals']) && !empty($data['completed_goals'])): ?>
@@ -185,6 +189,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <?php endforeach; ?>
          <?php endif; ?>
       </div>
+      <div class="routines">
+         <h2>Routines <span style="font-size: 1.5em; color: #ff9800;">🌟</span></h2>
+         <?php if (!empty($routines)): ?>
+            <?php foreach ($routines as $routine): ?>
+                  <div class="routine-item">
+                     <h3><?php echo htmlspecialchars($routine['title']); ?></h3>
+                     <p>Time: <?php echo date('h:i A', strtotime($routine['start_time'])) . ' - ' . date('h:i A', strtotime($routine['end_time'])); ?></p>
+                     <p>Bonus: <?php echo $routine['bonus_points']; ?> points</p>
+                     <button onclick="startRoutine(<?php echo $routine['id']; ?>)" class="button start-routine-button">Start Routine</button>
+                     <form method="POST" action="dashboard_child.php">
+                        <input type="hidden" name="routine_id" value="<?php echo $routine['id']; ?>">
+                        <button type="submit" name="complete_routine" class="button complete-routine-button">Complete Routine</button>
+                     </form>
+                     <ul>
+                        <?php foreach ($routine['tasks'] as $task): ?>
+                           <li><?php echo htmlspecialchars($task['title']); ?> (<?php echo $task['time_limit']; ?> min)</li>
+                        <?php endforeach; ?>
+                     </ul>
+                  </div>
+            <?php endforeach; ?>
+         <?php else: ?>
+            <p>No routines assigned yet. Ask your parent!</p>
+         <?php endif; ?>
+      </div>
       <div class="links">
          <a href="goal.php" class="button">View Goals</a>
          <a href="task.php" class="button">View Tasks</a>
@@ -192,7 +220,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       </div>
    </main>
    <footer>
-   <p>Child Task and Chore App - Ver 3.4.6</p>
+   <p>Child Task and Chore App - Ver 3.4.8</p>
    </footer>
 </body>
 </html>

@@ -3,7 +3,7 @@
 // Purpose: Display parent dashboard with child overview and management links
 // Inputs: Session data
 // Outputs: Dashboard interface
-// Version: 3.3.13
+// Version: 3.4.8 (Added Routine Management UI: Routine Tasks pool and quick routine creation)
 
 require_once __DIR__ . '/includes/functions.php';
 
@@ -22,6 +22,9 @@ if (!isset($_SESSION['username'])) {
 }
 
 $data = getDashboardData($_SESSION['user_id']);
+
+// Fetch Routine Tasks for parent dashboard
+$routine_tasks = getRoutineTasks($_SESSION['user_id']);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['create_reward'])) {
@@ -48,12 +51,51 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif (isset($_POST['approve_goal']) || isset($_POST['reject_goal'])) {
         $goal_id = filter_input(INPUT_POST, 'goal_id', FILTER_VALIDATE_INT);
         $action = isset($_POST['approve_goal']) ? 'approve' : 'reject';
-        $points = approveGoal($_SESSION['user_id'], $goal_id, $action === 'approve');
+        $comment = filter_input(INPUT_POST, 'rejection_comment', FILTER_SANITIZE_STRING);
+        $points = approveGoal($_SESSION['user_id'], $goal_id, $action === 'approve', $comment);
         if ($points !== false) {
             $message = $action === 'approve' ? "Goal approved! Child earned $points points." : "Goal rejected.";
             $data = getDashboardData($_SESSION['user_id']); // Refresh data
         } else {
             $message = "Failed to $action goal.";
+        }
+    } elseif (isset($_POST['create_routine_task'])) {
+        $title = filter_input(INPUT_POST, 'title', FILTER_SANITIZE_STRING);
+        $description = filter_input(INPUT_POST, 'description', FILTER_SANITIZE_STRING);
+        $time_limit = filter_input(INPUT_POST, 'time_limit', FILTER_VALIDATE_INT);
+        $point_value = filter_input(INPUT_POST, 'point_value', FILTER_VALIDATE_INT);
+        $category = filter_input(INPUT_POST, 'category', FILTER_SANITIZE_STRING);
+        if (createRoutineTask($_SESSION['user_id'], $title, $description, $time_limit, $point_value, $category)) {
+            $message = "Routine Task created successfully!";
+            $routine_tasks = getRoutineTasks($_SESSION['user_id']); // Refresh
+        } else {
+            $message = "Failed to create Routine Task.";
+        }
+    } elseif (isset($_POST['delete_routine_task'])) {
+        $routine_task_id = filter_input(INPUT_POST, 'routine_task_id', FILTER_VALIDATE_INT);
+        if (deleteRoutineTask($routine_task_id, $_SESSION['user_id'])) {
+            $message = "Routine Task deleted successfully!";
+            $routine_tasks = getRoutineTasks($_SESSION['user_id']); // Refresh
+        } else {
+            $message = "Failed to delete Routine Task.";
+        }
+    } elseif (isset($_POST['create_routine'])) {
+        $child_user_id = filter_input(INPUT_POST, 'child_user_id', FILTER_VALIDATE_INT);
+        $title = filter_input(INPUT_POST, 'title', FILTER_SANITIZE_STRING);
+        $start_time = filter_input(INPUT_POST, 'start_time', FILTER_SANITIZE_STRING);
+        $end_time = filter_input(INPUT_POST, 'end_time', FILTER_SANITIZE_STRING);
+        $recurrence = filter_input(INPUT_POST, 'recurrence', FILTER_SANITIZE_STRING);
+        $bonus_points = filter_input(INPUT_POST, 'bonus_points', FILTER_VALIDATE_INT);
+        $routine_task_ids = $_POST['routine_task_ids'] ?? []; // Array of selected IDs
+
+        $routine_id = createRoutine($_SESSION['user_id'], $child_user_id, $title, $start_time, $end_time, $recurrence, $bonus_points);
+        if ($routine_id) {
+            foreach ($routine_task_ids as $order => $routine_task_id) {
+                addRoutineTaskToRoutine($routine_id, $routine_task_id, $order + 1);
+            }
+            $message = "Routine created successfully!";
+        } else {
+            $message = "Failed to create routine.";
         }
     }
 }
@@ -67,14 +109,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <link rel="stylesheet" href="css/main.css">
     <style>
         .dashboard { padding: 20px; max-width: 800px; margin: 0 auto; }
-        .children-overview, .management-links, .active-rewards, .redeemed-rewards, .pending-approvals, .completed-goals { margin-top: 20px; }
-        .child-item, .reward-item, .goal-item { background-color: #f5f5f5; padding: 10px; margin: 5px 0; border-radius: 5px; }
+        .children-overview, .management-links, .active-rewards, .redeemed-rewards, .pending-approvals, .completed-goals, .routine-management { margin-top: 20px; }
+        .child-item, .reward-item, .goal-item, .routine-task-item, .routine-item { background-color: #f5f5f5; padding: 10px; margin: 5px 0; border-radius: 5px; }
         .button { padding: 10px 20px; margin: 5px; background-color: #4caf50; color: white; border: none; border-radius: 5px; cursor: pointer; text-decoration: none; display: inline-block; }
         .approve-button { background-color: #4caf50; }
         .reject-button { background-color: #f44336; }
         .form-group { margin-bottom: 15px; }
         .form-group label { display: block; margin-bottom: 5px; }
         .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 8px; }
+        /* Routine Management Styles - Mobile Responsive */
+        .routine-management { display: flex; flex-wrap: wrap; gap: 20px; }
+        .routine-pool, .routine-form { flex: 1; min-width: 300px; }
+        .routine-task-list { list-style: none; padding: 0; }
+        .routine-task-item { display: flex; justify-content: space-between; align-items: center; background: #e3f2fd; border: 1px solid #bbdefb; padding: 10px; margin: 5px 0; border-radius: 8px; }
+        .routine-task-item button { background: #2196f3; color: white; border: none; border-radius: 4px; padding: 5px 10px; cursor: pointer; }
+        /* Autism-Friendly: Large buttons, high contrast */
+        .button { font-size: 16px; min-height: 44px; }
+        @media (max-width: 768px) { .routine-management { flex-direction: column; } }
     </style>
 </head>
 <body>
@@ -115,7 +166,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                      <label for="point_cost">Point Cost:</label>
                      <input type="number" id="point_cost" name="point_cost" min="1" required>
                   </div>
-                  <button type="submit" name="create_reward">Create Reward</button>
+                  <button type="submit" name="create_reward" class="button">Create Reward</button>
                </form>
          </div>
          <div>
@@ -124,9 +175,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                   <div class="form-group">
                      <label for="child_user_id">Child:</label>
                      <select id="child_user_id" name="child_user_id" required>
-                           <?php foreach ($data['children'] as $child): ?>
-                              <option value="<?php echo $child['child_user_id']; ?>"><?php echo htmlspecialchars($child['username']); ?></option>
-                           <?php endforeach; ?>
+                        <?php
+                        $stmt = $db->prepare("SELECT cp.child_user_id, u.username FROM child_profiles cp JOIN users u ON cp.child_user_id = u.id WHERE cp.parent_user_id = :parent_id");
+                        $stmt->execute([':parent_id' => $_SESSION['user_id']]);
+                        $children = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                        foreach ($children as $child): ?>
+                            <option value="<?php echo $child['child_user_id']; ?>"><?php echo htmlspecialchars($child['username']); ?></option>
+                        <?php endforeach; ?>
                      </select>
                   </div>
                   <div class="form-group">
@@ -139,64 +194,130 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                   </div>
                   <div class="form-group">
                      <label for="start_date">Start Date:</label>
-                     <input type="datetime-local" id="start_date" name="start_date" required>
+                     <input type="datetime-local" id="start_date" name="start_date">
                   </div>
                   <div class="form-group">
                      <label for="end_date">End Date:</label>
-                     <input type="datetime-local" id="end_date" name="end_date" required>
+                     <input type="datetime-local" id="end_date" name="end_date">
                   </div>
                   <div class="form-group">
                      <label for="reward_id">Reward (optional):</label>
                      <select id="reward_id" name="reward_id">
-                           <option value="">None</option>
-                           <?php
-                           $stmt = $db->prepare("SELECT id, title FROM rewards WHERE parent_user_id = :parent_id AND status = 'available'");
-                           $stmt->execute([':parent_id' => $_SESSION['user_id']]);
-                           $rewards = $stmt->fetchAll(PDO::FETCH_ASSOC);
-                           foreach ($rewards as $reward): ?>
-                              <option value="<?php echo $reward['id']; ?>"><?php echo htmlspecialchars($reward['title']); ?></option>
-                           <?php endforeach; ?>
+                        <option value="">None</option>
+                        <?php foreach ($data['active_rewards'] as $reward): ?>
+                            <option value="<?php echo $reward['id']; ?>"><?php echo htmlspecialchars($reward['title']); ?></option>
+                        <?php endforeach; ?>
                      </select>
                   </div>
-                  <button type="submit" name="create_goal">Create Goal</button>
+                  <button type="submit" name="create_goal" class="button">Create Goal</button>
                </form>
          </div>
-         <a href="#" class="button">Summary Charts</a>
-         <p>Points Earned: <?php echo isset($data['total_points_earned']) ? htmlspecialchars($data['total_points_earned']) : '0'; ?></p>
-         <p>Goals Met: <?php echo isset($data['goals_met']) ? htmlspecialchars($data['goals_met']) : '0'; ?></p>
       </div>
-<!-- ROUTINE MANAGEMENT SECTION --> 
       <div class="routine-management">
          <h2>Routine Management</h2>
          <a href="routine.php" class="button">Full Routine Editor</a>
-         <!-- Quick create form similar to routine.php, abbreviated -->
-         <form method="POST" action="routine.php">
-            <!-- Quick fields: child, title, select routine tasks from pool -->
-         </form>
-         <h3>Recent Routines</h3>
-         <?php $routines = getRoutines($_SESSION['user_id']); ?>
-         <!-- List summaries -->
+         <div class="routine-pool">
+            <h3>Routine Tasks Pool</h3>
+            <form method="POST" action="dashboard_parent.php">
+               <div class="form-group">
+                  <label for="title">Title:</label>
+                  <input type="text" id="title" name="title" required>
+               </div>
+               <div class="form-group">
+                  <label for="description">Description:</label>
+                  <textarea id="description" name="description"></textarea>
+               </div>
+               <div class="form-group">
+                  <label for="time_limit">Time Limit (min):</label>
+                  <input type="number" id="time_limit" name="time_limit" min="1">
+               </div>
+               <div class="form-group">
+                  <label for="point_value">Point Value:</label>
+                  <input type="number" id="point_value" name="point_value" min="0">
+               </div>
+               <div class="form-group">
+                  <label for="category">Category:</label>
+                  <select id="category" name="category">
+                     <option value="hygiene">Hygiene</option>
+                     <option value="homework">Homework</option>
+                     <option value="household">Household</option>
+                  </select>
+               </div>
+               <button type="submit" name="create_routine_task" class="button">Add Routine Task</button>
+            </form>
+            <ul class="routine-task-list">
+               <?php foreach ($routine_tasks as $rt): ?>
+                  <li class="routine-task-item">
+                     <span><?php echo htmlspecialchars($rt['title']); ?> (<?php echo htmlspecialchars($rt['category']); ?>, <?php echo htmlspecialchars($rt['time_limit']); ?>min)</span>
+                     <div>
+                        <a href="routine.php?edit_rt=<?php echo $rt['id']; ?>" class="button" style="background: #ff9800; font-size: 12px; padding: 2px 8px;">Edit</a>
+                        <form method="POST" style="display: inline;">
+                           <input type="hidden" name="routine_task_id" value="<?php echo $rt['id']; ?>">
+                           <button type="submit" name="delete_routine_task" class="button" style="background: #f44336; font-size: 12px; padding: 2px 8px;" onclick="return confirm('Delete this Routine Task?')">Delete</button>
+                        </form>
+                     </div>
+                  </li>
+               <?php endforeach; ?>
+            </ul>
+         </div>
+         <div class="routine-form">
+            <h3>Quick Create Routine</h3>
+            <form method="POST" action="dashboard_parent.php">
+               <div class="form-group">
+                  <label for="child_user_id_routine">Child:</label>
+                  <select id="child_user_id_routine" name="child_user_id" required>
+                     <?php foreach ($data['children'] as $child): ?>
+                        <option value="<?php echo $child['child_user_id']; ?>"><?php echo htmlspecialchars($child['username']); ?></option>
+                     <?php endforeach; ?>
+                  </select>
+               </div>
+               <div class="form-group">
+                  <label for="title_routine">Title:</label>
+                  <input type="text" id="title_routine" name="title" required>
+               </div>
+               <div class="form-group">
+                  <label for="start_time">Start Time:</label>
+                  <input type="time" id="start_time" name="start_time" required>
+               </div>
+               <div class="form-group">
+                  <label for="end_time">End Time:</label>
+                  <input type="time" id="end_time" name="end_time" required>
+               </div>
+               <div class="form-group">
+                  <label for="recurrence">Recurrence:</label>
+                  <select id="recurrence" name="recurrence">
+                     <option value="">None</option>
+                     <option value="daily">Daily</option>
+                     <option value="weekly">Weekly</option>
+                  </select>
+               </div>
+               <div class="form-group">
+                  <label for="bonus_points">Bonus Points:</label>
+                  <input type="number" id="bonus_points" name="bonus_points" min="0" value="0" required>
+               </div>
+               <div class="form-group">
+                  <label>Routine Tasks:</label>
+                  <select multiple name="routine_task_ids[]" size="5">
+                     <?php foreach ($routine_tasks as $rt): ?>
+                        <option value="<?php echo $rt['id']; ?>"><?php echo htmlspecialchars($rt['title']); ?> (<?php echo $rt['time_limit']; ?>min)</option>
+                     <?php endforeach; ?>
+                  </select>
+               </div>
+               <button type="submit" name="create_routine" class="button">Create Routine</button>
+            </form>
+         </div>
       </div>
-
-      
       <div class="active-rewards">
          <h2>Active Rewards</h2>
          <?php if (isset($data['active_rewards']) && is_array($data['active_rewards']) && !empty($data['active_rewards'])): ?>
                <?php foreach ($data['active_rewards'] as $reward): ?>
                   <div class="reward-item">
-                     <p><?php echo htmlspecialchars($reward['title']); ?> (<?php echo htmlspecialchars($reward['point_cost']); ?> points)</p>
-                     <p><?php echo htmlspecialchars($reward['description']); ?></p>
-                     <p>Created on: 
-                           <?php 
-                              echo htmlspecialchars(
-                                 date('m/d/Y h:i A', strtotime($reward['created_on']))
-                              ); 
-                           ?>
-                     </p>
+                     <p>Reward: <?php echo htmlspecialchars($reward['title']); ?> (<?php echo htmlspecialchars($reward['point_cost']); ?> points)</p>
+                     <p>Description: <?php echo htmlspecialchars($reward['description']); ?></p>
                   </div>
                <?php endforeach; ?>
          <?php else: ?>
-               <p>No active rewards available.</p>
+               <p>No rewards available.</p>
          <?php endif; ?>
       </div>
       <div class="redeemed-rewards">
@@ -226,7 +347,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                            <input type="hidden" name="goal_id" value="<?php echo $approval['id']; ?>">
                            <button type="submit" name="approve_goal" class="button approve-button">Approve</button>
                            <button type="submit" name="reject_goal" class="button reject-button">Reject</button>
-                           <div class="reject-comment">
+                           <div class="form-group">
                               <label for="rejection_comment_<?php echo $approval['id']; ?>">Comment (optional):</label>
                               <textarea id="rejection_comment_<?php echo $approval['id']; ?>" name="rejection_comment"></textarea>
                            </div>
@@ -297,7 +418,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       </div>
    </main>
    <footer>
-      <p>Child Task and Chores App - Ver 3.4.6</p>
+      <p>Child Task and Chores App - Ver 3.4.8</p>
    </footer>
 </body>
 </html>

@@ -679,7 +679,7 @@ function updateChildPoints($child_id, $points) {
 // }
 
 // // New: Update a routine
-// function updateRoutine($routine_id, $title, $start_time, $end_time, $recurrence, $bonus_points, $parent_id) {
+// function updateRoutine($routine_id, $title, $start_time, $Fend_time, $recurrence, $bonus_points, $parent_id) {
 //     global $db;
 //     $db->beginTransaction();
 //     try {
