@@ -3,7 +3,7 @@
 // Purpose: Display parent dashboard with child overview and management links
 // Inputs: Session data
 // Outputs: Dashboard interface
-// Version: 3.5.0 (Added Manage Family wizard for child/caregiver addition)
+// Version: 3.5.1 (Age number input, photo upload save/resize, name display, caregiver child access)
 
 require_once __DIR__ . '/includes/functions.php';
 
@@ -22,6 +22,9 @@ if (!isset($_SESSION['username'])) {
 }
 
 $data = getDashboardData($_SESSION['user_id']);
+
+// Fetch Routine Tasks for parent dashboard (fix undefined)
+$routine_tasks = getRoutineTasks($_SESSION['user_id']);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['create_reward'])) {
@@ -61,7 +64,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $child_username = filter_input(INPUT_POST, 'child_username', FILTER_SANITIZE_STRING);
         $child_password = filter_input(INPUT_POST, 'child_password', FILTER_SANITIZE_STRING);
         $age = filter_input(INPUT_POST, 'age', FILTER_VALIDATE_INT);
-        $avatar = filter_input(INPUT_POST, 'avatar', FILTER_SANITIZE_STRING); // URL or path
+        $avatar = filter_input(INPUT_POST, 'avatar', FILTER_SANITIZE_STRING);
+        // Handle upload
+        $upload_path = '';
+        if (isset($_FILES['avatar_upload']) && $_FILES['avatar_upload']['error'] == 0) {
+            $upload_dir = __DIR__ . '/uploads/avatars/';
+            if (!is_dir($upload_dir)) {
+                mkdir($upload_dir, 0755, true);
+            }
+            $file_name = uniqid() . '_' . basename($_FILES['avatar_upload']['name']);
+            $upload_path = 'uploads/avatars/' . $file_name;
+            if (move_uploaded_file($_FILES['avatar_upload']['tmp_name'], __DIR__ . '/' . $upload_path)) {
+                // Resize image (GD library)
+                $image = imagecreatefromstring(file_get_contents(__DIR__ . '/' . $upload_path));
+                $resized = imagecreatetruecolor(100, 100);
+                imagecopyresampled($resized, $image, 0, 0, 0, 0, 100, 100, imagesx($image), imagesy($image));
+                imagejpeg($resized, __DIR__ . '/' . $upload_path, 90);
+                imagedestroy($image);
+                imagedestroy($resized);
+                $avatar = $upload_path; // Use uploaded path
+            } else {
+                $message = "Upload failed; using default avatar.";
+            }
+        }
         if (createChildProfile($_SESSION['user_id'], $child_name, $child_username, $child_password, $age, $avatar)) {
             $message = "Child added successfully! Username: $child_username, Password: $child_password (share securely).";
         } else {
@@ -70,7 +95,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif (isset($_POST['add_secondary_parent'])) {
         $secondary_username = filter_input(INPUT_POST, 'secondary_username', FILTER_SANITIZE_STRING);
         $secondary_password = filter_input(INPUT_POST, 'secondary_password', FILTER_SANITIZE_STRING);
-        if (addSecondaryParent($_SESSION['user_id'], $secondary_username, $secondary_password)) {
+        $secondary_name = filter_input(INPUT_POST, 'secondary_name', FILTER_SANITIZE_STRING);
+        if (addSecondaryParent($_SESSION['user_id'], $secondary_username, $secondary_password, $secondary_name)) {
             $message = "Secondary parent added successfully! Username: $secondary_username, Password: $secondary_password (share securely).";
         } else {
             $message = "Failed to add secondary parent. Check for duplicate username.";
@@ -101,6 +127,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         .family-form.active { display: block; }
         .avatar-preview { width: 50px; height: 50px; border-radius: 50%; margin: 5px; cursor: pointer; }
         .upload-preview { max-width: 100px; max-height: 100px; border-radius: 50%; }
+        .mother-badge { background: #e91e63; color: white; padding: 2px 6px; border-radius: 3px; font-size: 0.8em; }
+        .father-badge { background: #2196f3; color: white; padding: 2px 6px; border-radius: 3px; font-size: 0.8em; }
         @media (max-width: 768px) { .manage-family { padding: 10px; } .button { width: 100%; } }
     </style>
     <script>
@@ -125,6 +153,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // Avatar preview
             avatarOptions.forEach(option => {
                 option.addEventListener('click', () => {
+                    avatarOptions.forEach(opt => opt.classList.remove('selected'));
+                    option.classList.add('selected');
                     document.getElementById('avatar-preview').src = option.dataset.avatar;
                     document.getElementById('avatar').value = option.dataset.avatar;
                 });
@@ -187,18 +217,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                </div>
                <div class="form-group">
                   <label for="age">Age:</label>
-                  <select id="age" name="age" required>
-                     <?php for ($i = 5; $i <= 13; $i++): ?>
-                        <option value="<?php echo $i; ?>"><?php echo $i; ?></option>
-                     <?php endfor; ?>
-                  </select>
+                  <input type="number" id="age" name="age" min="1" max="18" required>
                </div>
                <div class="form-group">
                   <label>Avatar:</label>
                   <div class="avatar-options">
-                     <img class="avatar-option" data-avatar="avatars/boy1.png" src="avatars/boy1.png" alt="Avatar 1">
-                     <img class="avatar-option" data-avatar="avatars/girl1.png" src="avatars/girl1.png" alt="Avatar 2">
-                     <!-- Add more pre-loaded avatars -->
+                     <img class="avatar-option" data-avatar="images/avatar_images/boy1.png" src="images/avatar_images/boy1.png" alt="Avatar 1">
+                     <img class="avatar-option" data-avatar="images/avatar_images/girl1.png" src="images/avatar_images/girl1.png" alt="Avatar 2">
+                     <img class="avatar-option" data-avatar="images/avatar_images/boy2.png" src="images/avatar_images/boy2.png" alt="Avatar 3">
+                     <img class="avatar-option" data-avatar="images/avatar_images/girl2.png" src="images/avatar_images/girl2.png" alt="Avatar 4">
+                     <!-- Add more based on uploaded files -->
                   </div>
                   <input type="file" id="avatar-upload" name="avatar_upload" accept="image/*">
                   <img id="avatar-preview" src="default-avatar.png" alt="Preview" style="width: 100px; border-radius: 50%;">
@@ -210,6 +238,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
          <div id="caregiver-form" class="family-form">
             <h3>Add Caregiver</h3>
             <form method="POST" action="dashboard_parent.php">
+               <div class="form-group">
+                  <label for="secondary_name">Name:</label>
+                  <input type="text" id="secondary_name" name="secondary_name" required>
+               </div>
                <div class="form-group">
                   <label for="secondary_username">Username (for login):</label>
                   <input type="text" id="secondary_username" name="secondary_username" required>
@@ -223,6 +255,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
          </div>
       </div>
 
+      <!-- Rest of sections (Management Links, Rewards, etc.) with name display updates -->
       <div class="management-links">
          <h2>Management Links</h2>
          <a href="task.php" class="button">Create Task</a>
@@ -493,7 +526,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       </div>
    </main>
    <footer>
-      <p>Child Task and Chores App - Ver 3.5.0</p>
+      <p>Child Task and Chores App - Ver 3.5.1</p>
    </footer>
 </body>
 </html>
