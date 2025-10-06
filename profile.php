@@ -1,7 +1,7 @@
 <?php
 // profile.php - User profile management
 // Purpose: Edit profile details based on role (child: avatar/password; parent: family)
-// Version: 3.5.1 (Added name edits, gender badge)
+// Version: 3.5.2 (Added upload handling for child avatar edit)
 
 require_once __DIR__ . '/includes/functions.php';
 
@@ -11,8 +11,25 @@ if (!isset($_SESSION['user_id'])) {
     exit;
 }
 
-$user_id = $_SESSION['user_id'];
 $role = $_SESSION['role'];
+
+// Handle GET params for editing child (parent only)
+$edit_user_id = $_SESSION['user_id'];
+$edit_type = null;
+if ($role === 'parent' && isset($_GET['type']) && $_GET['type'] === 'child' && isset($_GET['user_id'])) {
+    $edit_user_id = filter_input(INPUT_GET, 'user_id', FILTER_VALIDATE_INT);
+    $edit_type = 'child';
+    // Verify linkage (security)
+    $link_stmt = $db->prepare("SELECT 1 FROM child_profiles WHERE child_user_id = :child_id AND parent_user_id = :parent_id");
+    $link_stmt->execute([':child_id' => $edit_user_id, ':parent_id' => $_SESSION['user_id']]);
+    if (!$link_stmt->fetchColumn()) {
+        $message = "Access denied: Not your child.";
+        $edit_user_id = $_SESSION['user_id']; // Fallback
+        $edit_type = null;
+    }
+}
+
+$user_id = $edit_user_id;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['update_password'])) {
@@ -22,13 +39,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             $message = "Failed to update password.";
         }
-    } elseif (isset($_POST['update_child_profile']) && $role === 'child') {
+    } elseif (isset($_POST['update_child_profile'])) {
         $child_name = filter_input(INPUT_POST, 'child_name', FILTER_SANITIZE_STRING);
         $age = filter_input(INPUT_POST, 'age', FILTER_VALIDATE_INT);
         $avatar = filter_input(INPUT_POST, 'avatar', FILTER_SANITIZE_STRING);
-        if (updateChildProfile($user_id, $child_name, $age, $avatar)) {
+        // Handle upload (for parent editing child or child self-upload)
+        $upload_path = $avatar; // Default to selected avatar
+        if (isset($_FILES['avatar_upload']) && $_FILES['avatar_upload']['error'] == 0) {
+            $upload_dir = __DIR__ . '/uploads/avatars/';
+            if (!is_dir($upload_dir)) {
+                mkdir($upload_dir, 0755, true);
+            }
+            $file_ext = pathinfo($_FILES['avatar_upload']['name'], PATHINFO_EXTENSION);
+            $file_name = uniqid() . '_' . pathinfo($_FILES['avatar_upload']['name'], PATHINFO_FILENAME) . '.' . $file_ext;
+            $upload_path = 'uploads/avatars/' . $file_name;
+            if (move_uploaded_file($_FILES['avatar_upload']['tmp_name'], __DIR__ . '/' . $upload_path)) {
+                // Resize image (GD library)
+                $image = imagecreatefromstring(file_get_contents(__DIR__ . '/' . $upload_path));
+                $resized = imagecreatetruecolor(100, 100);
+                imagecopyresampled($resized, $image, 0, 0, 0, 0, 100, 100, imagesx($image), imagesy($image));
+                imagejpeg($resized, __DIR__ . '/' . $upload_path, 90);
+                imagedestroy($image);
+                imagedestroy($resized);
+            } else {
+                $message = "Upload failed; using selected avatar.";
+            }
+        }
+        if (updateChildProfile($user_id, $child_name, $age, $upload_path)) {
             $message = "Profile updated successfully!";
-            $_SESSION['name'] = $child_name; // Update session
+            $_SESSION['name'] = $child_name; // Update session if self
         } else {
             $message = "Failed to update profile.";
         }
@@ -50,7 +89,7 @@ $stmt = $db->prepare("SELECT * FROM users WHERE id = :id");
 $stmt->execute([':id' => $user_id]);
 $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
-if ($role === 'child') {
+if ($role === 'child' || $edit_type === 'child') {
     $profile_stmt = $db->prepare("SELECT * FROM child_profiles WHERE child_user_id = :id");
     $profile_stmt->execute([':id' => $user_id]);
     $profile = $profile_stmt->fetch(PDO::FETCH_ASSOC);
@@ -75,10 +114,11 @@ if ($role === 'child') {
         .father-badge { background: #2196f3; color: white; padding: 2px 6px; border-radius: 3px; font-size: 0.8em; }
         .child-profile { background: linear-gradient(135deg, #e3f2fd, #f3e5f5); }
         .parent-profile { background: #f9f9f9; }
+        .editing-child { border: 2px solid #ff9800; }
         @media (max-width: 768px) { .avatar-options { gap: 5px; } .avatar-option { width: 50px; height: 50px; } }
     </style>
     <script>
-        // JS for avatar selection (child view)
+        // JS for avatar selection
         document.addEventListener('DOMContentLoaded', function() {
             const avatarOptions = document.querySelectorAll('.avatar-option');
             avatarOptions.forEach(option => {
@@ -96,12 +136,11 @@ if ($role === 'child') {
     <div class="profile">
         <h1>Profile</h1>
         <?php if (isset($message)) echo "<p>$message</p>"; ?>
-        <?php if ($role === 'child'): ?>
-            <div class="profile-form child-profile">
-                <h2>Your Profile</h2>
-                <p>Name: <?php echo htmlspecialchars($profile['child_name'] ?? $user['name'] ?? $user['username']); ?></p>
+        <?php if ($role === 'child' || $edit_type === 'child'): ?>
+            <div class="profile-form child-profile <?php if ($edit_type === 'child') echo 'editing-child'; ?>">
+                <h2><?php if ($edit_type === 'child') echo 'Edit Child: '; ?><?php echo htmlspecialchars($profile['child_name'] ?? $user['name'] ?? $user['username']); ?>'s Profile</h2>
                 <img id="avatar-preview" src="<?php echo htmlspecialchars($profile['avatar'] ?? 'default-avatar.png'); ?>" alt="Avatar" class="avatar-preview">
-                <form method="POST" action="profile.php">
+                <form method="POST" action="profile.php<?php if ($edit_type === 'child') echo '?user_id=' . $user_id . '&type=child'; ?>">
                     <div class="form-group">
                         <label for="child_name">Name:</label>
                         <input type="text" id="child_name" name="child_name" value="<?php echo htmlspecialchars($profile['child_name'] ?? $user['name'] ?? ''); ?>">
@@ -113,8 +152,10 @@ if ($role === 'child') {
                     <div class="form-group">
                         <label>Avatar:</label>
                         <div class="avatar-options">
-                            <img class="avatar-option <?php if (($profile['avatar'] ?? '') == 'images/avatar_images/boy1.png') echo 'selected'; ?>" data-avatar="images/avatar_images/boy1.png" src="images/avatar_images/boy1.png" alt="Avatar 1">
-                            <img class="avatar-option <?php if (($profile['avatar'] ?? '') == 'images/avatar_images/girl1.png') echo 'selected'; ?>" data-avatar="images/avatar_images/girl1.png" src="images/avatar_images/girl1.png" alt="Avatar 2">
+                            <img class="avatar-option <?php if (($profile['avatar'] ?? '') == 'images/avatar_images/default-avatar.png') echo 'selected'; ?>" data-avatar="images/avatar_images/default-avatar.png" src="images/avatar_images/default-avatar.png" alt="Avatar 0">   
+                            <img class="avatar-option <?php if (($profile['avatar'] ?? '') == 'images/avatar_images/boy-1.png') echo 'selected'; ?>" data-avatar="images/avatar_images/boy-1.png" src="images/avatar_images/boy-1.png" alt="Avatar 1">
+                            <img class="avatar-option <?php if (($profile['avatar'] ?? '') == 'images/avatar_images/girl-1.png') echo 'selected'; ?>" data-avatar="images/avatar_images/girl-1.png" src="images/avatar_images/girl-1.png" alt="Avatar 2">
+                            <img class="avatar-option <?php if (($profile['avatar'] ?? '') == 'images/avatar_images/xmas-elf-boy.png') echo 'selected'; ?>" data-avatar="images/avatar_images/xmas-elf-boy.png" src="images/avatar_images/xmas-elf-boy.png" alt="Avatar 3">
                             <!-- Add more -->
                         </div>
                         <input type="file" name="avatar_upload" accept="image/*">
@@ -122,14 +163,16 @@ if ($role === 'child') {
                     </div>
                     <button type="submit" name="update_child_profile" class="button">Update Profile</button>
                 </form>
-                <h3>Change Password</h3>
-                <form method="POST" action="profile.php">
-                    <div class="form-group">
-                        <label for="new_password">New Password:</label>
-                        <input type="password" id="new_password" name="new_password" required>
-                    </div>
-                    <button type="submit" name="update_password" class="button">Update Password</button>
-                </form>
+                <?php if ($role === 'child'): ?>
+                    <h3>Change Password</h3>
+                    <form method="POST" action="profile.php">
+                        <div class="form-group">
+                            <label for="new_password">New Password:</label>
+                            <input type="password" id="new_password" name="new_password" required>
+                        </div>
+                        <button type="submit" name="update_password" class="button">Update Password</button>
+                    </form>
+                <?php endif; ?>
             </div>
         <?php elseif ($role === 'parent'): ?>
             <div class="profile-form parent-profile">

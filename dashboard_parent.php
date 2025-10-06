@@ -72,20 +72,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (!is_dir($upload_dir)) {
                 mkdir($upload_dir, 0755, true);
             }
-            $file_name = uniqid() . '_' . basename($_FILES['avatar_upload']['name']);
-            $upload_path = 'uploads/avatars/' . $file_name;
-            if (move_uploaded_file($_FILES['avatar_upload']['tmp_name'], __DIR__ . '/' . $upload_path)) {
-                // Resize image (GD library)
-                $image = imagecreatefromstring(file_get_contents(__DIR__ . '/' . $upload_path));
-                $resized = imagecreatetruecolor(100, 100);
-                imagecopyresampled($resized, $image, 0, 0, 0, 0, 100, 100, imagesx($image), imagesy($image));
-                imagejpeg($resized, __DIR__ . '/' . $upload_path, 90);
-                imagedestroy($image);
-                imagedestroy($resized);
-                $avatar = $upload_path; // Use uploaded path
-            } else {
-                $message = "Upload failed; using default avatar.";
-            }
+            $file_ext = pathinfo($_FILES['avatar_upload']['name'], PATHINFO_EXTENSION);
+$file_name = uniqid() . '_' . pathinfo($_FILES['avatar_upload']['name'], PATHINFO_FILENAME) . '.' . $file_ext;
+$upload_path = 'uploads/avatars/' . $file_name;
+if (move_uploaded_file($_FILES['avatar_upload']['tmp_name'], __DIR__ . '/' . $upload_path)) {
+    // Resize image (GD library)
+    $image = imagecreatefromstring(file_get_contents(__DIR__ . '/' . $upload_path));
+    $resized = imagecreatetruecolor(100, 100);
+    imagecopyresampled($resized, $image, 0, 0, 0, 0, 100, 100, imagesx($image), imagesy($image));
+    imagejpeg($resized, __DIR__ . '/' . $upload_path, 90);
+    imagedestroy($image);
+    imagedestroy($resized);
+    $avatar = $upload_path; // Use uploaded path
+} else {
+    $message = "Upload failed; using default avatar.";
+}
         }
         if (createChildProfile($_SESSION['user_id'], $child_name, $child_username, $child_password, $age, $avatar)) {
             $message = "Child added successfully! Username: $child_username, Password: $child_password (share securely).";
@@ -126,6 +127,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         .family-form { display: none; } /* JS toggle for wizard */
         .family-form.active { display: block; }
         .avatar-preview { width: 50px; height: 50px; border-radius: 50%; margin: 5px; cursor: pointer; }
+        .avatar-options { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
+        .avatar-option { width: 60px; height: 60px; border-radius: 50%; cursor: pointer; border: 2px solid #ddd; }
+        .avatar-option.selected { border-color: #4caf50; }
         .upload-preview { max-width: 100px; max-height: 100px; border-radius: 50%; }
         .mother-badge { background: #e91e63; color: white; padding: 2px 6px; border-radius: 3px; font-size: 0.8em; }
         .father-badge { background: #2196f3; color: white; padding: 2px 6px; border-radius: 3px; font-size: 0.8em; }
@@ -222,14 +226,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                <div class="form-group">
                   <label>Avatar:</label>
                   <div class="avatar-options">
-                     <img class="avatar-option" data-avatar="images/avatar_images/boy1.png" src="images/avatar_images/boy1.png" alt="Avatar 1">
-                     <img class="avatar-option" data-avatar="images/avatar_images/girl1.png" src="images/avatar_images/girl1.png" alt="Avatar 2">
-                     <img class="avatar-option" data-avatar="images/avatar_images/boy2.png" src="images/avatar_images/boy2.png" alt="Avatar 3">
-                     <img class="avatar-option" data-avatar="images/avatar_images/girl2.png" src="images/avatar_images/girl2.png" alt="Avatar 4">
+                     <img class="avatar-option" data-avatar="images/avatar_images/default-avatar.png" src="images/avatar_images/default-avatar.png" alt="Avatar default">
+                     <img class="avatar-option" data-avatar="images/avatar_images/boy-1.png" src="images/avatar_images/boy-1.png" alt="Avatar 1">
+                     <img class="avatar-option" data-avatar="images/avatar_images/girl-1.png" src="images/avatar_images/girl-1.png" alt="Avatar 2">
+                     <img class="avatar-option" data-avatar="images/avatar_images/xmas-elf-boy.png" src="images/avatar_images/xmas-elf-boy.png" alt="Avatar 3">
                      <!-- Add more based on uploaded files -->
                   </div>
                   <input type="file" id="avatar-upload" name="avatar_upload" accept="image/*">
-                  <img id="avatar-preview" src="default-avatar.png" alt="Preview" style="width: 100px; border-radius: 50%;">
+                  <img id="avatar-preview" src="images/avatar_images/default-avatar.png" alt="Preview" style="width: 100px; border-radius: 50%;">
                   <input type="hidden" id="avatar" name="avatar">
                </div>
                <button type="submit" name="add_child" class="button">Add Child</button>
