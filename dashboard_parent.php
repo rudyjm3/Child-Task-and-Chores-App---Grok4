@@ -73,9 +73,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 mkdir($upload_dir, 0755, true);
             }
             $file_ext = pathinfo($_FILES['avatar_upload']['name'], PATHINFO_EXTENSION);
-$file_name = uniqid() . '_' . pathinfo($_FILES['avatar_upload']['name'], PATHINFO_FILENAME) . '.' . $file_ext;
-$upload_path = 'uploads/avatars/' . $file_name;
-if (move_uploaded_file($_FILES['avatar_upload']['tmp_name'], __DIR__ . '/' . $upload_path)) {
+            $file_name = uniqid() . '_' . pathinfo($_FILES['avatar_upload']['name'], PATHINFO_FILENAME) . '.' . $file_ext;
+            $upload_path = 'uploads/avatars/' . $file_name;
+            if (move_uploaded_file($_FILES['avatar_upload']['tmp_name'], __DIR__ . '/' . $upload_path)) {
     // Resize image (GD library)
     $image = imagecreatefromstring(file_get_contents(__DIR__ . '/' . $upload_path));
     $resized = imagecreatetruecolor(100, 100);

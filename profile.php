@@ -1,7 +1,7 @@
 <?php
 // profile.php - User profile management
 // Purpose: Edit profile details based on role (child: avatar/password; parent: family)
-// Version: 3.5.2 (Added upload handling for child avatar edit)
+// Version: 3.5.2 (Fixed child edit upload: enctype, validation, your avatar filenames)
 
 require_once __DIR__ . '/includes/functions.php';
 
@@ -46,23 +46,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // Handle upload (for parent editing child or child self-upload)
         $upload_path = $avatar; // Default to selected avatar
         if (isset($_FILES['avatar_upload']) && $_FILES['avatar_upload']['error'] == 0) {
-            $upload_dir = __DIR__ . '/uploads/avatars/';
-            if (!is_dir($upload_dir)) {
-                mkdir($upload_dir, 0755, true);
-            }
-            $file_ext = pathinfo($_FILES['avatar_upload']['name'], PATHINFO_EXTENSION);
-            $file_name = uniqid() . '_' . pathinfo($_FILES['avatar_upload']['name'], PATHINFO_FILENAME) . '.' . $file_ext;
-            $upload_path = 'uploads/avatars/' . $file_name;
-            if (move_uploaded_file($_FILES['avatar_upload']['tmp_name'], __DIR__ . '/' . $upload_path)) {
-                // Resize image (GD library)
-                $image = imagecreatefromstring(file_get_contents(__DIR__ . '/' . $upload_path));
-                $resized = imagecreatetruecolor(100, 100);
-                imagecopyresampled($resized, $image, 0, 0, 0, 0, 100, 100, imagesx($image), imagesy($image));
-                imagejpeg($resized, __DIR__ . '/' . $upload_path, 90);
-                imagedestroy($image);
-                imagedestroy($resized);
+            $file_size = $_FILES['avatar_upload']['size'];
+            $file_type = strtolower(pathinfo($_FILES['avatar_upload']['name'], PATHINFO_EXTENSION));
+            if ($file_size > 3 * 1024 * 1024 || !in_array($file_type, ['jpg', 'jpeg', 'png'])) {
+                $message = "Upload failed: File too large (>3MB) or invalid type (JPG/PNG only).";
             } else {
-                $message = "Upload failed; using selected avatar.";
+                $upload_dir = __DIR__ . '/uploads/avatars/';
+                if (!is_dir($upload_dir)) {
+                    mkdir($upload_dir, 0755, true);
+                }
+                $file_ext = $file_type;
+                $file_name = uniqid() . '_' . pathinfo($_FILES['avatar_upload']['name'], PATHINFO_FILENAME) . '.' . $file_ext;
+                $upload_path = 'uploads/avatars/' . $file_name;
+                if (move_uploaded_file($_FILES['avatar_upload']['tmp_name'], __DIR__ . '/' . $upload_path)) {
+                    // Resize image (GD library)
+                    $image = imagecreatefromstring(file_get_contents(__DIR__ . '/' . $upload_path));
+                    $resized = imagecreatetruecolor(100, 100);
+                    imagecopyresampled($resized, $image, 0, 0, 0, 0, 100, 100, imagesx($image), imagesy($image));
+                    imagejpeg($resized, __DIR__ . '/' . $upload_path, 90);
+                    imagedestroy($image);
+                    imagedestroy($resized);
+                } else {
+                    $message = "Upload failed; using selected avatar.";
+                }
             }
         }
         if (updateChildProfile($user_id, $child_name, $age, $upload_path)) {
@@ -140,7 +146,7 @@ if ($role === 'child' || $edit_type === 'child') {
             <div class="profile-form child-profile <?php if ($edit_type === 'child') echo 'editing-child'; ?>">
                 <h2><?php if ($edit_type === 'child') echo 'Edit Child: '; ?><?php echo htmlspecialchars($profile['child_name'] ?? $user['name'] ?? $user['username']); ?>'s Profile</h2>
                 <img id="avatar-preview" src="<?php echo htmlspecialchars($profile['avatar'] ?? 'default-avatar.png'); ?>" alt="Avatar" class="avatar-preview">
-                <form method="POST" action="profile.php<?php if ($edit_type === 'child') echo '?user_id=' . $user_id . '&type=child'; ?>">
+                <form method="POST" action="profile.php<?php if ($edit_type === 'child') echo '?user_id=' . $user_id . '&type=child'; ?>" enctype="multipart/form-data">
                     <div class="form-group">
                         <label for="child_name">Name:</label>
                         <input type="text" id="child_name" name="child_name" value="<?php echo htmlspecialchars($profile['child_name'] ?? $user['name'] ?? ''); ?>">
@@ -152,7 +158,7 @@ if ($role === 'child' || $edit_type === 'child') {
                     <div class="form-group">
                         <label>Avatar:</label>
                         <div class="avatar-options">
-                            <img class="avatar-option <?php if (($profile['avatar'] ?? '') == 'images/avatar_images/default-avatar.png') echo 'selected'; ?>" data-avatar="images/avatar_images/default-avatar.png" src="images/avatar_images/default-avatar.png" alt="Avatar 0">   
+                           <img class="avatar-option <?php if (($profile['avatar'] ?? '') == 'images/avatar_images/default-avatar.png') echo 'selected'; ?>" data-avatar="images/avatar_images/default-avatar.png" src="images/avatar_images/default-avatar.png" alt="Avatar Default">
                             <img class="avatar-option <?php if (($profile['avatar'] ?? '') == 'images/avatar_images/boy-1.png') echo 'selected'; ?>" data-avatar="images/avatar_images/boy-1.png" src="images/avatar_images/boy-1.png" alt="Avatar 1">
                             <img class="avatar-option <?php if (($profile['avatar'] ?? '') == 'images/avatar_images/girl-1.png') echo 'selected'; ?>" data-avatar="images/avatar_images/girl-1.png" src="images/avatar_images/girl-1.png" alt="Avatar 2">
                             <img class="avatar-option <?php if (($profile['avatar'] ?? '') == 'images/avatar_images/xmas-elf-boy.png') echo 'selected'; ?>" data-avatar="images/avatar_images/xmas-elf-boy.png" src="images/avatar_images/xmas-elf-boy.png" alt="Avatar 3">

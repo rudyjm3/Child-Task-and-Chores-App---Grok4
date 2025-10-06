@@ -679,20 +679,24 @@ try {
    $db->exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS name VARCHAR(50) DEFAULT NULL");
    $db->exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS gender ENUM('male', 'female') DEFAULT NULL");
    error_log("Added/verified name and gender columns in users");
-   
+
     // Create child_profiles table if not exists (removed preferences, added child_name)
-    $sql = "CREATE TABLE IF NOT EXISTS child_profiles (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        child_user_id INT NOT NULL,
-        parent_user_id INT NOT NULL,
-        child_name VARCHAR(50),
-        age INT,
-        avatar VARCHAR(50),
-        FOREIGN KEY (parent_user_id) REFERENCES users(id) ON DELETE CASCADE,
-        FOREIGN KEY (child_user_id) REFERENCES users(id) ON DELETE CASCADE
-    )";
-    $db->exec($sql);
-    error_log("Created/verified child_profiles table successfully");
+   $sql = "CREATE TABLE IF NOT EXISTS child_profiles (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      child_user_id INT NOT NULL,
+      parent_user_id INT NOT NULL,
+      child_name VARCHAR(50),
+      age INT,
+      avatar VARCHAR(255),
+      FOREIGN KEY (parent_user_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (child_user_id) REFERENCES users(id) ON DELETE CASCADE
+   )";
+   $db->exec($sql);
+   error_log("Created/verified child_profiles table successfully");
+
+   // Add avatar column size if not exists (for existing databases)
+   $db->exec("ALTER TABLE child_profiles MODIFY COLUMN IF EXISTS avatar VARCHAR(255)");
+   error_log("Updated avatar column size to VARCHAR(255)");
 
    // Add child_name column if not exists (for existing databases)
    $db->exec("ALTER TABLE child_profiles ADD COLUMN IF NOT EXISTS child_name VARCHAR(50) DEFAULT NULL");
