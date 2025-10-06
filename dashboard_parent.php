@@ -3,7 +3,7 @@
 // Purpose: Display parent dashboard with child overview and management links
 // Inputs: Session data
 // Outputs: Dashboard interface
-// Version: 3.4.8 (Added Routine Management UI: Routine Tasks pool and quick routine creation)
+// Version: 3.5.0 (Added Manage Family wizard for child/caregiver addition)
 
 require_once __DIR__ . '/includes/functions.php';
 
@@ -22,9 +22,6 @@ if (!isset($_SESSION['username'])) {
 }
 
 $data = getDashboardData($_SESSION['user_id']);
-
-// Fetch Routine Tasks for parent dashboard
-$routine_tasks = getRoutineTasks($_SESSION['user_id']);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['create_reward'])) {
@@ -59,43 +56,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             $message = "Failed to $action goal.";
         }
-    } elseif (isset($_POST['create_routine_task'])) {
-        $title = filter_input(INPUT_POST, 'title', FILTER_SANITIZE_STRING);
-        $description = filter_input(INPUT_POST, 'description', FILTER_SANITIZE_STRING);
-        $time_limit = filter_input(INPUT_POST, 'time_limit', FILTER_VALIDATE_INT);
-        $point_value = filter_input(INPUT_POST, 'point_value', FILTER_VALIDATE_INT);
-        $category = filter_input(INPUT_POST, 'category', FILTER_SANITIZE_STRING);
-        if (createRoutineTask($_SESSION['user_id'], $title, $description, $time_limit, $point_value, $category)) {
-            $message = "Routine Task created successfully!";
-            $routine_tasks = getRoutineTasks($_SESSION['user_id']); // Refresh
+    } elseif (isset($_POST['add_child'])) {
+        $child_name = filter_input(INPUT_POST, 'child_name', FILTER_SANITIZE_STRING);
+        $child_username = filter_input(INPUT_POST, 'child_username', FILTER_SANITIZE_STRING);
+        $child_password = filter_input(INPUT_POST, 'child_password', FILTER_SANITIZE_STRING);
+        $age = filter_input(INPUT_POST, 'age', FILTER_VALIDATE_INT);
+        $avatar = filter_input(INPUT_POST, 'avatar', FILTER_SANITIZE_STRING); // URL or path
+        if (createChildProfile($_SESSION['user_id'], $child_name, $child_username, $child_password, $age, $avatar)) {
+            $message = "Child added successfully! Username: $child_username, Password: $child_password (share securely).";
         } else {
-            $message = "Failed to create Routine Task.";
+            $message = "Failed to add child. Check for duplicate username.";
         }
-    } elseif (isset($_POST['delete_routine_task'])) {
-        $routine_task_id = filter_input(INPUT_POST, 'routine_task_id', FILTER_VALIDATE_INT);
-        if (deleteRoutineTask($routine_task_id, $_SESSION['user_id'])) {
-            $message = "Routine Task deleted successfully!";
-            $routine_tasks = getRoutineTasks($_SESSION['user_id']); // Refresh
+    } elseif (isset($_POST['add_secondary_parent'])) {
+        $secondary_username = filter_input(INPUT_POST, 'secondary_username', FILTER_SANITIZE_STRING);
+        $secondary_password = filter_input(INPUT_POST, 'secondary_password', FILTER_SANITIZE_STRING);
+        if (addSecondaryParent($_SESSION['user_id'], $secondary_username, $secondary_password)) {
+            $message = "Secondary parent added successfully! Username: $secondary_username, Password: $secondary_password (share securely).";
         } else {
-            $message = "Failed to delete Routine Task.";
-        }
-    } elseif (isset($_POST['create_routine'])) {
-        $child_user_id = filter_input(INPUT_POST, 'child_user_id', FILTER_VALIDATE_INT);
-        $title = filter_input(INPUT_POST, 'title', FILTER_SANITIZE_STRING);
-        $start_time = filter_input(INPUT_POST, 'start_time', FILTER_SANITIZE_STRING);
-        $end_time = filter_input(INPUT_POST, 'end_time', FILTER_SANITIZE_STRING);
-        $recurrence = filter_input(INPUT_POST, 'recurrence', FILTER_SANITIZE_STRING);
-        $bonus_points = filter_input(INPUT_POST, 'bonus_points', FILTER_VALIDATE_INT);
-        $routine_task_ids = $_POST['routine_task_ids'] ?? []; // Array of selected IDs
-
-        $routine_id = createRoutine($_SESSION['user_id'], $child_user_id, $title, $start_time, $end_time, $recurrence, $bonus_points);
-        if ($routine_id) {
-            foreach ($routine_task_ids as $order => $routine_task_id) {
-                addRoutineTaskToRoutine($routine_id, $routine_task_id, $order + 1);
-            }
-            $message = "Routine created successfully!";
-        } else {
-            $message = "Failed to create routine.";
+            $message = "Failed to add secondary parent. Check for duplicate username.";
         }
     }
 }
@@ -109,24 +87,62 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <link rel="stylesheet" href="css/main.css">
     <style>
         .dashboard { padding: 20px; max-width: 800px; margin: 0 auto; }
-        .children-overview, .management-links, .active-rewards, .redeemed-rewards, .pending-approvals, .completed-goals, .routine-management { margin-top: 20px; }
-        .child-item, .reward-item, .goal-item, .routine-task-item, .routine-item { background-color: #f5f5f5; padding: 10px; margin: 5px 0; border-radius: 5px; }
-        .button { padding: 10px 20px; margin: 5px; background-color: #4caf50; color: white; border: none; border-radius: 5px; cursor: pointer; text-decoration: none; display: inline-block; }
+        .children-overview, .management-links, .active-rewards, .redeemed-rewards, .pending-approvals, .completed-goals, .manage-family { margin-top: 20px; }
+        .child-item, .reward-item, .goal-item { background-color: #f5f5f5; padding: 10px; margin: 5px 0; border-radius: 5px; }
+        .button { padding: 10px 20px; margin: 5px; background-color: #4caf50; color: white; border: none; border-radius: 5px; cursor: pointer; text-decoration: none; display: inline-block; font-size: 16px; min-height: 44px; }
         .approve-button { background-color: #4caf50; }
         .reject-button { background-color: #f44336; }
         .form-group { margin-bottom: 15px; }
         .form-group label { display: block; margin-bottom: 5px; }
         .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 8px; }
-        /* Routine Management Styles - Mobile Responsive */
-        .routine-management { display: flex; flex-wrap: wrap; gap: 20px; }
-        .routine-pool, .routine-form { flex: 1; min-width: 300px; }
-        .routine-task-list { list-style: none; padding: 0; }
-        .routine-task-item { display: flex; justify-content: space-between; align-items: center; background: #e3f2fd; border: 1px solid #bbdefb; padding: 10px; margin: 5px 0; border-radius: 8px; }
-        .routine-task-item button { background: #2196f3; color: white; border: none; border-radius: 4px; padding: 5px 10px; cursor: pointer; }
-        /* Autism-Friendly: Large buttons, high contrast */
-        .button { font-size: 16px; min-height: 44px; }
-        @media (max-width: 768px) { .routine-management { flex-direction: column; } }
+        /* Manage Family Styles - Mobile Responsive, Autism-Friendly Wizard */
+        .manage-family { background: #f9f9f9; border-radius: 8px; padding: 20px; }
+        .family-form { display: none; } /* JS toggle for wizard */
+        .family-form.active { display: block; }
+        .avatar-preview { width: 50px; height: 50px; border-radius: 50%; margin: 5px; cursor: pointer; }
+        .upload-preview { max-width: 100px; max-height: 100px; border-radius: 50%; }
+        @media (max-width: 768px) { .manage-family { padding: 10px; } .button { width: 100%; } }
     </style>
+    <script>
+        // JS for Manage Family Wizard (step-by-step)
+        document.addEventListener('DOMContentLoaded', function() {
+            const addChildBtn = document.getElementById('add-child-btn');
+            const addCaregiverBtn = document.getElementById('add-caregiver-btn');
+            const childForm = document.getElementById('child-form');
+            const caregiverForm = document.getElementById('caregiver-form');
+            const avatarOptions = document.querySelectorAll('.avatar-option');
+
+            addChildBtn.addEventListener('click', () => {
+                childForm.classList.add('active');
+                caregiverForm.classList.remove('active');
+            });
+
+            addCaregiverBtn.addEventListener('click', () => {
+                caregiverForm.classList.add('active');
+                childForm.classList.remove('active');
+            });
+
+            // Avatar preview
+            avatarOptions.forEach(option => {
+                option.addEventListener('click', () => {
+                    document.getElementById('avatar-preview').src = option.dataset.avatar;
+                    document.getElementById('avatar').value = option.dataset.avatar;
+                });
+            });
+
+            // Upload preview
+            document.getElementById('avatar-upload').addEventListener('change', function(e) {
+                const file = e.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        document.getElementById('avatar-preview').src = e.target.result;
+                    };
+                    reader.readAsDataURL(file);
+                }
+            });
+        });
+    </script>
 </head>
 <body>
    <header>
@@ -141,13 +157,72 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
          <?php if (isset($data['children']) && is_array($data['children']) && !empty($data['children'])): ?>
                <?php foreach ($data['children'] as $child): ?>
                   <div class="child-item">
-                     <p>Child: <?php echo htmlspecialchars($child['username']); ?>, Avatar=<?php echo htmlspecialchars($child['avatar'] ?? 'No Avatar'); ?>, Age=<?php echo htmlspecialchars($child['age'] ?? 'N/A'); ?></p>
+                     <p>Child: <?php echo htmlspecialchars($child['child_name'] ?? $child['username']); ?>, Age=<?php echo htmlspecialchars($child['age'] ?? 'N/A'); ?></p>
+                     <img src="<?php echo htmlspecialchars($child['avatar'] ?? 'default-avatar.png'); ?>" alt="Avatar" style="width: 50px; border-radius: 50%;">
+                     <a href="profile.php?user_id=<?php echo $child['child_user_id']; ?>&type=child" class="button">Edit Child</a>
                   </div>
                <?php endforeach; ?>
          <?php else: ?>
-               <p>No children registered.</p>
+               <p>No children added yet. Add your first child below!</p>
          <?php endif; ?>
       </div>
+      <div class="manage-family">
+         <h2>Manage Family</h2>
+         <button id="add-child-btn" class="button">Add Child</button>
+         <button id="add-caregiver-btn" class="button" style="background: #ff9800;">Add Caregiver</button>
+         <div id="child-form" class="family-form">
+            <h3>Add Child</h3>
+            <form method="POST" action="dashboard_parent.php" enctype="multipart/form-data">
+               <div class="form-group">
+                  <label for="child_name">Child's Name:</label>
+                  <input type="text" id="child_name" name="child_name" required>
+               </div>
+               <div class="form-group">
+                  <label for="child_username">Username (for login):</label>
+                  <input type="text" id="child_username" name="child_username" required>
+               </div>
+               <div class="form-group">
+                  <label for="child_password">Password (parent sets):</label>
+                  <input type="password" id="child_password" name="child_password" required>
+               </div>
+               <div class="form-group">
+                  <label for="age">Age:</label>
+                  <select id="age" name="age" required>
+                     <?php for ($i = 5; $i <= 13; $i++): ?>
+                        <option value="<?php echo $i; ?>"><?php echo $i; ?></option>
+                     <?php endfor; ?>
+                  </select>
+               </div>
+               <div class="form-group">
+                  <label>Avatar:</label>
+                  <div class="avatar-options">
+                     <img class="avatar-option" data-avatar="avatars/boy1.png" src="avatars/boy1.png" alt="Avatar 1">
+                     <img class="avatar-option" data-avatar="avatars/girl1.png" src="avatars/girl1.png" alt="Avatar 2">
+                     <!-- Add more pre-loaded avatars -->
+                  </div>
+                  <input type="file" id="avatar-upload" name="avatar_upload" accept="image/*">
+                  <img id="avatar-preview" src="default-avatar.png" alt="Preview" style="width: 100px; border-radius: 50%;">
+                  <input type="hidden" id="avatar" name="avatar">
+               </div>
+               <button type="submit" name="add_child" class="button">Add Child</button>
+            </form>
+         </div>
+         <div id="caregiver-form" class="family-form">
+            <h3>Add Caregiver</h3>
+            <form method="POST" action="dashboard_parent.php">
+               <div class="form-group">
+                  <label for="secondary_username">Username (for login):</label>
+                  <input type="text" id="secondary_username" name="secondary_username" required>
+               </div>
+               <div class="form-group">
+                  <label for="secondary_password">Password:</label>
+                  <input type="password" id="secondary_password" name="secondary_password" required>
+               </div>
+               <button type="submit" name="add_secondary_parent" class="button">Add Caregiver</button>
+            </form>
+         </div>
+      </div>
+
       <div class="management-links">
          <h2>Management Links</h2>
          <a href="task.php" class="button">Create Task</a>
@@ -418,7 +493,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       </div>
    </main>
    <footer>
-      <p>Child Task and Chores App - Ver 3.4.8</p>
+      <p>Child Task and Chores App - Ver 3.5.0</p>
    </footer>
 </body>
 </html>
