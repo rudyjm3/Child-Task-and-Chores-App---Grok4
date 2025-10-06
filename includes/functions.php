@@ -148,10 +148,10 @@ function getDashboardData($user_id) {
             $main_parent_id = $main_parent_stmt->fetchColumn() ?: $user_id;
         }
 
-        $stmt = $db->prepare("SELECT cp.id, cp.child_user_id, u.username, cp.avatar, cp.age, cp.child_name 
-                             FROM child_profiles cp 
-                             JOIN users u ON cp.child_user_id = u.id 
-                             WHERE cp.parent_user_id = :parent_id");
+        $stmt = $db->prepare("SELECT cp.id, cp.child_user_id, u.username, cp.avatar, cp.age, COALESCE(cp.child_name, u.username) as child_name 
+                     FROM child_profiles cp 
+                     JOIN users u ON cp.child_user_id = u.id 
+                     WHERE cp.parent_user_id = :parent_id");
         $stmt->execute([':parent_id' => $main_parent_id]);
         $data['children'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
@@ -663,6 +663,10 @@ try {
     )";
     $db->exec($sql);
     error_log("Created/verified users table successfully");
+
+   // Add child_name column if not exists (for existing databases)
+   $db->exec("ALTER TABLE child_profiles ADD COLUMN IF NOT EXISTS child_name VARCHAR(50) DEFAULT NULL");
+   error_log("Added/verified child_name column in child_profiles");
 
     // Create child_profiles table if not exists (removed preferences, added child_name)
     $sql = "CREATE TABLE IF NOT EXISTS child_profiles (
