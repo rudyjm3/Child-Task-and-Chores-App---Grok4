@@ -3,19 +3,21 @@
 // Purpose: Centralize common operations for maintainability
 // Inputs: None initially
 // Outputs: Functions for app logic
-// Version: 3.5.0 (Major: Reworked auth/profile: Parent-only registration, auto-child creation, family_links table for secondary parents, removed preferences)
+// Version: 3.5.1 (Minor: Added name/gender to users, name display in queries, caregiver child access, upload handling)
 
 require_once __DIR__ . '/db_connect.php';
 
-// Register a new user
-function registerUser($username, $password, $role) {
+// Register a new user (revised for name/gender)
+function registerUser($username, $password, $role, $name = null, $gender = null) {
     global $db;
     $hashedPassword = password_hash($password, PASSWORD_DEFAULT);
-    $stmt = $db->prepare("INSERT INTO users (username, password, role) VALUES (:username, :password, :role)");
+    $stmt = $db->prepare("INSERT INTO users (username, password, role, name, gender) VALUES (:username, :password, :role, :name, :gender)");
     return $stmt->execute([
         ':username' => $username,
         ':password' => $hashedPassword,
-        ':role' => $role
+        ':role' => $role,
+        ':name' => $name,
+        ':gender' => $gender
     ]);
 }
 
@@ -31,7 +33,7 @@ function loginUser($username, $password) {
     return false;
 }
 
-// Revised: Create a child profile (now auto-creates child user and links)
+// Revised: Create a child profile (now auto-creates child user and links, with name)
 function createChildProfile($parent_user_id, $child_name, $child_username, $child_password, $age, $avatar) {
     global $db;
     try {
@@ -39,14 +41,15 @@ function createChildProfile($parent_user_id, $child_name, $child_username, $chil
         
         // Auto-create child user
         $hashedChildPassword = password_hash($child_password, PASSWORD_DEFAULT);
-        $stmt = $db->prepare("INSERT INTO users (username, password, role) VALUES (:username, :password, 'child')");
+        $stmt = $db->prepare("INSERT INTO users (username, password, role, name) VALUES (:username, :password, 'child', :name)");
         $stmt->execute([
             ':username' => $child_username,
-            ':password' => $hashedChildPassword
+            ':password' => $hashedChildPassword,
+            ':name' => $child_name
         ]);
         $child_user_id = $db->lastInsertId();
 
-        // Link in child_profiles (no preferences)
+        // Link in child_profiles
         $stmt = $db->prepare("INSERT INTO child_profiles (child_user_id, parent_user_id, child_name, age, avatar) VALUES (:child_user_id, :parent_id, :child_name, :age, :avatar)");
         $stmt->execute([
             ':child_user_id' => $child_user_id,
@@ -68,18 +71,19 @@ function createChildProfile($parent_user_id, $child_name, $child_username, $chil
     }
 }
 
-// New: Add secondary parent/caregiver
-function addSecondaryParent($main_parent_id, $secondary_username, $secondary_password) {
+// New: Add secondary parent/caregiver (with name)
+function addSecondaryParent($main_parent_id, $secondary_username, $secondary_password, $secondary_name) {
     global $db;
     try {
         $db->beginTransaction();
         
         // Create secondary user
         $hashedPassword = password_hash($secondary_password, PASSWORD_DEFAULT);
-        $stmt = $db->prepare("INSERT INTO users (username, password, role, is_secondary) VALUES (:username, :password, 'parent', 1)");
+        $stmt = $db->prepare("INSERT INTO users (username, password, role, name, is_secondary) VALUES (:username, :password, 'parent', :name, 1)");
         $stmt->execute([
             ':username' => $secondary_username,
-            ':password' => $hashedPassword
+            ':password' => $hashedPassword,
+            ':name' => $secondary_name
         ]);
         $secondary_id = $db->lastInsertId();
 
@@ -99,7 +103,7 @@ function addSecondaryParent($main_parent_id, $secondary_username, $secondary_pas
     }
 }
 
-// Revised: Update user password (for profile edits)
+// Revised: Update user password
 function updateUserPassword($user_id, $new_password) {
     global $db;
     $hashedPassword = password_hash($new_password, PASSWORD_DEFAULT);
@@ -114,20 +118,26 @@ function updateUserPassword($user_id, $new_password) {
 function updateChildProfile($child_user_id, $child_name, $age, $avatar) {
     global $db;
     $stmt = $db->prepare("UPDATE child_profiles SET child_name = :child_name, age = :age, avatar = :avatar WHERE child_user_id = :child_id");
-    return $stmt->execute([
+    $stmt->execute([
         ':child_name' => $child_name,
         ':age' => $age,
         ':avatar' => $avatar,
         ':child_id' => $child_user_id
     ]);
+    // Update users table name too
+    $stmt = $db->prepare("UPDATE users SET name = :name WHERE id = :id");
+    return $stmt->execute([
+        ':name' => $child_name,
+        ':id' => $child_user_id
+    ]);
 }
 
-// Fetch dashboard data based on user role (revised for secondary parents)
+// Revised: getDashboardData (name display, caregiver access)
 function getDashboardData($user_id) {
     global $db;
     $data = [];
     
-    $userStmt = $db->prepare("SELECT role FROM users WHERE id = :id");
+    $userStmt = $db->prepare("SELECT role, name FROM users WHERE id = :id");
     $userStmt->execute([':id' => $user_id]);
     $role = $userStmt->fetchColumn();
     if ($role === false) {
@@ -148,10 +158,11 @@ function getDashboardData($user_id) {
             $main_parent_id = $main_parent_stmt->fetchColumn() ?: $user_id;
         }
 
-        $stmt = $db->prepare("SELECT cp.id, cp.child_user_id, u.username, cp.avatar, cp.age, COALESCE(cp.child_name, u.username) as child_name 
-                     FROM child_profiles cp 
-                     JOIN users u ON cp.child_user_id = u.id 
-                     WHERE cp.parent_user_id = :parent_id");
+        // Revised: Use name display
+        $stmt = $db->prepare("SELECT cp.id, cp.child_user_id, u.username, u.name as child_name, cp.avatar, cp.age, cp.child_name 
+                             FROM child_profiles cp 
+                             JOIN users u ON cp.child_user_id = u.id 
+                             WHERE cp.parent_user_id = :parent_id");
         $stmt->execute([':parent_id' => $main_parent_id]);
         $data['children'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
@@ -159,14 +170,14 @@ function getDashboardData($user_id) {
         $stmt->execute([':parent_id' => $main_parent_id]);
         $data['active_rewards'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-        $stmt = $db->prepare("SELECT r.id, r.title, r.description, r.point_cost, u.username as child_username, r.redeemed_on 
+        $stmt = $db->prepare("SELECT r.id, r.title, r.description, r.point_cost, u.name as child_username, r.redeemed_on 
                              FROM rewards r 
                              LEFT JOIN users u ON r.redeemed_by = u.id 
                              WHERE r.parent_user_id = :parent_id AND r.status = 'redeemed'");
         $stmt->execute([':parent_id' => $main_parent_id]);
         $data['redeemed_rewards'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-        $stmt = $db->prepare("SELECT g.id, g.title, g.target_points, g.requested_at, u.username as child_username 
+        $stmt = $db->prepare("SELECT g.id, g.title, g.target_points, g.requested_at, u.name as child_username 
                              FROM goals g 
                              JOIN child_profiles cp ON g.child_user_id = cp.child_user_id 
                              JOIN users u ON g.child_user_id = u.id 
