@@ -1,16 +1,18 @@
 <?php
 // register.php - User registration
 // Purpose: Register new parent account (child creation now parent-driven)
-// Version: 3.5.0 (Limited to parent role; redirects to dashboard for family setup)
+// Version: 3.5.1 (Added name/gender inputs; displays badge in dashboard)
 
 require_once __DIR__ . '/includes/functions.php';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $username = filter_input(INPUT_POST, 'username', FILTER_SANITIZE_STRING);
     $password = filter_input(INPUT_POST, 'password', FILTER_SANITIZE_STRING);
+    $name = filter_input(INPUT_POST, 'name', FILTER_SANITIZE_STRING);
+    $gender = filter_input(INPUT_POST, 'gender', FILTER_SANITIZE_STRING);
     $role = 'parent'; // Fixed to parent only
 
-    if (registerUser($username, $password, $role)) {
+    if (registerUser($username, $password, $role, $name, $gender)) {
         // Auto-login after registration
         $_SESSION['user_id'] = $db->lastInsertId();
         $_SESSION['role'] = $role;
@@ -33,10 +35,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         .register-form { padding: 20px; max-width: 400px; margin: 0 auto; text-align: center; }
         .form-group { margin-bottom: 15px; }
         .form-group label { display: block; margin-bottom: 5px; }
-        .form-group input { width: 100%; padding: 8px; }
+        .form-group input, .form-group select { width: 100%; padding: 8px; }
         .button { padding: 10px 20px; background-color: #4caf50; color: white; border: none; border-radius: 5px; cursor: pointer; }
         .role-note { font-size: 0.9em; color: #666; margin-top: 10px; }
-        /* Mobile Responsive */
         @media (max-width: 768px) { .register-form { padding: 10px; } }
     </style>
 </head>
@@ -49,7 +50,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <?php endif; ?>
         <form method="POST">
             <div class="form-group">
-                <label for="username">Username:</label>
+                <label for="name">Full Name:</label>
+                <input type="text" id="name" name="name" required>
+            </div>
+            <div class="form-group">
+                <label for="gender">Gender:</label>
+                <select id="gender" name="gender">
+                    <option value="">Select</option>
+                    <option value="male">Male (Father)</option>
+                    <option value="female">Female (Mother)</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="username">Username (for login):</label>
                 <input type="text" id="username" name="username" required>
             </div>
             <div class="form-group">
