@@ -664,10 +664,6 @@ try {
     $db->exec($sql);
     error_log("Created/verified users table successfully");
 
-   // Add child_name column if not exists (for existing databases)
-   $db->exec("ALTER TABLE child_profiles ADD COLUMN IF NOT EXISTS child_name VARCHAR(50) DEFAULT NULL");
-   error_log("Added/verified child_name column in child_profiles");
-
     // Create child_profiles table if not exists (removed preferences, added child_name)
     $sql = "CREATE TABLE IF NOT EXISTS child_profiles (
         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -681,6 +677,10 @@ try {
     )";
     $db->exec($sql);
     error_log("Created/verified child_profiles table successfully");
+
+   // Add child_name column if not exists (for existing databases)
+   $db->exec("ALTER TABLE child_profiles ADD COLUMN IF NOT EXISTS child_name VARCHAR(50) DEFAULT NULL");
+   error_log("Added/verified child_name column in child_profiles");
 
     // Create tasks table if not exists
     $sql = "CREATE TABLE IF NOT EXISTS tasks (
