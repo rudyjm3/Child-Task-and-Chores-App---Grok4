@@ -379,7 +379,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                   <label for="child_user_id_routine">Child:</label>
                   <select id="child_user_id_routine" name="child_user_id" required>
                      <?php foreach ($data['children'] as $child): ?>
-                        <option value="<?php echo $child['child_user_id']; ?>"><?php echo htmlspecialchars($child['username']); ?></option>
+                        <option value="<?php echo $child['child_user_id']; ?>"><?php echo htmlspecialchars($child['child_name']); ?></option>
                      <?php endforeach; ?>
                   </select>
                </div>

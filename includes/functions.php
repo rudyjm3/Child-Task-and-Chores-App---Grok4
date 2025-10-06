@@ -149,20 +149,19 @@ function getDashboardData($user_id) {
 
     if ($role === 'parent') {
         // Check if secondary parent; get main parent ID for shared data
-        $main_parent_id = $user_id;
-        $secondary_stmt = $db->prepare("SELECT main_parent_id FROM family_links WHERE linked_user_id = :user_id AND role_type = 'secondary_parent'");
-        $secondary_stmt->execute([':user_id' => $user_id]);
-        if ($secondary_id = $secondary_stmt->fetchColumn()) {
-            $main_parent_stmt = $db->prepare("SELECT main_parent_id FROM family_links WHERE linked_user_id = :secondary_id");
-            $main_parent_stmt->execute([':secondary_id' => $secondary_id]);
-            $main_parent_id = $main_parent_stmt->fetchColumn() ?: $user_id;
-        }
+$main_parent_id = $user_id;
+$secondary_stmt = $db->prepare("SELECT main_parent_id FROM family_links WHERE linked_user_id = :user_id AND role_type = 'secondary_parent'");
+$secondary_stmt->execute([':user_id' => $user_id]);
+$main_parent_from_link = $secondary_stmt->fetchColumn();
+if ($main_parent_from_link) {
+    $main_parent_id = $main_parent_from_link;
+}
 
         // Revised: Use name display
-        $stmt = $db->prepare("SELECT cp.id, cp.child_user_id, u.username, u.name as child_name, cp.avatar, cp.age, cp.child_name 
-                             FROM child_profiles cp 
-                             JOIN users u ON cp.child_user_id = u.id 
-                             WHERE cp.parent_user_id = :parent_id");
+        $stmt = $db->prepare("SELECT cp.id, cp.child_user_id, COALESCE(u.name, u.username) as display_name, cp.avatar, cp.age, cp.child_name 
+                     FROM child_profiles cp 
+                     JOIN users u ON cp.child_user_id = u.id 
+                     WHERE cp.parent_user_id = :parent_id");
         $stmt->execute([':parent_id' => $main_parent_id]);
         $data['children'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
