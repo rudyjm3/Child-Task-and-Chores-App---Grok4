@@ -1,20 +1,24 @@
 <?php
-// register.php - User registration page
-// Purpose: Allow parents and children to register
-// Inputs: Username, password, role
-// Outputs: Registration form and success/error messages
+// register.php - User registration
+// Purpose: Register new parent account (child creation now parent-driven)
+// Version: 3.5.0 (Limited to parent role; redirects to dashboard for family setup)
 
 require_once __DIR__ . '/includes/functions.php';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $username = filter_input(INPUT_POST, 'username', FILTER_SANITIZE_STRING);
     $password = filter_input(INPUT_POST, 'password', FILTER_SANITIZE_STRING);
-    $role = filter_input(INPUT_POST, 'role', FILTER_SANITIZE_STRING);
+    $role = 'parent'; // Fixed to parent only
 
     if (registerUser($username, $password, $role)) {
-        $message = "Registration successful! Please <a href='login.php'>log in</a>.";
+        // Auto-login after registration
+        $_SESSION['user_id'] = $db->lastInsertId();
+        $_SESSION['role'] = $role;
+        $_SESSION['username'] = $username;
+        header("Location: dashboard_parent.php?setup_family=1");
+        exit;
     } else {
-        $message = "Registration failed. Username may be taken.";
+        $error = "Registration failed. Username may already exist.";
     }
 }
 ?>
@@ -23,30 +27,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Register</title>
+    <title>Register - Child Task and Chore App</title>
     <link rel="stylesheet" href="css/main.css">
+    <style>
+        .register-form { padding: 20px; max-width: 400px; margin: 0 auto; text-align: center; }
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; margin-bottom: 5px; }
+        .form-group input { width: 100%; padding: 8px; }
+        .button { padding: 10px 20px; background-color: #4caf50; color: white; border: none; border-radius: 5px; cursor: pointer; }
+        .role-note { font-size: 0.9em; color: #666; margin-top: 10px; }
+        /* Mobile Responsive */
+        @media (max-width: 768px) { .register-form { padding: 10px; } }
+    </style>
 </head>
 <body>
-    <header>
-        <h1>Register</h1>
-    </header>
-    <main>
-        <?php if (isset($message)) echo "<p>$message</p>"; ?>
-        <form method="POST" action="register.php">
-            <label for="username">Username:</label><br>
-            <input type="text" id="username" name="username" required><br>
-            <label for="password">Password:</label><br>
-            <input type="password" id="password" name="password" required><br>
-            <label for="role">Role:</label><br>
-            <select id="role" name="role" required>
-                <option value="parent">Parent</option>
-                <option value="child">Child</option>
-            </select><br>
-            <button type="submit">Register</button>
+    <div class="register-form">
+        <h1>Register as Parent</h1>
+        <p>Create your account to manage your child's tasks and chores.</p>
+        <?php if (isset($error)): ?>
+            <p style="color: red;"><?php echo htmlspecialchars($error); ?></p>
+        <?php endif; ?>
+        <form method="POST">
+            <div class="form-group">
+                <label for="username">Username:</label>
+                <input type="text" id="username" name="username" required>
+            </div>
+            <div class="form-group">
+                <label for="password">Password:</label>
+                <input type="password" id="password" name="password" required>
+            </div>
+            <button type="submit" class="button">Register</button>
         </form>
-    </main>
-    <footer>
-        <p>Child Task and Chore App - Ver 1.1.0</p>
-    </footer>
+        <p>Already have an account? <a href="login.php">Login here</a></p>
+        <p class="role-note">Child accounts are created by parents during setup.</p>
+    </div>
 </body>
 </html>
