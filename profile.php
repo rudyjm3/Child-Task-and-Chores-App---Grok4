@@ -1,7 +1,7 @@
 <?php
 // profile.php - User profile management
 // Purpose: Edit profile details based on role (child: avatar/password; parent: family)
-// Version: 3.5.0 (Role-based edits: child avatar/password, parent family management)
+// Version: 3.5.1 (Added name edits, gender badge)
 
 require_once __DIR__ . '/includes/functions.php';
 
@@ -28,6 +28,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $avatar = filter_input(INPUT_POST, 'avatar', FILTER_SANITIZE_STRING);
         if (updateChildProfile($user_id, $child_name, $age, $avatar)) {
             $message = "Profile updated successfully!";
+            $_SESSION['name'] = $child_name; // Update session
+        } else {
+            $message = "Failed to update profile.";
+        }
+    } elseif (isset($_POST['update_parent_profile'])) {
+        $name = filter_input(INPUT_POST, 'name', FILTER_SANITIZE_STRING);
+        $gender = filter_input(INPUT_POST, 'gender', FILTER_SANITIZE_STRING);
+        $stmt = $db->prepare("UPDATE users SET name = :name, gender = :gender WHERE id = :id");
+        if ($stmt->execute([':name' => $name, ':gender' => $gender, ':id' => $user_id])) {
+            $message = "Profile updated successfully!";
+            $_SESSION['name'] = $name;
         } else {
             $message = "Failed to update profile.";
         }
@@ -60,7 +71,8 @@ if ($role === 'child') {
         .avatar-options { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
         .avatar-option { width: 60px; height: 60px; border-radius: 50%; cursor: pointer; border: 2px solid #ddd; }
         .avatar-option.selected { border-color: #4caf50; }
-        /* Role-Based Styles */
+        .mother-badge { background: #e91e63; color: white; padding: 2px 6px; border-radius: 3px; font-size: 0.8em; }
+        .father-badge { background: #2196f3; color: white; padding: 2px 6px; border-radius: 3px; font-size: 0.8em; }
         .child-profile { background: linear-gradient(135deg, #e3f2fd, #f3e5f5); }
         .parent-profile { background: #f9f9f9; }
         @media (max-width: 768px) { .avatar-options { gap: 5px; } .avatar-option { width: 50px; height: 50px; } }
@@ -87,25 +99,22 @@ if ($role === 'child') {
         <?php if ($role === 'child'): ?>
             <div class="profile-form child-profile">
                 <h2>Your Profile</h2>
+                <p>Name: <?php echo htmlspecialchars($profile['child_name'] ?? $user['name'] ?? $user['username']); ?></p>
                 <img id="avatar-preview" src="<?php echo htmlspecialchars($profile['avatar'] ?? 'default-avatar.png'); ?>" alt="Avatar" class="avatar-preview">
                 <form method="POST" action="profile.php">
                     <div class="form-group">
                         <label for="child_name">Name:</label>
-                        <input type="text" id="child_name" name="child_name" value="<?php echo htmlspecialchars($profile['child_name'] ?? ''); ?>">
+                        <input type="text" id="child_name" name="child_name" value="<?php echo htmlspecialchars($profile['child_name'] ?? $user['name'] ?? ''); ?>">
                     </div>
                     <div class="form-group">
                         <label for="age">Age:</label>
-                        <select id="age" name="age">
-                            <?php for ($i = 5; $i <= 13; $i++): ?>
-                                <option value="<?php echo $i; ?>" <?php if (($profile['age'] ?? 0) == $i) echo 'selected'; ?>><?php echo $i; ?></option>
-                            <?php endfor; ?>
-                        </select>
+                        <input type="number" id="age" name="age" min="1" max="18" value="<?php echo htmlspecialchars($profile['age'] ?? ''); ?>">
                     </div>
                     <div class="form-group">
                         <label>Avatar:</label>
                         <div class="avatar-options">
-                            <img class="avatar-option <?php if (($profile['avatar'] ?? '') == 'avatars/boy1.png') echo 'selected'; ?>" data-avatar="avatars/boy1.png" src="avatars/boy1.png" alt="Avatar 1">
-                            <img class="avatar-option <?php if (($profile['avatar'] ?? '') == 'avatars/girl1.png') echo 'selected'; ?>" data-avatar="avatars/girl1.png" src="avatars/girl1.png" alt="Avatar 2">
+                            <img class="avatar-option <?php if (($profile['avatar'] ?? '') == 'images/avatar_images/boy1.png') echo 'selected'; ?>" data-avatar="images/avatar_images/boy1.png" src="images/avatar_images/boy1.png" alt="Avatar 1">
+                            <img class="avatar-option <?php if (($profile['avatar'] ?? '') == 'images/avatar_images/girl1.png') echo 'selected'; ?>" data-avatar="images/avatar_images/girl1.png" src="images/avatar_images/girl1.png" alt="Avatar 2">
                             <!-- Add more -->
                         </div>
                         <input type="file" name="avatar_upload" accept="image/*">
@@ -125,7 +134,22 @@ if ($role === 'child') {
         <?php elseif ($role === 'parent'): ?>
             <div class="profile-form parent-profile">
                 <h2>Your Profile</h2>
-                <p>Username: <?php echo htmlspecialchars($user['username']); ?></p>
+                <p>Name: <?php echo htmlspecialchars($user['name'] ?? $user['username']); ?> <?php if ($user['gender'] == 'female') echo '<span class="mother-badge">Mother</span>'; elseif ($user['gender'] == 'male') echo '<span class="father-badge">Father</span>'; ?></p>
+                <form method="POST" action="profile.php">
+                    <div class="form-group">
+                        <label for="name">Name:</label>
+                        <input type="text" id="name" name="name" value="<?php echo htmlspecialchars($user['name'] ?? ''); ?>">
+                    </div>
+                    <div class="form-group">
+                        <label for="gender">Gender:</label>
+                        <select id="gender" name="gender">
+                            <option value="">Select</option>
+                            <option value="male" <?php if ($user['gender'] == 'male') echo 'selected'; ?>>Male (Father)</option>
+                            <option value="female" <?php if ($user['gender'] == 'female') echo 'selected'; ?>>Female (Mother)</option>
+                        </select>
+                    </div>
+                    <button type="submit" name="update_parent_profile" class="button">Update Profile</button>
+                </form>
                 <h3>Change Password</h3>
                 <form method="POST" action="profile.php">
                     <div class="form-group">
