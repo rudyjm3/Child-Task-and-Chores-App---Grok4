@@ -176,11 +176,11 @@ if ($main_parent_from_link) {
         $stmt->execute([':parent_id' => $main_parent_id]);
         $data['redeemed_rewards'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-        $stmt = $db->prepare("SELECT g.id, g.title, g.target_points, g.requested_at, u.name as child_username 
-                             FROM goals g 
-                             JOIN child_profiles cp ON g.child_user_id = cp.child_user_id 
-                             JOIN users u ON g.child_user_id = u.id 
-                             WHERE cp.parent_user_id = :parent_id AND g.status = 'pending_approval'");
+        $stmt = $db->prepare("SELECT g.id, g.title, g.target_points, g.requested_at, COALESCE(u.name, u.username) as child_username 
+                     FROM goals g 
+                     JOIN child_profiles cp ON g.child_user_id = cp.child_user_id 
+                     JOIN users u ON g.child_user_id = u.id 
+                     WHERE cp.parent_user_id = :parent_id AND g.status = 'pending_approval'");
         $stmt->execute([':parent_id' => $main_parent_id]);
         $data['pending_approvals'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
@@ -228,10 +228,10 @@ if ($main_parent_from_link) {
         $stmt->execute([':child_id' => $user_id]);
         $data['completed_goals'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-        $stmt = $db->prepare("SELECT r.id, r.title, r.description, r.point_cost, r.status, r.redeemed_on 
-                             FROM rewards r 
-                             JOIN child_profiles cp ON r.parent_user_id = cp.parent_user_id 
-                             WHERE cp.child_user_id = :child_id AND r.status = 'redeemed'");
+        $stmt = $db->prepare("SELECT r.id, r.title, r.description, r.point_cost, COALESCE(u.name, u.username) as child_username, r.redeemed_on 
+                     FROM rewards r 
+                     LEFT JOIN users u ON r.redeemed_by = u.id 
+                     WHERE r.parent_user_id = :parent_id AND r.status = 'redeemed'");
         $stmt->execute([':child_id' => $user_id]);
         $data['redeemed_rewards'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
