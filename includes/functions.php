@@ -158,7 +158,7 @@ if ($main_parent_from_link) {
 }
 
         // Revised: Use name display
-        $stmt = $db->prepare("SELECT cp.id, cp.child_user_id, COALESCE(u.name, u.username) as display_name, cp.avatar, cp.age, cp.child_name 
+        $stmt = $db->prepare("SELECT cp.id, cp.child_user_id, COALESCE(u.name, u.username) as display_name, cp.avatar, cp.age, cp.child_name, u.created_by as task_creator 
                      FROM child_profiles cp 
                      JOIN users u ON cp.child_user_id = u.id 
                      WHERE cp.parent_user_id = :parent_id");
@@ -242,7 +242,7 @@ if ($main_parent_from_link) {
 // Create a new task
 function createTask($parent_user_id, $child_user_id, $title, $description, $due_date, $points, $recurrence, $category, $timing_mode) {
     global $db;
-    $stmt = $db->prepare("INSERT INTO tasks (parent_user_id, child_user_id, title, description, due_date, points, recurrence, category, timing_mode) VALUES (:parent_id, :child_id, :title, :description, :due_date, :points, :recurrence, :category, :timing_mode)");
+    $stmt = $db->prepare("INSERT INTO tasks (parent_user_id, child_user_id, title, description, due_date, points, recurrence, category, timing_mode, created_by) VALUES (:parent_id, :child_id, :title, :description, :due_date, :points, :recurrence, :category, :timing_mode, :created_by)");
     return $stmt->execute([
         ':parent_id' => $parent_user_id,
         ':child_id' => $child_user_id,
@@ -701,84 +701,108 @@ try {
    $db->exec("ALTER TABLE child_profiles ADD COLUMN IF NOT EXISTS child_name VARCHAR(50) DEFAULT NULL");
    error_log("Added/verified child_name column in child_profiles");
 
-    // Create tasks table if not exists
-    $sql = "CREATE TABLE IF NOT EXISTS tasks (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        parent_user_id INT NOT NULL,
-        child_user_id INT NOT NULL,
-        title VARCHAR(100) NOT NULL,
-        description TEXT,
-        due_date DATETIME,
-        points INT,
-        recurrence ENUM('daily', 'weekly', '') DEFAULT '',
-        category ENUM('hygiene', 'homework', 'household') DEFAULT 'household',
-        timing_mode ENUM('timer', 'suggested', 'no_limit') DEFAULT 'no_limit',
-        status ENUM('pending', 'completed', 'approved') DEFAULT 'pending',
-        photo_proof VARCHAR(255),
-        completed_at DATETIME,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (parent_user_id) REFERENCES users(id) ON DELETE CASCADE,
-        FOREIGN KEY (child_user_id) REFERENCES users(id) ON DELETE CASCADE
-    )";
-    $db->exec($sql);
-    error_log("Created/verified tasks table successfully");
+    // Create tasks table if not exists (added created_by)
+   $sql = "CREATE TABLE IF NOT EXISTS tasks (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      parent_user_id INT NOT NULL,
+      child_user_id INT NOT NULL,
+      title VARCHAR(100) NOT NULL,
+      description TEXT,
+      due_date DATETIME,
+      points INT,
+      recurrence ENUM('daily', 'weekly', '') DEFAULT '',
+      category ENUM('hygiene', 'homework', 'household') DEFAULT 'household',
+      timing_mode ENUM('timer', 'suggested', 'no_limit') DEFAULT 'no_limit',
+      status ENUM('pending', 'completed', 'approved') DEFAULT 'pending',
+      photo_proof VARCHAR(255),
+      completed_at DATETIME,
+      created_by INT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (parent_user_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (child_user_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+   )";
+   $db->exec($sql);
+   error_log("Created/verified tasks table successfully");
 
-    // Create rewards table if not exists
-    $sql = "CREATE TABLE IF NOT EXISTS rewards (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        parent_user_id INT NOT NULL,
-        title VARCHAR(100) NOT NULL,
-        description TEXT,
-        point_cost INT NOT NULL,
-        status ENUM('available', 'redeemed') DEFAULT 'available',
-        created_on TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        redeemed_by INT,
-        redeemed_on DATETIME,
-        FOREIGN KEY (parent_user_id) REFERENCES users(id) ON DELETE CASCADE,
-        FOREIGN KEY (redeemed_by) REFERENCES users(id) ON DELETE SET NULL
-    )";
-    $db->exec($sql);
-    error_log("Created/verified rewards table successfully");
+   // Add created_by to existing tasks if not exists
+   $db->exec("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS created_by INT DEFAULT " . $_SESSION['user_id'] . " REFERENCES users(id) ON DELETE SET NULL");
+   error_log("Added/verified created_by in tasks");
 
-    // Create goals table if not exists
-    $sql = "CREATE TABLE IF NOT EXISTS goals (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        parent_user_id INT NOT NULL,
-        child_user_id INT NOT NULL,
-        title VARCHAR(100) NOT NULL,
-        target_points INT NOT NULL,
-        start_date DATETIME,
-        end_date DATETIME,
-        status ENUM('active', 'pending_approval', 'completed', 'rejected') DEFAULT 'active',
-        reward_id INT,
-        completed_at DATETIME DEFAULT NULL,
-        requested_at DATETIME DEFAULT NULL,
-        rejected_at DATETIME DEFAULT NULL,
-        rejection_comment TEXT DEFAULT NULL,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (parent_user_id) REFERENCES users(id) ON DELETE CASCADE,
-        FOREIGN KEY (child_user_id) REFERENCES users(id) ON DELETE CASCADE,
-        FOREIGN KEY (reward_id) REFERENCES rewards(id) ON DELETE SET NULL
-    )";
-    $db->exec($sql);
-    error_log("Created/verified goals table successfully");
+   // Create rewards table if not exists (added created_by)
+   $sql = "CREATE TABLE IF NOT EXISTS rewards (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      parent_user_id INT NOT NULL,
+      title VARCHAR(100) NOT NULL,
+      description TEXT,
+      point_cost INT NOT NULL,
+      status ENUM('available', 'redeemed') DEFAULT 'available',
+      created_on TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      redeemed_by INT,
+      redeemed_on DATETIME,
+      created_by INT NOT NULL,
+      FOREIGN KEY (parent_user_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (redeemed_by) REFERENCES users(id) ON DELETE SET NULL,
+      FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+   )";
+   $db->exec($sql);
+   error_log("Created/verified rewards table successfully");
 
-    // Create routines table if not exists
-    $sql = "CREATE TABLE IF NOT EXISTS routines (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        parent_user_id INT NOT NULL,
-        child_user_id INT NOT NULL,
-        title VARCHAR(100) NOT NULL,
-        start_time TIME,
-        end_time TIME,
-        recurrence ENUM('daily', 'weekly', '') DEFAULT '',
-        bonus_points INT DEFAULT 0,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (parent_user_id) REFERENCES users(id) ON DELETE CASCADE,
-        FOREIGN KEY (child_user_id) REFERENCES users(id) ON DELETE CASCADE
-    )";
-    $db->exec($sql);
-    error_log("Created/verified routines table successfully");
+   // Add created_by to existing rewards if not exists
+   $db->exec("ALTER TABLE rewards ADD COLUMN IF NOT EXISTS created_by INT DEFAULT " . $_SESSION['user_id'] . " REFERENCES users(id) ON DELETE SET NULL");
+   error_log("Added/verified created_by in rewards");
+
+   // Create goals table if not exists (added created_by)
+   $sql = "CREATE TABLE IF NOT EXISTS goals (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      parent_user_id INT NOT NULL,
+      child_user_id INT NOT NULL,
+      title VARCHAR(100) NOT NULL,
+      target_points INT NOT NULL,
+      start_date DATETIME,
+      end_date DATETIME,
+      status ENUM('active', 'pending_approval', 'completed', 'rejected') DEFAULT 'active',
+      reward_id INT,
+      completed_at DATETIME DEFAULT NULL,
+      requested_at DATETIME DEFAULT NULL,
+      rejected_at DATETIME DEFAULT NULL,
+      rejection_comment TEXT DEFAULT NULL,
+      created_by INT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (parent_user_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (child_user_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (reward_id) REFERENCES rewards(id) ON DELETE SET NULL,
+      FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+   )";
+   $db->exec($sql);
+   error_log("Created/verified goals table successfully");
+
+   // Add created_by to existing goals if not exists
+   $db->exec("ALTER TABLE goals ADD COLUMN IF NOT EXISTS created_by INT DEFAULT " . $_SESSION['user_id'] . " REFERENCES users(id) ON DELETE SET NULL");
+   error_log("Added/verified created_by in goals");
+
+   // Create routines table if not exists (added created_by)
+   $sql = "CREATE TABLE IF NOT EXISTS routines (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      parent_user_id INT NOT NULL,
+      child_user_id INT NOT NULL,
+      title VARCHAR(100) NOT NULL,
+      start_time TIME,
+      end_time TIME,
+      recurrence ENUM('daily', 'weekly', '') DEFAULT '',
+      bonus_points INT DEFAULT 0,
+      created_by INT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (parent_user_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (child_user_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+   )";
+   $db->exec($sql);
+   error_log("Created/verified routines table successfully");
+
+   // Add created_by to existing routines if not exists
+   $db->exec("ALTER TABLE routines ADD COLUMN IF NOT EXISTS created_by INT DEFAULT " . $_SESSION['user_id'] . " REFERENCES users(id) ON DELETE SET NULL");
+   error_log("Added/verified created_by in routines");
 
     // Create routine_tasks table if not exists
     $sql = "CREATE TABLE IF NOT EXISTS routine_tasks (
