@@ -243,17 +243,18 @@ if ($main_parent_from_link) {
 function createTask($parent_user_id, $child_user_id, $title, $description, $due_date, $points, $recurrence, $category, $timing_mode) {
     global $db;
     $stmt = $db->prepare("INSERT INTO tasks (parent_user_id, child_user_id, title, description, due_date, points, recurrence, category, timing_mode, created_by) VALUES (:parent_id, :child_id, :title, :description, :due_date, :points, :recurrence, :category, :timing_mode, :created_by)");
-    return $stmt->execute([
-        ':parent_id' => $parent_user_id,
-        ':child_id' => $child_user_id,
-        ':title' => $title,
-        ':description' => $description,
-        ':due_date' => $due_date,
-        ':points' => $points,
-        ':recurrence' => $recurrence,
-        ':category' => $category,
-        ':timing_mode' => $timing_mode
-    ]);
+   return $stmt->execute([
+      ':parent_id' => $parent_user_id,
+      ':child_id' => $child_user_id,
+      ':title' => $title,
+      ':description' => $description,
+      ':due_date' => $due_date,
+      ':points' => $points,
+      ':recurrence' => $recurrence,
+      ':category' => $category,
+      ':timing_mode' => $timing_mode,
+      ':created_by' => $parent_user_id
+   ]);
 }
 
 // Get tasks for a user
@@ -306,13 +307,23 @@ function approveTask($task_id) {
 // Create reward
 function createReward($parent_user_id, $title, $description, $point_cost) {
     global $db;
-    $stmt = $db->prepare("INSERT INTO rewards (parent_user_id, title, description, point_cost) VALUES (:parent_id, :title, :description, :point_cost)");
-    return $stmt->execute([
-        ':parent_id' => $parent_user_id,
-        ':title' => $title,
-        ':description' => $description,
-        ':point_cost' => $point_cost
-    ]);
+   //  $stmt = $db->prepare("INSERT INTO rewards (parent_user_id, title, description, point_cost) VALUES (:parent_id, :title, :description, :point_cost)");
+   //  return $stmt->execute([
+   //      ':parent_id' => $parent_user_id,
+   //      ':title' => $title,
+   //      ':description' => $description,
+   //      ':point_cost' => $point_cost
+   //  ]);
+   $stmt = $db->prepare("INSERT INTO rewards (parent_id, title, description, point_cost, created_by) VALUES (:parent_id, :title, :description, :point_cost :created_by)");
+   return $stmt->execute([
+      ':parent_id' => $parent_user_id,
+      ':title' => $title,
+      ':description' => $description,
+      
+      ':point_cost' => $point_cost,
+      
+      ':created_by' => $parent_user_id
+   ]);
 }
 
 // Redeem reward
@@ -352,7 +363,7 @@ function redeemReward($child_user_id, $reward_id) {
 // Create goal
 function createGoal($parent_user_id, $child_user_id, $title, $target_points, $start_date, $end_date, $reward_id = null) {
     global $db;
-    $stmt = $db->prepare("INSERT INTO goals (parent_user_id, child_user_id, title, target_points, start_date, end_date, reward_id) VALUES (:parent_id, :child_id, :title, :target_points, :start_date, :end_date, :reward_id)");
+    $stmt = $db->prepare("INSERT INTO goals (parent_user_id, child_user_id, title, target_points, start_date, end_date, reward_id, created_by) VALUES (:parent_id, :child_id, :title, :target_points, :start_date, :end_date, :reward_id, :created_by)");
     return $stmt->execute([
         ':parent_id' => $parent_user_id,
         ':child_id' => $child_user_id,
@@ -360,7 +371,8 @@ function createGoal($parent_user_id, $child_user_id, $title, $target_points, $st
         ':target_points' => $target_points,
         ':start_date' => $start_date,
         ':end_date' => $end_date,
-        ':reward_id' => $reward_id
+        ':reward_id' => $reward_id,
+        ':created_by' => $parent_user_id
     ]);
 }
 
@@ -398,7 +410,7 @@ function approveGoal($parent_user_id, $goal_id, $approve = true, $comment = null
 // **[New] Routine Task Functions **
 function createRoutineTask($parent_user_id, $title, $description, $time_limit, $point_value, $category, $icon_url = null, $audio_url = null) {
     global $db;
-    $stmt = $db->prepare("INSERT INTO routine_tasks (parent_user_id, title, description, time_limit, point_value, category, icon_url, audio_url) VALUES (:parent_id, :title, :description, :time_limit, :point_value, :category, :icon_url, :audio_url)");
+    $stmt = $db->prepare("INSERT INTO routine_tasks (parent_user_id, title, description, time_limit, point_value, category, icon_url, audio_url, created_by) VALUES (:parent_id, :title, :description, :time_limit, :point_value, :category, :icon_url, :audio_url, :created_by)");
     return $stmt->execute([
         ':parent_id' => $parent_user_id,
         ':title' => $title,
@@ -407,7 +419,8 @@ function createRoutineTask($parent_user_id, $title, $description, $time_limit, $
         ':point_value' => $point_value,
         ':category' => $category,
         ':icon_url' => $icon_url,
-        ':audio_url' => $audio_url
+        ':audio_url' => $audio_url,
+        ':created_by' => $parent_user_id
     ]);
 }
 
@@ -513,7 +526,7 @@ function updateChildPoints($child_id, $points) {
 // **[Revised] Routine Functions (now use routine_task_id instead of task_id) **
 function createRoutine($parent_user_id, $child_user_id, $title, $start_time, $end_time, $recurrence, $bonus_points) {
     global $db;
-    $stmt = $db->prepare("INSERT INTO routines (parent_user_id, child_user_id, title, start_time, end_time, recurrence, bonus_points) VALUES (:parent_id, :child_id, :title, :start_time, :end_time, :recurrence, :bonus_points)");
+    $stmt = $db->prepare("INSERT INTO routines (parent_user_id, child_user_id, title, start_time, end_time, recurrence, bonus_points, created_by) VALUES (:parent_id, :child_id, :title, :start_time, :end_time, :recurrence, :bonus_points, :created_by)");
     $stmt->execute([
         ':parent_id' => $parent_user_id,
         ':child_id' => $child_user_id,
@@ -521,7 +534,8 @@ function createRoutine($parent_user_id, $child_user_id, $title, $start_time, $en
         ':start_time' => $start_time,
         ':end_time' => $end_time,
         ':recurrence' => $recurrence,
-        ':bonus_points' => $bonus_points
+        ':bonus_points' => $bonus_points,
+        ':created_by' => $parent_user_id
     ]);
     return $db->lastInsertId();
 }
@@ -657,9 +671,9 @@ function completeRoutine($routine_id, $child_id) {
 
 // Below code commented out so Notice message does not show up on the login page
 // Start session if not already started
-// if (session_status() === PHP_SESSION_NONE) {
-//     session_start();
-// }
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 
 // Ensure all dependent tables are created in correct order with error handling
 try {
@@ -848,6 +862,18 @@ try {
     )";
     $db->exec($sql);
     error_log("Created/verified family_links table successfully");
+      
+$db->exec("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS created_by INT NULL REFERENCES users(id) ON DELETE SET NULL");
+error_log("Added/verified created_by in tasks");
+
+$db->exec("ALTER TABLE rewards ADD COLUMN IF NOT EXISTS created_by INT NULL REFERENCES users(id) ON DELETE SET NULL");
+error_log("Added/verified created_by in rewards");
+
+$db->exec("ALTER TABLE goals ADD COLUMN IF NOT EXISTS created_by INT NULL REFERENCES users(id) ON DELETE SET NULL");
+error_log("Added/verified created_by in goals");
+
+$db->exec("ALTER TABLE routines ADD COLUMN IF NOT EXISTS created_by INT NULL REFERENCES users(id) ON DELETE SET NULL");
+error_log("Added/verified created_by in routines");
 
     // Create child_points table if not exists
     $sql = "CREATE TABLE IF NOT EXISTS child_points (
