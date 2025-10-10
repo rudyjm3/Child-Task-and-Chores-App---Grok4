@@ -300,14 +300,12 @@ function approveTask($task_id) {
 // Create reward
 function createReward($parent_user_id, $title, $description, $point_cost) {
     global $db;
-   $stmt = $db->prepare("INSERT INTO rewards (parent_id, title, description, point_cost, created_by) VALUES (:parent_id, :title, :description, :point_cost :created_by)");
+   $stmt = $db->prepare("INSERT INTO rewards (parent_user_id, title, description, point_cost, created_by) VALUES (:parent_id, :title, :description, :point_cost, :created_by)");
    return $stmt->execute([
       ':parent_id' => $parent_user_id,
       ':title' => $title,
       ':description' => $description,
-      
       ':point_cost' => $point_cost,
-      
       ':created_by' => $parent_user_id
    ]);
 }
