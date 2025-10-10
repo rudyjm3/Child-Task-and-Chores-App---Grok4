@@ -15,10 +15,11 @@ if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'child') {
 }
 
 // Set username in session if not already set
-if (!isset($_SESSION['username'])) {
-    $userStmt = $db->prepare("SELECT username FROM users WHERE id = :id");
+if (!isset($_SESSION['name'])) {
+    $userStmt = $db->prepare("SELECT name, username FROM users WHERE id = :id");
     $userStmt->execute([':id' => $_SESSION['user_id']]);
-    $_SESSION['username'] = $userStmt->fetchColumn() ?: 'Unknown User';
+    $user = $userStmt->fetch(PDO::FETCH_ASSOC);
+    $_SESSION['name'] = $user['name'] ?: $user['username'];
 }
 
 $data = getDashboardData($_SESSION['user_id']);
@@ -89,7 +90,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <body>
    <header>
    <h1>Child Dashboard</h1>
-   <p>Hi, <?php echo htmlspecialchars($_SESSION['username'] ?? 'Unknown User'); ?>!</p>
+   <p>Hi, <?php echo htmlspecialchars($_SESSION['name']); ?>!</p>
    <a href="goal.php">Goals</a> | <a href="task.php">Tasks</a> | <a href="routine.php">Routines</a> | <a href="profile.php">Profile</a> | <a href="logout.php">Logout</a>
    </header>
    <main class="dashboard">

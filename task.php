@@ -193,11 +193,15 @@ $approved_tasks = array_filter($tasks, function($t) { return $t['status'] === 'a
                     <label for="child_user_id">Child:</label>
                     <select id="child_user_id" name="child_user_id" required>
                         <?php
-                        $stmt = $db->prepare("SELECT cp.child_user_id, u.username FROM child_profiles cp JOIN users u ON cp.child_user_id = u.id WHERE cp.parent_user_id = :parent_id");
+                        $stmt = $db->prepare("SELECT cp.child_user_id, cp.child_name 
+                                             FROM child_profiles cp 
+                                             WHERE cp.parent_user_id = :parent_id");
                         $stmt->execute([':parent_id' => $_SESSION['user_id']]);
                         $children = $stmt->fetchAll(PDO::FETCH_ASSOC);
                         foreach ($children as $child): ?>
-                            <option value="<?php echo $child['child_user_id']; ?>"><?php echo htmlspecialchars($child['username']); ?></option>
+                            <option value="<?php echo $child['child_user_id']; ?>">
+                                <?php echo htmlspecialchars($child['child_name']); ?>
+                            </option>
                         <?php endforeach; ?>
                     </select>
                     <label for="title">Title:</label>

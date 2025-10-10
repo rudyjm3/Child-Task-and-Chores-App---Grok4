@@ -149,16 +149,16 @@ function getDashboardData($user_id) {
 
     if ($role === 'parent') {
         // Check if secondary parent; get main parent ID for shared data
-$main_parent_id = $user_id;
-$secondary_stmt = $db->prepare("SELECT main_parent_id FROM family_links WHERE linked_user_id = :user_id AND role_type = 'secondary_parent'");
-$secondary_stmt->execute([':user_id' => $user_id]);
-$main_parent_from_link = $secondary_stmt->fetchColumn();
-if ($main_parent_from_link) {
-    $main_parent_id = $main_parent_from_link;
-}
+      $main_parent_id = $user_id;
+      $secondary_stmt = $db->prepare("SELECT main_parent_id FROM family_links WHERE linked_user_id = :user_id AND role_type = 'secondary_parent'");
+      $secondary_stmt->execute([':user_id' => $user_id]);
+      $main_parent_from_link = $secondary_stmt->fetchColumn();
+      if ($main_parent_from_link) {
+         $main_parent_id = $main_parent_from_link;
+      }
 
         // Revised: Use name display
-        $stmt = $db->prepare("SELECT cp.id, cp.child_user_id, COALESCE(u.name, u.username) as display_name, cp.avatar, cp.age, cp.child_name, u.created_by as task_creator 
+        $stmt = $db->prepare("SELECT cp.id, cp.child_user_id, COALESCE(u.name, u.username) as display_name, cp.avatar, cp.age, cp.child_name
                      FROM child_profiles cp 
                      JOIN users u ON cp.child_user_id = u.id 
                      WHERE cp.parent_user_id = :parent_id");
@@ -169,11 +169,11 @@ if ($main_parent_from_link) {
         $stmt->execute([':parent_id' => $main_parent_id]);
         $data['active_rewards'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-        $stmt = $db->prepare("SELECT r.id, r.title, r.description, r.point_cost, u.name as child_username, r.redeemed_on 
-                             FROM rewards r 
-                             LEFT JOIN users u ON r.redeemed_by = u.id 
-                             WHERE r.parent_user_id = :parent_id AND r.status = 'redeemed'");
-        $stmt->execute([':parent_id' => $main_parent_id]);
+        $stmt = $db->prepare("SELECT r.id, r.title, r.description, r.point_cost, COALESCE(u.name, u.username) as child_username, r.redeemed_on 
+                     FROM rewards r 
+                     LEFT JOIN users u ON r.redeemed_by = u.id 
+                     WHERE r.redeemed_by = :child_id AND r.status = 'redeemed'");
+        $stmt->execute([':child_id' => $user_id]);
         $data['redeemed_rewards'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
         $stmt = $db->prepare("SELECT g.id, g.title, g.target_points, g.requested_at, COALESCE(u.name, u.username) as child_username 
@@ -231,7 +231,7 @@ if ($main_parent_from_link) {
         $stmt = $db->prepare("SELECT r.id, r.title, r.description, r.point_cost, COALESCE(u.name, u.username) as child_username, r.redeemed_on 
                      FROM rewards r 
                      LEFT JOIN users u ON r.redeemed_by = u.id 
-                     WHERE r.parent_user_id = :parent_id AND r.status = 'redeemed'");
+                     WHERE r.redeemed_by = :child_id AND r.status = 'redeemed'");
         $stmt->execute([':child_id' => $user_id]);
         $data['redeemed_rewards'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
@@ -297,23 +297,9 @@ function approveTask($task_id) {
     return false;
 }
 
-// Update child points
-// function updateChildPoints($child_user_id, $points) {
-//     global $db;
-//     $stmt = $db->prepare("INSERT INTO child_points (child_user_id, total_points) VALUES (:child_id, :points) ON DUPLICATE KEY UPDATE total_points = total_points + :points");
-//     return $stmt->execute([':child_id' => $child_user_id, ':points' => $points]);
-// }
-
 // Create reward
 function createReward($parent_user_id, $title, $description, $point_cost) {
     global $db;
-   //  $stmt = $db->prepare("INSERT INTO rewards (parent_user_id, title, description, point_cost) VALUES (:parent_id, :title, :description, :point_cost)");
-   //  return $stmt->execute([
-   //      ':parent_id' => $parent_user_id,
-   //      ':title' => $title,
-   //      ':description' => $description,
-   //      ':point_cost' => $point_cost
-   //  ]);
    $stmt = $db->prepare("INSERT INTO rewards (parent_id, title, description, point_cost, created_by) VALUES (:parent_id, :title, :description, :point_cost :created_by)");
    return $stmt->execute([
       ':parent_id' => $parent_user_id,
@@ -376,37 +362,101 @@ function createGoal($parent_user_id, $child_user_id, $title, $target_points, $st
     ]);
 }
 
-// Request goal completion
-function requestGoalCompletion($child_user_id, $goal_id) {
+// Keep existing updateGoal function (for editing goal details)
+function updateGoal($goal_id, $parent_user_id, $title, $target_points, $start_date, $end_date, $reward_id = null) {
     global $db;
-    $stmt = $db->prepare("UPDATE goals SET status = 'pending_approval', requested_at = NOW() WHERE id = :id AND child_user_id = :child_id AND status = 'active'");
-    return $stmt->execute([':id' => $goal_id, ':child_id' => $child_user_id]);
+    $stmt = $db->prepare("UPDATE goals 
+                         SET title = :title, 
+                             target_points = :target_points, 
+                             start_date = :start_date, 
+                             end_date = :end_date, 
+                             reward_id = :reward_id 
+                         WHERE id = :goal_id 
+                         AND parent_user_id = :parent_id");
+    return $stmt->execute([
+        ':goal_id' => $goal_id,
+        ':parent_id' => $parent_user_id,
+        ':title' => $title,
+        ':target_points' => $target_points,
+        ':start_date' => $start_date,
+        ':end_date' => $end_date,
+        ':reward_id' => $reward_id
+    ]);
 }
 
-// Approve goal
-function approveGoal($parent_user_id, $goal_id, $approve = true, $comment = null) {
+// Add back requestGoalCompletion function
+function requestGoalCompletion($goal_id, $child_user_id) {
     global $db;
-    $stmt = $db->prepare("SELECT child_user_id, target_points FROM goals WHERE id = :id AND parent_user_id = :parent_id AND status = 'pending_approval'");
-    $stmt->execute([':id' => $goal_id, ':parent_id' => $parent_user_id]);
-    $goal = $stmt->fetch(PDO::FETCH_ASSOC);
-    if ($goal) {
-        if ($approve) {
-            $stmt = $db->prepare("UPDATE goals SET status = 'completed', completed_at = NOW() WHERE id = :id");
-            $stmt->execute([':id' => $goal_id]);
+    $stmt = $db->prepare("UPDATE goals 
+                         SET status = 'pending_approval', 
+                             requested_at = NOW() 
+                         WHERE id = :goal_id 
+                         AND child_user_id = :child_id 
+                         AND status = 'active'");
+    return $stmt->execute([
+        ':goal_id' => $goal_id,
+        ':child_id' => $child_user_id
+    ]);
+}
+
+// Add back approveGoal function
+function approveGoal($goal_id, $parent_user_id) {
+    global $db;
+    try {
+        $db->beginTransaction();
+        
+        $stmt = $db->prepare("SELECT child_user_id, target_points 
+                             FROM goals 
+                             WHERE id = :goal_id 
+                             AND parent_user_id = :parent_id 
+                             AND status = 'pending_approval'");
+        $stmt->execute([
+            ':goal_id' => $goal_id,
+            ':parent_id' => $parent_user_id
+        ]);
+        $goal = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        if ($goal) {
+            // Update goal status to completed
+            $stmt = $db->prepare("UPDATE goals 
+                                SET status = 'completed', 
+                                    completed_at = NOW() 
+                                WHERE id = :goal_id");
+            $stmt->execute([':goal_id' => $goal_id]);
+            
+            // Award points to child
             updateChildPoints($goal['child_user_id'], $goal['target_points']);
-            return $goal['target_points'];
-        } else {
-            $stmt = $db->prepare("UPDATE goals SET status = 'rejected', rejected_at = NOW(), rejection_comment = :comment WHERE id = :id");
-            $stmt->execute([':id' => $goal_id, ':comment' => $comment]);
-            return 0;
+            
+            $db->commit();
+            return true;
         }
+        
+        $db->rollBack();
+        return false;
+    } catch (Exception $e) {
+        $db->rollBack();
+        error_log("Goal approval failed: " . $e->getMessage());
+        return false;
     }
-    return false;
 }
 
-// [Existing Routine Task Functions remain as previously updated - no change here]
+// Add back rejectGoal function
+function rejectGoal($goal_id, $parent_user_id, $rejection_comment) {
+    global $db;
+    $stmt = $db->prepare("UPDATE goals 
+                         SET status = 'rejected', 
+                             rejected_at = NOW(), 
+                             rejection_comment = :comment 
+                         WHERE id = :goal_id 
+                         AND parent_user_id = :parent_id 
+                         AND status = 'pending_approval'");
+    return $stmt->execute([
+        ':goal_id' => $goal_id,
+        ':parent_id' => $parent_user_id,
+        ':comment' => $rejection_comment
+    ]);
+}
 
-// NEW 9/28
 // **[New] Routine Task Functions **
 function createRoutineTask($parent_user_id, $title, $description, $time_limit, $point_value, $category, $icon_url = null, $audio_url = null) {
     global $db;
@@ -507,6 +557,44 @@ function completeGoal($child_user_id, $goal_id) {
     }
 }
 
+// Delete goal
+function deleteGoal($goal_id, $parent_user_id) {
+    global $db;
+    try {
+        $db->beginTransaction();
+        
+        // First verify the goal belongs to this parent
+        $stmt = $db->prepare("SELECT id FROM goals 
+                             WHERE id = :goal_id 
+                             AND parent_user_id = :parent_id");
+        $stmt->execute([
+            ':goal_id' => $goal_id,
+            ':parent_id' => $parent_user_id
+        ]);
+        
+        if ($stmt->fetch()) {
+            // If found, delete the goal
+            $stmt = $db->prepare("DELETE FROM goals 
+                                WHERE id = :goal_id 
+                                AND parent_user_id = :parent_id");
+            $result = $stmt->execute([
+                ':goal_id' => $goal_id,
+                ':parent_id' => $parent_user_id
+            ]);
+            
+            $db->commit();
+            return $result;
+        }
+        
+        $db->rollBack();
+        return false;
+    } catch (Exception $e) {
+        $db->rollBack();
+        error_log("Failed to delete goal $goal_id: " . $e->getMessage());
+        return false;
+    }
+}
+
 // New: Update child points (positive to add, negative to deduct)
 function updateChildPoints($child_id, $points) {
     global $db;
@@ -521,8 +609,6 @@ function updateChildPoints($child_id, $points) {
     }
 }
 
-
-// ADDED BELOW CODE NEW ROUTINE FUNCTION 9/28
 // **[Revised] Routine Functions (now use routine_task_id instead of task_id) **
 function createRoutine($parent_user_id, $child_user_id, $title, $start_time, $end_time, $recurrence, $bonus_points) {
     global $db;
@@ -666,14 +752,12 @@ function completeRoutine($routine_id, $child_id) {
         return false;
     }
 }
-// ADDED ABOVE CODE NEW ROUTINE FUNCTION 9/28
-
 
 // Below code commented out so Notice message does not show up on the login page
 // Start session if not already started
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
+// if (session_status() === PHP_SESSION_NONE) {
+//     session_start();
+// }
 
 // Ensure all dependent tables are created in correct order with error handling
 try {
@@ -730,7 +814,7 @@ try {
       status ENUM('pending', 'completed', 'approved') DEFAULT 'pending',
       photo_proof VARCHAR(255),
       completed_at DATETIME,
-      created_by INT NOT NULL,
+      created_by INT NULL,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (parent_user_id) REFERENCES users(id) ON DELETE CASCADE,
       FOREIGN KEY (child_user_id) REFERENCES users(id) ON DELETE CASCADE,
@@ -740,82 +824,82 @@ try {
    error_log("Created/verified tasks table successfully");
 
    // Add created_by to existing tasks if not exists
-   $db->exec("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS created_by INT DEFAULT " . $_SESSION['user_id'] . " REFERENCES users(id) ON DELETE SET NULL");
+   $db->exec("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS created_by INT NULL");
    error_log("Added/verified created_by in tasks");
 
    // Create rewards table if not exists (added created_by)
    $sql = "CREATE TABLE IF NOT EXISTS rewards (
-      id INT AUTO_INCREMENT PRIMARY KEY,
-      parent_user_id INT NOT NULL,
-      title VARCHAR(100) NOT NULL,
-      description TEXT,
-      point_cost INT NOT NULL,
-      status ENUM('available', 'redeemed') DEFAULT 'available',
-      created_on TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      redeemed_by INT,
-      redeemed_on DATETIME,
-      created_by INT NOT NULL,
-      FOREIGN KEY (parent_user_id) REFERENCES users(id) ON DELETE CASCADE,
-      FOREIGN KEY (redeemed_by) REFERENCES users(id) ON DELETE SET NULL,
-      FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+   id INT AUTO_INCREMENT PRIMARY KEY,
+   parent_user_id INT NOT NULL,
+   title VARCHAR(100) NOT NULL,
+   description TEXT,
+   point_cost INT NOT NULL,
+   status ENUM('available', 'redeemed') DEFAULT 'available',
+   created_on TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+   redeemed_by INT NULL,
+   redeemed_on DATETIME NULL,
+   created_by INT NULL,
+   FOREIGN KEY (parent_user_id) REFERENCES users(id) ON DELETE CASCADE,
+   FOREIGN KEY (redeemed_by) REFERENCES users(id) ON DELETE SET NULL,
+   FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
    )";
    $db->exec($sql);
    error_log("Created/verified rewards table successfully");
 
    // Add created_by to existing rewards if not exists
-   $db->exec("ALTER TABLE rewards ADD COLUMN IF NOT EXISTS created_by INT DEFAULT " . $_SESSION['user_id'] . " REFERENCES users(id) ON DELETE SET NULL");
+   $db->exec("ALTER TABLE rewards ADD COLUMN IF NOT EXISTS created_by INT NULL");
    error_log("Added/verified created_by in rewards");
 
-   // Create goals table if not exists (added created_by)
+   // Create goals table with corrected constraints
    $sql = "CREATE TABLE IF NOT EXISTS goals (
-      id INT AUTO_INCREMENT PRIMARY KEY,
-      parent_user_id INT NOT NULL,
-      child_user_id INT NOT NULL,
-      title VARCHAR(100) NOT NULL,
-      target_points INT NOT NULL,
-      start_date DATETIME,
-      end_date DATETIME,
-      status ENUM('active', 'pending_approval', 'completed', 'rejected') DEFAULT 'active',
-      reward_id INT,
-      completed_at DATETIME DEFAULT NULL,
-      requested_at DATETIME DEFAULT NULL,
-      rejected_at DATETIME DEFAULT NULL,
-      rejection_comment TEXT DEFAULT NULL,
-      created_by INT NOT NULL,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (parent_user_id) REFERENCES users(id) ON DELETE CASCADE,
-      FOREIGN KEY (child_user_id) REFERENCES users(id) ON DELETE CASCADE,
-      FOREIGN KEY (reward_id) REFERENCES rewards(id) ON DELETE SET NULL,
-      FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
-   )";
-   $db->exec($sql);
-   error_log("Created/verified goals table successfully");
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    parent_user_id INT NOT NULL,
+    child_user_id INT NOT NULL,
+    title VARCHAR(100) NOT NULL,
+    target_points INT NOT NULL,
+    start_date DATETIME,
+    end_date DATETIME,
+    status ENUM('active', 'pending_approval', 'completed', 'rejected') DEFAULT 'active',
+    reward_id INT NULL,
+    completed_at DATETIME DEFAULT NULL,
+    requested_at DATETIME DEFAULT NULL,
+    rejected_at DATETIME DEFAULT NULL,
+    rejection_comment TEXT DEFAULT NULL,
+    created_by INT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (parent_user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (child_user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (reward_id) REFERENCES rewards(id) ON DELETE SET NULL,
+    FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+  )";
+  $db->exec($sql);
+  error_log("Created/verified goals table successfully");
 
-   // Add created_by to existing goals if not exists
-   $db->exec("ALTER TABLE goals ADD COLUMN IF NOT EXISTS created_by INT DEFAULT " . $_SESSION['user_id'] . " REFERENCES users(id) ON DELETE SET NULL");
-   error_log("Added/verified created_by in goals");
+  // Add created_by to existing goals if not exists
+  $db->exec("ALTER TABLE goals ADD COLUMN IF NOT EXISTS created_by INT NULL");
+  error_log("Added/verified created_by in goals");
 
-   // Create routines table if not exists (added created_by)
+  // Create routines table if not exists (fixed constraints)
    $sql = "CREATE TABLE IF NOT EXISTS routines (
-      id INT AUTO_INCREMENT PRIMARY KEY,
-      parent_user_id INT NOT NULL,
-      child_user_id INT NOT NULL,
-      title VARCHAR(100) NOT NULL,
-      start_time TIME,
-      end_time TIME,
-      recurrence ENUM('daily', 'weekly', '') DEFAULT '',
-      bonus_points INT DEFAULT 0,
-      created_by INT NOT NULL,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (parent_user_id) REFERENCES users(id) ON DELETE CASCADE,
-      FOREIGN KEY (child_user_id) REFERENCES users(id) ON DELETE CASCADE,
-      FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    parent_user_id INT NOT NULL,
+    child_user_id INT NOT NULL,
+    title VARCHAR(100) NOT NULL,
+    start_time TIME,
+    end_time TIME,
+    recurrence ENUM('daily', 'weekly', '') DEFAULT '',
+    bonus_points INT DEFAULT 0,
+    created_by INT NULL,  /* Changed from NOT NULL to NULL */
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (parent_user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (child_user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
    )";
    $db->exec($sql);
    error_log("Created/verified routines table successfully");
 
    // Add created_by to existing routines if not exists
-   $db->exec("ALTER TABLE routines ADD COLUMN IF NOT EXISTS created_by INT DEFAULT " . $_SESSION['user_id'] . " REFERENCES users(id) ON DELETE SET NULL");
+   $db->exec("ALTER TABLE routines ADD COLUMN IF NOT EXISTS created_by INT NULL");
    error_log("Added/verified created_by in routines");
 
     // Create routine_tasks table if not exists
@@ -863,16 +947,16 @@ try {
     $db->exec($sql);
     error_log("Created/verified family_links table successfully");
       
-$db->exec("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS created_by INT NULL REFERENCES users(id) ON DELETE SET NULL");
+$db->exec("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS created_by INT NULL");
 error_log("Added/verified created_by in tasks");
 
-$db->exec("ALTER TABLE rewards ADD COLUMN IF NOT EXISTS created_by INT NULL REFERENCES users(id) ON DELETE SET NULL");
+$db->exec("ALTER TABLE rewards ADD COLUMN IF NOT EXISTS created_by INT NULL");
 error_log("Added/verified created_by in rewards");
 
-$db->exec("ALTER TABLE goals ADD COLUMN IF NOT EXISTS created_by INT NULL REFERENCES users(id) ON DELETE SET NULL");
+$db->exec("ALTER TABLE goals ADD COLUMN IF NOT EXISTS created_by INT NULL");
 error_log("Added/verified created_by in goals");
 
-$db->exec("ALTER TABLE routines ADD COLUMN IF NOT EXISTS created_by INT NULL REFERENCES users(id) ON DELETE SET NULL");
+$db->exec("ALTER TABLE routines ADD COLUMN IF NOT EXISTS created_by INT NULL");
 error_log("Added/verified created_by in routines");
 
     // Create child_points table if not exists
@@ -891,4 +975,5 @@ error_log("Added/verified created_by in routines");
     error_log("Table creation failed: " . $e->getMessage() . " at line " . $e->getLine());
     throw $e; // Re-throw to preserve the original error handling
 }
+
 ?>

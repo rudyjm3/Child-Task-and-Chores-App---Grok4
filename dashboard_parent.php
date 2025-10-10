@@ -14,11 +14,13 @@ if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'parent') {
     exit;
 }
 
-// Set username in session if not already set
-if (!isset($_SESSION['username'])) {
-    $userStmt = $db->prepare("SELECT username FROM users WHERE id = :id");
+// Set username and name in session if not already set
+if (!isset($_SESSION['username']) || !isset($_SESSION['name'])) {
+    $userStmt = $db->prepare("SELECT username, name FROM users WHERE id = :id");
     $userStmt->execute([':id' => $_SESSION['user_id']]);
-    $_SESSION['username'] = $userStmt->fetchColumn() ?: 'Unknown User';
+    $user = $userStmt->fetch(PDO::FETCH_ASSOC);
+    $_SESSION['username'] = $user['username'];
+    $_SESSION['name'] = $user['name'] ?: $user['username']; // fallback to username if name is null
 }
 
 $data = getDashboardData($_SESSION['user_id']);
@@ -65,6 +67,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $child_password = filter_input(INPUT_POST, 'child_password', FILTER_SANITIZE_STRING);
         $age = filter_input(INPUT_POST, 'age', FILTER_VALIDATE_INT);
         $avatar = filter_input(INPUT_POST, 'avatar', FILTER_SANITIZE_STRING);
+        $gender = filter_input(INPUT_POST, 'child_gender', FILTER_SANITIZE_STRING);
         // Handle upload
         $upload_path = '';
         if (isset($_FILES['avatar_upload']) && $_FILES['avatar_upload']['error'] == 0) {
@@ -88,7 +91,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $message = "Upload failed; using default avatar.";
 }
         }
-        if (createChildProfile($_SESSION['user_id'], $child_name, $child_username, $child_password, $age, $avatar)) {
+        if (createChildProfile($_SESSION['user_id'], $child_name, $child_username, $child_password, $age, $avatar, $gender)) {
             $message = "Child added successfully! Username: $child_username, Password: $child_password (share securely).";
         } else {
             $message = "Failed to add child. Check for duplicate username.";
@@ -224,6 +227,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                   <input type="number" id="age" name="age" min="1" max="18" required>
                </div>
                <div class="form-group">
+                  <label for="child_gender">Gender:</label>
+                  <select id="child_gender" name="child_gender" required>
+                      <option value="">Select...</option>
+                      <option value="male">Male</option>
+                      <option value="female">Female</option>
+                  </select>
+               </div>
+               <div class="form-group">
                   <label>Avatar:</label>
                   <div class="avatar-options">
                      <img class="avatar-option" data-avatar="images/avatar_images/default-avatar.png" src="images/avatar_images/default-avatar.png" alt="Avatar default">
@@ -288,11 +299,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                      <label for="child_user_id">Child:</label>
                      <select id="child_user_id" name="child_user_id" required>
                         <?php
-                        $stmt = $db->prepare("SELECT cp.child_user_id, u.username FROM child_profiles cp JOIN users u ON cp.child_user_id = u.id WHERE cp.parent_user_id = :parent_id");
+                        $stmt = $db->prepare("SELECT cp.child_user_id, cp.child_name 
+                                             FROM child_profiles cp 
+                                             WHERE cp.parent_user_id = :parent_id");
                         $stmt->execute([':parent_id' => $_SESSION['user_id']]);
                         $children = $stmt->fetchAll(PDO::FETCH_ASSOC);
                         foreach ($children as $child): ?>
-                            <option value="<?php echo $child['child_user_id']; ?>"><?php echo htmlspecialchars($child['username']); ?></option>
+                            <option value="<?php echo $child['child_user_id']; ?>">
+                                <?php echo htmlspecialchars($child['child_name']); ?>
+                            </option>
                         <?php endforeach; ?>
                      </select>
                   </div>

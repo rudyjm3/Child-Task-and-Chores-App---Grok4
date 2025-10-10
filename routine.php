@@ -211,12 +211,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         <label for="child_user_id">Child:</label>
                         <select id="child_user_id" name="child_user_id" required>
                             <?php
-                            $stmt = $db->prepare("SELECT cp.child_user_id, u.username FROM child_profiles cp JOIN users u ON cp.child_user_id = u.id WHERE cp.parent_user_id = :parent_id");
-                            $stmt->execute([':parent_id' => $_SESSION['user_id']]);
-                            $children = $stmt->fetchAll(PDO::FETCH_ASSOC);
-                            foreach ($children as $child): ?>
-                                <option value="<?php echo $child['child_user_id']; ?>"><?php echo htmlspecialchars($child['username']); ?></option>
-                            <?php endforeach; ?>
+                            $stmt = $db->prepare("SELECT cp.child_user_id, cp.child_name 
+                     FROM child_profiles cp 
+                     WHERE cp.parent_user_id = :parent_id");
+$stmt->execute([':parent_id' => $_SESSION['user_id']]);
+$children = $stmt->fetchAll(PDO::FETCH_ASSOC);
+foreach ($children as $child): ?>
+    <option value="<?php echo $child['child_user_id']; ?>">
+        <?php echo htmlspecialchars($child['child_name']); ?>
+    </option>
+<?php endforeach; ?>
                         </select>
                     </div>
                     <div class="form-group">
