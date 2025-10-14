@@ -67,7 +67,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $child_name = filter_input(INPUT_POST, 'child_name', FILTER_SANITIZE_STRING);
         $child_username = filter_input(INPUT_POST, 'child_username', FILTER_SANITIZE_STRING);
         $child_password = filter_input(INPUT_POST, 'child_password', FILTER_SANITIZE_STRING);
-        $age = filter_input(INPUT_POST, 'age', FILTER_VALIDATE_INT);
+        $birthday = filter_input(INPUT_POST, 'birthday', FILTER_SANITIZE_STRING);
         $avatar = filter_input(INPUT_POST, 'avatar', FILTER_SANITIZE_STRING);
         $gender = filter_input(INPUT_POST, 'child_gender', FILTER_SANITIZE_STRING);
         // Handle upload
@@ -93,10 +93,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $message = "Upload failed; using default avatar.";
 }
         }
-        if (createChildProfile($_SESSION['user_id'], $child_name, $child_username, $child_password, $age, $avatar, $gender)) {
+        if (createChildProfile($_SESSION['user_id'], $child_name, $child_username, $child_password, $birthday, $avatar, $gender)) {
             $message = "Child added successfully! Username: $child_username, Password: $child_password (share securely).";
         } else {
             $message = "Failed to add child. Check for duplicate username.";
+        }
+    } elseif (isset($_POST['add_new_user'])) {
+        $name = filter_input(INPUT_POST, 'secondary_name', FILTER_SANITIZE_STRING);
+        $username = filter_input(INPUT_POST, 'secondary_username', FILTER_SANITIZE_STRING);
+        $password = filter_input(INPUT_POST, 'secondary_password', FILTER_SANITIZE_STRING);
+        $role_type = filter_input(INPUT_POST, 'role_type', FILTER_SANITIZE_STRING);
+        
+        if ($role_type && in_array($role_type, ['secondary_parent', 'family_member', 'caregiver'])) {
+            if (addLinkedUser($_SESSION['user_id'], $username, $password, $name, $role_type)) {
+                $role_display = str_replace('_', ' ', ucwords($role_type));
+                $message = "$role_display added successfully! Username: $username";
+            } else {
+                $message = "Failed to add user. Check for duplicate username.";
+            }
+        } else {
+            $message = "Invalid role type selected.";
         }
     } elseif (isset($_POST['add_secondary_parent'])) {
         $secondary_username = filter_input(INPUT_POST, 'secondary_username', FILTER_SANITIZE_STRING);
@@ -111,6 +127,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $message = "$role_label added successfully! Username: $secondary_username, Password: $secondary_password (share securely).";
         } else {
             $message = "Failed to add secondary parent. Check for duplicate username.";
+        }
+    } elseif (isset($_POST['delete_user']) && $role_type === 'main_parent') {
+        $delete_user_id = filter_input(INPUT_POST, 'delete_user_id', FILTER_VALIDATE_INT);
+        if ($delete_user_id) {
+            $stmt = $db->prepare("DELETE FROM users WHERE id = :user_id AND id IN 
+                             (SELECT linked_user_id FROM family_links 
+                              WHERE main_parent_id = :main_parent_id)");
+            if ($stmt->execute([':user_id' => $delete_user_id, ':main_parent_id' => $_SESSION['user_id']])) {
+                $message = "User removed successfully.";
+            } else {
+                $message = "Failed to remove user.";
+            }
         }
     }
 }
@@ -191,7 +219,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <body>
    <header>
       <h1>Parent Dashboard</h1>
-      <p>Welcome, <?php echo htmlspecialchars($_SESSION['username'] ?? 'Unknown User'); ?> (<?php echo htmlspecialchars($_SESSION['role']); ?>)</p>
+      <p>Welcome, <?php echo htmlspecialchars($_SESSION['name'] ?? $_SESSION['username']); ?> 
+         <?php if ($role_type === 'main_parent'): ?>
+            <span class="role-badge">(Main Account Owner)</span>
+         <?php elseif ($role_type === 'secondary_parent'): ?>
+            <span class="role-badge">(Secondary Parent)</span>
+         <?php elseif ($role_type === 'family_member'): ?>
+            <span class="role-badge">(Family Member)</span>
+         <?php elseif ($role_type === 'caregiver'): ?>
+            <span class="role-badge">(Caregiver)</span>
+         <?php endif; ?>
+      </p>
       <a href="goal.php">Goals</a> | <a href="task.php">Tasks</a> | <a href="routine.php">Routines</a> | <a href="profile.php">Profile</a> | <a href="logout.php">Logout</a>
    </header>
    <main class="dashboard">
@@ -210,10 +248,75 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                <p>No children added yet. Add your first child below!</p>
          <?php endif; ?>
       </div>
+      <div class="family-members-list">
+         <h2>Family Members</h2>
+         <?php
+         $stmt = $db->prepare("SELECT u.id, u.name, u.username, fl.role_type 
+                              FROM users u 
+                              JOIN family_links fl ON u.id = fl.linked_user_id 
+                              WHERE fl.main_parent_id = :main_parent_id 
+                              AND fl.role_type IN ('secondary_parent', 'family_member') 
+                              ORDER BY fl.role_type, u.name");
+         $stmt->execute([':main_parent_id' => $_SESSION['user_id']]);
+         $family_members = $stmt->fetchAll(PDO::FETCH_ASSOC);
+         
+         if (!empty($family_members)): ?>
+             <?php foreach ($family_members as $member): ?>
+                 <div class="member-item">
+                     <p><?php echo htmlspecialchars($member['name'] ?? $member['username']); ?> 
+                        <span class="role-type">(<?php echo ucfirst(str_replace('_', ' ', $member['role_type'])); ?>)</span>
+                     </p>
+                     <?php if ($role_type === 'main_parent'): ?>
+                         <a href="profile.php?edit_user=<?php echo $member['id']; ?>" class="button edit-btn">Edit</a>
+                         <form method="POST" style="display: inline;">
+                             <input type="hidden" name="delete_user_id" value="<?php echo $member['id']; ?>">
+                             <button type="submit" name="delete_user" class="button delete-btn" 
+                                     onclick="return confirm('Are you sure you want to remove this family member?')">
+                                 Remove
+                             </button>
+                         </form>
+                     <?php endif; ?>
+                 </div>
+             <?php endforeach; ?>
+         <?php else: ?>
+             <p>No family members added yet.</p>
+         <?php endif; ?>
+
+         <h2>Caregivers</h2>
+         <?php
+         $stmt = $db->prepare("SELECT u.id, u.name, u.username, fl.role_type 
+                              FROM users u 
+                              JOIN family_links fl ON u.id = fl.linked_user_id 
+                              WHERE fl.main_parent_id = :main_parent_id 
+                              AND fl.role_type = 'caregiver' 
+                              ORDER BY u.name");
+         $stmt->execute([':main_parent_id' => $_SESSION['user_id']]);
+         $caregivers = $stmt->fetchAll(PDO::FETCH_ASSOC);
+         
+         if (!empty($caregivers)): ?>
+             <?php foreach ($caregivers as $caregiver): ?>
+                 <div class="member-item">
+                     <p><?php echo htmlspecialchars($caregiver['name'] ?? $caregiver['username']); ?></p>
+                     <?php if ($role_type === 'main_parent'): ?>
+                         <a href="profile.php?edit_user=<?php echo $caregiver['id']; ?>" class="button edit-btn">Edit</a>
+                         <form method="POST" style="display: inline;">
+                             <input type="hidden" name="delete_user_id" value="<?php echo $caregiver['id']; ?>">
+                             <button type="submit" name="delete_user" class="button delete-btn" 
+                                     onclick="return confirm('Are you sure you want to remove this caregiver?')">
+                                 Remove
+                             </button>
+                         </form>
+                     <?php endif; ?>
+                 </div>
+             <?php endforeach; ?>
+         <?php else: ?>
+             <p>No caregivers added yet.</p>
+         <?php endif; ?>
+     </div>
       <div class="manage-family">
          <h2>Manage Family</h2>
          <button id="add-child-btn" class="button">Add Child</button>
-         <button id="add-caregiver-btn" class="button" style="background: #ff9800;">Add Caregiver</button>
+         <button id="add-caregiver-btn" class="button" style="background: #ff9800;">Add New User</button>
          <div id="child-form" class="family-form">
             <h3>Add Child</h3>
             <form method="POST" action="dashboard_parent.php" enctype="multipart/form-data">
@@ -230,8 +333,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                   <input type="password" id="child_password" name="child_password" required>
                </div>
                <div class="form-group">
-                  <label for="age">Age:</label>
-                  <input type="number" id="age" name="age" min="1" max="18" required>
+                  <label for="birthday">Birthday:</label>
+                  <input type="date" id="birthday" name="birthday" required>
                </div>
                <div class="form-group">
                   <label for="child_gender">Gender:</label>
@@ -258,15 +361,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </form>
          </div>
          <div id="caregiver-form" class="family-form">
-            <h3>Add Caregiver</h3>
+            <h3>Add Family Member/Caregiver</h3>
             <form method="POST" action="dashboard_parent.php">
                <div class="form-group">
-                  <label for="secondary_name">Name:</label>
-                  <input type="text" id="secondary_name" name="secondary_name" required>
+                  <label for="secondary_name">Full Name:</label>
+                  <input type="text" id="secondary_name" name="secondary_name" required placeholder="Enter full name">
                </div>
                <div class="form-group">
                   <label for="secondary_username">Username (for login):</label>
-                  <input type="text" id="secondary_username" name="secondary_username" required>
+                  <input type="text" id="secondary_username" name="secondary_username" required placeholder="Choose a username">
                </div>
                <div class="form-group">
                   <label for="secondary_password">Password:</label>
@@ -275,12 +378,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                <div class="form-group">
                   <label for="role_type">Role Type:</label>
                   <select id="role_type" name="role_type" required>
-                     <option value="secondary_parent">Secondary Parent</option>
-                     <option value="family_member">Family Member</option>
-                     <option value="caregiver">Caregiver</option>
+                     <option value="secondary_parent">Secondary Parent (Full Access)</option>
+                     <option value="family_member">Family Member (Limited Access)</option>
+                     <option value="caregiver">Caregiver (Task Management Only)</option>
                   </select>
                </div>
-               <button type="submit" name="add_secondary_parent" class="button">Add User</button>
+               <button type="submit" name="add_new_user" class="button">Add New User</button>
             </form>
          </div>
       </div>

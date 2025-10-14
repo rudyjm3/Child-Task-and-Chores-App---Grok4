@@ -7,6 +7,15 @@
 
 require_once __DIR__ . '/db_connect.php';
 
+// Calculate age from birthday
+function calculateAge($birthday) {
+    if (!$birthday) return null;
+    $birthdayDate = new DateTime($birthday);
+    $today = new DateTime();
+    $age = $birthdayDate->diff($today)->y;
+    return $age;
+}
+
 // Register a new user (revised for name/gender)
 function registerUser($username, $password, $role, $name = null, $gender = null) {
     global $db;
@@ -85,37 +94,37 @@ function canAddEditFamilyMember($user_id) {
 }
 
 // Revised: Create a child profile (now auto-creates child user and links, with name)
-function createChildProfile($parent_user_id, $child_name, $child_username, $child_password, $age, $avatar) {
+function createChildProfile($parent_user_id, $child_name, $child_username, $child_password, $birthday, $avatar, $gender) {
     global $db;
     try {
         $db->beginTransaction();
         
-        // Auto-create child user
+        // Create child user
         $hashedChildPassword = password_hash($child_password, PASSWORD_DEFAULT);
-        $stmt = $db->prepare("INSERT INTO users (username, password, role, name) VALUES (:username, :password, 'child', :name)");
+        $stmt = $db->prepare("INSERT INTO users (username, password, role, name, gender) 
+                             VALUES (:username, :password, 'child', :name, :gender)");
         $stmt->execute([
             ':username' => $child_username,
             ':password' => $hashedChildPassword,
-            ':name' => $child_name
+            ':name' => $child_name,
+            ':gender' => $gender
         ]);
         $child_user_id = $db->lastInsertId();
 
-        // Link in child_profiles
-        $stmt = $db->prepare("INSERT INTO child_profiles (child_user_id, parent_user_id, child_name, age, avatar) VALUES (:child_user_id, :parent_id, :child_name, :age, :avatar)");
+        // Create child profile
+        $stmt = $db->prepare("INSERT INTO child_profiles (child_user_id, parent_user_id, child_name, birthday, avatar) 
+                             VALUES (:child_user_id, :parent_id, :child_name, :birthday, :avatar)");
         $stmt->execute([
             ':child_user_id' => $child_user_id,
             ':parent_id' => $parent_user_id,
             ':child_name' => $child_name,
-            ':age' => $age,
+            ':birthday' => $birthday,
             ':avatar' => $avatar
         ]);
 
-        // Initialize child points
-        updateChildPoints($child_user_id, 0);
-
         $db->commit();
         return $child_user_id;
-    } catch (PDOException $e) {
+    } catch (Exception $e) {
         $db->rollBack();
         error_log("Failed to create child profile: " . $e->getMessage());
         return false;
@@ -173,11 +182,18 @@ function updateUserPassword($user_id, $new_password) {
 }
 
 // Revised: Update child profile (avatar, age, name)
-function updateChildProfile($child_user_id, $child_name, $age, $avatar) {
+function updateChildProfile($child_user_id, $child_name, $birthday, $avatar) {
     global $db;
-    $stmt = $db->prepare("UPDATE child_profiles SET child_name = :child_name, age = :age, avatar = :avatar WHERE child_user_id = :child_id");
+    $age = calculateAge($birthday);
+    $stmt = $db->prepare("UPDATE child_profiles 
+                         SET child_name = :child_name, 
+                             birthday = :birthday,
+                             age = :age,
+                             avatar = :avatar 
+                         WHERE child_user_id = :child_id");
     $stmt->execute([
         ':child_name' => $child_name,
+        ':birthday' => $birthday,
         ':age' => $age,
         ':avatar' => $avatar,
         ':child_id' => $child_user_id
@@ -841,6 +857,7 @@ try {
       child_name VARCHAR(50),
       age INT,
       avatar VARCHAR(255),
+      birthday DATE DEFAULT NULL,
       FOREIGN KEY (parent_user_id) REFERENCES users(id) ON DELETE CASCADE,
       FOREIGN KEY (child_user_id) REFERENCES users(id) ON DELETE CASCADE
    )";
@@ -1031,5 +1048,12 @@ error_log("Added/verified created_by in routines");
     error_log("Table creation failed: " . $e->getMessage() . " at line " . $e->getLine());
     throw $e; // Re-throw to preserve the original error handling
 }
+
+// In functions.php, modify the child_profiles table schema:
+// Add birthday column if it doesn't exist
+$sql = "ALTER TABLE child_profiles 
+        ADD COLUMN IF NOT EXISTS birthday DATE DEFAULT NULL,
+        MODIFY COLUMN age INT DEFAULT NULL";
+$db->exec($sql);
 
 ?>
