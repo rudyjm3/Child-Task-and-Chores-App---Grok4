@@ -10,12 +10,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $password = filter_input(INPUT_POST, 'password', FILTER_SANITIZE_STRING);
     $name = filter_input(INPUT_POST, 'name', FILTER_SANITIZE_STRING);
     $gender = filter_input(INPUT_POST, 'gender', FILTER_SANITIZE_STRING);
-    $role = 'parent'; // Fixed to parent only
+    $role = 'main_parent'; // primary account creator
 
     if (registerUser($username, $password, $role, $name, $gender)) {
         // Auto-login after registration
         $_SESSION['user_id'] = $db->lastInsertId();
-        $_SESSION['role'] = $role;
+        $_SESSION['role'] = 'parent'; // UI-level
+        $_SESSION['role_type'] = $role; // detailed
         $_SESSION['username'] = $username;
         header("Location: dashboard_parent.php?setup_family=1");
         exit;

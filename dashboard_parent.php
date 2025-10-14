@@ -9,10 +9,12 @@ require_once __DIR__ . '/includes/functions.php';
 
 session_start(); // Force session start to load existing session
 error_log("Dashboard Parent: user_id=" . (isset($_SESSION['user_id']) ? $_SESSION['user_id'] : 'null') . ", role=" . (isset($_SESSION['role']) ? $_SESSION['role'] : 'null') . ", session_id=" . session_id() . ", cookie=" . (isset($_SERVER['HTTP_COOKIE']) ? $_SERVER['HTTP_COOKIE'] : 'none'));
-if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'parent') {
+if (!isset($_SESSION['user_id']) || !canCreateContent($_SESSION['user_id'])) {
     header("Location: login.php");
     exit;
 }
+// Set role_type for permission checks
+$role_type = getUserRole($_SESSION['user_id']);
 
 // Set username and name in session if not already set
 if (!isset($_SESSION['username']) || !isset($_SESSION['name'])) {
@@ -100,8 +102,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $secondary_username = filter_input(INPUT_POST, 'secondary_username', FILTER_SANITIZE_STRING);
         $secondary_password = filter_input(INPUT_POST, 'secondary_password', FILTER_SANITIZE_STRING);
         $secondary_name = filter_input(INPUT_POST, 'secondary_name', FILTER_SANITIZE_STRING);
-        if (addSecondaryParent($_SESSION['user_id'], $secondary_username, $secondary_password, $secondary_name)) {
-            $message = "Secondary parent added successfully! Username: $secondary_username, Password: $secondary_password (share securely).";
+        if (addLinkedUser($_SESSION['user_id'], $secondary_username, $secondary_password, $secondary_name, $_POST['role_type'])) {
+            $role_label = [
+                'secondary_parent' => 'Secondary parent',
+                'family_member' => 'Family member', 
+                'caregiver' => 'Caregiver'
+            ][$_POST['role_type']] ?? 'User';
+            $message = "$role_label added successfully! Username: $secondary_username, Password: $secondary_password (share securely).";
         } else {
             $message = "Failed to add secondary parent. Check for duplicate username.";
         }
@@ -265,7 +272,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                   <label for="secondary_password">Password:</label>
                   <input type="password" id="secondary_password" name="secondary_password" required>
                </div>
-               <button type="submit" name="add_secondary_parent" class="button">Add Caregiver</button>
+               <div class="form-group">
+                  <label for="role_type">Role Type:</label>
+                  <select id="role_type" name="role_type" required>
+                     <option value="secondary_parent">Secondary Parent</option>
+                     <option value="family_member">Family Member</option>
+                     <option value="caregiver">Caregiver</option>
+                  </select>
+               </div>
+               <button type="submit" name="add_secondary_parent" class="button">Add User</button>
             </form>
          </div>
       </div>

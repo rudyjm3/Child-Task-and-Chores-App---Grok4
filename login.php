@@ -19,11 +19,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $userStmt->execute([':username' => $username]);
         $user = $userStmt->fetch(PDO::FETCH_ASSOC);
         $_SESSION['user_id'] = $user['id'];
-        $_SESSION['role'] = $user['role'];
+        // For backward compatibility the UI expects 'parent' or 'child' dashboards.
+        // We'll set a generic session role for UI and a detailed role_type for permissions.
+        $_SESSION['role'] = ($user['role'] === 'child') ? 'child' : 'parent';
+        $_SESSION['role_type'] = $user['role']; // 'main_parent', 'family_member', 'caregiver', or 'child'
         $_SESSION['username'] = $username;
         $_SESSION['name'] = $user['name'] ?? $username; // For name display
-        error_log("Login successful for user_id=" . $user['id'] . ", role=" . $user['role']);
-        header("Location: dashboard_" . $user['role'] . ".php");
+        error_log("Login successful for user_id=" . $user['id'] . ", role_type=" . $user['role']);
+        header("Location: dashboard_" . $_SESSION['role'] . ".php");
         exit;
     } else {
         $error = "Invalid username or password.";

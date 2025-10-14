@@ -33,6 +33,57 @@ function loginUser($username, $password) {
     return false;
 }
 
+// Helper: get normalized role for a user (maps legacy 'parent' to 'main_parent')
+function getUserRole($user_id) {
+    global $db;
+    $stmt = $db->prepare("SELECT role FROM users WHERE id = :id");
+    $stmt->execute([':id' => $user_id]);
+    $role = $stmt->fetchColumn();
+    if ($role === 'parent') return 'main_parent'; // legacy mapping
+    return $role;
+}
+
+// Permission helper: returns true if user is main parent OR a family member linked as secondary_parent
+function userCanManageAll($user_id) {
+    global $db;
+    $role = getUserRole($user_id);
+    if ($role === 'main_parent') return true;
+    if ($role === 'family_member') {
+        $stmt = $db->prepare("SELECT 1 FROM family_links WHERE linked_user_id = :id AND role_type = 'secondary_parent' LIMIT 1");
+        $stmt->execute([':id' => $user_id]);
+        if ($stmt->fetchColumn()) return true;
+    }
+    return false;
+}
+
+// Simple helpers
+function isCaregiver($user_id) {
+    return getUserRole($user_id) === 'caregiver';
+}
+
+function isFamilyMember($user_id) {
+    return getUserRole($user_id) === 'family_member';
+}
+
+function canCreateContent($user_id) {
+    $role = getUserRole($user_id);
+    return in_array($role, ['main_parent', 'secondary_parent', 'family_member', 'caregiver']);
+}
+
+function canAddEditChild($user_id) {
+    $role = getUserRole($user_id);
+    return in_array($role, ['main_parent', 'secondary_parent']);
+}
+
+function canAddEditCaregiver($user_id) {
+    return canAddEditChild($user_id); // same restriction
+}
+
+function canAddEditFamilyMember($user_id) {
+    $role = getUserRole($user_id);
+    return in_array($role, ['main_parent', 'secondary_parent', 'family_member']);
+}
+
 // Revised: Create a child profile (now auto-creates child user and links, with name)
 function createChildProfile($parent_user_id, $child_name, $child_username, $child_password, $age, $avatar) {
     global $db;
@@ -71,34 +122,41 @@ function createChildProfile($parent_user_id, $child_name, $child_username, $chil
     }
 }
 
-// New: Add secondary parent/caregiver (with name)
-function addSecondaryParent($main_parent_id, $secondary_username, $secondary_password, $secondary_name) {
+// New: Add linked user (secondary parent, family member, or caregiver)
+// $roleType should be one of: 'secondary_parent', 'family_member', 'caregiver'
+function addLinkedUser($main_parent_id, $username, $password, $name, $roleType = 'secondary_parent') {
     global $db;
+    $allowed = ['secondary_parent', 'family_member', 'caregiver'];
+    if (!in_array($roleType, $allowed)) $roleType = 'family_member';
     try {
         $db->beginTransaction();
-        
-        // Create secondary user
-        $hashedPassword = password_hash($secondary_password, PASSWORD_DEFAULT);
-        $stmt = $db->prepare("INSERT INTO users (username, password, role, name, is_secondary) VALUES (:username, :password, 'parent', :name, 1)");
-        $stmt->execute([
-            ':username' => $secondary_username,
-            ':password' => $hashedPassword,
-            ':name' => $secondary_name
-        ]);
-        $secondary_id = $db->lastInsertId();
 
-        // Link in family_links
-        $stmt = $db->prepare("INSERT INTO family_links (main_parent_id, linked_user_id, role_type) VALUES (:main_id, :linked_id, 'secondary_parent')");
+        // Map roleType to users.role
+        $mappedRole = ($roleType === 'caregiver') ? 'caregiver' : 'family_member';
+
+        $hashedPassword = password_hash($password, PASSWORD_DEFAULT);
+        $stmt = $db->prepare("INSERT INTO users (username, password, role, name) VALUES (:username, :password, :role, :name)");
+        $stmt->execute([
+            ':username' => $username,
+            ':password' => $hashedPassword,
+            ':role' => $mappedRole,
+            ':name' => $name
+        ]);
+        $linked_id = $db->lastInsertId();
+
+        // Link in family_links with role_type
+        $stmt = $db->prepare("INSERT INTO family_links (main_parent_id, linked_user_id, role_type) VALUES (:main_id, :linked_id, :role_type)");
         $stmt->execute([
             ':main_id' => $main_parent_id,
-            ':linked_id' => $secondary_id
+            ':linked_id' => $linked_id,
+            ':role_type' => $roleType
         ]);
 
         $db->commit();
-        return $secondary_id;
+        return $linked_id;
     } catch (PDOException $e) {
         $db->rollBack();
-        error_log("Failed to add secondary parent: " . $e->getMessage());
+        error_log("Failed to add linked user: " . $e->getMessage());
         return false;
     }
 }
@@ -764,7 +822,7 @@ try {
         id INT AUTO_INCREMENT PRIMARY KEY,
         username VARCHAR(50) NOT NULL UNIQUE,
         password VARCHAR(255) NOT NULL,
-        role ENUM('parent', 'child') NOT NULL,
+        role ENUM('main_parent', 'family_member', 'caregiver', 'child') NOT NULL,
         is_secondary TINYINT(1) DEFAULT 0
     )";
     $db->exec($sql);
@@ -937,7 +995,7 @@ try {
         id INT AUTO_INCREMENT PRIMARY KEY,
         main_parent_id INT NOT NULL,
         linked_user_id INT NOT NULL,
-        role_type ENUM('child', 'secondary_parent') NOT NULL,
+        role_type ENUM('child', 'secondary_parent', 'family_member', 'caregiver') NOT NULL,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (main_parent_id) REFERENCES users(id) ON DELETE CASCADE,
         FOREIGN KEY (linked_user_id) REFERENCES users(id) ON DELETE CASCADE

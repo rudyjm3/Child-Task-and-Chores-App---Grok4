@@ -57,7 +57,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             $message = "Failed to complete task.";
         }
-    } elseif (isset($_POST['approve_task']) && $_SESSION['role'] === 'parent') {
+    } elseif (isset($_POST['approve_task']) && isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id']) && canAddEditChild($_SESSION['user_id'])) {
         $task_id = filter_input(INPUT_POST, 'task_id', FILTER_VALIDATE_INT);
         if (approveTask($task_id)) {
             $message = "Task approved!";
@@ -130,10 +130,10 @@ $approved_tasks = array_filter($tasks, function($t) { return $t['status'] === 'a
         }
         /* Overdue styles (role-specific colors for autism-friendliness) */
         .overdue {
-            border-left: 5px solid <?php echo ($_SESSION['role'] === 'parent') ? '#d9534f' : '#ff9900'; ?>; /* Red for parent, orange for child */
+            border-left: 5px solid <?php echo (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) ? '#d9534f' : '#ff9900'; ?>; /* Red for parent/family/caregiver, orange for child */
         }
         .overdue-label {
-            background-color: <?php echo ($_SESSION['role'] === 'parent') ? '#d9534f' : '#ff9900'; ?>;
+            background-color: <?php echo (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) ? '#d9534f' : '#ff9900'; ?>;
             color: white;
             padding: 4px 8px;
             border-radius: 4px;
@@ -178,7 +178,7 @@ $approved_tasks = array_filter($tasks, function($t) { return $t['status'] === 'a
     <header>
          <h1>Task Management</h1>
          <p>Welcome, <?php echo htmlspecialchars($_SESSION['username'] ?? 'Unknown User'); ?> (<?php echo htmlspecialchars($_SESSION['role']); ?>)</p>
-         <a href="dashboard_<?php echo $_SESSION['role']; ?>.php">Dashboard</a> | 
+         <a href="dashboard_<?php echo canCreateContent($_SESSION['user_id']) ? 'parent' : 'child'; ?>.php">Dashboard</a> | 
          <a href="goal.php">Goals</a> | 
          <a href="routine.php">Routines</a> |
          <a href="profile.php">Profile</a> | 
@@ -186,7 +186,7 @@ $approved_tasks = array_filter($tasks, function($t) { return $t['status'] === 'a
     </header>
     <main>
         <?php if (isset($message)) echo "<p>$message</p>"; ?>
-        <?php if ($_SESSION['role'] === 'parent'): ?>
+        <?php if (canCreateContent($_SESSION['user_id']) && canAddEditChild($_SESSION['user_id'])): ?>
             <div class="task-form">
                 <h2>Create Task</h2>
                 <form method="POST" action="task.php" enctype="multipart/form-data">
@@ -235,7 +235,7 @@ $approved_tasks = array_filter($tasks, function($t) { return $t['status'] === 'a
             </div>
         <?php endif; ?>
         <div class="task-list">
-            <h2><?php echo ($_SESSION['role'] === 'parent') ? 'Created Tasks' : 'Assigned Tasks'; ?></h2>
+            <h2><?php echo (canCreateContent($_SESSION['user_id'])) ? 'Created Tasks' : 'Assigned Tasks'; ?></h2>
             <?php if (empty($tasks)): ?>
                 <p>No tasks available.</p>
             <?php else: ?>
@@ -263,14 +263,14 @@ $approved_tasks = array_filter($tasks, function($t) { return $t['status'] === 'a
                             <?php elseif ($task['timing_mode'] === 'suggested'): ?>
                                 <p>Suggested Time: 10min (guideline)</p>
                             <?php endif; ?>
-                            <?php if ($_SESSION['role'] === 'child'): ?>
+                                <?php if (!canCreateContent($_SESSION['user_id'])): ?>
                                 <form method="POST" action="task.php" enctype="multipart/form-data">
                                     <input type="hidden" name="task_id" value="<?php echo $task['id']; ?>">
                                     <input type="file" name="photo_proof">
                                     <button type="submit" name="complete_task">Finish Task</button>
                                 </form>
                             <?php endif; ?>
-                            <?php if ($_SESSION['role'] === 'parent'): ?>
+                                <?php if (canCreateContent($_SESSION['user_id']) && canAddEditChild($_SESSION['user_id'])): ?>
                                 <div class="edit-delete">
                                     <a href="edit_task.php?id=<?php echo $task['id']; ?>">Edit</a>
                                     <a href="delete_task.php?id=<?php echo $task['id']; ?>">Delete</a>
@@ -292,7 +292,7 @@ $approved_tasks = array_filter($tasks, function($t) { return $t['status'] === 'a
                             <p>Category: <?php echo htmlspecialchars($task['category']); ?></p>
                             <p>Task Description: <?php echo htmlspecialchars($task['description']); ?></p>
                             <p>Timing Mode: <?php echo htmlspecialchars($task['timing_mode']); ?></p>
-                            <?php if ($_SESSION['role'] === 'parent'): ?>
+                                <?php if (canCreateContent($_SESSION['user_id']) && canAddEditChild($_SESSION['user_id'])): ?>
                                 <form method="POST" action="task.php">
                                     <input type="hidden" name="task_id" value="<?php echo $task['id']; ?>">
                                     <button type="submit" name="approve_task">Approve Task</button>

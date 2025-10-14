@@ -14,7 +14,7 @@ if (!isset($_SESSION['user_id'])) {
     exit;
 }
 
-$routine_tasks = ($_SESSION['role'] === 'parent') ? getRoutineTasks($_SESSION['user_id']) : [];
+$routine_tasks = (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) ? getRoutineTasks($_SESSION['user_id']) : [];
 $routines = getRoutines($_SESSION['user_id']);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -74,7 +74,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             $message = "Failed to complete routine (ensure all tasks are approved).";
         }
-    } elseif (isset($_POST['delete_routine']) && $_SESSION['role'] === 'parent') {
+    } elseif (isset($_POST['delete_routine']) && isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
         $routine_id = filter_input(INPUT_POST, 'routine_id', FILTER_VALIDATE_INT);
         if (deleteRoutine($routine_id, $_SESSION['user_id'])) {
             $message = "Routine deleted!";
@@ -82,7 +82,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             $message = "Failed to delete routine.";
         }
-    } elseif (isset($_POST['delete_routine_task']) && $_SESSION['role'] === 'parent') {
+    } elseif (isset($_POST['delete_routine_task']) && isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
         $routine_task_id = filter_input(INPUT_POST, 'routine_task_id', FILTER_VALIDATE_INT);
         if (deleteRoutineTask($routine_task_id, $_SESSION['user_id'])) {
             $message = "Routine Task deleted!";
@@ -122,7 +122,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <script>
         // JS for drag-and-drop reorder (parent view)
         document.addEventListener('DOMContentLoaded', function() {
-            <?php if ($_SESSION['role'] === 'parent'): ?>
+            <?php if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])): ?>
                 <?php foreach ($routines as $routine): ?>
                     new Sortable(document.getElementById('checklist-<?php echo $routine['id']; ?>'), {
                         animation: 150,
@@ -203,7 +203,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </header>
     <main>
         <?php if (isset($message)) echo "<p>$message</p>"; ?>
-        <?php if ($_SESSION['role'] === 'parent'): ?>
+        <?php if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])): ?>
             <div class="routine-form">
                 <h2>Create Routine</h2>
                 <form method="POST" action="routine.php">
@@ -322,7 +322,7 @@ foreach ($children as $child): ?>
                                 <button type="submit" name="complete_routine" class="button">Complete Routine</button>
                             </form>
                         <?php endif; ?>
-                        <?php if ($_SESSION['role'] === 'parent'): ?>
+                        <?php if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])): ?>
                             <form method="POST" action="routine.php">
                                 <input type="hidden" name="routine_id" value="<?php echo $routine['id']; ?>">
                                 <input type="text" name="title" value="<?php echo htmlspecialchars($routine['title']); ?>" placeholder="New Title">
