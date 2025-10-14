@@ -101,7 +101,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $message = "Failed to add child. Check for duplicate username.";
         }
     } elseif (isset($_POST['add_new_user'])) {
-        $name = filter_input(INPUT_POST, 'secondary_name', FILTER_SANITIZE_STRING);
+        $first_name = filter_input(INPUT_POST, 'secondary_first_name', FILTER_SANITIZE_STRING);
+        $last_name = filter_input(INPUT_POST, 'secondary_last_name', FILTER_SANITIZE_STRING);
+        $name = trim($first_name . ' ' . $last_name);
         $username = filter_input(INPUT_POST, 'secondary_username', FILTER_SANITIZE_STRING);
         $password = filter_input(INPUT_POST, 'secondary_password', FILTER_SANITIZE_STRING);
         $role_type = filter_input(INPUT_POST, 'role_type', FILTER_SANITIZE_STRING);
@@ -370,8 +372,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <h3>Add Family Member/Caregiver</h3>
             <form method="POST" action="dashboard_parent.php">
                <div class="form-group">
-                  <label for="secondary_name">Full Name:</label>
-                  <input type="text" id="secondary_name" name="secondary_name" required placeholder="Enter full name">
+                  <label for="secondary_first_name">First Name:</label>
+                  <input type="text" id="secondary_first_name" name="secondary_first_name" required placeholder="Enter first name">
+               </div>
+               <div class="form-group">
+                  <label for="secondary_last_name">Last Name:</label>
+                  <input type="text" id="secondary_last_name" name="secondary_last_name" required placeholder="Enter last name">
                </div>
                <div class="form-group">
                   <label for="secondary_username">Username (for login):</label>
