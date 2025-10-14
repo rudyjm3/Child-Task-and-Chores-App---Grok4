@@ -16,16 +16,23 @@ function calculateAge($birthday) {
     return $age;
 }
 
-// Register a new user (revised for name/gender)
-function registerUser($username, $password, $role, $name = null, $gender = null) {
+// Update database schema for first/last name
+$db->exec("ALTER TABLE users 
+    ADD COLUMN IF NOT EXISTS first_name VARCHAR(50) DEFAULT NULL,
+    ADD COLUMN IF NOT EXISTS last_name VARCHAR(50) DEFAULT NULL");
+
+// Register a new user (revised for first/last name and gender)
+function registerUser($username, $password, $role, $first_name = null, $last_name = null, $gender = null) {
     global $db;
     $hashedPassword = password_hash($password, PASSWORD_DEFAULT);
-    $stmt = $db->prepare("INSERT INTO users (username, password, role, name, gender) VALUES (:username, :password, :role, :name, :gender)");
+    $stmt = $db->prepare("INSERT INTO users (username, password, role, first_name, last_name, gender) 
+                         VALUES (:username, :password, :role, :first_name, :last_name, :gender)");
     return $stmt->execute([
         ':username' => $username,
         ':password' => $hashedPassword,
         ':role' => $role,
-        ':name' => $name,
+        ':first_name' => $first_name,
+        ':last_name' => $last_name,
         ':gender' => $gender
     ]);
 }
@@ -94,19 +101,20 @@ function canAddEditFamilyMember($user_id) {
 }
 
 // Revised: Create a child profile (now auto-creates child user and links, with name)
-function createChildProfile($parent_user_id, $child_name, $child_username, $child_password, $birthday, $avatar, $gender) {
+function createChildProfile($parent_user_id, $first_name, $last_name, $child_username, $child_password, $birthday, $avatar, $gender) {
     global $db;
     try {
         $db->beginTransaction();
         
         // Create child user
         $hashedChildPassword = password_hash($child_password, PASSWORD_DEFAULT);
-        $stmt = $db->prepare("INSERT INTO users (username, password, role, name, gender) 
-                             VALUES (:username, :password, 'child', :name, :gender)");
+        $stmt = $db->prepare("INSERT INTO users (username, password, role, first_name, last_name, gender) 
+                             VALUES (:username, :password, 'child', :first_name, :last_name, :gender)");
         $stmt->execute([
             ':username' => $child_username,
             ':password' => $hashedChildPassword,
-            ':name' => $child_name,
+            ':first_name' => $first_name,
+            ':last_name' => $last_name,
             ':gender' => $gender
         ]);
         $child_user_id = $db->lastInsertId();
@@ -117,7 +125,7 @@ function createChildProfile($parent_user_id, $child_name, $child_username, $chil
         $stmt->execute([
             ':child_user_id' => $child_user_id,
             ':parent_id' => $parent_user_id,
-            ':child_name' => $child_name,
+            ':child_name' => $first_name . ' ' . $last_name,
             ':birthday' => $birthday,
             ':avatar' => $avatar
         ]);
@@ -182,22 +190,56 @@ function updateUserPassword($user_id, $new_password) {
 }
 
 // Revised: Update child profile (avatar, age, name)
-function updateChildProfile($child_user_id, $child_name, $birthday, $avatar) {
+function updateChildProfile($child_user_id, $first_name, $last_name, $birthday, $avatar) {
     global $db;
     $age = calculateAge($birthday);
-    $stmt = $db->prepare("UPDATE child_profiles 
-                         SET child_name = :child_name, 
-                             birthday = :birthday,
-                             age = :age,
-                             avatar = :avatar 
-                         WHERE child_user_id = :child_id");
-    $stmt->execute([
-        ':child_name' => $child_name,
-        ':birthday' => $birthday,
-        ':age' => $age,
-        ':avatar' => $avatar,
-        ':child_id' => $child_user_id
-    ]);
+    try {
+        $db->beginTransaction();
+        
+        // Update child_profiles table
+        $stmt = $db->prepare("UPDATE child_profiles 
+                             SET child_name = :child_name, 
+                                 birthday = :birthday,
+                                 age = :age,
+                                 avatar = :avatar 
+                             WHERE child_user_id = :child_id");
+        $stmt->execute([
+            ':child_name' => $first_name . ' ' . $last_name,
+            ':birthday' => $birthday,
+            ':age' => $age,
+            ':avatar' => $avatar,
+            ':child_id' => $child_user_id
+        ]);
+        
+        // Also update users table
+        $stmt = $db->prepare("UPDATE users 
+                             SET first_name = :first_name,
+                                 last_name = :last_name 
+                             WHERE id = :user_id");
+        $stmt->execute([
+            ':first_name' => $first_name,
+            ':last_name' => $last_name,
+            ':user_id' => $child_user_id
+        ]);
+
+        // Update users table
+        $stmt = $db->prepare("UPDATE users 
+                             SET first_name = :first_name,
+                                 last_name = :last_name
+                             WHERE id = :id");
+        $stmt->execute([
+            ':first_name' => $first_name,
+            ':last_name' => $last_name,
+            ':id' => $child_user_id
+        ]);
+
+        $db->commit();
+        return true;
+    } catch (Exception $e) {
+        $db->rollBack();
+        error_log("Failed to update child profile: " . $e->getMessage());
+        return false;
+    }
     // Update users table name too
     $stmt = $db->prepare("UPDATE users SET name = :name WHERE id = :id");
     return $stmt->execute([

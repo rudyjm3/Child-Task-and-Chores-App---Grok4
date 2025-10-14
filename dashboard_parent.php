@@ -64,7 +64,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $message = "Failed to $action goal.";
         }
     } elseif (isset($_POST['add_child'])) {
-        $child_name = filter_input(INPUT_POST, 'child_name', FILTER_SANITIZE_STRING);
+        // Get and split child's name into first and last name
+        $first_name = filter_input(INPUT_POST, 'first_name', FILTER_SANITIZE_STRING);
+        $last_name = filter_input(INPUT_POST, 'last_name', FILTER_SANITIZE_STRING);
         $child_username = filter_input(INPUT_POST, 'child_username', FILTER_SANITIZE_STRING);
         $child_password = filter_input(INPUT_POST, 'child_password', FILTER_SANITIZE_STRING);
         $birthday = filter_input(INPUT_POST, 'birthday', FILTER_SANITIZE_STRING);
@@ -81,19 +83,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $file_name = uniqid() . '_' . pathinfo($_FILES['avatar_upload']['name'], PATHINFO_FILENAME) . '.' . $file_ext;
             $upload_path = 'uploads/avatars/' . $file_name;
             if (move_uploaded_file($_FILES['avatar_upload']['tmp_name'], __DIR__ . '/' . $upload_path)) {
-    // Resize image (GD library)
-    $image = imagecreatefromstring(file_get_contents(__DIR__ . '/' . $upload_path));
-    $resized = imagecreatetruecolor(100, 100);
-    imagecopyresampled($resized, $image, 0, 0, 0, 0, 100, 100, imagesx($image), imagesy($image));
-    imagejpeg($resized, __DIR__ . '/' . $upload_path, 90);
-    imagedestroy($image);
-    imagedestroy($resized);
-    $avatar = $upload_path; // Use uploaded path
-} else {
-    $message = "Upload failed; using default avatar.";
-}
+                // Resize image (GD library)
+                $image = imagecreatefromstring(file_get_contents(__DIR__ . '/' . $upload_path));
+                $resized = imagecreatetruecolor(100, 100);
+                imagecopyresampled($resized, $image, 0, 0, 0, 0, 100, 100, imagesx($image), imagesy($image));
+                imagejpeg($resized, __DIR__ . '/' . $upload_path, 90);
+                imagedestroy($image);
+                imagedestroy($resized);
+                $avatar = $upload_path; // Use uploaded path
+            } else {
+                $message = "Upload failed; using default avatar.";
+            }
         }
-        if (createChildProfile($_SESSION['user_id'], $child_name, $child_username, $child_password, $birthday, $avatar, $gender)) {
+        if (createChildProfile($_SESSION['user_id'], $first_name, $last_name, $child_username, $child_password, $birthday, $avatar, $gender)) {
             $message = "Child added successfully! Username: $child_username, Password: $child_password (share securely).";
         } else {
             $message = "Failed to add child. Check for duplicate username.";
@@ -321,8 +323,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <h3>Add Child</h3>
             <form method="POST" action="dashboard_parent.php" enctype="multipart/form-data">
                <div class="form-group">
-                  <label for="child_name">Child's Name:</label>
-                  <input type="text" id="child_name" name="child_name" required>
+                  <label for="first_name">First Name:</label>
+                  <input type="text" id="first_name" name="first_name" required>
+               </div>
+               <div class="form-group">
+                  <label for="last_name">Last Name:</label>
+                  <input type="text" id="last_name" name="last_name" required>
                </div>
                <div class="form-group">
                   <label for="child_username">Username (for login):</label>

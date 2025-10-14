@@ -40,8 +40,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $message = "Failed to update password.";
         }
     } elseif (isset($_POST['update_child_profile'])) {
-        $child_name = filter_input(INPUT_POST, 'child_name', FILTER_SANITIZE_STRING);
-        $age = filter_input(INPUT_POST, 'age', FILTER_VALIDATE_INT);
+        $first_name = filter_input(INPUT_POST, 'first_name', FILTER_SANITIZE_STRING);
+        $last_name = filter_input(INPUT_POST, 'last_name', FILTER_SANITIZE_STRING);
+        $birthday = filter_input(INPUT_POST, 'birthday', FILTER_SANITIZE_STRING);
         $avatar = filter_input(INPUT_POST, 'avatar', FILTER_SANITIZE_STRING);
         // Handle upload (for parent editing child or child self-upload)
         $upload_path = $avatar; // Default to selected avatar
@@ -71,19 +72,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             }
         }
-        if (updateChildProfile($user_id, $child_name, $age, $upload_path)) {
+        if (updateChildProfile($user_id, $first_name, $last_name, $birthday, $upload_path)) {
             $message = "Profile updated successfully!";
-            $_SESSION['name'] = $child_name; // Update session if self
+            $_SESSION['name'] = $first_name; // Update session with first name if self
         } else {
             $message = "Failed to update profile.";
         }
     } elseif (isset($_POST['update_parent_profile'])) {
-        $name = filter_input(INPUT_POST, 'name', FILTER_SANITIZE_STRING);
+        $first_name = filter_input(INPUT_POST, 'first_name', FILTER_SANITIZE_STRING);
+        $last_name = filter_input(INPUT_POST, 'last_name', FILTER_SANITIZE_STRING);
         $gender = filter_input(INPUT_POST, 'gender', FILTER_SANITIZE_STRING);
-        $stmt = $db->prepare("UPDATE users SET name = :name, gender = :gender WHERE id = :id");
-        if ($stmt->execute([':name' => $name, ':gender' => $gender, ':id' => $user_id])) {
+        $stmt = $db->prepare("UPDATE users SET first_name = :first_name, last_name = :last_name, gender = :gender WHERE id = :id");
+        if ($stmt->execute([
+            ':first_name' => $first_name,
+            ':last_name' => $last_name,
+            ':gender' => $gender,
+            ':id' => $user_id
+        ])) {
             $message = "Profile updated successfully!";
-            $_SESSION['name'] = $name;
+            $_SESSION['name'] = $first_name; // Only use first name for welcome messages
         } else {
             $message = "Failed to update profile.";
         }
@@ -116,12 +123,50 @@ if ($role === 'child' || $edit_type === 'child') {
         .avatar-options { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
         .avatar-option { width: 60px; height: 60px; border-radius: 50%; cursor: pointer; border: 2px solid #ddd; }
         .avatar-option.selected { border-color: #4caf50; }
-        .mother-badge { background: #e91e63; color: white; padding: 2px 6px; border-radius: 3px; font-size: 0.8em; }
-        .father-badge { background: #2196f3; color: white; padding: 2px 6px; border-radius: 3px; font-size: 0.8em; }
-        .child-profile { background: linear-gradient(135deg, #e3f2fd, #f3e5f5); }
-        .parent-profile { background: #f9f9f9; }
-        .editing-child { border: 2px solid #ff9800; }
-        @media (max-width: 768px) { .avatar-options { gap: 5px; } .avatar-option { width: 50px; height: 50px; } }
+        .mother-badge, .father-badge { 
+            background: #4caf50; 
+            color: white; 
+            padding: 2px 8px; 
+            border-radius: 4px; 
+            font-size: 0.9em; 
+            margin-left: 8px;
+        }
+        .child-profile { 
+            background: linear-gradient(135deg, #e3f2fd, #f3e5f5);
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .parent-profile { 
+            background: #f9f9f9;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .editing-child { 
+            border: 2px solid #ff9800;
+            position: relative;
+        }
+        .editing-child::before {
+            content: 'Editing Child Profile';
+            position: absolute;
+            top: -12px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #ff9800;
+            color: white;
+            padding: 2px 10px;
+            border-radius: 4px;
+            font-size: 0.8em;
+        }
+        .profile-name {
+            font-size: 1.2em;
+            font-weight: 500;
+            margin: 15px 0;
+        }
+        @media (max-width: 768px) { 
+            .avatar-options { gap: 5px; } 
+            .avatar-option { width: 50px; height: 50px; } 
+            .profile-form { padding: 15px; }
+        }
     </style>
     <script>
         // JS for avatar selection
@@ -144,16 +189,24 @@ if ($role === 'child' || $edit_type === 'child') {
         <?php if (isset($message)) echo "<p>$message</p>"; ?>
         <?php if ($role === 'child' || $edit_type === 'child'): ?>
             <div class="profile-form child-profile <?php if ($edit_type === 'child') echo 'editing-child'; ?>">
-                <h2><?php if ($edit_type === 'child') echo 'Edit Child: '; ?><?php echo htmlspecialchars($profile['child_name'] ?? $user['name'] ?? $user['username']); ?>'s Profile</h2>
+                <h2><?php if ($edit_type === 'child') echo 'Edit Child: '; ?><?php echo htmlspecialchars($profile['child_name'] ?? $user['first_name'] ?? $user['username']); ?>'s Profile</h2>
                 <img id="avatar-preview" src="<?php echo htmlspecialchars($profile['avatar'] ?? 'default-avatar.png'); ?>" alt="Avatar" class="avatar-preview">
                 <form method="POST" action="profile.php<?php if ($edit_type === 'child') echo '?user_id=' . $user_id . '&type=child'; ?>" enctype="multipart/form-data">
                     <div class="form-group">
-                        <label for="child_name">Name:</label>
-                        <input type="text" id="child_name" name="child_name" value="<?php echo htmlspecialchars($profile['child_name'] ?? $user['name'] ?? ''); ?>">
+                        <label for="first_name">First Name:</label>
+                        <input type="text" id="first_name" name="first_name" value="<?php echo htmlspecialchars($profile['first_name'] ?? $user['first_name'] ?? ''); ?>" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="last_name">Last Name:</label>
+                        <input type="text" id="last_name" name="last_name" value="<?php echo htmlspecialchars($profile['last_name'] ?? $user['last_name'] ?? ''); ?>" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="birthday">Birthday:</label>
+                        <input type="date" id="birthday" name="birthday" value="<?php echo htmlspecialchars($profile['birthday'] ?? ''); ?>" required>
                     </div>
                     <div class="form-group">
                         <label for="age">Age:</label>
-                        <input type="number" id="age" name="age" min="1" max="18" value="<?php echo htmlspecialchars($profile['age'] ?? ''); ?>">
+                        <input type="number" id="age" name="age" min="1" max="18" value="<?php echo htmlspecialchars($profile['age'] ?? ''); ?>" readonly>
                     </div>
                     <div class="form-group">
                         <label>Avatar:</label>
@@ -183,18 +236,25 @@ if ($role === 'child' || $edit_type === 'child') {
         <?php elseif ($role === 'parent'): ?>
             <div class="profile-form parent-profile">
                 <h2>Your Profile</h2>
-                <p>Name: <?php echo htmlspecialchars($user['name'] ?? $user['username']); ?> <?php if ($user['gender'] == 'female') echo '<span class="mother-badge">Mother</span>'; elseif ($user['gender'] == 'male') echo '<span class="father-badge">Father</span>'; ?></p>
+                <p class="profile-name"><?php echo htmlspecialchars($user['first_name'] . ' ' . $user['last_name'] ?? $user['username']); ?> 
+                   <?php if ($user['gender'] == 'female') echo '<span class="mother-badge">Parent</span>'; 
+                         elseif ($user['gender'] == 'male') echo '<span class="father-badge">Parent</span>'; ?>
+                </p>
                 <form method="POST" action="profile.php">
                     <div class="form-group">
-                        <label for="name">Name:</label>
-                        <input type="text" id="name" name="name" value="<?php echo htmlspecialchars($user['name'] ?? ''); ?>">
+                        <label for="first_name">First Name:</label>
+                        <input type="text" id="first_name" name="first_name" value="<?php echo htmlspecialchars($user['first_name'] ?? ''); ?>" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="last_name">Last Name:</label>
+                        <input type="text" id="last_name" name="last_name" value="<?php echo htmlspecialchars($user['last_name'] ?? ''); ?>" required>
                     </div>
                     <div class="form-group">
                         <label for="gender">Gender:</label>
                         <select id="gender" name="gender">
                             <option value="">Select</option>
-                            <option value="male" <?php if ($user['gender'] == 'male') echo 'selected'; ?>>Male (Father)</option>
-                            <option value="female" <?php if ($user['gender'] == 'female') echo 'selected'; ?>>Female (Mother)</option>
+                            <option value="male" <?php if ($user['gender'] == 'male') echo 'selected'; ?>>Male</option>
+                            <option value="female" <?php if ($user['gender'] == 'female') echo 'selected'; ?>>Female</option>
                         </select>
                     </div>
                     <button type="submit" name="update_parent_profile" class="button">Update Profile</button>
