@@ -16,6 +16,15 @@ if (!isset($_SESSION['user_id']) || !canCreateContent($_SESSION['user_id'])) {
 // Set role_type for permission checks
 $role_type = getUserRole($_SESSION['user_id']);
 
+if ($role_type === 'family_member') {
+    $stmt = $db->prepare("SELECT role_type FROM family_links WHERE linked_user_id = :id");
+    $stmt->execute([':id' => $_SESSION['user_id']]);
+    $linked_role_type = $stmt->fetchColumn();
+    if ($linked_role_type) {
+        $role_type = $linked_role_type;
+    }
+}
+
 // Set username and name in session if not already set
 if (!isset($_SESSION['username']) || !isset($_SESSION['name'])) {
     $userStmt = $db->prepare("SELECT username, name FROM users WHERE id = :id");
