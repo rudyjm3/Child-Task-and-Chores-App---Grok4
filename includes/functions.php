@@ -3,7 +3,7 @@
 // Purpose: Centralize common operations for maintainability
 // Inputs: None initially
 // Outputs: Functions for app logic
-// Version: 3.5.1 (Minor: Added name/gender to users, name display in queries, caregiver child access, upload handling)
+// Version: 3.5.2 (Fixed addLinkedUser to use first/last name instead of name, for consistency with child profiles)
 
 require_once __DIR__ . '/db_connect.php';
 
@@ -141,7 +141,7 @@ function createChildProfile($parent_user_id, $first_name, $last_name, $child_use
 
 // New: Add linked user (secondary parent, family member, or caregiver)
 // $roleType should be one of: 'secondary_parent', 'family_member', 'caregiver'
-function addLinkedUser($main_parent_id, $username, $password, $name, $roleType = 'secondary_parent') {
+function addLinkedUser($main_parent_id, $username, $password, $first_name, $last_name, $roleType = 'secondary_parent') {
     global $db;
     $allowed = ['secondary_parent', 'family_member', 'caregiver'];
     if (!in_array($roleType, $allowed)) $roleType = 'family_member';
@@ -152,12 +152,13 @@ function addLinkedUser($main_parent_id, $username, $password, $name, $roleType =
         $mappedRole = ($roleType === 'caregiver') ? 'caregiver' : 'family_member';
 
         $hashedPassword = password_hash($password, PASSWORD_DEFAULT);
-        $stmt = $db->prepare("INSERT INTO users (username, password, role, name) VALUES (:username, :password, :role, :name)");
+        $stmt = $db->prepare("INSERT INTO users (username, password, role, first_name, last_name) VALUES (:username, :password, :role, :first_name, :last_name)");
         $stmt->execute([
             ':username' => $username,
             ':password' => $hashedPassword,
             ':role' => $mappedRole,
-            ':name' => $name
+            ':first_name' => $first_name,
+            ':last_name' => $last_name
         ]);
         $linked_id = $db->lastInsertId();
 
@@ -272,6 +273,8 @@ function getDashboardData($user_id) {
       if ($main_parent_from_link) {
          $main_parent_id = $main_parent_from_link;
       }
+
+      // ******
 
         // Revised: Use name display
         $stmt = $db->prepare("SELECT cp.id, cp.child_user_id, COALESCE(u.name, u.username) as display_name, cp.avatar, cp.age, cp.child_name
@@ -886,7 +889,7 @@ try {
     $db->exec($sql);
     error_log("Created/verified users table successfully");
 
-    // Add name and gender columns to users if not exists
+    // Add name column to users if not exists
    $db->exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS name VARCHAR(50) DEFAULT NULL");
    $db->exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS gender ENUM('male', 'female') DEFAULT NULL");
    error_log("Added/verified name and gender columns in users");
@@ -910,7 +913,7 @@ try {
    $db->exec("ALTER TABLE child_profiles MODIFY COLUMN IF EXISTS avatar VARCHAR(255)");
    error_log("Updated avatar column size to VARCHAR(255)");
 
-   // Add child_name column if not exists (for existing databases)
+   // Add child_name column column if not exists (for existing databases)
    $db->exec("ALTER TABLE child_profiles ADD COLUMN IF NOT EXISTS child_name VARCHAR(50) DEFAULT NULL");
    error_log("Added/verified child_name column in child_profiles");
 
@@ -1091,7 +1094,7 @@ error_log("Added/verified created_by in routines");
     throw $e; // Re-throw to preserve the original error handling
 }
 
-// In functions.php, modify the child_profiles table schema:
+// Modify the child_profiles table schema:
 // Add birthday column if it doesn't exist
 $sql = "ALTER TABLE child_profiles 
         ADD COLUMN IF NOT EXISTS birthday DATE DEFAULT NULL,

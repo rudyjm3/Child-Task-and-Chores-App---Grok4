@@ -3,7 +3,7 @@
 // Purpose: Display parent dashboard with child overview and management links
 // Inputs: Session data
 // Outputs: Dashboard interface
-// Version: 3.5.1 (Age number input, photo upload save/resize, name display, caregiver child access)
+// Version: 3.5.2 (Fixed family list display for non-main parents by fetching correct main_parent_id; updated name display to use CONCAT(first_name, ' ', last_name))
 
 require_once __DIR__ . '/includes/functions.php';
 
@@ -103,13 +103,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif (isset($_POST['add_new_user'])) {
         $first_name = filter_input(INPUT_POST, 'secondary_first_name', FILTER_SANITIZE_STRING);
         $last_name = filter_input(INPUT_POST, 'secondary_last_name', FILTER_SANITIZE_STRING);
-        $name = trim($first_name . ' ' . $last_name);
         $username = filter_input(INPUT_POST, 'secondary_username', FILTER_SANITIZE_STRING);
         $password = filter_input(INPUT_POST, 'secondary_password', FILTER_SANITIZE_STRING);
         $role_type = filter_input(INPUT_POST, 'role_type', FILTER_SANITIZE_STRING);
         
         if ($role_type && in_array($role_type, ['secondary_parent', 'family_member', 'caregiver'])) {
-            if (addLinkedUser($_SESSION['user_id'], $username, $password, $name, $role_type)) {
+            if (addLinkedUser($_SESSION['user_id'], $username, $password, $first_name, $last_name, $role_type)) {
                 $role_display = str_replace('_', ' ', ucwords($role_type));
                 $message = "$role_display added successfully! Username: $username";
             } else {
@@ -253,15 +252,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
          <?php endif; ?>
       </div>
       <div class="family-members-list">
+         <?php
+         // Determine the main_parent_id
+         $main_parent_id = $_SESSION['user_id'];
+         if ($role_type !== 'main_parent') {
+             $stmt = $db->prepare("SELECT main_parent_id FROM family_links WHERE linked_user_id = :linked_id");
+             $stmt->execute([':linked_id' => $_SESSION['user_id']]);
+             $fetched_main_id = $stmt->fetchColumn();
+             if ($fetched_main_id) {
+                 $main_parent_id = $fetched_main_id;
+             } else {
+                 error_log("No main_parent_id found for linked user {$_SESSION['user_id']}");
+             }
+         }
+         ?>
          <h2>Family Members</h2>
          <?php
-         $stmt = $db->prepare("SELECT u.id, u.name, u.username, fl.role_type 
-                              FROM users u 
-                              JOIN family_links fl ON u.id = fl.linked_user_id 
-                              WHERE fl.main_parent_id = :main_parent_id 
-                              AND fl.role_type IN ('secondary_parent', 'family_member') 
-                              ORDER BY fl.role_type, u.name");
-         $stmt->execute([':main_parent_id' => $_SESSION['user_id']]);
+         $stmt = $db->prepare("SELECT u.id, CONCAT(u.first_name, ' ', u.last_name) AS name, u.username, fl.role_type 
+                               FROM users u 
+                               JOIN family_links fl ON u.id = fl.linked_user_id 
+                               WHERE fl.main_parent_id = :main_parent_id 
+                               AND fl.role_type IN ('secondary_parent', 'family_member') 
+                               ORDER BY fl.role_type, u.name");
+         $stmt->execute([':main_parent_id' => $main_parent_id]);
          $family_members = $stmt->fetchAll(PDO::FETCH_ASSOC);
          
          if (!empty($family_members)): ?>
@@ -288,13 +301,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
          <h2>Caregivers</h2>
          <?php
-         $stmt = $db->prepare("SELECT u.id, u.name, u.username, fl.role_type 
-                              FROM users u 
-                              JOIN family_links fl ON u.id = fl.linked_user_id 
-                              WHERE fl.main_parent_id = :main_parent_id 
-                              AND fl.role_type = 'caregiver' 
-                              ORDER BY u.name");
-         $stmt->execute([':main_parent_id' => $_SESSION['user_id']]);
+         $stmt = $db->prepare("SELECT u.id, CONCAT(u.first_name, ' ', u.last_name) AS name, u.username, fl.role_type 
+                               FROM users u 
+                               JOIN family_links fl ON u.id = fl.linked_user_id 
+                               WHERE fl.main_parent_id = :main_parent_id 
+                               AND fl.role_type = 'caregiver' 
+                               ORDER BY u.name");
+         $stmt->execute([':main_parent_id' => $main_parent_id]);
          $caregivers = $stmt->fetchAll(PDO::FETCH_ASSOC);
          
          if (!empty($caregivers)): ?>
@@ -675,7 +688,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       </div>
    </main>
    <footer>
-      <p>Child Task and Chores App - Ver 3.5.1</p>
+      <p>Child Task and Chores App - Ver 3.5.2</p>
    </footer>
 </body>
 </html>
