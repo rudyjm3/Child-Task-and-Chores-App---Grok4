@@ -110,25 +110,31 @@ function createChildProfile($parent_user_id, $first_name, $last_name, $child_use
         $hashedChildPassword = password_hash($child_password, PASSWORD_DEFAULT);
         $stmt = $db->prepare("INSERT INTO users (username, password, role, first_name, last_name, gender) 
                              VALUES (:username, :password, 'child', :first_name, :last_name, :gender)");
-        $stmt->execute([
+        if (!$stmt->execute([
             ':username' => $child_username,
             ':password' => $hashedChildPassword,
             ':first_name' => $first_name,
             ':last_name' => $last_name,
             ':gender' => $gender
-        ]);
+        ])) {
+            $db->rollBack();
+            return false;
+        }
         $child_user_id = $db->lastInsertId();
 
         // Create child profile
         $stmt = $db->prepare("INSERT INTO child_profiles (child_user_id, parent_user_id, child_name, birthday, avatar) 
                              VALUES (:child_user_id, :parent_id, :child_name, :birthday, :avatar)");
-        $stmt->execute([
+        if (!$stmt->execute([
             ':child_user_id' => $child_user_id,
             ':parent_id' => $parent_user_id,
             ':child_name' => $first_name . ' ' . $last_name,
             ':birthday' => $birthday,
             ':avatar' => $avatar
-        ]);
+        ])) {
+            $db->rollBack();
+            return false;
+        }
 
         $db->commit();
         return $child_user_id;
