@@ -159,22 +159,28 @@ function addLinkedUser($main_parent_id, $username, $password, $first_name, $last
 
         $hashedPassword = password_hash($password, PASSWORD_DEFAULT);
         $stmt = $db->prepare("INSERT INTO users (username, password, role, first_name, last_name) VALUES (:username, :password, :role, :first_name, :last_name)");
-        $stmt->execute([
+        if (!$stmt->execute([
             ':username' => $username,
             ':password' => $hashedPassword,
             ':role' => $mappedRole,
             ':first_name' => $first_name,
             ':last_name' => $last_name
-        ]);
+        ])) {
+            $db->rollBack();
+            return false;
+        }
         $linked_id = $db->lastInsertId();
 
         // Link in family_links with role_type
         $stmt = $db->prepare("INSERT INTO family_links (main_parent_id, linked_user_id, role_type) VALUES (:main_id, :linked_id, :role_type)");
-        $stmt->execute([
+        if (!$stmt->execute([
             ':main_id' => $main_parent_id,
             ':linked_id' => $linked_id,
             ':role_type' => $roleType
-        ]);
+        ])) {
+            $db->rollBack();
+            return false;
+        }
 
         $db->commit();
         return $linked_id;
