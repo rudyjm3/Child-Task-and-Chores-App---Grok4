@@ -171,7 +171,7 @@ function addLinkedUser($main_parent_id, $username, $password, $first_name, $last
         }
         $linked_id = $db->lastInsertId();
 
-        // Link in family_links with role_type
+      // Link in family_links with role_type
         $stmt = $db->prepare("INSERT INTO family_links (main_parent_id, linked_user_id, role_type) VALUES (:main_id, :linked_id, :role_type)");
         if (!$stmt->execute([
             ':main_id' => $main_parent_id,
@@ -265,67 +265,58 @@ function updateChildProfile($child_user_id, $first_name, $last_name, $birthday, 
 function getDashboardData($user_id) {
     global $db;
     $data = [];
-    
-    $userStmt = $db->prepare("SELECT role, name FROM users WHERE id = :id");
-    $userStmt->execute([':id' => $user_id]);
-    $role = $userStmt->fetchColumn();
-    if ($role === false) {
-        $role = 'unknown'; // Default if query fails
-        error_log("Warning: No role found for user_id=$user_id, defaulting to 'unknown'");
-    }
 
+    // Normalize role (map legacy 'parent' -> 'main_parent')
+    $role = getUserRole($user_id) ?? 'unknown';
     error_log("Fetching dashboard data for user_id=$user_id, role=$role");
 
-    if ($role === 'parent') {
-        // Check if secondary parent; get main parent ID for shared data
-      $main_parent_id = $user_id;
-      $secondary_stmt = $db->prepare("SELECT main_parent_id FROM family_links WHERE linked_user_id = :user_id AND role_type = 'secondary_parent'");
-      $secondary_stmt->execute([':user_id' => $user_id]);
-      $main_parent_from_link = $secondary_stmt->fetchColumn();
-      if ($main_parent_from_link) {
-         $main_parent_id = $main_parent_from_link;
-      }
+    // Build a unified branch for all parent-like roles
+    if (in_array($role, ['main_parent', 'family_member', 'caregiver'])) {
+        // Determine the main parent id for the current actor
+        $main_parent_id = $user_id;
+        if ($role !== 'main_parent') {
+            $secondary_stmt = $db->prepare("SELECT main_parent_id FROM family_links WHERE linked_user_id = :user_id LIMIT 1");
+            $secondary_stmt->execute([':user_id' => $user_id]);
+            $main_parent_from_link = $secondary_stmt->fetchColumn();
+            if ($main_parent_from_link) {
+                $main_parent_id = $main_parent_from_link;
+            }
+        }
 
-      // ******
-
-        // Revised: Use name display
-        $stmt = $db->prepare("SELECT cp.id, cp.child_user_id, COALESCE(u.name, u.username) as display_name, cp.avatar, cp.age, cp.child_name
-                     FROM child_profiles cp 
-                     JOIN users u ON cp.child_user_id = u.id 
-                     WHERE cp.parent_user_id = :parent_id");
+        // Children for this family
+        $stmt = $db->prepare("SELECT cp.id, cp.child_user_id, COALESCE(CONCAT(u.first_name, ' ', u.last_name), u.name, u.username) AS display_name, cp.avatar, cp.age, cp.child_name
+                              FROM child_profiles cp
+                              JOIN users u ON cp.child_user_id = u.id
+                              WHERE cp.parent_user_id = :parent_id");
         $stmt->execute([':parent_id' => $main_parent_id]);
-        $data['children'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $data['children'] = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
+        // Active rewards for the family
         $stmt = $db->prepare("SELECT id, title, description, point_cost, created_on FROM rewards WHERE parent_user_id = :parent_id AND status = 'available'");
         $stmt->execute([':parent_id' => $main_parent_id]);
-        $data['active_rewards'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $data['active_rewards'] = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
-        $stmt = $db->prepare("SELECT r.id, r.title, r.description, r.point_cost, COALESCE(u.name, u.username) as child_username, r.redeemed_on 
-                     FROM rewards r 
-                     LEFT JOIN users u ON r.redeemed_by = u.id 
-                     WHERE r.redeemed_by = :child_id AND r.status = 'redeemed'");
-        $stmt->execute([':child_id' => $user_id]);
-        $data['redeemed_rewards'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-        $stmt = $db->prepare("SELECT g.id, g.title, g.target_points, g.requested_at, COALESCE(u.name, u.username) as child_username 
-                     FROM goals g 
-                     JOIN child_profiles cp ON g.child_user_id = cp.child_user_id 
-                     JOIN users u ON g.child_user_id = u.id 
-                     WHERE cp.parent_user_id = :parent_id AND g.status = 'pending_approval'");
+        // Pending approvals across this parent's children
+        $stmt = $db->prepare("SELECT g.id, g.title, g.target_points, g.requested_at, COALESCE(CONCAT(u.first_name, ' ', u.last_name), u.name, u.username) AS child_username
+                              FROM goals g
+                              JOIN child_profiles cp ON g.child_user_id = cp.child_user_id
+                              JOIN users u ON g.child_user_id = u.id
+                              WHERE cp.parent_user_id = :parent_id AND g.status = 'pending_approval'");
         $stmt->execute([':parent_id' => $main_parent_id]);
-        $data['pending_approvals'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $data['pending_approvals'] = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
-        // Sum total_points_earned from child_points
+        // Sum total points across children
         $data['total_points_earned'] = 0;
         foreach ($data['children'] as $child) {
             $stmt = $db->prepare("SELECT total_points FROM child_points WHERE child_user_id = :child_id");
             $stmt->execute([':child_id' => $child['child_user_id']]);
-            $data['total_points_earned'] += $stmt->fetchColumn() ?: 0;
+            $data['total_points_earned'] += (int)($stmt->fetchColumn() ?: 0);
         }
 
         $stmt = $db->prepare("SELECT COUNT(*) FROM goals WHERE parent_user_id = :parent_id AND status = 'completed'");
         $stmt->execute([':parent_id' => $main_parent_id]);
-        $data['goals_met'] = $stmt->fetchColumn();
+        $data['goals_met'] = (int)($stmt->fetchColumn() ?: 0);
+
     } elseif ($role === 'child') {
         // Fetch remaining_points from child_points
         $stmt = $db->prepare("SELECT total_points FROM child_points WHERE child_user_id = :child_id");
@@ -1077,17 +1068,17 @@ try {
     $db->exec($sql);
     error_log("Created/verified family_links table successfully");
       
-$db->exec("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS created_by INT NULL");
-error_log("Added/verified created_by in tasks");
+   $db->exec("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS created_by INT NULL");
+   error_log("Added/verified created_by in tasks");
 
-$db->exec("ALTER TABLE rewards ADD COLUMN IF NOT EXISTS created_by INT NULL");
-error_log("Added/verified created_by in rewards");
+   $db->exec("ALTER TABLE rewards ADD COLUMN IF NOT EXISTS created_by INT NULL");
+   error_log("Added/verified created_by in rewards");
 
-$db->exec("ALTER TABLE goals ADD COLUMN IF NOT EXISTS created_by INT NULL");
-error_log("Added/verified created_by in goals");
+   $db->exec("ALTER TABLE goals ADD COLUMN IF NOT EXISTS created_by INT NULL");
+   error_log("Added/verified created_by in goals");
 
-$db->exec("ALTER TABLE routines ADD COLUMN IF NOT EXISTS created_by INT NULL");
-error_log("Added/verified created_by in routines");
+   $db->exec("ALTER TABLE routines ADD COLUMN IF NOT EXISTS created_by INT NULL");
+   error_log("Added/verified created_by in routines");
 
     // Create child_points table if not exists
     $sql = "CREATE TABLE IF NOT EXISTS child_points (
@@ -1098,7 +1089,7 @@ error_log("Added/verified created_by in routines");
     $db->exec($sql);
     error_log("Created/verified child_points table successfully");
 
-    // Note: Pre-population of default Routine Tasks skipped to avoid foreign key constraint violation with parent_user_id = 0.
+            // Note: Pre-population of default Routine Tasks skipped to avoid foreign key constraint violation with parent_user_id = 0.
     // Parents can create initial tasks via the UI.
     error_log("Skipped pre-population of default Routine Tasks to avoid foreign key issues");
 } catch (PDOException $e) {
@@ -1106,7 +1097,25 @@ error_log("Added/verified created_by in routines");
     throw $e; // Re-throw to preserve the original error handling
 }
 
-// Modify the child_profiles table schema:
+try {
+    // Migrate legacy 'parent' roles first to avoid data corruption on ALTER
+    $db->exec("UPDATE users SET role = 'main_parent' WHERE role = 'parent' OR role = '' OR role IS NULL;");
+    error_log("Migrated legacy user roles successfully");
+
+    $db->exec("ALTER TABLE users MODIFY role ENUM('main_parent', 'family_member', 'caregiver', 'child') NOT NULL;");
+    error_log("Modified users role ENUM successfully");
+} catch (PDOException $e) {
+    error_log("Failed to modify users role ENUM: " . $e->getMessage());
+}
+
+try {
+    $db->exec("ALTER TABLE family_links MODIFY role_type ENUM('child', 'secondary_parent', 'family_member', 'caregiver') NOT NULL;");
+    error_log("Modified family_links role_type ENUM successfully");
+} catch (PDOException $e) {
+    error_log("Failed to modify family_links role_type ENUM: " . $e->getMessage());
+}
+
+// In functions.php, modify the child_profiles table schema:
 // Add birthday column if it doesn't exist
 $sql = "ALTER TABLE child_profiles 
         ADD COLUMN IF NOT EXISTS birthday DATE DEFAULT NULL,

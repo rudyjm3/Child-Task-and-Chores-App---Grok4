@@ -12,6 +12,8 @@ if (!isset($_SESSION['user_id'])) {
 }
 
 $role = $_SESSION['role'];
+// Resolve precise role type for permission checks
+$role_type = getUserRole($_SESSION['user_id']);
 
 // Handle GET params for editing child (parent only)
 $edit_user_id = $_SESSION['user_id'];
@@ -26,6 +28,26 @@ if ($role === 'parent' && isset($_GET['type']) && $_GET['type'] === 'child' && i
         $message = "Access denied: Not your child.";
         $edit_user_id = $_SESSION['user_id']; // Fallback
         $edit_type = null;
+    }
+}
+
+// Allow main parent to edit linked adult profiles via ?edit_user=<id>
+if ($role === 'parent' && $role_type === 'main_parent' && isset($_GET['edit_user'])) {
+    $target_id = filter_input(INPUT_GET, 'edit_user', FILTER_VALIDATE_INT);
+    if ($target_id) {
+        // Verify that the target belongs to this family (adult link or child)
+        $ok = false;
+        $chk1 = $db->prepare("SELECT 1 FROM family_links WHERE main_parent_id = :pid AND linked_user_id = :uid LIMIT 1");
+        $chk1->execute([':pid' => $_SESSION['user_id'], ':uid' => $target_id]);
+        if ($chk1->fetchColumn()) { $ok = true; }
+        if (!$ok) {
+            $chk2 = $db->prepare("SELECT 1 FROM child_profiles WHERE parent_user_id = :pid AND child_user_id = :uid LIMIT 1");
+            $chk2->execute([':pid' => $_SESSION['user_id'], ':uid' => $target_id]);
+            if ($chk2->fetchColumn()) { $ok = true; $edit_type = 'child'; }
+        }
+        if ($ok) {
+            $edit_user_id = $target_id;
+        }
     }
 }
 

@@ -16,6 +16,17 @@ if (!isset($_SESSION['user_id']) || !canCreateContent($_SESSION['user_id'])) {
 // Set role_type for permission checks
 $role_type = getUserRole($_SESSION['user_id']);
 
+// Compute the family context's main parent id for later queries
+$main_parent_id = $_SESSION['user_id'];
+if ($role_type !== 'main_parent') {
+    $stmt = $db->prepare("SELECT main_parent_id FROM family_links WHERE linked_user_id = :linked_id LIMIT 1");
+    $stmt->execute([':linked_id' => $_SESSION['user_id']]);
+    $fetched_main_id = $stmt->fetchColumn();
+    if ($fetched_main_id) {
+        $main_parent_id = $fetched_main_id;
+    }
+}
+
 if ($role_type === 'family_member') {
     $stmt = $db->prepare("SELECT role_type FROM family_links WHERE linked_user_id = :id");
     $stmt->execute([':id' => $_SESSION['user_id']]);
@@ -126,30 +137,47 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             $message = "Invalid role type selected.";
         }
-    } elseif (isset($_POST['add_secondary_parent'])) {
-        $secondary_username = filter_input(INPUT_POST, 'secondary_username', FILTER_SANITIZE_STRING);
-        $secondary_password = filter_input(INPUT_POST, 'secondary_password', FILTER_SANITIZE_STRING);
-        $secondary_name = filter_input(INPUT_POST, 'secondary_name', FILTER_SANITIZE_STRING);
-        if (addLinkedUser($_SESSION['user_id'], $secondary_username, $secondary_password, $secondary_name, $_POST['role_type'])) {
+    } elseif (isset($_POST['add_new_user'])) {
+        $secondary_username   = filter_input(INPUT_POST, 'secondary_username', FILTER_SANITIZE_STRING);
+        $secondary_password   = filter_input(INPUT_POST, 'secondary_password', FILTER_SANITIZE_STRING);
+        $secondary_first_name = filter_input(INPUT_POST, 'secondary_first_name', FILTER_SANITIZE_STRING);
+        $secondary_last_name  = filter_input(INPUT_POST, 'secondary_last_name', FILTER_SANITIZE_STRING);
+        $role_type_sel        = filter_input(INPUT_POST, 'role_type', FILTER_SANITIZE_STRING);
+
+        if (addLinkedUser($main_parent_id, $secondary_username, $secondary_password, $secondary_first_name, $secondary_last_name, $role_type_sel)) {
             $role_label = [
                 'secondary_parent' => 'Secondary parent',
-                'family_member' => 'Family member', 
+                'family_member' => 'Family member',
                 'caregiver' => 'Caregiver'
-            ][$_POST['role_type']] ?? 'User';
-            $message = "$role_label added successfully! Username: $secondary_username, Password: $secondary_password (share securely).";
+            ][$role_type_sel] ?? 'User';
+            $message = "$role_label added successfully! Username: $secondary_username.";
         } else {
-            $message = "Failed to add secondary parent. Check for duplicate username.";
+            $message = "Failed to add user. Check for duplicate username.";
         }
     } elseif (isset($_POST['delete_user']) && $role_type === 'main_parent') {
         $delete_user_id = filter_input(INPUT_POST, 'delete_user_id', FILTER_VALIDATE_INT);
         if ($delete_user_id) {
-            $stmt = $db->prepare("DELETE FROM users WHERE id = :user_id AND id IN 
-                             (SELECT linked_user_id FROM family_links 
-                              WHERE main_parent_id = :main_parent_id)");
-            if ($stmt->execute([':user_id' => $delete_user_id, ':main_parent_id' => $_SESSION['user_id']])) {
-                $message = "User removed successfully.";
+            // Try removing a linked adult first
+            $stmt = $db->prepare("DELETE FROM users 
+                                  WHERE id = :user_id AND id IN (
+                                      SELECT linked_user_id FROM family_links WHERE main_parent_id = :main_parent_id
+                                  )");
+            $stmt->execute([':user_id' => $delete_user_id, ':main_parent_id' => $main_parent_id]);
+
+            if ($stmt->rowCount() === 0) {
+                // If not an adult link, try deleting a child of this parent
+                $stmt2 = $db->prepare("DELETE FROM users 
+                                       WHERE id = :user_id AND id IN (
+                                           SELECT child_user_id FROM child_profiles WHERE parent_user_id = :main_parent_id
+                                       )");
+                $stmt2->execute([':user_id' => $delete_user_id, ':main_parent_id' => $main_parent_id]);
+                if ($stmt2->rowCount() > 0) {
+                    $message = "Child removed successfully.";
+                } else {
+                    $message = "Failed to remove user.";
+                }
             } else {
-                $message = "Failed to remove user.";
+                $message = "User removed successfully.";
             }
         }
     }
@@ -250,31 +278,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
          <h2>Children Overview</h2>
          <?php if (isset($data['children']) && is_array($data['children']) && !empty($data['children'])): ?>
                <?php foreach ($data['children'] as $child): ?>
-                  <div class="child-item">
-                     <p>Child: <?php echo htmlspecialchars($child['child_name']); ?>, Age=<?php echo htmlspecialchars($child['age'] ?? 'N/A'); ?></p>
-                     <img src="<?php echo htmlspecialchars($child['avatar'] ?? 'default-avatar.png'); ?>" alt="Avatar" style="width: 50px; border-radius: 50%;">
-                     <a href="profile.php?user_id=<?php echo $child['child_user_id']; ?>&type=child" class="button">Edit Child</a>
-                  </div>
+                 <div class="child-item">
+                    <p>Child: <?php echo htmlspecialchars($child['child_name']); ?>, Age=<?php echo htmlspecialchars($child['age'] ?? 'N/A'); ?></p>
+                    <img src="<?php echo htmlspecialchars($child['avatar'] ?? 'default-avatar.png'); ?>" alt="Avatar" style="width: 50px; border-radius: 50%;">
+                    <a href="profile.php?user_id=<?php echo $child['child_user_id']; ?>&type=child" class="button">Edit Child</a>
+                    <?php if ($role_type === 'main_parent'): ?>
+                        <form method="POST" style="display:inline">
+                            <input type="hidden" name="delete_user_id" value="<?php echo $child['child_user_id']; ?>">
+                            <button type="submit" name="delete_user" class="button delete-btn" onclick="return confirm('Remove this child and all their data?')">Remove</button>
+                        </form>
+                    <?php endif; ?>
+                 </div>
                <?php endforeach; ?>
          <?php else: ?>
                <p>No children added yet. Add your first child below!</p>
          <?php endif; ?>
       </div>
       <div class="family-members-list">
-         <?php
-         // Determine the main_parent_id
-         $main_parent_id = $_SESSION['user_id'];
-         if ($role_type !== 'main_parent') {
-             $stmt = $db->prepare("SELECT main_parent_id FROM family_links WHERE linked_user_id = :linked_id");
-             $stmt->execute([':linked_id' => $_SESSION['user_id']]);
-             $fetched_main_id = $stmt->fetchColumn();
-             if ($fetched_main_id) {
-                 $main_parent_id = $fetched_main_id;
-             } else {
-                 error_log("No main_parent_id found for linked user {$_SESSION['user_id']}");
-             }
-         }
-         ?>
+         <?php // Use precomputed $main_parent_id from top of file ?>
          <h2>Family Members</h2>
          <?php
          $stmt = $db->prepare("SELECT u.id, CONCAT(u.first_name, ' ', u.last_name) AS name, u.username, fl.role_type 
@@ -454,7 +475,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $stmt = $db->prepare("SELECT cp.child_user_id, cp.child_name 
                                              FROM child_profiles cp 
                                              WHERE cp.parent_user_id = :parent_id");
-                        $stmt->execute([':parent_id' => $_SESSION['user_id']]);
+                        $stmt->execute([':parent_id' => $main_parent_id]);
                         $children = $stmt->fetchAll(PDO::FETCH_ASSOC);
                         foreach ($children as $child): ?>
                             <option value="<?php echo $child['child_user_id']; ?>">
