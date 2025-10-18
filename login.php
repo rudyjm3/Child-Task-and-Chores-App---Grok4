@@ -24,7 +24,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $_SESSION['role'] = ($user['role'] === 'child') ? 'child' : 'parent';
         $_SESSION['role_type'] = $user['role']; // 'main_parent', 'family_member', 'caregiver', or 'child'
         $_SESSION['username'] = $username;
-        $_SESSION['name'] = $user['name'] ?? $username; // For name display
+        // Normalize display name consistently
+        $_SESSION['name'] = getDisplayName($user['id']);
         error_log("Login successful for user_id=" . $user['id'] . ", role_type=" . $user['role']);
         header("Location: dashboard_" . $_SESSION['role'] . ".php");
         exit;

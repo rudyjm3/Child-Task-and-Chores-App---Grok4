@@ -7,6 +7,63 @@
 
 require_once __DIR__ . '/db_connect.php';
 
+// Return a consistent display name for a user
+function getDisplayName($user_id) {
+    global $db;
+    $stmt = $db->prepare("SELECT first_name, last_name, name, username FROM users WHERE id = :id");
+    $stmt->execute([':id' => $user_id]);
+    $u = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$u) return '';
+    $first = trim((string)($u['first_name'] ?? ''));
+    $last  = trim((string)($u['last_name'] ?? ''));
+    if ($first !== '' || $last !== '') {
+        return trim($first . ' ' . $last);
+    }
+    if (!empty($u['name'])) return $u['name'];
+    return $u['username'];
+}
+
+// Return the role_type string from family_links if present
+function getFamilyLinkRole($user_id) {
+    global $db;
+    $stmt = $db->prepare("SELECT role_type FROM family_links WHERE linked_user_id = :id LIMIT 1");
+    $stmt->execute([':id' => $user_id]);
+    return $stmt->fetchColumn() ?: null;
+}
+
+function getEffectiveRole($user_id) {
+    $role = getUserRole($user_id);
+    if ($role === 'family_member') {
+        $linkedRole = getFamilyLinkRole($user_id);
+        if ($linkedRole) {
+            return $linkedRole;
+        }
+    }
+    return $role;
+}
+
+// Human readable role label for badges
+function getUserRoleLabel($user_id) {
+    $role = getEffectiveRole($user_id);
+    if (!$role) return null;
+    if ($role === 'main_parent') return 'Main Account Owner';
+    if ($role === 'child') return 'Child';
+
+    if ($role === 'caregiver') {
+        return 'Caregiver';
+    }
+
+    if ($role === 'family_member') {
+        $linkedRole = getFamilyLinkRole($user_id);
+        if ($linkedRole === 'secondary_parent') return 'Secondary Parent';
+        if ($linkedRole === 'caregiver') return 'Caregiver';
+        if ($linkedRole === 'child') return 'Child';
+        return 'Family Member';
+    }
+
+    return ucfirst(str_replace('_', ' ', $role));
+}
+
 // Calculate age from birthday
 function calculateAge($birthday) {
     if (!$birthday) return null;
@@ -62,8 +119,8 @@ function getUserRole($user_id) {
 // Permission helper: returns true if user is main parent OR a family member linked as secondary_parent
 function userCanManageAll($user_id) {
     global $db;
-    $role = getUserRole($user_id);
-    if ($role === 'main_parent') return true;
+    $role = getEffectiveRole($user_id);
+    if ($role === 'main_parent' || $role === 'secondary_parent') return true;
     if ($role === 'family_member') {
         $stmt = $db->prepare("SELECT 1 FROM family_links WHERE linked_user_id = :id AND role_type = 'secondary_parent' LIMIT 1");
         $stmt->execute([':id' => $user_id]);
@@ -74,20 +131,20 @@ function userCanManageAll($user_id) {
 
 // Simple helpers
 function isCaregiver($user_id) {
-    return getUserRole($user_id) === 'caregiver';
+    return getEffectiveRole($user_id) === 'caregiver';
 }
 
 function isFamilyMember($user_id) {
-    return getUserRole($user_id) === 'family_member';
+    return getEffectiveRole($user_id) === 'family_member';
 }
 
 function canCreateContent($user_id) {
-    $role = getUserRole($user_id);
+    $role = getEffectiveRole($user_id);
     return in_array($role, ['main_parent', 'secondary_parent', 'family_member', 'caregiver']);
 }
 
 function canAddEditChild($user_id) {
-    $role = getUserRole($user_id);
+    $role = getEffectiveRole($user_id);
     return in_array($role, ['main_parent', 'secondary_parent']);
 }
 
@@ -96,7 +153,7 @@ function canAddEditCaregiver($user_id) {
 }
 
 function canAddEditFamilyMember($user_id) {
-    $role = getUserRole($user_id);
+    $role = getEffectiveRole($user_id);
     return in_array($role, ['main_parent', 'secondary_parent', 'family_member']);
 }
 
@@ -203,12 +260,12 @@ function updateUserPassword($user_id, $new_password) {
 }
 
 // Revised: Update child profile (avatar, age, name)
-function updateChildProfile($child_user_id, $first_name, $last_name, $birthday, $avatar) {
+function updateChildProfile($child_user_id, $first_name, $last_name, $birthday, $avatar, $gender = null) {
     global $db;
     $age = calculateAge($birthday);
     try {
         $db->beginTransaction();
-        
+
         // Update child_profiles table
         $stmt = $db->prepare("UPDATE child_profiles 
                              SET child_name = :child_name, 
@@ -223,27 +280,18 @@ function updateChildProfile($child_user_id, $first_name, $last_name, $birthday, 
             ':avatar' => $avatar,
             ':child_id' => $child_user_id
         ]);
-        
+
         // Also update users table
         $stmt = $db->prepare("UPDATE users 
                              SET first_name = :first_name,
-                                 last_name = :last_name 
+                                 last_name = :last_name,
+                                 gender = :gender
                              WHERE id = :user_id");
         $stmt->execute([
             ':first_name' => $first_name,
             ':last_name' => $last_name,
+            ':gender' => $gender,
             ':user_id' => $child_user_id
-        ]);
-
-        // Update users table
-        $stmt = $db->prepare("UPDATE users 
-                             SET first_name = :first_name,
-                                 last_name = :last_name
-                             WHERE id = :id");
-        $stmt->execute([
-            ':first_name' => $first_name,
-            ':last_name' => $last_name,
-            ':id' => $child_user_id
         ]);
 
         $db->commit();
@@ -253,12 +301,6 @@ function updateChildProfile($child_user_id, $first_name, $last_name, $birthday, 
         error_log("Failed to update child profile: " . $e->getMessage());
         return false;
     }
-    // Update users table name too
-    $stmt = $db->prepare("UPDATE users SET name = :name WHERE id = :id");
-    return $stmt->execute([
-        ':name' => $child_name,
-        ':id' => $child_user_id
-    ]);
 }
 
 // Revised: getDashboardData (name display, caregiver access)

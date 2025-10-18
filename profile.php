@@ -11,110 +11,216 @@ if (!isset($_SESSION['user_id'])) {
     exit;
 }
 
+// Prevent any client/proxy caching so the profile view always reflects the current request context
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
+
 $role = $_SESSION['role'];
+$current_user_id = $_SESSION['user_id'];
 // Resolve precise role type for permission checks
-$role_type = getUserRole($_SESSION['user_id']);
+$current_role_type = getEffectiveRole($current_user_id);
 
-// Handle GET params for editing child (parent only)
-$edit_user_id = $_SESSION['user_id'];
-$edit_type = null;
-if ($role === 'parent' && isset($_GET['type']) && $_GET['type'] === 'child' && isset($_GET['user_id'])) {
-    $edit_user_id = filter_input(INPUT_GET, 'user_id', FILTER_VALIDATE_INT);
-    $edit_type = 'child';
-    // Verify linkage (security)
-    $link_stmt = $db->prepare("SELECT 1 FROM child_profiles WHERE child_user_id = :child_id AND parent_user_id = :parent_id");
-    $link_stmt->execute([':child_id' => $edit_user_id, ':parent_id' => $_SESSION['user_id']]);
-    if (!$link_stmt->fetchColumn()) {
-        $message = "Access denied: Not your child.";
-        $edit_user_id = $_SESSION['user_id']; // Fallback
-        $edit_type = null;
+// Determine the family root (main account owner) for relationship checks
+$family_root_id = $current_user_id;
+if ($current_role_type !== 'main_parent') {
+    $stmt = $db->prepare("SELECT main_parent_id FROM family_links WHERE linked_user_id = :uid LIMIT 1");
+    $stmt->execute([':uid' => $current_user_id]);
+    $root = $stmt->fetchColumn();
+    if ($root) {
+        $family_root_id = $root;
     }
 }
 
-// Allow main parent to edit linked adult profiles via ?edit_user=<id>
-if ($role === 'parent' && $role_type === 'main_parent' && isset($_GET['edit_user'])) {
-    $target_id = filter_input(INPUT_GET, 'edit_user', FILTER_VALIDATE_INT);
-    if ($target_id) {
-        // Verify that the target belongs to this family (adult link or child)
-        $ok = false;
-        $chk1 = $db->prepare("SELECT 1 FROM family_links WHERE main_parent_id = :pid AND linked_user_id = :uid LIMIT 1");
-        $chk1->execute([':pid' => $_SESSION['user_id'], ':uid' => $target_id]);
-        if ($chk1->fetchColumn()) { $ok = true; }
-        if (!$ok) {
-            $chk2 = $db->prepare("SELECT 1 FROM child_profiles WHERE parent_user_id = :pid AND child_user_id = :uid LIMIT 1");
-            $chk2->execute([':pid' => $_SESSION['user_id'], ':uid' => $target_id]);
-            if ($chk2->fetchColumn()) { $ok = true; $edit_type = 'child'; }
-        }
-        if ($ok) {
-            $edit_user_id = $target_id;
-        }
+// Work out requested profile target
+$requested_user_id = null;
+$requested_context = null; // 'child' or 'adult'
+
+if (isset($_GET['self'])) {
+    $requested_user_id = $current_user_id;
+    $requested_context = ($current_role_type === 'child') ? 'child' : 'adult';
+} elseif ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $requested_user_id = filter_input(INPUT_POST, 'edit_user_id', FILTER_VALIDATE_INT, ['flags' => FILTER_NULL_ON_FAILURE]);
+    $requested_context = filter_input(INPUT_POST, 'edit_type', FILTER_SANITIZE_STRING);
+} else {
+    if (isset($_GET['type'], $_GET['user_id']) && $_GET['type'] === 'child') {
+        $requested_user_id = filter_input(INPUT_GET, 'user_id', FILTER_VALIDATE_INT);
+        $requested_context = 'child';
+    } elseif (isset($_GET['edit_user'])) {
+        $requested_user_id = filter_input(INPUT_GET, 'edit_user', FILTER_VALIDATE_INT);
+        $requested_context = filter_input(INPUT_GET, 'role_type', FILTER_SANITIZE_STRING);
     }
 }
+
+$requested_context = $requested_context ? strtolower($requested_context) : null;
+
+// Default target is the logged-in user
+$edit_user_id = $current_user_id;
+$edit_type = ($current_role_type === 'child') ? 'child' : 'adult';
+
+// Helper closures for validation
+$isChildOfParent = function($child_id) use ($db, $family_root_id) {
+    $stmt = $db->prepare("SELECT 1 FROM child_profiles WHERE parent_user_id = :parent_id AND child_user_id = :child_id LIMIT 1");
+    $stmt->execute([':parent_id' => $family_root_id, ':child_id' => $child_id]);
+    return (bool)$stmt->fetchColumn();
+};
+
+$isLinkedAdult = function($linked_id) use ($db, $family_root_id) {
+    $stmt = $db->prepare("SELECT role_type FROM family_links WHERE main_parent_id = :parent_id AND linked_user_id = :linked_id LIMIT 1");
+    $stmt->execute([':parent_id' => $family_root_id, ':linked_id' => $linked_id]);
+    return $stmt->fetchColumn() ?: null;
+};
+
+// Determine final target
+if ($requested_user_id && $requested_user_id !== $current_user_id) {
+    if (in_array($current_role_type, ['main_parent', 'secondary_parent'])) {
+        $context = $requested_context;
+        if ($context === 'child' || !$context) {
+            if ($isChildOfParent($requested_user_id)) {
+                $edit_user_id = $requested_user_id;
+                $edit_type = 'child';
+            } elseif (!$context) {
+                // If context missing but user is actually a child, infer it
+                $requested_role = getUserRole($requested_user_id);
+                if ($requested_role === 'child' && $isChildOfParent($requested_user_id)) {
+                    $edit_user_id = $requested_user_id;
+                    $edit_type = 'child';
+                }
+            }
+        }
+        if ($edit_user_id === $current_user_id) {
+            // Not resolved as child; try linked adults
+            $linked_role = $isLinkedAdult($requested_user_id);
+            if ($linked_role) {
+                $edit_user_id = $requested_user_id;
+                $edit_type = ($linked_role === 'child') ? 'child' : 'adult';
+            }
+        }
+    }
+} else {
+    // Self-view - ensure context is accurate
+    if ($requested_context === 'child' && $current_role_type === 'child') {
+        $edit_type = 'child';
+    } else {
+        $edit_type = ($current_role_type === 'child') ? 'child' : 'adult';
+    }
+}
+
+$edit_type = ($edit_type === 'child') ? 'child' : 'adult';
 
 $user_id = $edit_user_id;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['update_password'])) {
-        $new_password = filter_input(INPUT_POST, 'new_password', FILTER_SANITIZE_STRING);
-        if (updateUserPassword($user_id, $new_password)) {
-            $message = "Password updated successfully!";
+        if ($user_id != $_SESSION['user_id'] && !in_array($current_role_type, ['main_parent', 'secondary_parent'])) {
+            $message = "Access denied.";
         } else {
-            $message = "Failed to update password.";
-        }
-    } elseif (isset($_POST['update_child_profile'])) {
-        $first_name = filter_input(INPUT_POST, 'first_name', FILTER_SANITIZE_STRING);
-        $last_name = filter_input(INPUT_POST, 'last_name', FILTER_SANITIZE_STRING);
-        $birthday = filter_input(INPUT_POST, 'birthday', FILTER_SANITIZE_STRING);
-        $avatar = filter_input(INPUT_POST, 'avatar', FILTER_SANITIZE_STRING);
-        // Handle upload (for parent editing child or child self-upload)
-        $upload_path = $avatar; // Default to selected avatar
-        if (isset($_FILES['avatar_upload']) && $_FILES['avatar_upload']['error'] == 0) {
-            $file_size = $_FILES['avatar_upload']['size'];
-            $file_type = strtolower(pathinfo($_FILES['avatar_upload']['name'], PATHINFO_EXTENSION));
-            if ($file_size > 3 * 1024 * 1024 || !in_array($file_type, ['jpg', 'jpeg', 'png'])) {
-                $message = "Upload failed: File too large (>3MB) or invalid type (JPG/PNG only).";
+            $new_password = filter_input(INPUT_POST, 'new_password', FILTER_SANITIZE_STRING);
+            if (updateUserPassword($user_id, $new_password)) {
+                $message = "Password updated successfully!";
+                if ($user_id != $_SESSION['user_id']) {
+                    // Redirect back to the specific profile after managing someone else
+                    if ($edit_type === 'child') {
+                        $redirect = 'profile.php?user_id=' . $user_id . '&type=child';
+                    } else {
+                        $linked_role = getFamilyLinkRole($user_id);
+                        $redirect = 'profile.php?edit_user=' . $user_id;
+                        if ($linked_role) {
+                            $redirect .= '&role_type=' . urlencode($linked_role);
+                        }
+                    }
+                    header('Location: ' . $redirect);
+                    exit;
+                }
             } else {
-                $upload_dir = __DIR__ . '/uploads/avatars/';
-                if (!is_dir($upload_dir)) {
-                    mkdir($upload_dir, 0755, true);
-                }
-                $file_ext = $file_type;
-                $file_name = uniqid() . '_' . pathinfo($_FILES['avatar_upload']['name'], PATHINFO_FILENAME) . '.' . $file_ext;
-                $upload_path = 'uploads/avatars/' . $file_name;
-                if (move_uploaded_file($_FILES['avatar_upload']['tmp_name'], __DIR__ . '/' . $upload_path)) {
-                    // Resize image (GD library)
-                    $image = imagecreatefromstring(file_get_contents(__DIR__ . '/' . $upload_path));
-                    $resized = imagecreatetruecolor(100, 100);
-                    imagecopyresampled($resized, $image, 0, 0, 0, 0, 100, 100, imagesx($image), imagesy($image));
-                    imagejpeg($resized, __DIR__ . '/' . $upload_path, 90);
-                    imagedestroy($image);
-                    imagedestroy($resized);
-                } else {
-                    $message = "Upload failed; using selected avatar.";
-                }
+                $message = "Failed to update password.";
             }
         }
-        if (updateChildProfile($user_id, $first_name, $last_name, $birthday, $upload_path)) {
-            $message = "Profile updated successfully!";
-            $_SESSION['name'] = $first_name; // Update session with first name if self
+    } elseif (isset($_POST['update_child_profile'])) {
+        if ($user_id != $_SESSION['user_id'] && !in_array($current_role_type, ['main_parent', 'secondary_parent'])) {
+            $message = "Access denied.";
         } else {
-            $message = "Failed to update profile.";
+            $first_name = filter_input(INPUT_POST, 'first_name', FILTER_SANITIZE_STRING);
+            $last_name = filter_input(INPUT_POST, 'last_name', FILTER_SANITIZE_STRING);
+            $birthday = filter_input(INPUT_POST, 'birthday', FILTER_SANITIZE_STRING);
+            $avatar = filter_input(INPUT_POST, 'avatar', FILTER_SANITIZE_STRING);
+            $child_gender = filter_input(INPUT_POST, 'child_gender', FILTER_SANITIZE_STRING);
+            $allowed_genders = ['male', 'female', 'nonbinary', 'prefer_not_to_say'];
+            if (!in_array($child_gender, $allowed_genders, true)) {
+                $child_gender = null;
+            }
+            // Handle upload (for parent editing child or child self-upload)
+            $upload_path = $avatar; // Default to selected avatar
+            if (isset($_FILES['avatar_upload']) && $_FILES['avatar_upload']['error'] == 0) {
+                $file_size = $_FILES['avatar_upload']['size'];
+                $file_type = strtolower(pathinfo($_FILES['avatar_upload']['name'], PATHINFO_EXTENSION));
+                if ($file_size > 3 * 1024 * 1024 || !in_array($file_type, ['jpg', 'jpeg', 'png'])) {
+                    $message = "Upload failed: File too large (>3MB) or invalid type (JPG/PNG only).";
+                } else {
+                    $upload_dir = __DIR__ . '/uploads/avatars/';
+                    if (!is_dir($upload_dir)) {
+                        mkdir($upload_dir, 0755, true);
+                    }
+                    $file_ext = strtolower(pathinfo($_FILES['avatar_upload']['name'], PATHINFO_EXTENSION));
+                    $file_name = uniqid() . '_' . pathinfo($_FILES['avatar_upload']['name'], PATHINFO_FILENAME) . '.' . $file_ext;
+                    $upload_path = 'uploads/avatars/' . $file_name;
+                    if (move_uploaded_file($_FILES['avatar_upload']['tmp_name'], __DIR__ . '/' . $upload_path)) {
+                        // Resize image (GD library)
+                        $image = imagecreatefromstring(file_get_contents(__DIR__ . '/' . $upload_path));
+                        $resized = imagecreatetruecolor(100, 100);
+                        imagecopyresampled($resized, $image, 0, 0, 0, 0, 100, 100, imagesx($image), imagesy($image));
+                        imagejpeg($resized, __DIR__ . '/' . $upload_path, 90);
+                        imagedestroy($image);
+                        imagedestroy($resized);
+                    } else {
+                        $message = "Upload failed; using selected avatar.";
+                    }
+                }
+            }
+            if (updateChildProfile($user_id, $first_name, $last_name, $birthday, $upload_path, $child_gender)) {
+                $message = "Profile updated successfully!";
+                // Only update session display name if the logged-in user edited their own profile
+                if ($user_id == $_SESSION['user_id']) {
+                    $_SESSION['name'] = getDisplayName($_SESSION['user_id']);
+                }
+                // PRG: Redirect to avoid resubmission and to reset context if editing another profile
+                if ($user_id != $_SESSION['user_id']) {
+                    header('Location: profile.php?user_id=' . $user_id . '&type=child');
+                    exit;
+                }
+            } else {
+                $message = "Failed to update profile.";
+            }
         }
     } elseif (isset($_POST['update_parent_profile'])) {
-        $first_name = filter_input(INPUT_POST, 'first_name', FILTER_SANITIZE_STRING);
-        $last_name = filter_input(INPUT_POST, 'last_name', FILTER_SANITIZE_STRING);
-        $gender = filter_input(INPUT_POST, 'gender', FILTER_SANITIZE_STRING);
-        $stmt = $db->prepare("UPDATE users SET first_name = :first_name, last_name = :last_name, gender = :gender WHERE id = :id");
-        if ($stmt->execute([
-            ':first_name' => $first_name,
-            ':last_name' => $last_name,
-            ':gender' => $gender,
-            ':id' => $user_id
-        ])) {
-            $message = "Profile updated successfully!";
-            $_SESSION['name'] = $first_name; // Only use first name for welcome messages
+        if ($user_id != $_SESSION['user_id'] && !in_array($current_role_type, ['main_parent', 'secondary_parent'])) {
+            $message = "Access denied.";
         } else {
-            $message = "Failed to update profile.";
+            $first_name = filter_input(INPUT_POST, 'first_name', FILTER_SANITIZE_STRING);
+            $last_name = filter_input(INPUT_POST, 'last_name', FILTER_SANITIZE_STRING);
+            $gender = filter_input(INPUT_POST, 'gender', FILTER_SANITIZE_STRING);
+            $stmt = $db->prepare("UPDATE users SET first_name = :first_name, last_name = :last_name, gender = :gender WHERE id = :id");
+            if ($stmt->execute([
+                ':first_name' => $first_name,
+                ':last_name' => $last_name,
+                ':gender' => $gender,
+                ':id' => $user_id
+            ])) {
+                $message = "Profile updated successfully!";
+                if ($user_id == $_SESSION['user_id']) {
+                    $_SESSION['name'] = getDisplayName($_SESSION['user_id']);
+                }
+                if ($user_id != $_SESSION['user_id']) {
+                    $linked_role = getFamilyLinkRole($user_id);
+                    $redirect = 'profile.php?edit_user=' . $user_id;
+                    if ($linked_role) {
+                        $redirect .= '&role_type=' . urlencode($linked_role);
+                    }
+                    header('Location: ' . $redirect);
+                    exit;
+                }
+            } else {
+                $message = "Failed to update profile.";
+            }
         }
     }
 }
@@ -129,6 +235,13 @@ if ($role === 'child' || $edit_type === 'child') {
     $profile_stmt->execute([':id' => $user_id]);
     $profile = $profile_stmt->fetch(PDO::FETCH_ASSOC);
 }
+
+$target_role_label = getUserRoleLabel($user_id);
+$display_name = trim(($user['first_name'] ?? '') . ' ' . ($user['last_name'] ?? ''));
+if ($display_name === '') {
+    $display_name = $user['username'];
+}
+$child_display_name = $profile['child_name'] ?? $display_name;
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -145,13 +258,14 @@ if ($role === 'child' || $edit_type === 'child') {
         .avatar-options { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
         .avatar-option { width: 60px; height: 60px; border-radius: 50%; cursor: pointer; border: 2px solid #ddd; }
         .avatar-option.selected { border-color: #4caf50; }
-        .mother-badge, .father-badge { 
-            background: #4caf50; 
-            color: white; 
-            padding: 2px 8px; 
-            border-radius: 4px; 
-            font-size: 0.9em; 
+        .role-badge {
+            background: #4caf50;
+            color: #fff;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.9em;
             margin-left: 8px;
+            display: inline-block;
         }
         .child-profile { 
             background: linear-gradient(135deg, #e3f2fd, #f3e5f5);
@@ -211,20 +325,38 @@ if ($role === 'child' || $edit_type === 'child') {
         <?php if (isset($message)) echo "<p>$message</p>"; ?>
         <?php if ($role === 'child' || $edit_type === 'child'): ?>
             <div class="profile-form child-profile <?php if ($edit_type === 'child') echo 'editing-child'; ?>">
-                <h2><?php if ($edit_type === 'child') echo 'Edit Child: '; ?><?php echo htmlspecialchars($profile['child_name'] ?? $user['first_name'] ?? $user['username']); ?>'s Profile</h2>
+                <h2>
+                    <?php if ($edit_type === 'child') echo 'Edit Child: '; ?>
+                    <?php echo htmlspecialchars($child_display_name); ?>'s Profile
+                    <?php if ($target_role_label): ?>
+                        <span class="role-badge"><?php echo htmlspecialchars($target_role_label); ?></span>
+                    <?php endif; ?>
+                </h2>
                 <img id="avatar-preview" src="<?php echo htmlspecialchars($profile['avatar'] ?? 'default-avatar.png'); ?>" alt="Avatar" class="avatar-preview">
-                <form method="POST" action="profile.php<?php if ($edit_type === 'child') echo '?user_id=' . $user_id . '&type=child'; ?>" enctype="multipart/form-data">
+                <form method="POST" action="profile.php" enctype="multipart/form-data">
+                    <input type="hidden" name="edit_user_id" value="<?php echo (int)$user_id; ?>">
+                    <input type="hidden" name="edit_type" value="child">
                     <div class="form-group">
                         <label for="first_name">First Name:</label>
-                        <input type="text" id="first_name" name="first_name" value="<?php echo htmlspecialchars($profile['first_name'] ?? $user['first_name'] ?? ''); ?>" required>
+                        <input type="text" id="first_name" name="first_name" value="<?php echo htmlspecialchars($user['first_name'] ?? ''); ?>" required>
                     </div>
                     <div class="form-group">
                         <label for="last_name">Last Name:</label>
-                        <input type="text" id="last_name" name="last_name" value="<?php echo htmlspecialchars($profile['last_name'] ?? $user['last_name'] ?? ''); ?>" required>
+                        <input type="text" id="last_name" name="last_name" value="<?php echo htmlspecialchars($user['last_name'] ?? ''); ?>" required>
                     </div>
                     <div class="form-group">
                         <label for="birthday">Birthday:</label>
                         <input type="date" id="birthday" name="birthday" value="<?php echo htmlspecialchars($profile['birthday'] ?? ''); ?>" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="child_gender">Gender:</label>
+                        <select id="child_gender" name="child_gender" required>
+                            <option value="">Select...</option>
+                            <option value="male" <?php if (($user['gender'] ?? '') === 'male') echo 'selected'; ?>>Male</option>
+                            <option value="female" <?php if (($user['gender'] ?? '') === 'female') echo 'selected'; ?>>Female</option>
+                            <option value="nonbinary" <?php if (($user['gender'] ?? '') === 'nonbinary') echo 'selected'; ?>>Non-binary</option>
+                            <option value="prefer_not_to_say" <?php if (($user['gender'] ?? '') === 'prefer_not_to_say') echo 'selected'; ?>>Prefer not to say</option>
+                        </select>
                     </div>
                     <div class="form-group">
                         <label for="age">Age:</label>
@@ -247,6 +379,8 @@ if ($role === 'child' || $edit_type === 'child') {
                 <?php if ($role === 'child'): ?>
                     <h3>Change Password</h3>
                     <form method="POST" action="profile.php">
+                        <input type="hidden" name="edit_user_id" value="<?php echo (int)$_SESSION['user_id']; ?>">
+                        <input type="hidden" name="edit_type" value="child">
                         <div class="form-group">
                             <label for="new_password">New Password:</label>
                             <input type="password" id="new_password" name="new_password" required>
@@ -258,11 +392,15 @@ if ($role === 'child' || $edit_type === 'child') {
         <?php elseif ($role === 'parent'): ?>
             <div class="profile-form parent-profile">
                 <h2>Your Profile</h2>
-                <p class="profile-name"><?php echo htmlspecialchars($user['first_name'] . ' ' . $user['last_name'] ?? $user['username']); ?> 
-                   <?php if ($user['gender'] == 'female') echo '<span class="mother-badge">Parent</span>'; 
-                         elseif ($user['gender'] == 'male') echo '<span class="father-badge">Parent</span>'; ?>
+                <p class="profile-name">
+                    <?php echo htmlspecialchars($display_name); ?>
+                    <?php if ($target_role_label): ?>
+                        <span class="role-badge"><?php echo htmlspecialchars($target_role_label); ?></span>
+                    <?php endif; ?>
                 </p>
                 <form method="POST" action="profile.php">
+                    <input type="hidden" name="edit_user_id" value="<?php echo (int)$user_id; ?>">
+                    <input type="hidden" name="edit_type" value="adult">
                     <div class="form-group">
                         <label for="first_name">First Name:</label>
                         <input type="text" id="first_name" name="first_name" value="<?php echo htmlspecialchars($user['first_name'] ?? ''); ?>" required>
@@ -283,14 +421,18 @@ if ($role === 'child' || $edit_type === 'child') {
                 </form>
                 <h3>Change Password</h3>
                 <form method="POST" action="profile.php">
+                    <input type="hidden" name="edit_user_id" value="<?php echo (int)$user_id; ?>">
+                    <input type="hidden" name="edit_type" value="adult">
                     <div class="form-group">
                         <label for="new_password">New Password:</label>
                         <input type="password" id="new_password" name="new_password" required>
                     </div>
                     <button type="submit" name="update_password" class="button">Update Password</button>
                 </form>
-                <h3>Manage Family</h3>
-                <a href="dashboard_parent.php#manage-family" class="button">Go to Manage Family</a>
+                <?php if ($current_role_type === 'main_parent'): ?>
+                    <h3>Manage Family</h3>
+                    <a href="dashboard_parent.php#manage-family" class="button">Go to Manage Family</a>
+                <?php endif; ?>
             </div>
         <?php endif; ?>
         <a href="dashboard_<?php echo $role; ?>.php" class="button">Back to Dashboard</a>

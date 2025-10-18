@@ -14,7 +14,7 @@ if (!isset($_SESSION['user_id']) || !canCreateContent($_SESSION['user_id'])) {
     exit;
 }
 // Set role_type for permission checks
-$role_type = getUserRole($_SESSION['user_id']);
+$role_type = getEffectiveRole($_SESSION['user_id']);
 
 // Compute the family context's main parent id for later queries
 $main_parent_id = $_SESSION['user_id'];
@@ -36,13 +36,14 @@ if ($role_type === 'family_member') {
     }
 }
 
-// Set username and name in session if not already set
-if (!isset($_SESSION['username']) || !isset($_SESSION['name'])) {
-    $userStmt = $db->prepare("SELECT username, name FROM users WHERE id = :id");
-    $userStmt->execute([':id' => $_SESSION['user_id']]);
-    $user = $userStmt->fetch(PDO::FETCH_ASSOC);
-    $_SESSION['username'] = $user['username'];
-    $_SESSION['name'] = $user['name'] ?: $user['username']; // fallback to username if name is null
+// Ensure display name in session
+if (!isset($_SESSION['name'])) {
+    $_SESSION['name'] = getDisplayName($_SESSION['user_id']);
+}
+if (!isset($_SESSION['username'])) {
+    $uStmt = $db->prepare("SELECT username FROM users WHERE id = :id");
+    $uStmt->execute([':id' => $_SESSION['user_id']]);
+    $_SESSION['username'] = $uStmt->fetchColumn() ?: 'Unknown';
 }
 
 $data = getDashboardData($_SESSION['user_id']);
@@ -154,9 +155,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             $message = "Failed to add user. Check for duplicate username.";
         }
-    } elseif (isset($_POST['delete_user']) && $role_type === 'main_parent') {
+    } elseif (isset($_POST['delete_user']) && in_array($role_type, ['main_parent', 'secondary_parent'])) {
         $delete_user_id = filter_input(INPUT_POST, 'delete_user_id', FILTER_VALIDATE_INT);
         if ($delete_user_id) {
+            if ($delete_user_id == $main_parent_id) {
+                $message = "Cannot remove the main account owner.";
+            } else {
             // Try removing a linked adult first
             $stmt = $db->prepare("DELETE FROM users 
                                   WHERE id = :user_id AND id IN (
@@ -178,6 +182,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             } else {
                 $message = "User removed successfully.";
+            }
             }
         }
     }
@@ -270,7 +275,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <span class="role-badge">(Caregiver)</span>
          <?php endif; ?>
       </p>
-      <a href="goal.php">Goals</a> | <a href="task.php">Tasks</a> | <a href="routine.php">Routines</a> | <a href="profile.php">Profile</a> | <a href="logout.php">Logout</a>
+      <a href="goal.php">Goals</a> | <a href="task.php">Tasks</a> | <a href="routine.php">Routines</a> | <a href="profile.php?self=1">Profile</a> | <a href="logout.php">Logout</a>
    </header>
    <main class="dashboard">
       <?php if (isset($message)) echo "<p>$message</p>"; ?>
@@ -278,17 +283,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
          <h2>Children Overview</h2>
          <?php if (isset($data['children']) && is_array($data['children']) && !empty($data['children'])): ?>
                <?php foreach ($data['children'] as $child): ?>
-                 <div class="child-item">
-                    <p>Child: <?php echo htmlspecialchars($child['child_name']); ?>, Age=<?php echo htmlspecialchars($child['age'] ?? 'N/A'); ?></p>
-                    <img src="<?php echo htmlspecialchars($child['avatar'] ?? 'default-avatar.png'); ?>" alt="Avatar" style="width: 50px; border-radius: 50%;">
-                    <a href="profile.php?user_id=<?php echo $child['child_user_id']; ?>&type=child" class="button">Edit Child</a>
-                    <?php if ($role_type === 'main_parent'): ?>
-                        <form method="POST" style="display:inline">
-                            <input type="hidden" name="delete_user_id" value="<?php echo $child['child_user_id']; ?>">
-                            <button type="submit" name="delete_user" class="button delete-btn" onclick="return confirm('Remove this child and all their data?')">Remove</button>
-                        </form>
-                    <?php endif; ?>
-                 </div>
+                  <div class="child-item">
+                     <p>Child: <?php echo htmlspecialchars($child['child_name']); ?>, Age=<?php echo htmlspecialchars($child['age'] ?? 'N/A'); ?></p>
+                     <img src="<?php echo htmlspecialchars($child['avatar'] ?? 'default-avatar.png'); ?>" alt="Avatar" style="width: 50px; border-radius: 50%;">
+                     <?php if (in_array($role_type, ['main_parent', 'secondary_parent'])): ?>
+                         <a href="profile.php?user_id=<?php echo $child['child_user_id']; ?>&type=child" class="button">Edit Child</a>
+                     <?php endif; ?>
+                     <?php if ($role_type === 'main_parent'): ?>
+                         <form method="POST" style="display:inline">
+                             <input type="hidden" name="delete_user_id" value="<?php echo $child['child_user_id']; ?>">
+                             <button type="submit" name="delete_user" class="button delete-btn" onclick="return confirm('Remove this child and all their data?')">Remove</button>
+                         </form>
+                     <?php endif; ?>
+                  </div>
                <?php endforeach; ?>
          <?php else: ?>
                <p>No children added yet. Add your first child below!</p>
@@ -313,8 +320,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                      <p><?php echo htmlspecialchars($member['name'] ?? $member['username']); ?> 
                         <span class="role-type">(<?php echo ucfirst(str_replace('_', ' ', $member['role_type'])); ?>)</span>
                      </p>
-                     <?php if ($role_type === 'main_parent'): ?>
-                         <a href="profile.php?edit_user=<?php echo $member['id']; ?>" class="button edit-btn">Edit</a>
+                     <?php if (in_array($role_type, ['main_parent', 'secondary_parent'])): ?>
+                         <a href="profile.php?edit_user=<?php echo $member['id']; ?>&role_type=<?php echo urlencode($member['role_type']); ?>" class="button edit-btn">Edit</a>
                          <form method="POST" style="display: inline;">
                              <input type="hidden" name="delete_user_id" value="<?php echo $member['id']; ?>">
                              <button type="submit" name="delete_user" class="button delete-btn" 
@@ -344,8 +351,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
              <?php foreach ($caregivers as $caregiver): ?>
                  <div class="member-item">
                      <p><?php echo htmlspecialchars($caregiver['name'] ?? $caregiver['username']); ?></p>
-                     <?php if ($role_type === 'main_parent'): ?>
-                         <a href="profile.php?edit_user=<?php echo $caregiver['id']; ?>" class="button edit-btn">Edit</a>
+                     <?php if (in_array($role_type, ['main_parent', 'secondary_parent'])): ?>
+                         <a href="profile.php?edit_user=<?php echo $caregiver['id']; ?>&role_type=<?php echo urlencode($caregiver['role_type']); ?>" class="button edit-btn">Edit</a>
                          <form method="POST" style="display: inline;">
                              <input type="hidden" name="delete_user_id" value="<?php echo $caregiver['id']; ?>">
                              <button type="submit" name="delete_user" class="button delete-btn" 

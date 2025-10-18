@@ -13,6 +13,11 @@ if (!isset($_SESSION['user_id'])) {
     exit;
 }
 
+// Ensure a friendly display name is available in session
+if (!isset($_SESSION['name'])) {
+    $_SESSION['name'] = getDisplayName($_SESSION['user_id']);
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['create_goal']) && isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
         $child_user_id = filter_input(INPUT_POST, 'child_user_id', FILTER_VALIDATE_INT);
@@ -209,11 +214,11 @@ if ($_SESSION['role'] === 'parent') {
 <body>
     <header>
         <h1>Goal Management</h1>
-        <p>Welcome, <?php echo htmlspecialchars($_SESSION['username'] ?? 'Unknown User'); ?> (<?php echo htmlspecialchars($_SESSION['role']); ?>)</p>
+        <p>Welcome, <?php echo htmlspecialchars($_SESSION['name'] ?? $_SESSION['username'] ?? 'Unknown User'); ?> (<?php echo htmlspecialchars($_SESSION['role']); ?>)</p>
         <a href="dashboard_<?php echo $_SESSION['role']; ?>.php">Dashboard</a> | 
         <a href="task.php">Tasks</a> | 
         <a href="routine.php">Routines</a> | 
-        <a href="profile.php">Profile</a> | 
+        <a href="profile.php?self=1">Profile</a> | 
         <a href="logout.php">Logout</a>
     </header>
     <main class="<?php echo ($_SESSION['role'] === 'child') ? 'child-view' : ''; ?>">

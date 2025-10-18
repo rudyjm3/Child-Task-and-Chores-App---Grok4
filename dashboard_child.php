@@ -14,12 +14,9 @@ if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'child') {
     exit;
 }
 
-// Set username in session if not already set
+// Ensure friendly display name
 if (!isset($_SESSION['name'])) {
-    $userStmt = $db->prepare("SELECT name, username FROM users WHERE id = :id");
-    $userStmt->execute([':id' => $_SESSION['user_id']]);
-    $user = $userStmt->fetch(PDO::FETCH_ASSOC);
-    $_SESSION['name'] = $user['name'] ?: $user['username'];
+    $_SESSION['name'] = getDisplayName($_SESSION['user_id']);
 }
 
 $data = getDashboardData($_SESSION['user_id']);
@@ -91,7 +88,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
    <header>
    <h1>Child Dashboard</h1>
    <p>Hi, <?php echo htmlspecialchars($_SESSION['name']); ?>!</p>
-   <a href="goal.php">Goals</a> | <a href="task.php">Tasks</a> | <a href="routine.php">Routines</a> | <a href="profile.php">Profile</a> | <a href="logout.php">Logout</a>
+   <a href="goal.php">Goals</a> | <a href="task.php">Tasks</a> | <a href="routine.php">Routines</a> | <a href="profile.php?self=1">Profile</a> | <a href="logout.php">Logout</a>
    </header>
    <main class="dashboard">
       <?php if (isset($message)) echo "<p>$message</p>"; ?>

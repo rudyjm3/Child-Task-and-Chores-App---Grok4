@@ -17,17 +17,9 @@ if (!isset($_SESSION['user_id'])) {
     exit;
 }
 
-// Set username in session if not already set (for display)
-if (!isset($_SESSION['username'])) {
-    $userStmt = $db->prepare("SELECT username FROM users WHERE id = :id");
-    $userStmt->execute([':id' => $_SESSION['user_id']]);
-    $username = $userStmt->fetchColumn();
-    if ($username) {
-        $_SESSION['username'] = $username;
-    } else {
-        error_log("Username not found for user_id: " . $_SESSION['user_id']);
-        $_SESSION['username'] = "Unknown User";
-    }
+// Ensure display name in session for header
+if (!isset($_SESSION['name'])) {
+    $_SESSION['name'] = getDisplayName($_SESSION['user_id']);
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -177,11 +169,11 @@ $approved_tasks = array_filter($tasks, function($t) { return $t['status'] === 'a
 <body>
     <header>
          <h1>Task Management</h1>
-         <p>Welcome, <?php echo htmlspecialchars($_SESSION['username'] ?? 'Unknown User'); ?> (<?php echo htmlspecialchars($_SESSION['role']); ?>)</p>
+         <p>Welcome, <?php echo htmlspecialchars($_SESSION['name'] ?? $_SESSION['username'] ?? 'Unknown User'); ?> (<?php echo htmlspecialchars($_SESSION['role']); ?>)</p>
          <a href="dashboard_<?php echo canCreateContent($_SESSION['user_id']) ? 'parent' : 'child'; ?>.php">Dashboard</a> | 
          <a href="goal.php">Goals</a> | 
          <a href="routine.php">Routines</a> |
-         <a href="profile.php">Profile</a> | 
+         <a href="profile.php?self=1">Profile</a> | 
          <a href="logout.php">Logout</a>
     </header>
     <main>
