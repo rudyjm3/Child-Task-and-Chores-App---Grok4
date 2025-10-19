@@ -243,31 +243,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             const childForm = document.getElementById('child-form');
             const caregiverForm = document.getElementById('caregiver-form');
             const avatarPreview = document.getElementById('avatar-preview');
+            const avatarInput = document.getElementById('avatar');
 
-            if (addChildBtn && addCaregiverBtn && childForm && caregiverForm && avatarPreview) {
-                const avatarOptions = document.querySelectorAll('.avatar-option');
-
+            if (addChildBtn && childForm) {
                 addChildBtn.addEventListener('click', () => {
                     childForm.classList.add('active');
-                    caregiverForm.classList.remove('active');
+                    if (caregiverForm) caregiverForm.classList.remove('active');
                 });
+            }
 
+            if (addCaregiverBtn && caregiverForm) {
                 addCaregiverBtn.addEventListener('click', () => {
                     caregiverForm.classList.add('active');
-                    childForm.classList.remove('active');
+                    if (childForm) childForm.classList.remove('active');
                 });
+            }
 
-                // Avatar preview
+            if (avatarPreview && avatarInput) {
+                const avatarOptions = document.querySelectorAll('.avatar-option');
+
                 avatarOptions.forEach(option => {
                     option.addEventListener('click', () => {
                         avatarOptions.forEach(opt => opt.classList.remove('selected'));
                         option.classList.add('selected');
                         avatarPreview.src = option.dataset.avatar;
-                        document.getElementById('avatar').value = option.dataset.avatar;
+                        avatarInput.value = option.dataset.avatar;
                     });
                 });
 
-                // Upload preview
                 const avatarUpload = document.getElementById('avatar-upload');
                 if (avatarUpload) {
                     avatarUpload.addEventListener('change', function(e) {
@@ -401,58 +404,62 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
              <p>No caregivers added yet.</p>
          <?php endif; ?>
      </div>
-      <?php if (in_array($role_type, ['main_parent', 'secondary_parent'])): ?>
+      <?php if (in_array($role_type, ['main_parent', 'secondary_parent', 'family_member'])): ?>
       <div class="manage-family" id="manage-family">
          <h2>Manage Family</h2>
-         <button id="add-child-btn" class="button">Add Child</button>
+         <?php if (in_array($role_type, ['main_parent', 'secondary_parent'])): ?>
+            <button id="add-child-btn" class="button">Add Child</button>
+         <?php endif; ?>
          <button id="add-caregiver-btn" class="button" style="background: #ff9800;">Add New User</button>
-         <div id="child-form" class="family-form">
-            <h3>Add Child</h3>
-            <form method="POST" action="dashboard_parent.php" enctype="multipart/form-data">
-               <div class="form-group">
-                  <label for="first_name">First Name:</label>
-                  <input type="text" id="first_name" name="first_name" required>
-               </div>
-               <div class="form-group">
-                  <label for="last_name">Last Name:</label>
-                  <input type="text" id="last_name" name="last_name" required>
-               </div>
-               <div class="form-group">
-                  <label for="child_username">Username (for login):</label>
-                  <input type="text" id="child_username" name="child_username" required>
-               </div>
-               <div class="form-group">
-                  <label for="child_password">Password (parent sets):</label>
-                  <input type="password" id="child_password" name="child_password" required>
-               </div>
-               <div class="form-group">
-                  <label for="birthday">Birthday:</label>
-                  <input type="date" id="birthday" name="birthday" required>
-               </div>
-               <div class="form-group">
-                  <label for="child_gender">Gender:</label>
-                  <select id="child_gender" name="child_gender" required>
-                      <option value="">Select...</option>
-                      <option value="male">Male</option>
-                      <option value="female">Female</option>
-                  </select>
-               </div>
-               <div class="form-group">
-                  <label>Avatar:</label>
-                  <div class="avatar-options">
-                     <img class="avatar-option" data-avatar="images/avatar_images/default-avatar.png" src="images/avatar_images/default-avatar.png" alt="Avatar default">
-                     <img class="avatar-option" data-avatar="images/avatar_images/boy-1.png" src="images/avatar_images/boy-1.png" alt="Avatar 1">
-                     <img class="avatar-option" data-avatar="images/avatar_images/girl-1.png" src="images/avatar_images/girl-1.png" alt="Avatar 2">
-                     <img class="avatar-option" data-avatar="images/avatar_images/xmas-elf-boy.png" src="images/avatar_images/xmas-elf-boy.png" alt="Avatar 3">
-                     <!-- Add more based on uploaded files -->
+         <?php if (in_array($role_type, ['main_parent', 'secondary_parent'])): ?>
+            <div id="child-form" class="family-form">
+               <h3>Add Child</h3>
+               <form method="POST" action="dashboard_parent.php" enctype="multipart/form-data">
+                  <div class="form-group">
+                     <label for="first_name">First Name:</label>
+                     <input type="text" id="first_name" name="first_name" required>
                   </div>
-                  <input type="file" id="avatar-upload" name="avatar_upload" accept="image/*">
-                  <img id="avatar-preview" src="images/avatar_images/default-avatar.png" alt="Preview" style="width: 100px; border-radius: 50%;">
-                  <input type="hidden" id="avatar" name="avatar">
-               </div>
-               <button type="submit" name="add_child" class="button">Add Child</button>
-            </form>
-         </div>
+                  <div class="form-group">
+                     <label for="last_name">Last Name:</label>
+                     <input type="text" id="last_name" name="last_name" required>
+                  </div>
+                  <div class="form-group">
+                     <label for="child_username">Username (for login):</label>
+                     <input type="text" id="child_username" name="child_username" required>
+                  </div>
+                  <div class="form-group">
+                     <label for="child_password">Password (parent sets):</label>
+                     <input type="password" id="child_password" name="child_password" required>
+                  </div>
+                  <div class="form-group">
+                     <label for="birthday">Birthday:</label>
+                     <input type="date" id="birthday" name="birthday" required>
+                  </div>
+                  <div class="form-group">
+                     <label for="child_gender">Gender:</label>
+                     <select id="child_gender" name="child_gender" required>
+                         <option value="">Select...</option>
+                         <option value="male">Male</option>
+                         <option value="female">Female</option>
+                     </select>
+                  </div>
+                  <div class="form-group">
+                     <label>Avatar:</label>
+                     <div class="avatar-options">
+                        <img class="avatar-option" data-avatar="images/avatar_images/default-avatar.png" src="images/avatar_images/default-avatar.png" alt="Avatar default">
+                        <img class="avatar-option" data-avatar="images/avatar_images/boy-1.png" src="images/avatar_images/boy-1.png" alt="Avatar 1">
+                        <img class="avatar-option" data-avatar="images/avatar_images/girl-1.png" src="images/avatar_images/girl-1.png" alt="Avatar 2">
+                        <img class="avatar-option" data-avatar="images/avatar_images/xmas-elf-boy.png" src="images/avatar_images/xmas-elf-boy.png" alt="Avatar 3">
+                        <!-- Add more based on uploaded files -->
+                     </div>
+                     <input type="file" id="avatar-upload" name="avatar_upload" accept="image/*">
+                     <img id="avatar-preview" src="images/avatar_images/default-avatar.png" alt="Preview" style="width: 100px; border-radius: 50%;">
+                     <input type="hidden" id="avatar" name="avatar">
+                  </div>
+                  <button type="submit" name="add_child" class="button">Add Child</button>
+               </form>
+            </div>
+         <?php endif; ?>
          <div id="caregiver-form" class="family-form">
             <h3>Add Family Member/Caregiver</h3>
             <form method="POST" action="dashboard_parent.php">
