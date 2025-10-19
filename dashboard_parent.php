@@ -321,22 +321,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
          <?php // Use precomputed $main_parent_id from top of file ?>
          <h2>Family Members</h2>
          <?php
-         $stmt = $db->prepare("SELECT u.id, CONCAT(u.first_name, ' ', u.last_name) AS name, u.username, fl.role_type 
-                               FROM users u 
-                               JOIN family_links fl ON u.id = fl.linked_user_id 
-                               WHERE fl.main_parent_id = :main_parent_id 
-                               AND fl.role_type IN ('secondary_parent', 'family_member') 
-                               ORDER BY fl.role_type, u.name");
-         $stmt->execute([':main_parent_id' => $main_parent_id]);
-         $family_members = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $stmt = $db->prepare("SELECT u.id, CONCAT(u.first_name, ' ', u.last_name) AS name, u.username, fl.role_type 
+                              FROM users u 
+                              JOIN family_links fl ON u.id = fl.linked_user_id 
+                              WHERE fl.main_parent_id = :main_parent_id 
+                              AND fl.role_type IN ('secondary_parent', 'family_member') 
+                              ORDER BY fl.role_type, u.name");
+        $stmt->execute([':main_parent_id' => $main_parent_id]);
+        $family_members = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        if ($role_type !== 'main_parent') {
+            $ownerStmt = $db->prepare("SELECT id, CONCAT(first_name, ' ', last_name) AS name, username FROM users WHERE id = :id");
+            $ownerStmt->execute([':id' => $main_parent_id]);
+            $mainOwner = $ownerStmt->fetch(PDO::FETCH_ASSOC);
+            if ($mainOwner) {
+                $mainOwner['role_type'] = 'main_parent';
+                array_unshift($family_members, $mainOwner);
+            }
+        }
          
          if (!empty($family_members)): ?>
              <?php foreach ($family_members as $member): ?>
                  <div class="member-item">
                      <p><?php echo htmlspecialchars($member['name'] ?? $member['username']); ?> 
-                        <span class="role-type">(<?php echo ucfirst(str_replace('_', ' ', $member['role_type'])); ?>)</span>
+                        <span class="role-type">(<?php
+                            $roleLabel = ($member['role_type'] ?? '') === 'main_parent'
+                                ? 'Main Account Owner'
+                                : ucfirst(str_replace('_', ' ', $member['role_type'] ?? ''));
+                            echo htmlspecialchars($roleLabel);
+                        ?>)</span>
                      </p>
-                     <?php if (in_array($role_type, ['main_parent', 'secondary_parent'])): ?>
+                     <?php if (in_array($role_type, ['main_parent', 'secondary_parent']) && ($member['role_type'] ?? '') !== 'main_parent'): ?>
                          <a href="profile.php?edit_user=<?php echo $member['id']; ?>&role_type=<?php echo urlencode($member['role_type']); ?>" class="button edit-btn">Edit</a>
                          <form method="POST" style="display: inline;">
                              <input type="hidden" name="delete_user_id" value="<?php echo $member['id']; ?>">
