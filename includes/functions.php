@@ -31,6 +31,20 @@ function getFamilyLinkRole($user_id) {
     return $stmt->fetchColumn() ?: null;
 }
 
+function getFamilyRootId($user_id) {
+    $role = getEffectiveRole($user_id);
+    if ($role === 'main_parent') {
+        return $user_id;
+    }
+
+    global $db;
+    $stmt = $db->prepare("SELECT main_parent_id FROM family_links WHERE linked_user_id = :id LIMIT 1");
+    $stmt->execute([':id' => $user_id]);
+    $main_parent_id = $stmt->fetchColumn();
+
+    return $main_parent_id ?: $user_id;
+}
+
 // Retrieve parent title (mother/father) for a user if assigned
 function getParentTitle($user_id) {
     global $db;
@@ -433,33 +447,32 @@ function getDashboardData($user_id) {
 }
 
 // Create a new task
-function createTask($parent_user_id, $child_user_id, $title, $description, $due_date, $points, $recurrence, $category, $timing_mode) {
+function createTask($parent_user_id, $child_user_id, $title, $description, $due_date, $points, $recurrence, $category, $timing_mode, $creator_user_id = null) {
     global $db;
     $stmt = $db->prepare("INSERT INTO tasks (parent_user_id, child_user_id, title, description, due_date, points, recurrence, category, timing_mode, created_by) VALUES (:parent_id, :child_id, :title, :description, :due_date, :points, :recurrence, :category, :timing_mode, :created_by)");
-   return $stmt->execute([
-      ':parent_id' => $parent_user_id,
-      ':child_id' => $child_user_id,
-      ':title' => $title,
-      ':description' => $description,
-      ':due_date' => $due_date,
-      ':points' => $points,
-      ':recurrence' => $recurrence,
-      ':category' => $category,
-      ':timing_mode' => $timing_mode,
-      ':created_by' => $parent_user_id
-   ]);
+    return $stmt->execute([
+        ':parent_id' => $parent_user_id,
+        ':child_id' => $child_user_id,
+        ':title' => $title,
+        ':description' => $description,
+        ':due_date' => $due_date,
+        ':points' => $points,
+        ':recurrence' => $recurrence,
+        ':category' => $category,
+        ':timing_mode' => $timing_mode,
+        ':created_by' => $creator_user_id ?? $parent_user_id
+    ]);
 }
 
 // Get tasks for a user
 function getTasks($user_id) {
     global $db;
-    $userStmt = $db->prepare("SELECT role FROM users WHERE id = :id");
-    $userStmt->execute([':id' => $user_id]);
-    $role = $userStmt->fetchColumn();
+    $role = getEffectiveRole($user_id);
 
-    if ($role === 'parent') {
+    if (in_array($role, ['main_parent', 'secondary_parent', 'family_member', 'caregiver'], true)) {
+        $parent_id = getFamilyRootId($user_id);
         $stmt = $db->prepare("SELECT * FROM tasks WHERE parent_user_id = :parent_id");
-        $stmt->execute([':parent_id' => $user_id]);
+        $stmt->execute([':parent_id' => $parent_id]);
     } else {
         $stmt = $db->prepare("SELECT * FROM tasks WHERE child_user_id = :child_id");
         $stmt->execute([':child_id' => $user_id]);
@@ -538,7 +551,7 @@ function redeemReward($child_user_id, $reward_id) {
 }
 
 // Create goal
-function createGoal($parent_user_id, $child_user_id, $title, $target_points, $start_date, $end_date, $reward_id = null) {
+function createGoal($parent_user_id, $child_user_id, $title, $target_points, $start_date, $end_date, $reward_id = null, $creator_user_id = null) {
     global $db;
     $stmt = $db->prepare("INSERT INTO goals (parent_user_id, child_user_id, title, target_points, start_date, end_date, reward_id, created_by) VALUES (:parent_id, :child_id, :title, :target_points, :start_date, :end_date, :reward_id, :created_by)");
     return $stmt->execute([
@@ -549,7 +562,7 @@ function createGoal($parent_user_id, $child_user_id, $title, $target_points, $st
         ':start_date' => $start_date,
         ':end_date' => $end_date,
         ':reward_id' => $reward_id,
-        ':created_by' => $parent_user_id
+        ':created_by' => $creator_user_id ?? $parent_user_id
     ]);
 }
 
@@ -649,7 +662,7 @@ function rejectGoal($goal_id, $parent_user_id, $rejection_comment) {
 }
 
 // **[New] Routine Task Functions **
-function createRoutineTask($parent_user_id, $title, $description, $time_limit, $point_value, $category, $icon_url = null, $audio_url = null) {
+function createRoutineTask($parent_user_id, $title, $description, $time_limit, $point_value, $category, $icon_url = null, $audio_url = null, $creator_user_id = null) {
     global $db;
     $stmt = $db->prepare("INSERT INTO routine_tasks (parent_user_id, title, description, time_limit, point_value, category, icon_url, audio_url, created_by) VALUES (:parent_id, :title, :description, :time_limit, :point_value, :category, :icon_url, :audio_url, :created_by)");
     return $stmt->execute([
@@ -661,7 +674,7 @@ function createRoutineTask($parent_user_id, $title, $description, $time_limit, $
         ':category' => $category,
         ':icon_url' => $icon_url,
         ':audio_url' => $audio_url,
-        ':created_by' => $parent_user_id
+        ':created_by' => $creator_user_id ?? $parent_user_id
     ]);
 }
 
@@ -801,7 +814,7 @@ function updateChildPoints($child_id, $points) {
 }
 
 // **[Revised] Routine Functions (now use routine_task_id instead of task_id) **
-function createRoutine($parent_user_id, $child_user_id, $title, $start_time, $end_time, $recurrence, $bonus_points) {
+function createRoutine($parent_user_id, $child_user_id, $title, $start_time, $end_time, $recurrence, $bonus_points, $creator_user_id = null) {
     global $db;
     $stmt = $db->prepare("INSERT INTO routines (parent_user_id, child_user_id, title, start_time, end_time, recurrence, bonus_points, created_by) VALUES (:parent_id, :child_id, :title, :start_time, :end_time, :recurrence, :bonus_points, :created_by)");
     $stmt->execute([
@@ -812,7 +825,7 @@ function createRoutine($parent_user_id, $child_user_id, $title, $start_time, $en
         ':end_time' => $end_time,
         ':recurrence' => $recurrence,
         ':bonus_points' => $bonus_points,
-        ':created_by' => $parent_user_id
+        ':created_by' => $creator_user_id ?? $parent_user_id
     ]);
     return $db->lastInsertId();
 }
@@ -865,13 +878,12 @@ function reorderRoutineTasks($routine_id, $new_order) {  // $new_order = array(r
 
 function getRoutines($user_id) {
     global $db;
-    $userStmt = $db->prepare("SELECT role FROM users WHERE id = :id");
-    $userStmt->execute([':id' => $user_id]);
-    $role = $userStmt->fetchColumn();
+    $role = getEffectiveRole($user_id);
 
-    if ($role === 'parent') {
+    if (in_array($role, ['main_parent', 'secondary_parent', 'family_member', 'caregiver'], true)) {
+        $parent_id = getFamilyRootId($user_id);
         $stmt = $db->prepare("SELECT * FROM routines WHERE parent_user_id = :parent_id");
-        $stmt->execute([':parent_id' => $user_id]);
+        $stmt->execute([':parent_id' => $parent_id]);
     } else {
         $stmt = $db->prepare("SELECT * FROM routines WHERE child_user_id = :child_id");
         $stmt->execute([':child_id' => $user_id]);

@@ -49,7 +49,7 @@ if (!isset($_SESSION['username'])) {
 $data = getDashboardData($_SESSION['user_id']);
 
 // Fetch Routine Tasks for parent dashboard (fix undefined)
-$routine_tasks = getRoutineTasks($_SESSION['user_id']);
+$routine_tasks = getRoutineTasks($main_parent_id);
 
 $welcome_role_label = getUserRoleLabel($_SESSION['user_id']);
 if (!$welcome_role_label) {
@@ -76,7 +76,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $start_date = filter_input(INPUT_POST, 'start_date', FILTER_SANITIZE_STRING);
         $end_date = filter_input(INPUT_POST, 'end_date', FILTER_SANITIZE_STRING);
         $reward_id = filter_input(INPUT_POST, 'reward_id', FILTER_VALIDATE_INT, FILTER_NULL_ON_FAILURE);
-        if (createGoal($_SESSION['user_id'], $child_user_id, $title, $target_points, $start_date, $end_date, $reward_id)) {
+        if (createGoal($main_parent_id, $child_user_id, $title, $target_points, $start_date, $end_date, $reward_id, $_SESSION['user_id'])) {
             $message = "Goal created successfully!";
         } else {
             $message = "Failed to create goal. Check date range or reward ID.";

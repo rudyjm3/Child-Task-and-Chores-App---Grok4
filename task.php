@@ -22,6 +22,8 @@ if (!isset($_SESSION['name'])) {
     $_SESSION['name'] = getDisplayName($_SESSION['user_id']);
 }
 
+$family_root_id = getFamilyRootId($_SESSION['user_id']);
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['create_task'])) {
         $child_user_id = filter_input(INPUT_POST, 'child_user_id', FILTER_VALIDATE_INT);
@@ -33,7 +35,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $category = filter_input(INPUT_POST, 'category', FILTER_SANITIZE_STRING);
         $timing_mode = filter_input(INPUT_POST, 'timing_mode', FILTER_SANITIZE_STRING);
 
-        if (createTask($_SESSION['user_id'], $child_user_id, $title, $description, $due_date, $points, $recurrence, $category, $timing_mode)) {
+        if (canCreateContent($_SESSION['user_id']) && createTask($family_root_id, $child_user_id, $title, $description, $due_date, $points, $recurrence, $category, $timing_mode, $_SESSION['user_id'])) {
             $message = "Task created successfully!";
         } else {
             $message = "Failed to create task.";
@@ -199,7 +201,7 @@ if (!$welcome_role_label) {
     </header>
     <main>
         <?php if (isset($message)) echo "<p>$message</p>"; ?>
-        <?php if (canCreateContent($_SESSION['user_id']) && canAddEditChild($_SESSION['user_id'])): ?>
+        <?php if (canCreateContent($_SESSION['user_id'])): ?>
             <div class="task-form">
                 <h2>Create Task</h2>
                 <form method="POST" action="task.php" enctype="multipart/form-data">
@@ -209,7 +211,7 @@ if (!$welcome_role_label) {
                         $stmt = $db->prepare("SELECT cp.child_user_id, cp.child_name 
                                              FROM child_profiles cp 
                                              WHERE cp.parent_user_id = :parent_id");
-                        $stmt->execute([':parent_id' => $_SESSION['user_id']]);
+                        $stmt->execute([':parent_id' => $family_root_id]);
                         $children = $stmt->fetchAll(PDO::FETCH_ASSOC);
                         foreach ($children as $child): ?>
                             <option value="<?php echo $child['child_user_id']; ?>">

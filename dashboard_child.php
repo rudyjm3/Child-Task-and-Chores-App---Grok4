@@ -27,7 +27,7 @@ $routines = getRoutines($_SESSION['user_id']);
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['request_completion'])) {
         $goal_id = filter_input(INPUT_POST, 'goal_id', FILTER_VALIDATE_INT);
-        if (requestGoalCompletion($_SESSION['user_id'], $goal_id)) {
+        if (requestGoalCompletion($goal_id, $_SESSION['user_id'])) {
             $message = "Completion requested! Awaiting parent approval.";
             $data = getDashboardData($_SESSION['user_id']); // Refresh data
         } else {

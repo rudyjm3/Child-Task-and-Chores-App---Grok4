@@ -19,7 +19,9 @@ if (!isset($_SESSION['name'])) {
     $_SESSION['name'] = getDisplayName($_SESSION['user_id']);
 }
 
-$routine_tasks = (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) ? getRoutineTasks($_SESSION['user_id']) : [];
+$family_root_id = getFamilyRootId($_SESSION['user_id']);
+
+$routine_tasks = (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) ? getRoutineTasks($family_root_id) : [];
 $routines = getRoutines($_SESSION['user_id']);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -32,7 +34,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $bonus_points = filter_input(INPUT_POST, 'bonus_points', FILTER_VALIDATE_INT);
         $routine_task_ids = $_POST['routine_task_ids'] ?? []; // Array of selected IDs
 
-        $routine_id = createRoutine($_SESSION['user_id'], $child_user_id, $title, $start_time, $end_time, $recurrence, $bonus_points);
+        $routine_id = createRoutine($family_root_id, $child_user_id, $title, $start_time, $end_time, $recurrence, $bonus_points, $_SESSION['user_id']);
         if ($routine_id) {
             foreach ($routine_task_ids as $order => $routine_task_id) {
                 addRoutineTaskToRoutine($routine_id, $routine_task_id, $order + 1);
@@ -48,9 +50,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $time_limit = filter_input(INPUT_POST, 'time_limit', FILTER_VALIDATE_INT);
         $point_value = filter_input(INPUT_POST, 'point_value', FILTER_VALIDATE_INT);
         $category = filter_input(INPUT_POST, 'category', FILTER_SANITIZE_STRING);
-        if (createRoutineTask($_SESSION['user_id'], $title, $description, $time_limit, $point_value, $category)) {
+        if (createRoutineTask($family_root_id, $title, $description, $time_limit, $point_value, $category, null, null, $_SESSION['user_id'])) {
             $message = "Routine Task created!";
-            $routine_tasks = getRoutineTasks($_SESSION['user_id']); // Refresh
+            $routine_tasks = getRoutineTasks($family_root_id); // Refresh
         } else {
             $message = "Failed to create Routine Task.";
         }
@@ -63,7 +65,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $bonus_points = filter_input(INPUT_POST, 'bonus_points', FILTER_VALIDATE_INT);
         $routine_task_orders = $_POST['routine_task_orders'] ?? []; // array(routine_task_id => order)
 
-        if (updateRoutine($routine_id, $title, $start_time, $end_time, $recurrence, $bonus_points, $_SESSION['user_id'])) {
+        if (updateRoutine($routine_id, $title, $start_time, $end_time, $recurrence, $bonus_points, $family_root_id)) {
             reorderRoutineTasks($routine_id, $routine_task_orders);
             $message = "Routine updated successfully!";
             $routines = getRoutines($_SESSION['user_id']); // Refresh
@@ -81,7 +83,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     } elseif (isset($_POST['delete_routine']) && isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
         $routine_id = filter_input(INPUT_POST, 'routine_id', FILTER_VALIDATE_INT);
-        if (deleteRoutine($routine_id, $_SESSION['user_id'])) {
+        if (deleteRoutine($routine_id, $family_root_id)) {
             $message = "Routine deleted!";
             $routines = getRoutines($_SESSION['user_id']); // Refresh
         } else {
@@ -89,9 +91,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     } elseif (isset($_POST['delete_routine_task']) && isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
         $routine_task_id = filter_input(INPUT_POST, 'routine_task_id', FILTER_VALIDATE_INT);
-        if (deleteRoutineTask($routine_task_id, $_SESSION['user_id'])) {
+        if (deleteRoutineTask($routine_task_id, $family_root_id)) {
             $message = "Routine Task deleted!";
-            $routine_tasks = getRoutineTasks($_SESSION['user_id']); // Refresh
+            $routine_tasks = getRoutineTasks($family_root_id); // Refresh
         } else {
             $message = "Failed to delete Routine Task.";
         }
@@ -238,15 +240,15 @@ if (!$welcome_role_label) {
                         <select id="child_user_id" name="child_user_id" required>
                             <?php
                             $stmt = $db->prepare("SELECT cp.child_user_id, cp.child_name 
-                     FROM child_profiles cp 
-                     WHERE cp.parent_user_id = :parent_id");
-$stmt->execute([':parent_id' => $_SESSION['user_id']]);
-$children = $stmt->fetchAll(PDO::FETCH_ASSOC);
-foreach ($children as $child): ?>
-    <option value="<?php echo $child['child_user_id']; ?>">
-        <?php echo htmlspecialchars($child['child_name']); ?>
-    </option>
-<?php endforeach; ?>
+                                             FROM child_profiles cp 
+                                             WHERE cp.parent_user_id = :parent_id");
+                            $stmt->execute([':parent_id' => $family_root_id]);
+                            $children = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                            foreach ($children as $child): ?>
+                                <option value="<?php echo $child['child_user_id']; ?>">
+                                    <?php echo htmlspecialchars($child['child_name']); ?>
+                                </option>
+                            <?php endforeach; ?>
                         </select>
                     </div>
                     <div class="form-group">
