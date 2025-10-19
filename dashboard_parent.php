@@ -118,6 +118,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         if (createChildProfile($_SESSION['user_id'], $first_name, $last_name, $child_username, $child_password, $birthday, $avatar, $gender)) {
             $message = "Child added successfully! Username: $child_username, Password: $child_password (share securely).";
+            $data = getDashboardData($_SESSION['user_id']);
         } else {
             $message = "Failed to add child. Check for duplicate username.";
         }

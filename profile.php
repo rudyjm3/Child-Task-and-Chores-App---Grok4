@@ -234,6 +234,9 @@ if ($role === 'child' || $edit_type === 'child') {
     $profile_stmt = $db->prepare("SELECT * FROM child_profiles WHERE child_user_id = :id");
     $profile_stmt->execute([':id' => $user_id]);
     $profile = $profile_stmt->fetch(PDO::FETCH_ASSOC);
+    if ($profile) {
+        $profile['age'] = calculateAge($profile['birthday'] ?? null);
+    }
 }
 
 $target_role_label = getUserRoleLabel($user_id);
@@ -359,8 +362,8 @@ $child_display_name = $profile['child_name'] ?? $display_name;
                         </select>
                     </div>
                     <div class="form-group">
-                        <label for="age">Age:</label>
-                        <input type="number" id="age" name="age" min="1" max="18" value="<?php echo htmlspecialchars($profile['age'] ?? ''); ?>" readonly>
+                        <label>Age:</label>
+                        <span class="readonly-value"><?php echo ($profile['age'] ?? null) !== null ? htmlspecialchars($profile['age']) : 'N/A'; ?></span>
                     </div>
                     <div class="form-group">
                         <label>Avatar:</label>

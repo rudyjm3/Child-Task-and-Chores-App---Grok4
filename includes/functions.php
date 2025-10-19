@@ -179,14 +179,17 @@ function createChildProfile($parent_user_id, $first_name, $last_name, $child_use
         }
         $child_user_id = $db->lastInsertId();
 
+        $age = calculateAge($birthday);
+
         // Create child profile
-        $stmt = $db->prepare("INSERT INTO child_profiles (child_user_id, parent_user_id, child_name, birthday, avatar) 
-                             VALUES (:child_user_id, :parent_id, :child_name, :birthday, :avatar)");
+        $stmt = $db->prepare("INSERT INTO child_profiles (child_user_id, parent_user_id, child_name, birthday, age, avatar) 
+                             VALUES (:child_user_id, :parent_id, :child_name, :birthday, :age, :avatar)");
         if (!$stmt->execute([
             ':child_user_id' => $child_user_id,
             ':parent_id' => $parent_user_id,
             ':child_name' => $first_name . ' ' . $last_name,
             ':birthday' => $birthday,
+            ':age' => $age,
             ':avatar' => $avatar
         ])) {
             $db->rollBack();
@@ -326,12 +329,17 @@ function getDashboardData($user_id) {
         }
 
         // Children for this family
-        $stmt = $db->prepare("SELECT cp.id, cp.child_user_id, COALESCE(CONCAT(u.first_name, ' ', u.last_name), u.name, u.username) AS display_name, cp.avatar, cp.age, cp.child_name
-                              FROM child_profiles cp
-                              JOIN users u ON cp.child_user_id = u.id
-                              WHERE cp.parent_user_id = :parent_id");
+        $stmt = $db->prepare("SELECT cp.id, cp.child_user_id, COALESCE(CONCAT(u.first_name, ' ', u.last_name), u.name, u.username) AS display_name, cp.avatar, cp.birthday, cp.child_name
+                                FROM child_profiles cp
+                                JOIN users u ON cp.child_user_id = u.id
+                                WHERE cp.parent_user_id = :parent_id");
         $stmt->execute([':parent_id' => $main_parent_id]);
         $data['children'] = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+        foreach ($data['children'] as &$child) {
+            $child['age'] = calculateAge($child['birthday'] ?? null);
+        }
+        unset($child);
 
         // Active rewards for the family
         $stmt = $db->prepare("SELECT id, title, description, point_cost, created_on FROM rewards WHERE parent_user_id = :parent_id AND status = 'available'");
