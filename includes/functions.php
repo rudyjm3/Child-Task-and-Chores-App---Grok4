@@ -3,7 +3,7 @@
 // Purpose: Centralize common operations for maintainability
 // Inputs: None initially
 // Outputs: Functions for app logic
-// Version: 3.5.2 (Fixed addLinkedUser to use first/last name instead of name, for consistency with child profiles)
+// Version: 3.10.14 (Family-wide role support and linked management enhancements)
 
 require_once __DIR__ . '/db_connect.php';
 

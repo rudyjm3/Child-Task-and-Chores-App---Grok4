@@ -375,7 +375,7 @@ if (!$welcome_role_label) {
         </div>
     </main>
     <footer>
-      <p>Child Task and Chore App - Ver 3.4.8</p>
+      <p>Child Task and Chore App - Ver 3.10.14</p>
     </footer>
 </body>
 </html>

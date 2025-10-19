@@ -1,7 +1,7 @@
 <?php
 // profile.php - User profile management
 // Purpose: Edit profile details based on role (child: avatar/password; parent: family)
-// Version: 3.5.2 (Fixed child edit upload: enctype, validation, your avatar filenames)
+// Version: 3.10.14 (Secondary parent and caregiver profile management refinements)
 
 require_once __DIR__ . '/includes/functions.php';
 
@@ -197,55 +197,77 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             $first_name = filter_input(INPUT_POST, 'first_name', FILTER_SANITIZE_STRING);
             $last_name = filter_input(INPUT_POST, 'last_name', FILTER_SANITIZE_STRING);
-            $gender = filter_input(INPUT_POST, 'gender', FILTER_SANITIZE_STRING);
-            if (!in_array($gender, ['male', 'female'], true)) {
-                $gender = null;
-            }
-            $allowed_parent_titles = ['mother', 'father'];
-            $parent_title = filter_input(INPUT_POST, 'parent_title', FILTER_SANITIZE_STRING);
-            if (!in_array($parent_title, $allowed_parent_titles, true)) {
-                $parent_title = null;
-            }
+            $target_effective_role_for_update = getEffectiveRole($user_id);
 
-            $target_effective_role = getEffectiveRole($user_id);
-            if (!in_array($target_effective_role, ['main_parent', 'secondary_parent'], true)) {
-                $parent_title = null;
-            }
-
-            $parent_conflict = false;
-            if ($parent_title) {
-                $family_owner_id = $family_root_id;
-                if ($target_effective_role === 'main_parent') {
-                    $family_owner_id = $user_id;
+            if (in_array($target_effective_role_for_update, ['main_parent', 'secondary_parent'], true)) {
+                $gender = filter_input(INPUT_POST, 'gender', FILTER_SANITIZE_STRING);
+                if (!in_array($gender, ['male', 'female'], true)) {
+                    $gender = null;
                 }
-                $conflictStmt = $db->prepare("SELECT u.id 
-                                             FROM users u
-                                             LEFT JOIN family_links fl ON u.id = fl.linked_user_id
-                                             WHERE (
-                                                     u.id = :main_parent_id
-                                                     OR (fl.main_parent_id = :main_parent_id AND fl.role_type = 'secondary_parent')
-                                                   )
-                                               AND u.parent_title = :parent_title
-                                               AND u.id != :current_user
-                                             LIMIT 1");
-                $conflictStmt->execute([
-                    ':main_parent_id' => $family_owner_id,
-                    ':parent_title' => $parent_title,
-                    ':current_user' => $user_id
-                ]);
-                if ($conflictStmt->fetchColumn()) {
-                    $parent_conflict = true;
-                    $message = ucfirst($parent_title) . " has already been assigned to another parent in this family. Please choose a different option or leave it blank.";
+                $allowed_parent_titles = ['mother', 'father'];
+                $parent_title = filter_input(INPUT_POST, 'parent_title', FILTER_SANITIZE_STRING);
+                if (!in_array($parent_title, $allowed_parent_titles, true)) {
+                    $parent_title = null;
                 }
-            }
 
-            if (!$parent_conflict) {
-                $stmt = $db->prepare("UPDATE users SET first_name = :first_name, last_name = :last_name, gender = :gender, parent_title = :parent_title WHERE id = :id");
+                $parent_conflict = false;
+                if ($parent_title) {
+                    $family_owner_id = $family_root_id;
+                    if ($target_effective_role_for_update === 'main_parent') {
+                        $family_owner_id = $user_id;
+                    }
+                    $conflictStmt = $db->prepare("SELECT u.id 
+                                                 FROM users u
+                                                 LEFT JOIN family_links fl ON u.id = fl.linked_user_id
+                                                 WHERE (
+                                                         u.id = :main_parent_id
+                                                         OR (fl.main_parent_id = :main_parent_id AND fl.role_type = 'secondary_parent')
+                                                       )
+                                                   AND u.parent_title = :parent_title
+                                                   AND u.id != :current_user
+                                                 LIMIT 1");
+                    $conflictStmt->execute([
+                        ':main_parent_id' => $family_owner_id,
+                        ':parent_title' => $parent_title,
+                        ':current_user' => $user_id
+                    ]);
+                    if ($conflictStmt->fetchColumn()) {
+                        $parent_conflict = true;
+                        $message = ucfirst($parent_title) . " has already been assigned to another parent in this family. Please choose a different option or leave it blank.";
+                    }
+                }
+
+                if (!$parent_conflict) {
+                    $stmt = $db->prepare("UPDATE users SET first_name = :first_name, last_name = :last_name, gender = :gender, parent_title = :parent_title WHERE id = :id");
+                    if ($stmt->execute([
+                        ':first_name' => $first_name,
+                        ':last_name' => $last_name,
+                        ':gender' => $gender ?: null,
+                        ':parent_title' => $parent_title,
+                        ':id' => $user_id
+                    ])) {
+                        $message = "Profile updated successfully!";
+                        if ($user_id == $_SESSION['user_id']) {
+                            $_SESSION['name'] = getDisplayName($_SESSION['user_id']);
+                        }
+                        if ($user_id != $_SESSION['user_id']) {
+                            $linked_role = getFamilyLinkRole($user_id);
+                            $redirect = 'profile.php?edit_user=' . $user_id;
+                            if ($linked_role) {
+                                $redirect .= '&role_type=' . urlencode($linked_role);
+                            }
+                            header('Location: ' . $redirect);
+                            exit;
+                        }
+                    } else {
+                        $message = "Failed to update profile.";
+                    }
+                }
+            } else {
+                $stmt = $db->prepare("UPDATE users SET first_name = :first_name, last_name = :last_name, parent_title = NULL WHERE id = :id");
                 if ($stmt->execute([
                     ':first_name' => $first_name,
                     ':last_name' => $last_name,
-                    ':gender' => $gender ?: null,
-                    ':parent_title' => $parent_title,
                     ':id' => $user_id
                 ])) {
                     $message = "Profile updated successfully!";
@@ -507,6 +529,47 @@ $child_display_name = $profile['child_name'] ?? $display_name;
                     <h3>Manage Family</h3>
                     <a href="dashboard_parent.php#manage-family" class="button">Go to Manage Family</a>
                 <?php endif; ?>
+            </div>
+        <?php elseif (in_array($target_effective_role, ['family_member', 'caregiver'], true)): ?>
+            <div class="profile-form parent-profile">
+                <h2>
+                    <?php
+                        if ($user_id == $_SESSION['user_id']) {
+                            echo 'Your Profile';
+                        } else {
+                            echo 'Edit ' . htmlspecialchars($target_role_label ?? ucfirst($target_effective_role));
+                        }
+                    ?>
+                </h2>
+                <p class="profile-name">
+                    <?php echo htmlspecialchars($display_name); ?>
+                    <?php if ($target_role_label): ?>
+                        <span class="role-badge"><?php echo htmlspecialchars($target_role_label); ?></span>
+                    <?php endif; ?>
+                </p>
+                <form method="POST" action="profile.php">
+                    <input type="hidden" name="edit_user_id" value="<?php echo (int)$user_id; ?>">
+                    <input type="hidden" name="edit_type" value="adult">
+                    <div class="form-group">
+                        <label for="first_name">First Name:</label>
+                        <input type="text" id="first_name" name="first_name" value="<?php echo htmlspecialchars($user['first_name'] ?? ''); ?>" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="last_name">Last Name:</label>
+                        <input type="text" id="last_name" name="last_name" value="<?php echo htmlspecialchars($user['last_name'] ?? ''); ?>" required>
+                    </div>
+                    <button type="submit" name="update_parent_profile" class="button">Update Profile</button>
+                </form>
+                <h3>Change Password</h3>
+                <form method="POST" action="profile.php">
+                    <input type="hidden" name="edit_user_id" value="<?php echo (int)$user_id; ?>">
+                    <input type="hidden" name="edit_type" value="adult">
+                    <div class="form-group">
+                        <label for="new_password">New Password:</label>
+                        <input type="password" id="new_password" name="new_password" required>
+                    </div>
+                    <button type="submit" name="update_password" class="button">Update Password</button>
+                </form>
             </div>
         <?php endif; ?>
         <a href="dashboard_<?php echo $role; ?>.php" class="button">Back to Dashboard</a>
