@@ -14,11 +14,9 @@ if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'child') {
     exit;
 }
 
-// Set username in session if not already set
-if (!isset($_SESSION['username'])) {
-    $userStmt = $db->prepare("SELECT username FROM users WHERE id = :id");
-    $userStmt->execute([':id' => $_SESSION['user_id']]);
-    $_SESSION['username'] = $userStmt->fetchColumn() ?: 'Unknown User';
+// Ensure friendly display name
+if (!isset($_SESSION['name'])) {
+    $_SESSION['name'] = getDisplayName($_SESSION['user_id']);
 }
 
 $data = getDashboardData($_SESSION['user_id']);
@@ -29,7 +27,7 @@ $routines = getRoutines($_SESSION['user_id']);
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['request_completion'])) {
         $goal_id = filter_input(INPUT_POST, 'goal_id', FILTER_VALIDATE_INT);
-        if (requestGoalCompletion($_SESSION['user_id'], $goal_id)) {
+        if (requestGoalCompletion($goal_id, $_SESSION['user_id'])) {
             $message = "Completion requested! Awaiting parent approval.";
             $data = getDashboardData($_SESSION['user_id']); // Refresh data
         } else {
@@ -89,8 +87,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <body>
    <header>
    <h1>Child Dashboard</h1>
-   <p>Hi, <?php echo htmlspecialchars($_SESSION['username'] ?? 'Unknown User'); ?>!</p>
-   <a href="goal.php">Goals</a> | <a href="task.php">Tasks</a> | <a href="routine.php">Routines</a> | <a href="profile.php">Profile</a> | <a href="logout.php">Logout</a>
+   <p>Hi, <?php echo htmlspecialchars($_SESSION['name']); ?>!</p>
+   <a href="goal.php">Goals</a> | <a href="task.php">Tasks</a> | <a href="routine.php">Routines</a> | <a href="profile.php?self=1">Profile</a> | <a href="logout.php">Logout</a>
    </header>
    <main class="dashboard">
       <?php if (isset($message)) echo "<p>$message</p>"; ?>
@@ -220,7 +218,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       </div>
    </main>
    <footer>
-   <p>Child Task and Chore App - Ver 3.4.8</p>
+   <p>Child Task and Chore App - Ver 3.10.14</p>
    </footer>
 </body>
 </html>

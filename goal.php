@@ -13,8 +13,15 @@ if (!isset($_SESSION['user_id'])) {
     exit;
 }
 
+// Ensure a friendly display name is available in session
+if (!isset($_SESSION['name'])) {
+    $_SESSION['name'] = getDisplayName($_SESSION['user_id']);
+}
+
+$family_root_id = getFamilyRootId($_SESSION['user_id']);
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    if (isset($_POST['create_goal']) && $_SESSION['role'] === 'parent') {
+    if (isset($_POST['create_goal']) && isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
         $child_user_id = filter_input(INPUT_POST, 'child_user_id', FILTER_VALIDATE_INT);
         $title = filter_input(INPUT_POST, 'title', FILTER_SANITIZE_STRING);
         $target_points = filter_input(INPUT_POST, 'target_points', FILTER_VALIDATE_INT);
@@ -22,12 +29,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $end_date = filter_input(INPUT_POST, 'end_date', FILTER_SANITIZE_STRING);
         $reward_id = filter_input(INPUT_POST, 'reward_id', FILTER_VALIDATE_INT, FILTER_NULL_ON_FAILURE);
 
-        if (createGoal($_SESSION['user_id'], $child_user_id, $title, $target_points, $start_date, $end_date, $reward_id)) {
+        if (createGoal($family_root_id, $child_user_id, $title, $target_points, $start_date, $end_date, $reward_id, $_SESSION['user_id'])) {
             $message = "Goal created successfully!";
         } else {
             $message = "Failed to create goal.";
         }
-    } elseif (isset($_POST['update_goal']) && $_SESSION['role'] === 'parent') {
+    } elseif (isset($_POST['update_goal']) && isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
         $goal_id = filter_input(INPUT_POST, 'goal_id', FILTER_VALIDATE_INT);
         $title = filter_input(INPUT_POST, 'title', FILTER_SANITIZE_STRING);
         $target_points = filter_input(INPUT_POST, 'target_points', FILTER_VALIDATE_INT);
@@ -35,28 +42,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $end_date = filter_input(INPUT_POST, 'end_date', FILTER_SANITIZE_STRING);
         $reward_id = filter_input(INPUT_POST, 'reward_id', FILTER_VALIDATE_INT, FILTER_NULL_ON_FAILURE);
 
-        if (updateGoal($goal_id, $_SESSION['user_id'], $title, $target_points, $start_date, $end_date, $reward_id)) {
+        if (updateGoal($goal_id, $family_root_id, $title, $target_points, $start_date, $end_date, $reward_id)) {
             $message = "Goal updated successfully!";
         } else {
             $message = "Failed to update goal.";
         }
-    } elseif (isset($_POST['delete_goal']) && $_SESSION['role'] === 'parent') {
+    } elseif (isset($_POST['delete_goal']) && isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
         $goal_id = filter_input(INPUT_POST, 'goal_id', FILTER_VALIDATE_INT);
-        if (deleteGoal($goal_id, $_SESSION['user_id'])) {
+        if (deleteGoal($goal_id, $family_root_id)) {
             $message = "Goal deleted successfully!";
         } else {
             $message = "Failed to delete goal.";
         }
-    } elseif (isset($_POST['reactivate_goal']) && $_SESSION['role'] === 'parent') {
+    } elseif (isset($_POST['reactivate_goal']) && isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
         $goal_id = filter_input(INPUT_POST, 'goal_id', FILTER_VALIDATE_INT);
-        if (reactivateGoal($goal_id, $_SESSION['user_id'])) {
+        if (reactivateGoal($goal_id, $family_root_id)) {
             $message = "Goal reactivated successfully!";
         } else {
             $message = "Failed to reactivate goal.";
         }
-    } elseif (isset($_POST['request_completion']) && $_SESSION['role'] === 'child') {
+    } elseif (isset($_POST['request_completion']) && isset($_SESSION['user_id']) && getUserRole($_SESSION['user_id']) === 'child') {
         $goal_id = filter_input(INPUT_POST, 'goal_id', FILTER_VALIDATE_INT);
-        if (requestGoalCompletion($_SESSION['user_id'], $goal_id)) {
+        if (requestGoalCompletion($goal_id, $_SESSION['user_id'])) {
             $message = "Completion requested! Awaiting parent approval.";
         } else {
             $message = "Failed to request completion.";
@@ -65,25 +72,45 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $goal_id = filter_input(INPUT_POST, 'goal_id', FILTER_VALIDATE_INT);
         $action = isset($_POST['approve_goal']) ? 'approve' : 'reject';
         $rejection_comment = $action === 'reject' ? filter_input(INPUT_POST, 'rejection_comment', FILTER_UNSAFE_RAW, FILTER_FLAG_STRIP_LOW) : null;
-        $points = approveGoal($_SESSION['user_id'], $goal_id, $action === 'approve', $rejection_comment);
-        if ($points !== false) {
-            $message = $action === 'approve' ? "Goal approved! Child earned $points points." : "Goal rejected.";
+
+        if (!canCreateContent($_SESSION['user_id'])) {
+            $message = "Access denied.";
         } else {
-            $message = "Failed to $action goal.";
+            if ($action === 'approve') {
+                $pointsStmt = $db->prepare("SELECT target_points FROM goals WHERE id = :goal_id AND parent_user_id = :parent_id");
+                $pointsStmt->execute([':goal_id' => $goal_id, ':parent_id' => $family_root_id]);
+                $points_value = $pointsStmt->fetchColumn();
+
+                if (approveGoal($goal_id, $family_root_id)) {
+                    if ($points_value !== false) {
+                        $message = "Goal approved! Child earned " . (int)$points_value . " points.";
+                    } else {
+                        $message = "Goal approved!";
+                    }
+                } else {
+                    $message = "Failed to approve goal.";
+                }
+            } else {
+                if (rejectGoal($goal_id, $family_root_id, $rejection_comment)) {
+                    $message = "Goal rejected.";
+                } else {
+                    $message = "Failed to reject goal.";
+                }
+            }
         }
     }
 }
 
 // Fetch goals for the user
 $goals = [];
-if ($_SESSION['role'] === 'parent') {
+if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
     $stmt = $db->prepare("SELECT g.id, g.title, g.target_points, g.start_date, g.end_date, g.status, g.reward_id, r.title as reward_title, u.username as child_username, g.rejected_at, g.rejection_comment, g.created_at 
                          FROM goals g 
                          JOIN users u ON g.child_user_id = u.id 
                          LEFT JOIN rewards r ON g.reward_id = r.id 
                          WHERE g.parent_user_id = :parent_id 
                          ORDER BY g.start_date ASC");
-    $stmt->execute([':parent_id' => $_SESSION['user_id']]);
+    $stmt->execute([':parent_id' => $family_root_id]);
     $goals = $stmt->fetchAll(PDO::FETCH_ASSOC);
 } else { // Child
     $stmt = $db->prepare("SELECT g.id, g.title, g.target_points, g.start_date, g.end_date, g.status, g.reward_id, r.title as reward_title, g.rejected_at, g.rejection_comment, g.created_at 
@@ -114,14 +141,14 @@ $rejected_goals = array_filter($goals, function($g) { return $g['status'] === 'r
 
 // Fetch all goals for parent view (including active, pending, completed, rejected)
 $all_goals = [];
-if ($_SESSION['role'] === 'parent') {
+if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
     $stmt = $db->prepare("SELECT g.id, g.title, g.target_points, g.start_date, g.end_date, g.status, g.reward_id, r.title as reward_title, u.username as child_username, g.rejected_at, g.rejection_comment, g.created_at 
                          FROM goals g 
                          JOIN users u ON g.child_user_id = u.id 
                          LEFT JOIN rewards r ON g.reward_id = r.id 
                          WHERE g.parent_user_id = :parent_id 
                          ORDER BY g.start_date ASC");
-    $stmt->execute([':parent_id' => $_SESSION['user_id']]);
+    $stmt->execute([':parent_id' => $family_root_id]);
     $all_goals = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
     // Format dates for all goals in parent view
@@ -138,6 +165,14 @@ if ($_SESSION['role'] === 'parent') {
     $active_goals = array_filter($all_goals, function($g) { return $g['status'] === 'active' || $g['status'] === 'pending_approval'; });
     $completed_goals = array_filter($all_goals, function($g) { return $g['status'] === 'completed'; });
     $rejected_goals = array_filter($all_goals, function($g) { return $g['status'] === 'rejected'; });
+}
+
+$welcome_role_label = getUserRoleLabel($_SESSION['user_id']);
+if (!$welcome_role_label) {
+    $fallback_role = getEffectiveRole($_SESSION['user_id']) ?: ($_SESSION['role'] ?? null);
+    if ($fallback_role) {
+        $welcome_role_label = ucfirst(str_replace('_', ' ', $fallback_role));
+    }
 }
 ?>
 <!DOCTYPE html>
@@ -173,11 +208,20 @@ if ($_SESSION['role'] === 'parent') {
         .button {
             padding: 10px 20px;
             margin: 5px;
-            background-color: <?php echo ($_SESSION['role'] === 'parent') ? '#4caf50' : '#ff9800'; ?>;
+            background-color: <?php echo (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) ? '#4caf50' : '#ff9800'; ?>;
             color: white;
             border: none;
             border-radius: 5px;
             cursor: pointer;
+        }
+        .role-badge {
+            background: #4caf50;
+            color: #fff;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.9em;
+            margin-left: 8px;
+            display: inline-block;
         }
         .edit-delete a {
             margin-right: 10px;
@@ -209,27 +253,35 @@ if ($_SESSION['role'] === 'parent') {
 <body>
     <header>
         <h1>Goal Management</h1>
-        <p>Welcome, <?php echo htmlspecialchars($_SESSION['username'] ?? 'Unknown User'); ?> (<?php echo htmlspecialchars($_SESSION['role']); ?>)</p>
+        <p>Welcome, <?php echo htmlspecialchars($_SESSION['name'] ?? $_SESSION['username'] ?? 'Unknown User'); ?>
+            <?php if ($welcome_role_label): ?>
+                <span class="role-badge">(<?php echo htmlspecialchars($welcome_role_label); ?>)</span>
+            <?php endif; ?>
+        </p>
         <a href="dashboard_<?php echo $_SESSION['role']; ?>.php">Dashboard</a> | 
         <a href="task.php">Tasks</a> | 
         <a href="routine.php">Routines</a> | 
-        <a href="profile.php">Profile</a> | 
+        <a href="profile.php?self=1">Profile</a> | 
         <a href="logout.php">Logout</a>
     </header>
     <main class="<?php echo ($_SESSION['role'] === 'child') ? 'child-view' : ''; ?>">
         <?php if (isset($message)) echo "<p>$message</p>"; ?>
-        <?php if ($_SESSION['role'] === 'parent'): ?>
+        <?php if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])): ?>
             <div class="goal-form">
                 <h2>Create Goal</h2>
                 <form method="POST" action="goal.php">
                     <label for="child_user_id">Child:</label>
                     <select id="child_user_id" name="child_user_id" required>
                         <?php
-                        $stmt = $db->prepare("SELECT cp.child_user_id, u.username FROM child_profiles cp JOIN users u ON cp.child_user_id = u.id WHERE cp.parent_user_id = :parent_id");
-                        $stmt->execute([':parent_id' => $_SESSION['user_id']]);
+                        $stmt = $db->prepare("SELECT cp.child_user_id, cp.child_name 
+                                             FROM child_profiles cp 
+                                             WHERE cp.parent_user_id = :parent_id");
+                        $stmt->execute([':parent_id' => $family_root_id]);
                         $children = $stmt->fetchAll(PDO::FETCH_ASSOC);
                         foreach ($children as $child): ?>
-                            <option value="<?php echo $child['child_user_id']; ?>"><?php echo htmlspecialchars($child['username']); ?></option>
+                            <option value="<?php echo $child['child_user_id']; ?>">
+                                <?php echo htmlspecialchars($child['child_name']); ?>
+                            </option>
                         <?php endforeach; ?>
                     </select>
                     <label for="title">Title:</label>
@@ -245,7 +297,7 @@ if ($_SESSION['role'] === 'parent') {
                         <option value="">None</option>
                         <?php
                         $stmt = $db->prepare("SELECT id, title FROM rewards WHERE parent_user_id = :parent_id AND status = 'available'");
-                        $stmt->execute([':parent_id' => $_SESSION['user_id']]);
+                        $stmt->execute([':parent_id' => $family_root_id]);
                         $rewards = $stmt->fetchAll(PDO::FETCH_ASSOC);
                         foreach ($rewards as $reward): ?>
                             <option value="<?php echo $reward['id']; ?>"><?php echo htmlspecialchars($reward['title']); ?></option>
@@ -256,7 +308,7 @@ if ($_SESSION['role'] === 'parent') {
             </div>
         <?php endif; ?>
         <div class="goal-list">
-            <h2><?php echo ($_SESSION['role'] === 'parent') ? 'Created Goals' : 'Your Goals'; ?></h2>
+            <h2><?php echo (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) ? 'Created Goals' : 'Your Goals'; ?></h2>
             <?php if (empty($goals)): ?>
                 <p>No goals available.</p>
             <?php else: ?>
@@ -271,7 +323,7 @@ if ($_SESSION['role'] === 'parent') {
                             <p>Period: <?php echo htmlspecialchars($goal['start_date_formatted']); ?> to <?php echo htmlspecialchars($goal['end_date_formatted']); ?></p>
                             <p>Reward: <?php echo htmlspecialchars($goal['reward_title'] ?? 'None'); ?></p>
                             <p>Status: <?php echo htmlspecialchars($goal['status']); ?></p>
-                            <?php if ($_SESSION['role'] === 'parent'): ?>
+                            <?php if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])): ?>
                                 <p>Child: <?php echo htmlspecialchars($goal['child_username']); ?></p>
                                 <?php if ($goal['status'] === 'pending_approval'): ?>
                                     <form method="POST" action="goal.php">
@@ -311,7 +363,7 @@ if ($_SESSION['role'] === 'parent') {
                             <p>Period: <?php echo htmlspecialchars($goal['start_date_formatted']); ?> to <?php echo htmlspecialchars($goal['end_date_formatted']); ?></p>
                             <p>Reward: <?php echo htmlspecialchars($goal['reward_title'] ?? 'None'); ?></p>
                             <p>Status: Completed</p>
-                            <?php if ($_SESSION['role'] === 'parent'): ?>
+                            <?php if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])): ?>
                                 <p>Child: <?php echo htmlspecialchars($goal['child_username']); ?></p>
                             <?php endif; ?>
                         </div>
@@ -330,7 +382,7 @@ if ($_SESSION['role'] === 'parent') {
                             <p>Status: Rejected</p>
                             <p>Rejected on: <?php echo htmlspecialchars($goal['rejected_at_formatted']); ?></p>
                             <p>Comment: <?php echo htmlspecialchars($goal['rejection_comment'] ?? 'No comments available.'); ?></p>
-                            <?php if ($_SESSION['role'] === 'parent'): ?>
+                            <?php if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])): ?>
                                 <p>Child: <?php echo htmlspecialchars($goal['child_username']); ?></p>
                                 <form method="POST" action="goal.php">
                                     <input type="hidden" name="goal_id" value="<?php echo $goal['id']; ?>">
@@ -352,7 +404,7 @@ if ($_SESSION['role'] === 'parent') {
         </div>
     </main>
     <footer>
-        <p>Child Task and Chore App - Ver 3.4.6</p>
+        <p>Child Task and Chore App - Ver 3.10.14</p>
     </footer>
 </body>
 </html>

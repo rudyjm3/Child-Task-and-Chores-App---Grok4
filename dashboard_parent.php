@@ -3,28 +3,61 @@
 // Purpose: Display parent dashboard with child overview and management links
 // Inputs: Session data
 // Outputs: Dashboard interface
-// Version: 3.4.8 (Added Routine Management UI: Routine Tasks pool and quick routine creation)
+// Version: 3.5.2 (Fixed family list display for non-main parents by fetching correct main_parent_id; updated name display to use CONCAT(first_name, ' ', last_name))
 
 require_once __DIR__ . '/includes/functions.php';
 
 session_start(); // Force session start to load existing session
 error_log("Dashboard Parent: user_id=" . (isset($_SESSION['user_id']) ? $_SESSION['user_id'] : 'null') . ", role=" . (isset($_SESSION['role']) ? $_SESSION['role'] : 'null') . ", session_id=" . session_id() . ", cookie=" . (isset($_SERVER['HTTP_COOKIE']) ? $_SERVER['HTTP_COOKIE'] : 'none'));
-if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'parent') {
+if (!isset($_SESSION['user_id']) || !canCreateContent($_SESSION['user_id'])) {
     header("Location: login.php");
     exit;
 }
+// Set role_type for permission checks
+$role_type = getEffectiveRole($_SESSION['user_id']);
 
-// Set username in session if not already set
+// Compute the family context's main parent id for later queries
+$main_parent_id = $_SESSION['user_id'];
+if ($role_type !== 'main_parent') {
+    $stmt = $db->prepare("SELECT main_parent_id FROM family_links WHERE linked_user_id = :linked_id LIMIT 1");
+    $stmt->execute([':linked_id' => $_SESSION['user_id']]);
+    $fetched_main_id = $stmt->fetchColumn();
+    if ($fetched_main_id) {
+        $main_parent_id = $fetched_main_id;
+    }
+}
+
+if ($role_type === 'family_member') {
+    $stmt = $db->prepare("SELECT role_type FROM family_links WHERE linked_user_id = :id");
+    $stmt->execute([':id' => $_SESSION['user_id']]);
+    $linked_role_type = $stmt->fetchColumn();
+    if ($linked_role_type) {
+        $role_type = $linked_role_type;
+    }
+}
+
+// Ensure display name in session
+if (!isset($_SESSION['name'])) {
+    $_SESSION['name'] = getDisplayName($_SESSION['user_id']);
+}
 if (!isset($_SESSION['username'])) {
-    $userStmt = $db->prepare("SELECT username FROM users WHERE id = :id");
-    $userStmt->execute([':id' => $_SESSION['user_id']]);
-    $_SESSION['username'] = $userStmt->fetchColumn() ?: 'Unknown User';
+    $uStmt = $db->prepare("SELECT username FROM users WHERE id = :id");
+    $uStmt->execute([':id' => $_SESSION['user_id']]);
+    $_SESSION['username'] = $uStmt->fetchColumn() ?: 'Unknown';
 }
 
 $data = getDashboardData($_SESSION['user_id']);
 
-// Fetch Routine Tasks for parent dashboard
-$routine_tasks = getRoutineTasks($_SESSION['user_id']);
+// Fetch Routine Tasks for parent dashboard (fix undefined)
+$routine_tasks = getRoutineTasks($main_parent_id);
+
+$welcome_role_label = getUserRoleLabel($_SESSION['user_id']);
+if (!$welcome_role_label) {
+    $fallback_role = $role_type ?: ($_SESSION['role'] ?? null);
+    if ($fallback_role) {
+        $welcome_role_label = ucfirst(str_replace('_', ' ', $fallback_role));
+    }
+}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['create_reward'])) {
@@ -43,7 +76,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $start_date = filter_input(INPUT_POST, 'start_date', FILTER_SANITIZE_STRING);
         $end_date = filter_input(INPUT_POST, 'end_date', FILTER_SANITIZE_STRING);
         $reward_id = filter_input(INPUT_POST, 'reward_id', FILTER_VALIDATE_INT, FILTER_NULL_ON_FAILURE);
-        if (createGoal($_SESSION['user_id'], $child_user_id, $title, $target_points, $start_date, $end_date, $reward_id)) {
+        if (createGoal($main_parent_id, $child_user_id, $title, $target_points, $start_date, $end_date, $reward_id, $_SESSION['user_id'])) {
             $message = "Goal created successfully!";
         } else {
             $message = "Failed to create goal. Check date range or reward ID.";
@@ -59,43 +92,115 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             $message = "Failed to $action goal.";
         }
-    } elseif (isset($_POST['create_routine_task'])) {
-        $title = filter_input(INPUT_POST, 'title', FILTER_SANITIZE_STRING);
-        $description = filter_input(INPUT_POST, 'description', FILTER_SANITIZE_STRING);
-        $time_limit = filter_input(INPUT_POST, 'time_limit', FILTER_VALIDATE_INT);
-        $point_value = filter_input(INPUT_POST, 'point_value', FILTER_VALIDATE_INT);
-        $category = filter_input(INPUT_POST, 'category', FILTER_SANITIZE_STRING);
-        if (createRoutineTask($_SESSION['user_id'], $title, $description, $time_limit, $point_value, $category)) {
-            $message = "Routine Task created successfully!";
-            $routine_tasks = getRoutineTasks($_SESSION['user_id']); // Refresh
+    } elseif (isset($_POST['add_child'])) {
+        if (!canAddEditChild($_SESSION['user_id'])) {
+            $message = "You do not have permission to add children.";
         } else {
-            $message = "Failed to create Routine Task.";
-        }
-    } elseif (isset($_POST['delete_routine_task'])) {
-        $routine_task_id = filter_input(INPUT_POST, 'routine_task_id', FILTER_VALIDATE_INT);
-        if (deleteRoutineTask($routine_task_id, $_SESSION['user_id'])) {
-            $message = "Routine Task deleted successfully!";
-            $routine_tasks = getRoutineTasks($_SESSION['user_id']); // Refresh
-        } else {
-            $message = "Failed to delete Routine Task.";
-        }
-    } elseif (isset($_POST['create_routine'])) {
-        $child_user_id = filter_input(INPUT_POST, 'child_user_id', FILTER_VALIDATE_INT);
-        $title = filter_input(INPUT_POST, 'title', FILTER_SANITIZE_STRING);
-        $start_time = filter_input(INPUT_POST, 'start_time', FILTER_SANITIZE_STRING);
-        $end_time = filter_input(INPUT_POST, 'end_time', FILTER_SANITIZE_STRING);
-        $recurrence = filter_input(INPUT_POST, 'recurrence', FILTER_SANITIZE_STRING);
-        $bonus_points = filter_input(INPUT_POST, 'bonus_points', FILTER_VALIDATE_INT);
-        $routine_task_ids = $_POST['routine_task_ids'] ?? []; // Array of selected IDs
-
-        $routine_id = createRoutine($_SESSION['user_id'], $child_user_id, $title, $start_time, $end_time, $recurrence, $bonus_points);
-        if ($routine_id) {
-            foreach ($routine_task_ids as $order => $routine_task_id) {
-                addRoutineTaskToRoutine($routine_id, $routine_task_id, $order + 1);
+            // Get and split child's name into first and last name
+            $first_name = filter_input(INPUT_POST, 'first_name', FILTER_SANITIZE_STRING);
+            $last_name = filter_input(INPUT_POST, 'last_name', FILTER_SANITIZE_STRING);
+            $child_username = filter_input(INPUT_POST, 'child_username', FILTER_SANITIZE_STRING);
+            $child_password = filter_input(INPUT_POST, 'child_password', FILTER_SANITIZE_STRING);
+            $birthday = filter_input(INPUT_POST, 'birthday', FILTER_SANITIZE_STRING);
+            $avatar = filter_input(INPUT_POST, 'avatar', FILTER_SANITIZE_STRING);
+            $gender = filter_input(INPUT_POST, 'child_gender', FILTER_SANITIZE_STRING);
+            // Handle upload
+            $upload_path = '';
+            if (isset($_FILES['avatar_upload']) && $_FILES['avatar_upload']['error'] == 0) {
+                $upload_dir = __DIR__ . '/uploads/avatars/';
+                if (!is_dir($upload_dir)) {
+                    mkdir($upload_dir, 0755, true);
+                }
+                $file_ext = pathinfo($_FILES['avatar_upload']['name'], PATHINFO_EXTENSION);
+                $file_name = uniqid() . '_' . pathinfo($_FILES['avatar_upload']['name'], PATHINFO_FILENAME) . '.' . $file_ext;
+                $upload_path = 'uploads/avatars/' . $file_name;
+                if (move_uploaded_file($_FILES['avatar_upload']['tmp_name'], __DIR__ . '/' . $upload_path)) {
+                    // Resize image (GD library)
+                    $image = imagecreatefromstring(file_get_contents(__DIR__ . '/' . $upload_path));
+                    $resized = imagecreatetruecolor(100, 100);
+                    imagecopyresampled($resized, $image, 0, 0, 0, 0, 100, 100, imagesx($image), imagesy($image));
+                    imagejpeg($resized, __DIR__ . '/' . $upload_path, 90);
+                    imagedestroy($image);
+                    imagedestroy($resized);
+                    $avatar = $upload_path; // Use uploaded path
+                } else {
+                    $message = "Upload failed; using default avatar.";
+                }
             }
-            $message = "Routine created successfully!";
+            if (createChildProfile($_SESSION['user_id'], $first_name, $last_name, $child_username, $child_password, $birthday, $avatar, $gender)) {
+                $message = "Child added successfully! Username: $child_username, Password: $child_password (share securely).";
+                $data = getDashboardData($_SESSION['user_id']);
+            } else {
+                $message = "Failed to add child. Check for duplicate username.";
+            }
+        }
+    } elseif (isset($_POST['add_new_user'])) {
+        if (!canAddEditFamilyMember($_SESSION['user_id'])) {
+            $message = "You do not have permission to add family members or caregivers.";
         } else {
-            $message = "Failed to create routine.";
+            $first_name = filter_input(INPUT_POST, 'secondary_first_name', FILTER_SANITIZE_STRING);
+            $last_name = filter_input(INPUT_POST, 'secondary_last_name', FILTER_SANITIZE_STRING);
+            $username = filter_input(INPUT_POST, 'secondary_username', FILTER_SANITIZE_STRING);
+            $password = filter_input(INPUT_POST, 'secondary_password', FILTER_SANITIZE_STRING);
+            $role_type = filter_input(INPUT_POST, 'role_type', FILTER_SANITIZE_STRING);
+            
+            if ($role_type && in_array($role_type, ['secondary_parent', 'family_member', 'caregiver'])) {
+                if (addLinkedUser($_SESSION['user_id'], $username, $password, $first_name, $last_name, $role_type)) {
+                    $role_display = str_replace('_', ' ', ucwords($role_type));
+                    $message = "$role_display added successfully! Username: $username";
+                } else {
+                    $message = "Failed to add user. Check for duplicate username.";
+                }
+            } else {
+                $message = "Invalid role type selected.";
+            }
+        }
+    } elseif (isset($_POST['add_new_user'])) {
+        $secondary_username   = filter_input(INPUT_POST, 'secondary_username', FILTER_SANITIZE_STRING);
+        $secondary_password   = filter_input(INPUT_POST, 'secondary_password', FILTER_SANITIZE_STRING);
+        $secondary_first_name = filter_input(INPUT_POST, 'secondary_first_name', FILTER_SANITIZE_STRING);
+        $secondary_last_name  = filter_input(INPUT_POST, 'secondary_last_name', FILTER_SANITIZE_STRING);
+        $role_type_sel        = filter_input(INPUT_POST, 'role_type', FILTER_SANITIZE_STRING);
+
+        if (addLinkedUser($main_parent_id, $secondary_username, $secondary_password, $secondary_first_name, $secondary_last_name, $role_type_sel)) {
+            $role_label = [
+                'secondary_parent' => 'Secondary parent',
+                'family_member' => 'Family member',
+                'caregiver' => 'Caregiver'
+            ][$role_type_sel] ?? 'User';
+            $message = "$role_label added successfully! Username: $secondary_username.";
+        } else {
+            $message = "Failed to add user. Check for duplicate username.";
+        }
+    } elseif (isset($_POST['delete_user']) && in_array($role_type, ['main_parent', 'secondary_parent'])) {
+        $delete_user_id = filter_input(INPUT_POST, 'delete_user_id', FILTER_VALIDATE_INT);
+        if ($delete_user_id) {
+            if ($delete_user_id == $main_parent_id) {
+                $message = "Cannot remove the main account owner.";
+            } else {
+            // Try removing a linked adult first
+            $stmt = $db->prepare("DELETE FROM users 
+                                  WHERE id = :user_id AND id IN (
+                                      SELECT linked_user_id FROM family_links WHERE main_parent_id = :main_parent_id
+                                  )");
+            $stmt->execute([':user_id' => $delete_user_id, ':main_parent_id' => $main_parent_id]);
+
+            if ($stmt->rowCount() === 0) {
+                // If not an adult link, try deleting a child of this parent
+                $stmt2 = $db->prepare("DELETE FROM users 
+                                       WHERE id = :user_id AND id IN (
+                                           SELECT child_user_id FROM child_profiles WHERE parent_user_id = :main_parent_id
+                                       )");
+                $stmt2->execute([':user_id' => $delete_user_id, ':main_parent_id' => $main_parent_id]);
+                if ($stmt2->rowCount() > 0) {
+                    $message = "Child removed successfully.";
+                } else {
+                    $message = "Failed to remove user.";
+                }
+            } else {
+                $message = "User removed successfully.";
+            }
+            }
         }
     }
 }
@@ -109,30 +214,89 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <link rel="stylesheet" href="css/main.css">
     <style>
         .dashboard { padding: 20px; max-width: 800px; margin: 0 auto; }
-        .children-overview, .management-links, .active-rewards, .redeemed-rewards, .pending-approvals, .completed-goals, .routine-management { margin-top: 20px; }
-        .child-item, .reward-item, .goal-item, .routine-task-item, .routine-item { background-color: #f5f5f5; padding: 10px; margin: 5px 0; border-radius: 5px; }
-        .button { padding: 10px 20px; margin: 5px; background-color: #4caf50; color: white; border: none; border-radius: 5px; cursor: pointer; text-decoration: none; display: inline-block; }
+        .children-overview, .management-links, .active-rewards, .redeemed-rewards, .pending-approvals, .completed-goals, .manage-family { margin-top: 20px; }
+        .child-item, .reward-item, .goal-item { background-color: #f5f5f5; padding: 10px; margin: 5px 0; border-radius: 5px; }
+        .button { padding: 10px 20px; margin: 5px; background-color: #4caf50; color: white; border: none; border-radius: 5px; cursor: pointer; text-decoration: none; display: inline-block; font-size: 16px; min-height: 44px; }
         .approve-button { background-color: #4caf50; }
         .reject-button { background-color: #f44336; }
         .form-group { margin-bottom: 15px; }
         .form-group label { display: block; margin-bottom: 5px; }
         .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 8px; }
-        /* Routine Management Styles - Mobile Responsive */
-        .routine-management { display: flex; flex-wrap: wrap; gap: 20px; }
-        .routine-pool, .routine-form { flex: 1; min-width: 300px; }
-        .routine-task-list { list-style: none; padding: 0; }
-        .routine-task-item { display: flex; justify-content: space-between; align-items: center; background: #e3f2fd; border: 1px solid #bbdefb; padding: 10px; margin: 5px 0; border-radius: 8px; }
-        .routine-task-item button { background: #2196f3; color: white; border: none; border-radius: 4px; padding: 5px 10px; cursor: pointer; }
-        /* Autism-Friendly: Large buttons, high contrast */
-        .button { font-size: 16px; min-height: 44px; }
-        @media (max-width: 768px) { .routine-management { flex-direction: column; } }
+        /* Manage Family Styles - Mobile Responsive, Autism-Friendly Wizard */
+        .manage-family { background: #f9f9f9; border-radius: 8px; padding: 20px; }
+        .family-form { display: none; } /* JS toggle for wizard */
+        .family-form.active { display: block; }
+        .avatar-preview { width: 50px; height: 50px; border-radius: 50%; margin: 5px; cursor: pointer; }
+        .avatar-options { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
+        .avatar-option { width: 60px; height: 60px; border-radius: 50%; cursor: pointer; border: 2px solid #ddd; }
+        .avatar-option.selected { border-color: #4caf50; }
+        .upload-preview { max-width: 100px; max-height: 100px; border-radius: 50%; }
+        .mother-badge { background: #e91e63; color: white; padding: 2px 6px; border-radius: 3px; font-size: 0.8em; }
+        .father-badge { background: #2196f3; color: white; padding: 2px 6px; border-radius: 3px; font-size: 0.8em; }
+        @media (max-width: 768px) { .manage-family { padding: 10px; } .button { width: 100%; } }
     </style>
+    <script>
+        // JS for Manage Family Wizard (step-by-step)
+        document.addEventListener('DOMContentLoaded', function() {
+            const addChildBtn = document.getElementById('add-child-btn');
+            const addCaregiverBtn = document.getElementById('add-caregiver-btn');
+            const childForm = document.getElementById('child-form');
+            const caregiverForm = document.getElementById('caregiver-form');
+            const avatarPreview = document.getElementById('avatar-preview');
+            const avatarInput = document.getElementById('avatar');
+
+            if (addChildBtn && childForm) {
+                addChildBtn.addEventListener('click', () => {
+                    childForm.classList.add('active');
+                    if (caregiverForm) caregiverForm.classList.remove('active');
+                });
+            }
+
+            if (addCaregiverBtn && caregiverForm) {
+                addCaregiverBtn.addEventListener('click', () => {
+                    caregiverForm.classList.add('active');
+                    if (childForm) childForm.classList.remove('active');
+                });
+            }
+
+            if (avatarPreview && avatarInput) {
+                const avatarOptions = document.querySelectorAll('.avatar-option');
+
+                avatarOptions.forEach(option => {
+                    option.addEventListener('click', () => {
+                        avatarOptions.forEach(opt => opt.classList.remove('selected'));
+                        option.classList.add('selected');
+                        avatarPreview.src = option.dataset.avatar;
+                        avatarInput.value = option.dataset.avatar;
+                    });
+                });
+
+                const avatarUpload = document.getElementById('avatar-upload');
+                if (avatarUpload) {
+                    avatarUpload.addEventListener('change', function(e) {
+                        const file = e.target.files[0];
+                        if (file) {
+                            const reader = new FileReader();
+                            reader.onload = function(evt) {
+                                avatarPreview.src = evt.target.result;
+                            };
+                            reader.readAsDataURL(file);
+                        }
+                    });
+                }
+            }
+        });
+    </script>
 </head>
 <body>
    <header>
       <h1>Parent Dashboard</h1>
-      <p>Welcome, <?php echo htmlspecialchars($_SESSION['username'] ?? 'Unknown User'); ?> (<?php echo htmlspecialchars($_SESSION['role']); ?>)</p>
-      <a href="goal.php">Goals</a> | <a href="task.php">Tasks</a> | <a href="routine.php">Routines</a> | <a href="profile.php">Profile</a> | <a href="logout.php">Logout</a>
+      <p>Welcome, <?php echo htmlspecialchars($_SESSION['name'] ?? $_SESSION['username']); ?> 
+         <?php if ($welcome_role_label): ?>
+            <span class="role-badge">(<?php echo htmlspecialchars($welcome_role_label); ?>)</span>
+         <?php endif; ?>
+      </p>
+      <a href="goal.php">Goals</a> | <a href="task.php">Tasks</a> | <a href="routine.php">Routines</a> | <a href="profile.php?self=1">Profile</a> | <a href="logout.php">Logout</a>
    </header>
    <main class="dashboard">
       <?php if (isset($message)) echo "<p>$message</p>"; ?>
@@ -141,13 +305,195 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
          <?php if (isset($data['children']) && is_array($data['children']) && !empty($data['children'])): ?>
                <?php foreach ($data['children'] as $child): ?>
                   <div class="child-item">
-                     <p>Child: <?php echo htmlspecialchars($child['username']); ?>, Avatar=<?php echo htmlspecialchars($child['avatar'] ?? 'No Avatar'); ?>, Age=<?php echo htmlspecialchars($child['age'] ?? 'N/A'); ?></p>
+                     <p>Child: <?php echo htmlspecialchars($child['child_name']); ?>, Age=<?php echo htmlspecialchars($child['age'] ?? 'N/A'); ?></p>
+                     <img src="<?php echo htmlspecialchars($child['avatar'] ?? 'default-avatar.png'); ?>" alt="Avatar" style="width: 50px; border-radius: 50%;">
+                     <?php if (in_array($role_type, ['main_parent', 'secondary_parent'])): ?>
+                         <a href="profile.php?user_id=<?php echo $child['child_user_id']; ?>&type=child" class="button">Edit Child</a>
+                     <?php endif; ?>
+                     <?php if ($role_type === 'main_parent'): ?>
+                         <form method="POST" style="display:inline">
+                             <input type="hidden" name="delete_user_id" value="<?php echo $child['child_user_id']; ?>">
+                             <button type="submit" name="delete_user" class="button delete-btn" onclick="return confirm('Remove this child and all their data?')">Remove</button>
+                         </form>
+                     <?php endif; ?>
                   </div>
                <?php endforeach; ?>
          <?php else: ?>
-               <p>No children registered.</p>
+               <p>No children added yet. Add your first child below!</p>
          <?php endif; ?>
       </div>
+      <div class="family-members-list">
+         <?php // Use precomputed $main_parent_id from top of file ?>
+         <h2>Family Members</h2>
+         <?php
+        $stmt = $db->prepare("SELECT u.id, CONCAT(u.first_name, ' ', u.last_name) AS name, u.username, fl.role_type 
+                              FROM users u 
+                              JOIN family_links fl ON u.id = fl.linked_user_id 
+                              WHERE fl.main_parent_id = :main_parent_id 
+                              AND fl.role_type IN ('secondary_parent', 'family_member') 
+                              ORDER BY fl.role_type, u.name");
+        $stmt->execute([':main_parent_id' => $main_parent_id]);
+        $family_members = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        if ($role_type !== 'main_parent') {
+            $ownerStmt = $db->prepare("SELECT id, CONCAT(first_name, ' ', last_name) AS name, username FROM users WHERE id = :id");
+            $ownerStmt->execute([':id' => $main_parent_id]);
+            $mainOwner = $ownerStmt->fetch(PDO::FETCH_ASSOC);
+            if ($mainOwner) {
+                $mainOwner['role_type'] = 'main_parent';
+                array_unshift($family_members, $mainOwner);
+            }
+        }
+         
+         if (!empty($family_members)): ?>
+             <?php foreach ($family_members as $member): ?>
+                 <div class="member-item">
+                    <p><?php echo htmlspecialchars($member['name'] ?? $member['username']); ?> 
+                        <span class="role-type">(<?php
+                            $memberBadge = getUserRoleLabel($member['id']) ?? ($member['role_type'] ?? '');
+                            if (!$memberBadge && isset($member['role_type'])) {
+                                $memberBadge = ucfirst(str_replace('_', ' ', $member['role_type']));
+                            }
+                            echo htmlspecialchars($memberBadge);
+                        ?>)</span>
+                     </p>
+                     <?php if (in_array($role_type, ['main_parent', 'secondary_parent']) && ($member['role_type'] ?? '') !== 'main_parent'): ?>
+                         <a href="profile.php?edit_user=<?php echo $member['id']; ?>&role_type=<?php echo urlencode($member['role_type']); ?>" class="button edit-btn">Edit</a>
+                         <form method="POST" style="display: inline;">
+                             <input type="hidden" name="delete_user_id" value="<?php echo $member['id']; ?>">
+                             <button type="submit" name="delete_user" class="button delete-btn" 
+                                     onclick="return confirm('Are you sure you want to remove this family member?')">
+                                 Remove
+                             </button>
+                         </form>
+                     <?php endif; ?>
+                 </div>
+             <?php endforeach; ?>
+         <?php else: ?>
+             <p>No family members added yet.</p>
+         <?php endif; ?>
+
+         <h2>Caregivers</h2>
+         <?php
+         $stmt = $db->prepare("SELECT u.id, CONCAT(u.first_name, ' ', u.last_name) AS name, u.username, fl.role_type 
+                               FROM users u 
+                               JOIN family_links fl ON u.id = fl.linked_user_id 
+                               WHERE fl.main_parent_id = :main_parent_id 
+                               AND fl.role_type = 'caregiver' 
+                               ORDER BY u.name");
+         $stmt->execute([':main_parent_id' => $main_parent_id]);
+         $caregivers = $stmt->fetchAll(PDO::FETCH_ASSOC);
+         
+         if (!empty($caregivers)): ?>
+             <?php foreach ($caregivers as $caregiver): ?>
+                 <div class="member-item">
+                     <p><?php echo htmlspecialchars($caregiver['name'] ?? $caregiver['username']); ?></p>
+                     <?php if (in_array($role_type, ['main_parent', 'secondary_parent'])): ?>
+                         <a href="profile.php?edit_user=<?php echo $caregiver['id']; ?>&role_type=<?php echo urlencode($caregiver['role_type']); ?>" class="button edit-btn">Edit</a>
+                         <form method="POST" style="display: inline;">
+                             <input type="hidden" name="delete_user_id" value="<?php echo $caregiver['id']; ?>">
+                             <button type="submit" name="delete_user" class="button delete-btn" 
+                                     onclick="return confirm('Are you sure you want to remove this caregiver?')">
+                                 Remove
+                             </button>
+                         </form>
+                     <?php endif; ?>
+                 </div>
+             <?php endforeach; ?>
+         <?php else: ?>
+             <p>No caregivers added yet.</p>
+         <?php endif; ?>
+     </div>
+      <?php if (in_array($role_type, ['main_parent', 'secondary_parent', 'family_member'])): ?>
+      <div class="manage-family" id="manage-family">
+         <h2>Manage Family</h2>
+         <?php if (in_array($role_type, ['main_parent', 'secondary_parent'])): ?>
+            <button id="add-child-btn" class="button">Add Child</button>
+         <?php endif; ?>
+         <button id="add-caregiver-btn" class="button" style="background: #ff9800;">Add New User</button>
+         <?php if (in_array($role_type, ['main_parent', 'secondary_parent'])): ?>
+            <div id="child-form" class="family-form">
+               <h3>Add Child</h3>
+               <form method="POST" action="dashboard_parent.php" enctype="multipart/form-data">
+                  <div class="form-group">
+                     <label for="first_name">First Name:</label>
+                     <input type="text" id="first_name" name="first_name" required>
+                  </div>
+                  <div class="form-group">
+                     <label for="last_name">Last Name:</label>
+                     <input type="text" id="last_name" name="last_name" required>
+                  </div>
+                  <div class="form-group">
+                     <label for="child_username">Username (for login):</label>
+                     <input type="text" id="child_username" name="child_username" required>
+                  </div>
+                  <div class="form-group">
+                     <label for="child_password">Password (parent sets):</label>
+                     <input type="password" id="child_password" name="child_password" required>
+                  </div>
+                  <div class="form-group">
+                     <label for="birthday">Birthday:</label>
+                     <input type="date" id="birthday" name="birthday" required>
+                  </div>
+                  <div class="form-group">
+                     <label for="child_gender">Gender:</label>
+                     <select id="child_gender" name="child_gender" required>
+                         <option value="">Select...</option>
+                         <option value="male">Male</option>
+                         <option value="female">Female</option>
+                     </select>
+                  </div>
+                  <div class="form-group">
+                     <label>Avatar:</label>
+                     <div class="avatar-options">
+                        <img class="avatar-option" data-avatar="images/avatar_images/default-avatar.png" src="images/avatar_images/default-avatar.png" alt="Avatar default">
+                        <img class="avatar-option" data-avatar="images/avatar_images/boy-1.png" src="images/avatar_images/boy-1.png" alt="Avatar 1">
+                        <img class="avatar-option" data-avatar="images/avatar_images/girl-1.png" src="images/avatar_images/girl-1.png" alt="Avatar 2">
+                        <img class="avatar-option" data-avatar="images/avatar_images/xmas-elf-boy.png" src="images/avatar_images/xmas-elf-boy.png" alt="Avatar 3">
+                        <!-- Add more based on uploaded files -->
+                     </div>
+                     <input type="file" id="avatar-upload" name="avatar_upload" accept="image/*">
+                     <img id="avatar-preview" src="images/avatar_images/default-avatar.png" alt="Preview" style="width: 100px; border-radius: 50%;">
+                     <input type="hidden" id="avatar" name="avatar">
+                  </div>
+                  <button type="submit" name="add_child" class="button">Add Child</button>
+               </form>
+            </div>
+         <?php endif; ?>
+         <div id="caregiver-form" class="family-form">
+            <h3>Add Family Member/Caregiver</h3>
+            <form method="POST" action="dashboard_parent.php">
+               <div class="form-group">
+                  <label for="secondary_first_name">First Name:</label>
+                  <input type="text" id="secondary_first_name" name="secondary_first_name" required placeholder="Enter first name">
+               </div>
+               <div class="form-group">
+                  <label for="secondary_last_name">Last Name:</label>
+                  <input type="text" id="secondary_last_name" name="secondary_last_name" required placeholder="Enter last name">
+               </div>
+               <div class="form-group">
+                  <label for="secondary_username">Username (for login):</label>
+                  <input type="text" id="secondary_username" name="secondary_username" required placeholder="Choose a username">
+               </div>
+               <div class="form-group">
+                  <label for="secondary_password">Password:</label>
+                  <input type="password" id="secondary_password" name="secondary_password" required>
+               </div>
+               <div class="form-group">
+                  <label for="role_type">Role Type:</label>
+                  <select id="role_type" name="role_type" required>
+                     <option value="secondary_parent">Secondary Parent (Full Access)</option>
+                     <option value="family_member">Family Member (Limited Access)</option>
+                     <option value="caregiver">Caregiver (Task Management Only)</option>
+                  </select>
+               </div>
+               <button type="submit" name="add_new_user" class="button">Add New User</button>
+            </form>
+         </div>
+      </div>
+      <?php endif; ?>
+
+      <!-- Rest of sections (Management Links, Rewards, etc.) with name display updates -->
       <div class="management-links">
          <h2>Management Links</h2>
          <a href="task.php" class="button">Create Task</a>
@@ -176,11 +522,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                      <label for="child_user_id">Child:</label>
                      <select id="child_user_id" name="child_user_id" required>
                         <?php
-                        $stmt = $db->prepare("SELECT cp.child_user_id, u.username FROM child_profiles cp JOIN users u ON cp.child_user_id = u.id WHERE cp.parent_user_id = :parent_id");
-                        $stmt->execute([':parent_id' => $_SESSION['user_id']]);
+                        $stmt = $db->prepare("SELECT cp.child_user_id, cp.child_name 
+                                             FROM child_profiles cp 
+                                             WHERE cp.parent_user_id = :parent_id");
+                        $stmt->execute([':parent_id' => $main_parent_id]);
                         $children = $stmt->fetchAll(PDO::FETCH_ASSOC);
                         foreach ($children as $child): ?>
-                            <option value="<?php echo $child['child_user_id']; ?>"><?php echo htmlspecialchars($child['username']); ?></option>
+                            <option value="<?php echo $child['child_user_id']; ?>">
+                                <?php echo htmlspecialchars($child['child_name']); ?>
+                            </option>
                         <?php endforeach; ?>
                      </select>
                   </div>
@@ -267,7 +617,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                   <label for="child_user_id_routine">Child:</label>
                   <select id="child_user_id_routine" name="child_user_id" required>
                      <?php foreach ($data['children'] as $child): ?>
-                        <option value="<?php echo $child['child_user_id']; ?>"><?php echo htmlspecialchars($child['username']); ?></option>
+                        <option value="<?php echo $child['child_user_id']; ?>"><?php echo htmlspecialchars($child['child_name']); ?></option>
                      <?php endforeach; ?>
                   </select>
                </div>
@@ -418,7 +768,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       </div>
    </main>
    <footer>
-      <p>Child Task and Chores App - Ver 3.4.8</p>
+      <p>Child Task and Chores App - Ver 3.10.14</p>
    </footer>
 </body>
 </html>

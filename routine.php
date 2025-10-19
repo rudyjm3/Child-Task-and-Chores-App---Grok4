@@ -14,7 +14,14 @@ if (!isset($_SESSION['user_id'])) {
     exit;
 }
 
-$routine_tasks = ($_SESSION['role'] === 'parent') ? getRoutineTasks($_SESSION['user_id']) : [];
+// Ensure display name is set for header
+if (!isset($_SESSION['name'])) {
+    $_SESSION['name'] = getDisplayName($_SESSION['user_id']);
+}
+
+$family_root_id = getFamilyRootId($_SESSION['user_id']);
+
+$routine_tasks = (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) ? getRoutineTasks($family_root_id) : [];
 $routines = getRoutines($_SESSION['user_id']);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -27,7 +34,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $bonus_points = filter_input(INPUT_POST, 'bonus_points', FILTER_VALIDATE_INT);
         $routine_task_ids = $_POST['routine_task_ids'] ?? []; // Array of selected IDs
 
-        $routine_id = createRoutine($_SESSION['user_id'], $child_user_id, $title, $start_time, $end_time, $recurrence, $bonus_points);
+        $routine_id = createRoutine($family_root_id, $child_user_id, $title, $start_time, $end_time, $recurrence, $bonus_points, $_SESSION['user_id']);
         if ($routine_id) {
             foreach ($routine_task_ids as $order => $routine_task_id) {
                 addRoutineTaskToRoutine($routine_id, $routine_task_id, $order + 1);
@@ -43,9 +50,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $time_limit = filter_input(INPUT_POST, 'time_limit', FILTER_VALIDATE_INT);
         $point_value = filter_input(INPUT_POST, 'point_value', FILTER_VALIDATE_INT);
         $category = filter_input(INPUT_POST, 'category', FILTER_SANITIZE_STRING);
-        if (createRoutineTask($_SESSION['user_id'], $title, $description, $time_limit, $point_value, $category)) {
+        if (createRoutineTask($family_root_id, $title, $description, $time_limit, $point_value, $category, null, null, $_SESSION['user_id'])) {
             $message = "Routine Task created!";
-            $routine_tasks = getRoutineTasks($_SESSION['user_id']); // Refresh
+            $routine_tasks = getRoutineTasks($family_root_id); // Refresh
         } else {
             $message = "Failed to create Routine Task.";
         }
@@ -58,7 +65,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $bonus_points = filter_input(INPUT_POST, 'bonus_points', FILTER_VALIDATE_INT);
         $routine_task_orders = $_POST['routine_task_orders'] ?? []; // array(routine_task_id => order)
 
-        if (updateRoutine($routine_id, $title, $start_time, $end_time, $recurrence, $bonus_points, $_SESSION['user_id'])) {
+        if (updateRoutine($routine_id, $title, $start_time, $end_time, $recurrence, $bonus_points, $family_root_id)) {
             reorderRoutineTasks($routine_id, $routine_task_orders);
             $message = "Routine updated successfully!";
             $routines = getRoutines($_SESSION['user_id']); // Refresh
@@ -74,22 +81,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             $message = "Failed to complete routine (ensure all tasks are approved).";
         }
-    } elseif (isset($_POST['delete_routine']) && $_SESSION['role'] === 'parent') {
+    } elseif (isset($_POST['delete_routine']) && isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
         $routine_id = filter_input(INPUT_POST, 'routine_id', FILTER_VALIDATE_INT);
-        if (deleteRoutine($routine_id, $_SESSION['user_id'])) {
+        if (deleteRoutine($routine_id, $family_root_id)) {
             $message = "Routine deleted!";
             $routines = getRoutines($_SESSION['user_id']); // Refresh
         } else {
             $message = "Failed to delete routine.";
         }
-    } elseif (isset($_POST['delete_routine_task']) && $_SESSION['role'] === 'parent') {
+    } elseif (isset($_POST['delete_routine_task']) && isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
         $routine_task_id = filter_input(INPUT_POST, 'routine_task_id', FILTER_VALIDATE_INT);
-        if (deleteRoutineTask($routine_task_id, $_SESSION['user_id'])) {
+        if (deleteRoutineTask($routine_task_id, $family_root_id)) {
             $message = "Routine Task deleted!";
-            $routine_tasks = getRoutineTasks($_SESSION['user_id']); // Refresh
+            $routine_tasks = getRoutineTasks($family_root_id); // Refresh
         } else {
             $message = "Failed to delete Routine Task.";
         }
+    }
+}
+
+$welcome_role_label = getUserRoleLabel($_SESSION['user_id']);
+if (!$welcome_role_label) {
+    $fallback_role = getEffectiveRole($_SESSION['user_id']) ?: ($_SESSION['role'] ?? null);
+    if ($fallback_role) {
+        $welcome_role_label = ucfirst(str_replace('_', ' ', $fallback_role));
     }
 }
 ?>
@@ -113,6 +128,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         /* Kid-Friendly for Child View */
         .routine-card.child-view { background: linear-gradient(135deg, #e3f2fd, #f3e5f5); }
         .routine-card.child-view li { background: #fff9c4; border-left: 4px solid #ff9800; }
+        .role-badge {
+            background: #4caf50;
+            color: #fff;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.9em;
+            margin-left: 8px;
+            display: inline-block;
+        }
         .button { padding: 10px 20px; margin: 5px; background-color: #4caf50; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; min-height: 44px; }
         .start-next-button { background-color: #2196f3; }
         /* Mobile Responsive */
@@ -122,7 +146,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <script>
         // JS for drag-and-drop reorder (parent view)
         document.addEventListener('DOMContentLoaded', function() {
-            <?php if ($_SESSION['role'] === 'parent'): ?>
+            <?php if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])): ?>
                 <?php foreach ($routines as $routine): ?>
                     new Sortable(document.getElementById('checklist-<?php echo $routine['id']; ?>'), {
                         animation: 150,
@@ -198,12 +222,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <body>
     <header>
       <h1>Routine Management</h1>
-      <p>Welcome, <?php echo htmlspecialchars($_SESSION['username'] ?? 'Unknown User'); ?> (<?php echo htmlspecialchars($_SESSION['role']); ?>)</p>
-      <a href="dashboard_<?php echo $_SESSION['role']; ?>.php">Dashboard</a> | <a href="goal.php">Goals</a> | <a href="task.php">Tasks</a> | <a href="profile.php">Profile</a> | <a href="logout.php">Logout</a>
+      <p>Welcome, <?php echo htmlspecialchars($_SESSION['name'] ?? $_SESSION['username'] ?? 'Unknown User'); ?>
+         <?php if ($welcome_role_label): ?>
+            <span class="role-badge">(<?php echo htmlspecialchars($welcome_role_label); ?>)</span>
+         <?php endif; ?>
+      </p>
+      <a href="dashboard_<?php echo $_SESSION['role']; ?>.php">Dashboard</a> | <a href="goal.php">Goals</a> | <a href="task.php">Tasks</a> | <a href="profile.php?self=1">Profile</a> | <a href="logout.php">Logout</a>
     </header>
     <main>
         <?php if (isset($message)) echo "<p>$message</p>"; ?>
-        <?php if ($_SESSION['role'] === 'parent'): ?>
+        <?php if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])): ?>
             <div class="routine-form">
                 <h2>Create Routine</h2>
                 <form method="POST" action="routine.php">
@@ -211,11 +239,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         <label for="child_user_id">Child:</label>
                         <select id="child_user_id" name="child_user_id" required>
                             <?php
-                            $stmt = $db->prepare("SELECT cp.child_user_id, u.username FROM child_profiles cp JOIN users u ON cp.child_user_id = u.id WHERE cp.parent_user_id = :parent_id");
-                            $stmt->execute([':parent_id' => $_SESSION['user_id']]);
+                            $stmt = $db->prepare("SELECT cp.child_user_id, cp.child_name 
+                                             FROM child_profiles cp 
+                                             WHERE cp.parent_user_id = :parent_id");
+                            $stmt->execute([':parent_id' => $family_root_id]);
                             $children = $stmt->fetchAll(PDO::FETCH_ASSOC);
                             foreach ($children as $child): ?>
-                                <option value="<?php echo $child['child_user_id']; ?>"><?php echo htmlspecialchars($child['username']); ?></option>
+                                <option value="<?php echo $child['child_user_id']; ?>">
+                                    <?php echo htmlspecialchars($child['child_name']); ?>
+                                </option>
                             <?php endforeach; ?>
                         </select>
                     </div>
@@ -318,7 +350,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 <button type="submit" name="complete_routine" class="button">Complete Routine</button>
                             </form>
                         <?php endif; ?>
-                        <?php if ($_SESSION['role'] === 'parent'): ?>
+                        <?php if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])): ?>
                             <form method="POST" action="routine.php">
                                 <input type="hidden" name="routine_id" value="<?php echo $routine['id']; ?>">
                                 <input type="text" name="title" value="<?php echo htmlspecialchars($routine['title']); ?>" placeholder="New Title">
@@ -343,7 +375,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </div>
     </main>
     <footer>
-      <p>Child Task and Chore App - Ver 3.4.8</p>
+      <p>Child Task and Chore App - Ver 3.10.14</p>
     </footer>
 </body>
 </html>
