@@ -144,6 +144,14 @@ if ($_SESSION['role'] === 'parent') {
     $completed_goals = array_filter($all_goals, function($g) { return $g['status'] === 'completed'; });
     $rejected_goals = array_filter($all_goals, function($g) { return $g['status'] === 'rejected'; });
 }
+
+$welcome_role_label = getUserRoleLabel($_SESSION['user_id']);
+if (!$welcome_role_label) {
+    $fallback_role = getEffectiveRole($_SESSION['user_id']) ?: ($_SESSION['role'] ?? null);
+    if ($fallback_role) {
+        $welcome_role_label = ucfirst(str_replace('_', ' ', $fallback_role));
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -184,6 +192,15 @@ if ($_SESSION['role'] === 'parent') {
             border-radius: 5px;
             cursor: pointer;
         }
+        .role-badge {
+            background: #4caf50;
+            color: #fff;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.9em;
+            margin-left: 8px;
+            display: inline-block;
+        }
         .edit-delete a {
             margin-right: 10px;
             color: #007bff;
@@ -214,7 +231,11 @@ if ($_SESSION['role'] === 'parent') {
 <body>
     <header>
         <h1>Goal Management</h1>
-        <p>Welcome, <?php echo htmlspecialchars($_SESSION['name'] ?? $_SESSION['username'] ?? 'Unknown User'); ?> (<?php echo htmlspecialchars($_SESSION['role']); ?>)</p>
+        <p>Welcome, <?php echo htmlspecialchars($_SESSION['name'] ?? $_SESSION['username'] ?? 'Unknown User'); ?>
+            <?php if ($welcome_role_label): ?>
+                <span class="role-badge">(<?php echo htmlspecialchars($welcome_role_label); ?>)</span>
+            <?php endif; ?>
+        </p>
         <a href="dashboard_<?php echo $_SESSION['role']; ?>.php">Dashboard</a> | 
         <a href="task.php">Tasks</a> | 
         <a href="routine.php">Routines</a> | 

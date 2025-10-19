@@ -198,28 +198,72 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $first_name = filter_input(INPUT_POST, 'first_name', FILTER_SANITIZE_STRING);
             $last_name = filter_input(INPUT_POST, 'last_name', FILTER_SANITIZE_STRING);
             $gender = filter_input(INPUT_POST, 'gender', FILTER_SANITIZE_STRING);
-            $stmt = $db->prepare("UPDATE users SET first_name = :first_name, last_name = :last_name, gender = :gender WHERE id = :id");
-            if ($stmt->execute([
-                ':first_name' => $first_name,
-                ':last_name' => $last_name,
-                ':gender' => $gender,
-                ':id' => $user_id
-            ])) {
-                $message = "Profile updated successfully!";
-                if ($user_id == $_SESSION['user_id']) {
-                    $_SESSION['name'] = getDisplayName($_SESSION['user_id']);
+            if (!in_array($gender, ['male', 'female'], true)) {
+                $gender = null;
+            }
+            $allowed_parent_titles = ['mother', 'father'];
+            $parent_title = filter_input(INPUT_POST, 'parent_title', FILTER_SANITIZE_STRING);
+            if (!in_array($parent_title, $allowed_parent_titles, true)) {
+                $parent_title = null;
+            }
+
+            $target_effective_role = getEffectiveRole($user_id);
+            if (!in_array($target_effective_role, ['main_parent', 'secondary_parent'], true)) {
+                $parent_title = null;
+            }
+
+            $parent_conflict = false;
+            if ($parent_title) {
+                $family_owner_id = $family_root_id;
+                if ($target_effective_role === 'main_parent') {
+                    $family_owner_id = $user_id;
                 }
-                if ($user_id != $_SESSION['user_id']) {
-                    $linked_role = getFamilyLinkRole($user_id);
-                    $redirect = 'profile.php?edit_user=' . $user_id;
-                    if ($linked_role) {
-                        $redirect .= '&role_type=' . urlencode($linked_role);
+                $conflictStmt = $db->prepare("SELECT u.id 
+                                             FROM users u
+                                             LEFT JOIN family_links fl ON u.id = fl.linked_user_id
+                                             WHERE (
+                                                     u.id = :main_parent_id
+                                                     OR (fl.main_parent_id = :main_parent_id AND fl.role_type = 'secondary_parent')
+                                                   )
+                                               AND u.parent_title = :parent_title
+                                               AND u.id != :current_user
+                                             LIMIT 1");
+                $conflictStmt->execute([
+                    ':main_parent_id' => $family_owner_id,
+                    ':parent_title' => $parent_title,
+                    ':current_user' => $user_id
+                ]);
+                if ($conflictStmt->fetchColumn()) {
+                    $parent_conflict = true;
+                    $message = ucfirst($parent_title) . " has already been assigned to another parent in this family. Please choose a different option or leave it blank.";
+                }
+            }
+
+            if (!$parent_conflict) {
+                $stmt = $db->prepare("UPDATE users SET first_name = :first_name, last_name = :last_name, gender = :gender, parent_title = :parent_title WHERE id = :id");
+                if ($stmt->execute([
+                    ':first_name' => $first_name,
+                    ':last_name' => $last_name,
+                    ':gender' => $gender ?: null,
+                    ':parent_title' => $parent_title,
+                    ':id' => $user_id
+                ])) {
+                    $message = "Profile updated successfully!";
+                    if ($user_id == $_SESSION['user_id']) {
+                        $_SESSION['name'] = getDisplayName($_SESSION['user_id']);
                     }
-                    header('Location: ' . $redirect);
-                    exit;
+                    if ($user_id != $_SESSION['user_id']) {
+                        $linked_role = getFamilyLinkRole($user_id);
+                        $redirect = 'profile.php?edit_user=' . $user_id;
+                        if ($linked_role) {
+                            $redirect .= '&role_type=' . urlencode($linked_role);
+                        }
+                        header('Location: ' . $redirect);
+                        exit;
+                    }
+                } else {
+                    $message = "Failed to update profile.";
                 }
-            } else {
-                $message = "Failed to update profile.";
             }
         }
     }
@@ -239,6 +283,8 @@ if ($role === 'child' || $edit_type === 'child') {
     }
 }
 
+$target_effective_role = getEffectiveRole($user_id);
+$target_parent_title = $user['parent_title'] ?? null;
 $target_role_label = getUserRoleLabel($user_id);
 $display_name = trim(($user['first_name'] ?? '') . ' ' . ($user['last_name'] ?? ''));
 if ($display_name === '') {
@@ -319,6 +365,20 @@ $child_display_name = $profile['child_name'] ?? $display_name;
                     document.getElementById('avatar-preview').src = option.dataset.avatar;
                 });
             });
+
+            const genderSelect = document.getElementById('gender');
+            const parentTitleSelect = document.getElementById('parent_title');
+            if (genderSelect && parentTitleSelect) {
+                genderSelect.addEventListener('change', function() {
+                    if (this.value === 'male') {
+                        parentTitleSelect.value = 'father';
+                    } else if (this.value === 'female') {
+                        parentTitleSelect.value = 'mother';
+                    } else {
+                        parentTitleSelect.value = '';
+                    }
+                });
+            }
         });
     </script>
 </head>
@@ -392,9 +452,11 @@ $child_display_name = $profile['child_name'] ?? $display_name;
                     </form>
                 <?php endif; ?>
             </div>
-        <?php elseif ($role === 'parent'): ?>
+        <?php elseif (in_array($target_effective_role, ['main_parent', 'secondary_parent'], true)): ?>
             <div class="profile-form parent-profile">
-                <h2>Your Profile</h2>
+                <h2>
+                    <?php echo ($user_id == $_SESSION['user_id']) ? 'Your Profile' : 'Edit Parent Profile'; ?>
+                </h2>
                 <p class="profile-name">
                     <?php echo htmlspecialchars($display_name); ?>
                     <?php if ($target_role_label): ?>
@@ -416,9 +478,18 @@ $child_display_name = $profile['child_name'] ?? $display_name;
                         <label for="gender">Gender:</label>
                         <select id="gender" name="gender">
                             <option value="">Select</option>
-                            <option value="male" <?php if ($user['gender'] == 'male') echo 'selected'; ?>>Male</option>
-                            <option value="female" <?php if ($user['gender'] == 'female') echo 'selected'; ?>>Female</option>
+                            <option value="male" <?php if (($user['gender'] ?? '') === 'male') echo 'selected'; ?>>Male</option>
+                            <option value="female" <?php if (($user['gender'] ?? '') === 'female') echo 'selected'; ?>>Female</option>
                         </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="parent_title">Parent Role (optional):</label>
+                        <select id="parent_title" name="parent_title">
+                            <option value="">Not specified</option>
+                            <option value="mother" <?php if ($target_parent_title === 'mother') echo 'selected'; ?>>Mother</option>
+                            <option value="father" <?php if ($target_parent_title === 'father') echo 'selected'; ?>>Father</option>
+                        </select>
+                        <small style="display:block;margin-top:5px;color:#555;">Each family can assign Mother and Father once. Leave blank if not applicable.</small>
                     </div>
                     <button type="submit" name="update_parent_profile" class="button">Update Profile</button>
                 </form>

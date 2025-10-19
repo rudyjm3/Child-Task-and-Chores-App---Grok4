@@ -97,6 +97,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 }
+
+$welcome_role_label = getUserRoleLabel($_SESSION['user_id']);
+if (!$welcome_role_label) {
+    $fallback_role = getEffectiveRole($_SESSION['user_id']) ?: ($_SESSION['role'] ?? null);
+    if ($fallback_role) {
+        $welcome_role_label = ucfirst(str_replace('_', ' ', $fallback_role));
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -118,6 +126,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         /* Kid-Friendly for Child View */
         .routine-card.child-view { background: linear-gradient(135deg, #e3f2fd, #f3e5f5); }
         .routine-card.child-view li { background: #fff9c4; border-left: 4px solid #ff9800; }
+        .role-badge {
+            background: #4caf50;
+            color: #fff;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.9em;
+            margin-left: 8px;
+            display: inline-block;
+        }
         .button { padding: 10px 20px; margin: 5px; background-color: #4caf50; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; min-height: 44px; }
         .start-next-button { background-color: #2196f3; }
         /* Mobile Responsive */
@@ -203,7 +220,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <body>
     <header>
       <h1>Routine Management</h1>
-      <p>Welcome, <?php echo htmlspecialchars($_SESSION['name'] ?? $_SESSION['username'] ?? 'Unknown User'); ?> (<?php echo htmlspecialchars($_SESSION['role']); ?>)</p>
+      <p>Welcome, <?php echo htmlspecialchars($_SESSION['name'] ?? $_SESSION['username'] ?? 'Unknown User'); ?>
+         <?php if ($welcome_role_label): ?>
+            <span class="role-badge">(<?php echo htmlspecialchars($welcome_role_label); ?>)</span>
+         <?php endif; ?>
+      </p>
       <a href="dashboard_<?php echo $_SESSION['role']; ?>.php">Dashboard</a> | <a href="goal.php">Goals</a> | <a href="task.php">Tasks</a> | <a href="profile.php?self=1">Profile</a> | <a href="logout.php">Logout</a>
     </header>
     <main>

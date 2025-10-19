@@ -51,6 +51,14 @@ $data = getDashboardData($_SESSION['user_id']);
 // Fetch Routine Tasks for parent dashboard (fix undefined)
 $routine_tasks = getRoutineTasks($_SESSION['user_id']);
 
+$welcome_role_label = getUserRoleLabel($_SESSION['user_id']);
+if (!$welcome_role_label) {
+    $fallback_role = $role_type ?: ($_SESSION['role'] ?? null);
+    if ($fallback_role) {
+        $welcome_role_label = ucfirst(str_replace('_', ' ', $fallback_role));
+    }
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['create_reward'])) {
         $title = filter_input(INPUT_POST, 'reward_title', FILTER_SANITIZE_STRING);
@@ -281,14 +289,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
    <header>
       <h1>Parent Dashboard</h1>
       <p>Welcome, <?php echo htmlspecialchars($_SESSION['name'] ?? $_SESSION['username']); ?> 
-         <?php if ($role_type === 'main_parent'): ?>
-            <span class="role-badge">(Main Account Owner)</span>
-         <?php elseif ($role_type === 'secondary_parent'): ?>
-            <span class="role-badge">(Secondary Parent)</span>
-         <?php elseif ($role_type === 'family_member'): ?>
-            <span class="role-badge">(Family Member)</span>
-         <?php elseif ($role_type === 'caregiver'): ?>
-            <span class="role-badge">(Caregiver)</span>
+         <?php if ($welcome_role_label): ?>
+            <span class="role-badge">(<?php echo htmlspecialchars($welcome_role_label); ?>)</span>
          <?php endif; ?>
       </p>
       <a href="goal.php">Goals</a> | <a href="task.php">Tasks</a> | <a href="routine.php">Routines</a> | <a href="profile.php?self=1">Profile</a> | <a href="logout.php">Logout</a>
@@ -343,12 +345,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
          if (!empty($family_members)): ?>
              <?php foreach ($family_members as $member): ?>
                  <div class="member-item">
-                     <p><?php echo htmlspecialchars($member['name'] ?? $member['username']); ?> 
+                    <p><?php echo htmlspecialchars($member['name'] ?? $member['username']); ?> 
                         <span class="role-type">(<?php
-                            $roleLabel = ($member['role_type'] ?? '') === 'main_parent'
-                                ? 'Main Account Owner'
-                                : ucfirst(str_replace('_', ' ', $member['role_type'] ?? ''));
-                            echo htmlspecialchars($roleLabel);
+                            $memberBadge = getUserRoleLabel($member['id']) ?? ($member['role_type'] ?? '');
+                            if (!$memberBadge && isset($member['role_type'])) {
+                                $memberBadge = ucfirst(str_replace('_', ' ', $member['role_type']));
+                            }
+                            echo htmlspecialchars($memberBadge);
                         ?>)</span>
                      </p>
                      <?php if (in_array($role_type, ['main_parent', 'secondary_parent']) && ($member['role_type'] ?? '') !== 'main_parent'): ?>

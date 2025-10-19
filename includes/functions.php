@@ -31,6 +31,15 @@ function getFamilyLinkRole($user_id) {
     return $stmt->fetchColumn() ?: null;
 }
 
+// Retrieve parent title (mother/father) for a user if assigned
+function getParentTitle($user_id) {
+    global $db;
+    $stmt = $db->prepare("SELECT parent_title FROM users WHERE id = :id");
+    $stmt->execute([':id' => $user_id]);
+    $title = $stmt->fetchColumn();
+    return $title ?: null;
+}
+
 function getEffectiveRole($user_id) {
     $role = getUserRole($user_id);
     if ($role === 'family_member') {
@@ -46,6 +55,17 @@ function getEffectiveRole($user_id) {
 function getUserRoleLabel($user_id) {
     $role = getEffectiveRole($user_id);
     if (!$role) return null;
+
+    if (in_array($role, ['main_parent', 'secondary_parent'], true)) {
+        $parentTitle = getParentTitle($user_id);
+        if ($parentTitle === 'mother') {
+            return 'Mother';
+        }
+        if ($parentTitle === 'father') {
+            return 'Father';
+        }
+    }
+
     if ($role === 'main_parent') return 'Main Account Owner';
     if ($role === 'child') return 'Child';
 
@@ -76,7 +96,8 @@ function calculateAge($birthday) {
 // Update database schema for first/last name
 $db->exec("ALTER TABLE users 
     ADD COLUMN IF NOT EXISTS first_name VARCHAR(50) DEFAULT NULL,
-    ADD COLUMN IF NOT EXISTS last_name VARCHAR(50) DEFAULT NULL");
+    ADD COLUMN IF NOT EXISTS last_name VARCHAR(50) DEFAULT NULL,
+    ADD COLUMN IF NOT EXISTS parent_title ENUM('mother','father') DEFAULT NULL");
 
 // Register a new user (revised for first/last name and gender)
 function registerUser($username, $password, $role, $first_name = null, $last_name = null, $gender = null) {

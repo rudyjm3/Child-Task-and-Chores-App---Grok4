@@ -70,6 +70,14 @@ unset($task);
 $pending_tasks = array_filter($tasks, function($t) { return $t['status'] === 'pending'; });
 $completed_tasks = array_filter($tasks, function($t) { return $t['status'] === 'completed'; }); // Waiting approval
 $approved_tasks = array_filter($tasks, function($t) { return $t['status'] === 'approved'; });
+
+$welcome_role_label = getUserRoleLabel($_SESSION['user_id']);
+if (!$welcome_role_label) {
+    $fallback_role = getEffectiveRole($_SESSION['user_id']) ?: ($_SESSION['role'] ?? null);
+    if ($fallback_role) {
+        $welcome_role_label = ucfirst(str_replace('_', ' ', $fallback_role));
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -101,6 +109,15 @@ $approved_tasks = array_filter($tasks, function($t) { return $t['status'] === 'a
             background-color: #e0e0e0;
             padding: 10px;
             margin: 5px 0;
+        }
+        .role-badge {
+            background: #4caf50;
+            color: #fff;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.9em;
+            margin-left: 8px;
+            display: inline-block;
         }
         .button {
             padding: 10px 20px;
@@ -169,7 +186,11 @@ $approved_tasks = array_filter($tasks, function($t) { return $t['status'] === 'a
 <body>
     <header>
          <h1>Task Management</h1>
-         <p>Welcome, <?php echo htmlspecialchars($_SESSION['name'] ?? $_SESSION['username'] ?? 'Unknown User'); ?> (<?php echo htmlspecialchars($_SESSION['role']); ?>)</p>
+        <p>Welcome, <?php echo htmlspecialchars($_SESSION['name'] ?? $_SESSION['username'] ?? 'Unknown User'); ?>
+            <?php if ($welcome_role_label): ?>
+                <span class="role-badge">(<?php echo htmlspecialchars($welcome_role_label); ?>)</span>
+            <?php endif; ?>
+        </p>
          <a href="dashboard_<?php echo canCreateContent($_SESSION['user_id']) ? 'parent' : 'child'; ?>.php">Dashboard</a> | 
          <a href="goal.php">Goals</a> | 
          <a href="routine.php">Routines</a> |

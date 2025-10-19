@@ -45,6 +45,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $message = "Failed to update goal.";
     }
 }
+
+$welcome_role_label = getUserRoleLabel($_SESSION['user_id']);
+if (!$welcome_role_label) {
+    $fallback_role = getEffectiveRole($_SESSION['user_id']) ?: ($_SESSION['role'] ?? null);
+    if ($fallback_role) {
+        $welcome_role_label = ucfirst(str_replace('_', ' ', $fallback_role));
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -77,12 +85,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             border-radius: 5px;
             cursor: pointer;
         }
+        .role-badge {
+            background: #4caf50;
+            color: #fff;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.9em;
+            margin-left: 8px;
+            display: inline-block;
+        }
     </style>
 </head>
 <body>
     <header>
         <h1>Edit Goal</h1>
-        <p>Welcome, <?php echo htmlspecialchars($_SESSION['username'] ?? 'Unknown User'); ?> (<?php echo htmlspecialchars($_SESSION['role']); ?>)</p>
+        <p>Welcome, <?php echo htmlspecialchars($_SESSION['name'] ?? $_SESSION['username'] ?? 'Unknown User'); ?>
+            <?php if ($welcome_role_label): ?>
+                <span class="role-badge">(<?php echo htmlspecialchars($welcome_role_label); ?>)</span>
+            <?php endif; ?>
+        </p>
         <a href="goal.php">Back to Goals</a> | <a href="dashboard_parent.php">Dashboard</a> | <a href="logout.php">Logout</a>
     </header>
     <main>
