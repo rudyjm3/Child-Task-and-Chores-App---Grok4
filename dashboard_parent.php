@@ -85,59 +85,67 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $message = "Failed to $action goal.";
         }
     } elseif (isset($_POST['add_child'])) {
-        // Get and split child's name into first and last name
-        $first_name = filter_input(INPUT_POST, 'first_name', FILTER_SANITIZE_STRING);
-        $last_name = filter_input(INPUT_POST, 'last_name', FILTER_SANITIZE_STRING);
-        $child_username = filter_input(INPUT_POST, 'child_username', FILTER_SANITIZE_STRING);
-        $child_password = filter_input(INPUT_POST, 'child_password', FILTER_SANITIZE_STRING);
-        $birthday = filter_input(INPUT_POST, 'birthday', FILTER_SANITIZE_STRING);
-        $avatar = filter_input(INPUT_POST, 'avatar', FILTER_SANITIZE_STRING);
-        $gender = filter_input(INPUT_POST, 'child_gender', FILTER_SANITIZE_STRING);
-        // Handle upload
-        $upload_path = '';
-        if (isset($_FILES['avatar_upload']) && $_FILES['avatar_upload']['error'] == 0) {
-            $upload_dir = __DIR__ . '/uploads/avatars/';
-            if (!is_dir($upload_dir)) {
-                mkdir($upload_dir, 0755, true);
-            }
-            $file_ext = pathinfo($_FILES['avatar_upload']['name'], PATHINFO_EXTENSION);
-            $file_name = uniqid() . '_' . pathinfo($_FILES['avatar_upload']['name'], PATHINFO_FILENAME) . '.' . $file_ext;
-            $upload_path = 'uploads/avatars/' . $file_name;
-            if (move_uploaded_file($_FILES['avatar_upload']['tmp_name'], __DIR__ . '/' . $upload_path)) {
-                // Resize image (GD library)
-                $image = imagecreatefromstring(file_get_contents(__DIR__ . '/' . $upload_path));
-                $resized = imagecreatetruecolor(100, 100);
-                imagecopyresampled($resized, $image, 0, 0, 0, 0, 100, 100, imagesx($image), imagesy($image));
-                imagejpeg($resized, __DIR__ . '/' . $upload_path, 90);
-                imagedestroy($image);
-                imagedestroy($resized);
-                $avatar = $upload_path; // Use uploaded path
-            } else {
-                $message = "Upload failed; using default avatar.";
-            }
-        }
-        if (createChildProfile($_SESSION['user_id'], $first_name, $last_name, $child_username, $child_password, $birthday, $avatar, $gender)) {
-            $message = "Child added successfully! Username: $child_username, Password: $child_password (share securely).";
-            $data = getDashboardData($_SESSION['user_id']);
+        if (!canAddEditChild($_SESSION['user_id'])) {
+            $message = "You do not have permission to add children.";
         } else {
-            $message = "Failed to add child. Check for duplicate username.";
+            // Get and split child's name into first and last name
+            $first_name = filter_input(INPUT_POST, 'first_name', FILTER_SANITIZE_STRING);
+            $last_name = filter_input(INPUT_POST, 'last_name', FILTER_SANITIZE_STRING);
+            $child_username = filter_input(INPUT_POST, 'child_username', FILTER_SANITIZE_STRING);
+            $child_password = filter_input(INPUT_POST, 'child_password', FILTER_SANITIZE_STRING);
+            $birthday = filter_input(INPUT_POST, 'birthday', FILTER_SANITIZE_STRING);
+            $avatar = filter_input(INPUT_POST, 'avatar', FILTER_SANITIZE_STRING);
+            $gender = filter_input(INPUT_POST, 'child_gender', FILTER_SANITIZE_STRING);
+            // Handle upload
+            $upload_path = '';
+            if (isset($_FILES['avatar_upload']) && $_FILES['avatar_upload']['error'] == 0) {
+                $upload_dir = __DIR__ . '/uploads/avatars/';
+                if (!is_dir($upload_dir)) {
+                    mkdir($upload_dir, 0755, true);
+                }
+                $file_ext = pathinfo($_FILES['avatar_upload']['name'], PATHINFO_EXTENSION);
+                $file_name = uniqid() . '_' . pathinfo($_FILES['avatar_upload']['name'], PATHINFO_FILENAME) . '.' . $file_ext;
+                $upload_path = 'uploads/avatars/' . $file_name;
+                if (move_uploaded_file($_FILES['avatar_upload']['tmp_name'], __DIR__ . '/' . $upload_path)) {
+                    // Resize image (GD library)
+                    $image = imagecreatefromstring(file_get_contents(__DIR__ . '/' . $upload_path));
+                    $resized = imagecreatetruecolor(100, 100);
+                    imagecopyresampled($resized, $image, 0, 0, 0, 0, 100, 100, imagesx($image), imagesy($image));
+                    imagejpeg($resized, __DIR__ . '/' . $upload_path, 90);
+                    imagedestroy($image);
+                    imagedestroy($resized);
+                    $avatar = $upload_path; // Use uploaded path
+                } else {
+                    $message = "Upload failed; using default avatar.";
+                }
+            }
+            if (createChildProfile($_SESSION['user_id'], $first_name, $last_name, $child_username, $child_password, $birthday, $avatar, $gender)) {
+                $message = "Child added successfully! Username: $child_username, Password: $child_password (share securely).";
+                $data = getDashboardData($_SESSION['user_id']);
+            } else {
+                $message = "Failed to add child. Check for duplicate username.";
+            }
         }
     } elseif (isset($_POST['add_new_user'])) {
-        $first_name = filter_input(INPUT_POST, 'secondary_first_name', FILTER_SANITIZE_STRING);
-        $last_name = filter_input(INPUT_POST, 'secondary_last_name', FILTER_SANITIZE_STRING);
-        $username = filter_input(INPUT_POST, 'secondary_username', FILTER_SANITIZE_STRING);
-        $password = filter_input(INPUT_POST, 'secondary_password', FILTER_SANITIZE_STRING);
-        $role_type = filter_input(INPUT_POST, 'role_type', FILTER_SANITIZE_STRING);
-        
-        if ($role_type && in_array($role_type, ['secondary_parent', 'family_member', 'caregiver'])) {
-            if (addLinkedUser($_SESSION['user_id'], $username, $password, $first_name, $last_name, $role_type)) {
-                $role_display = str_replace('_', ' ', ucwords($role_type));
-                $message = "$role_display added successfully! Username: $username";
-            } else {
-                $message = "Failed to add user. Check for duplicate username.";
-            }
+        if (!canAddEditFamilyMember($_SESSION['user_id'])) {
+            $message = "You do not have permission to add family members or caregivers.";
         } else {
-            $message = "Invalid role type selected.";
+            $first_name = filter_input(INPUT_POST, 'secondary_first_name', FILTER_SANITIZE_STRING);
+            $last_name = filter_input(INPUT_POST, 'secondary_last_name', FILTER_SANITIZE_STRING);
+            $username = filter_input(INPUT_POST, 'secondary_username', FILTER_SANITIZE_STRING);
+            $password = filter_input(INPUT_POST, 'secondary_password', FILTER_SANITIZE_STRING);
+            $role_type = filter_input(INPUT_POST, 'role_type', FILTER_SANITIZE_STRING);
+            
+            if ($role_type && in_array($role_type, ['secondary_parent', 'family_member', 'caregiver'])) {
+                if (addLinkedUser($_SESSION['user_id'], $username, $password, $first_name, $last_name, $role_type)) {
+                    $role_display = str_replace('_', ' ', ucwords($role_type));
+                    $message = "$role_display added successfully! Username: $username";
+                } else {
+                    $message = "Failed to add user. Check for duplicate username.";
+                }
+            } else {
+                $message = "Invalid role type selected.";
+            }
         }
     } elseif (isset($_POST['add_new_user'])) {
         $secondary_username   = filter_input(INPUT_POST, 'secondary_username', FILTER_SANITIZE_STRING);
@@ -226,39 +234,46 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             const addCaregiverBtn = document.getElementById('add-caregiver-btn');
             const childForm = document.getElementById('child-form');
             const caregiverForm = document.getElementById('caregiver-form');
-            const avatarOptions = document.querySelectorAll('.avatar-option');
+            const avatarPreview = document.getElementById('avatar-preview');
 
-            addChildBtn.addEventListener('click', () => {
-                childForm.classList.add('active');
-                caregiverForm.classList.remove('active');
-            });
+            if (addChildBtn && addCaregiverBtn && childForm && caregiverForm && avatarPreview) {
+                const avatarOptions = document.querySelectorAll('.avatar-option');
 
-            addCaregiverBtn.addEventListener('click', () => {
-                caregiverForm.classList.add('active');
-                childForm.classList.remove('active');
-            });
-
-            // Avatar preview
-            avatarOptions.forEach(option => {
-                option.addEventListener('click', () => {
-                    avatarOptions.forEach(opt => opt.classList.remove('selected'));
-                    option.classList.add('selected');
-                    document.getElementById('avatar-preview').src = option.dataset.avatar;
-                    document.getElementById('avatar').value = option.dataset.avatar;
+                addChildBtn.addEventListener('click', () => {
+                    childForm.classList.add('active');
+                    caregiverForm.classList.remove('active');
                 });
-            });
 
-            // Upload preview
-            document.getElementById('avatar-upload').addEventListener('change', function(e) {
-                const file = e.target.files[0];
-                if (file) {
-                    const reader = new FileReader();
-                    reader.onload = function(e) {
-                        document.getElementById('avatar-preview').src = e.target.result;
-                    };
-                    reader.readAsDataURL(file);
+                addCaregiverBtn.addEventListener('click', () => {
+                    caregiverForm.classList.add('active');
+                    childForm.classList.remove('active');
+                });
+
+                // Avatar preview
+                avatarOptions.forEach(option => {
+                    option.addEventListener('click', () => {
+                        avatarOptions.forEach(opt => opt.classList.remove('selected'));
+                        option.classList.add('selected');
+                        avatarPreview.src = option.dataset.avatar;
+                        document.getElementById('avatar').value = option.dataset.avatar;
+                    });
+                });
+
+                // Upload preview
+                const avatarUpload = document.getElementById('avatar-upload');
+                if (avatarUpload) {
+                    avatarUpload.addEventListener('change', function(e) {
+                        const file = e.target.files[0];
+                        if (file) {
+                            const reader = new FileReader();
+                            reader.onload = function(evt) {
+                                avatarPreview.src = evt.target.result;
+                            };
+                            reader.readAsDataURL(file);
+                        }
+                    });
                 }
-            });
+            }
         });
     </script>
 </head>
@@ -368,7 +383,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
              <p>No caregivers added yet.</p>
          <?php endif; ?>
      </div>
-      <div class="manage-family">
+      <?php if (in_array($role_type, ['main_parent', 'secondary_parent'])): ?>
+      <div class="manage-family" id="manage-family">
          <h2>Manage Family</h2>
          <button id="add-child-btn" class="button">Add Child</button>
          <button id="add-caregiver-btn" class="button" style="background: #ff9800;">Add New User</button>
@@ -450,6 +466,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </form>
          </div>
       </div>
+      <?php endif; ?>
 
       <!-- Rest of sections (Management Links, Rewards, etc.) with name display updates -->
       <div class="management-links">
