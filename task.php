@@ -270,6 +270,9 @@ if (!$welcome_role_label) {
                             <p>Due: <?php echo htmlspecialchars($task['due_date_formatted']); ?><?php if ($due_time < $current_time) { echo '<span class="overdue-label">Overdue!</span>'; } ?></p>
                             <p>Points: <?php echo htmlspecialchars($task['points']); ?></p>
                             <p>Category: <?php echo htmlspecialchars($task['category']); ?></p>
+                            <?php if (!empty($task['creator_display_name'])): ?>
+                                <p>Created by: <?php echo htmlspecialchars($task['creator_display_name']); ?></p>
+                            <?php endif; ?>
                             <p>Task Description: <?php echo htmlspecialchars($task['description']); ?></p>
                             <p>Timing Mode: <?php echo htmlspecialchars($task['timing_mode']); ?></p>
                             <?php if ($task['timing_mode'] === 'timer'): ?>
@@ -305,6 +308,9 @@ if (!$welcome_role_label) {
                             <p>Due: <?php echo htmlspecialchars($task['due_date_formatted']); ?></p>
                             <p>Points: <?php echo htmlspecialchars($task['points']); ?></p>
                             <p>Category: <?php echo htmlspecialchars($task['category']); ?></p>
+                            <?php if (!empty($task['creator_display_name'])): ?>
+                                <p>Created by: <?php echo htmlspecialchars($task['creator_display_name']); ?></p>
+                            <?php endif; ?>
                             <p>Task Description: <?php echo htmlspecialchars($task['description']); ?></p>
                             <p>Timing Mode: <?php echo htmlspecialchars($task['timing_mode']); ?></p>
                                 <?php if (canCreateContent($_SESSION['user_id']) && canAddEditChild($_SESSION['user_id'])): ?>
@@ -333,6 +339,9 @@ if (!$welcome_role_label) {
                             <p>Due: <?php echo htmlspecialchars($task['due_date_formatted']); ?></p>
                             <p>Points: <?php echo htmlspecialchars($task['points']); ?></p>
                             <p>Category: <?php echo htmlspecialchars($task['category']); ?></p>
+                            <?php if (!empty($task['creator_display_name'])): ?>
+                                <p>Created by: <?php echo htmlspecialchars($task['creator_display_name']); ?></p>
+                            <?php endif; ?>
                             <p>Task Description: <?php echo htmlspecialchars($task['description']); ?></p>
                             <p>Timing Mode: <?php echo htmlspecialchars($task['timing_mode']); ?></p>
                             <p class="completed">Approved!</p>

@@ -135,6 +135,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                      <p><?php echo htmlspecialchars($goal['title']); ?> (Target: <?php echo htmlspecialchars($goal['target_points']); ?> points)</p>
                      <p>Period: <?php echo htmlspecialchars(date('m/d/Y h:i A', strtotime($goal['start_date']))); ?> to <?php echo htmlspecialchars(date('m/d/Y h:i A', strtotime($goal['end_date']))); ?></p>
                      <p>Reward: <?php echo htmlspecialchars($goal['reward_title'] ?? 'None'); ?></p>
+                     <?php if (!empty($goal['creator_display_name'])): ?>
+                        <p>Created by: <?php echo htmlspecialchars($goal['creator_display_name']); ?></p>
+                     <?php endif; ?>
                      <form method="POST" action="dashboard_child.php">
                         <input type="hidden" name="goal_id" value="<?php echo $goal['id']; ?>">
                         <button type="submit" name="request_completion" class="button request-button">Request Completion</button>
@@ -153,6 +156,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                      <p><?php echo htmlspecialchars($goal['title']); ?> (Target: <?php echo htmlspecialchars($goal['target_points']); ?> points)</p>
                      <p>Period: <?php echo htmlspecialchars(date('m/d/Y h:i A', strtotime($goal['start_date']))); ?> to <?php echo htmlspecialchars(date('m/d/Y h:i A', strtotime($goal['end_date']))); ?></p>
                      <p>Reward: <?php echo htmlspecialchars($goal['reward_title'] ?? 'None'); ?></p>
+                     <?php if (!empty($goal['creator_display_name'])): ?>
+                        <p>Created by: <?php echo htmlspecialchars($goal['creator_display_name']); ?></p>
+                     <?php endif; ?>
                      <p>Completed on: <?php echo htmlspecialchars(date('m/d/Y h:i A', strtotime($goal['completed_at']))); ?></p>
                   </div>
             <?php endforeach; ?>
@@ -163,8 +169,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       <div class="rejected-goals">
          <h2>Rejected Goals</h2>
          <?php
-         $stmt = $db->prepare("SELECT g.id, g.title, g.created_at, g.rejected_at, g.rejection_comment 
+         $stmt = $db->prepare("SELECT 
+                              g.id, 
+                              g.title, 
+                              g.created_at, 
+                              g.rejected_at, 
+                              g.rejection_comment,
+                              COALESCE(
+                                 NULLIF(TRIM(CONCAT(COALESCE(creator.first_name, ''), ' ', COALESCE(creator.last_name, ''))), ''),
+                                 NULLIF(creator.name, ''),
+                                 creator.username,
+                                 'Unknown'
+                              ) AS creator_display_name
                               FROM goals g 
+                              LEFT JOIN users creator ON g.created_by = creator.id
                               WHERE g.child_user_id = :child_id AND g.status = 'rejected'");
          $stmt->execute([':child_id' => $_SESSION['user_id']]);
          $rejected_goals = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -180,6 +198,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <?php foreach ($rejected_goals as $goal): ?>
                   <div class="goal-item">
                      <p>Title: <?php echo htmlspecialchars($goal['title']); ?></p>
+                     <?php if (!empty($goal['creator_display_name'])): ?>
+                        <p>Created by: <?php echo htmlspecialchars($goal['creator_display_name']); ?></p>
+                     <?php endif; ?>
                      <p>Created on: <?php echo htmlspecialchars($goal['created_at_formatted']); ?></p>
                      <p>Rejected on: <?php echo htmlspecialchars($goal['rejected_at_formatted']); ?></p>
                      <p>Comment: <?php echo htmlspecialchars($goal['rejection_comment'] ?? 'No comments available.'); ?></p>
@@ -193,6 +214,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <?php foreach ($routines as $routine): ?>
                   <div class="routine-item">
                      <h3><?php echo htmlspecialchars($routine['title']); ?></h3>
+                     <?php if (!empty($routine['creator_display_name'])): ?>
+                        <p>Created by: <?php echo htmlspecialchars($routine['creator_display_name']); ?></p>
+                     <?php endif; ?>
                      <p>Time: <?php echo date('h:i A', strtotime($routine['start_time'])) . ' - ' . date('h:i A', strtotime($routine['end_time'])); ?></p>
                      <p>Bonus: <?php echo $routine['bonus_points']; ?> points</p>
                      <button onclick="startRoutine(<?php echo $routine['id']; ?>)" class="button start-routine-button">Start Routine</button>

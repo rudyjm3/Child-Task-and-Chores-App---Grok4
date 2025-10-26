@@ -104,18 +104,59 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 // Fetch goals for the user
 $goals = [];
 if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
-    $stmt = $db->prepare("SELECT g.id, g.title, g.target_points, g.start_date, g.end_date, g.status, g.reward_id, r.title as reward_title, u.username as child_username, g.rejected_at, g.rejection_comment, g.created_at 
+    $stmt = $db->prepare("SELECT 
+                             g.id, 
+                             g.title, 
+                             g.target_points, 
+                             g.start_date, 
+                             g.end_date, 
+                             g.status, 
+                             g.reward_id, 
+                             r.title AS reward_title, 
+                             COALESCE(
+                                 NULLIF(TRIM(CONCAT(COALESCE(u.first_name, ''), ' ', COALESCE(u.last_name, ''))), ''),
+                                 NULLIF(u.name, ''),
+                                 u.username
+                             ) AS child_display_name, 
+                             g.rejected_at, 
+                             g.rejection_comment, 
+                             g.created_at,
+                             COALESCE(
+                                 NULLIF(TRIM(CONCAT(COALESCE(creator.first_name, ''), ' ', COALESCE(creator.last_name, ''))), ''),
+                                 NULLIF(creator.name, ''),
+                                 creator.username,
+                                 'Unknown'
+                             ) AS creator_display_name
                          FROM goals g 
                          JOIN users u ON g.child_user_id = u.id 
                          LEFT JOIN rewards r ON g.reward_id = r.id 
+                         LEFT JOIN users creator ON g.created_by = creator.id
                          WHERE g.parent_user_id = :parent_id 
                          ORDER BY g.start_date ASC");
     $stmt->execute([':parent_id' => $family_root_id]);
     $goals = $stmt->fetchAll(PDO::FETCH_ASSOC);
 } else { // Child
-    $stmt = $db->prepare("SELECT g.id, g.title, g.target_points, g.start_date, g.end_date, g.status, g.reward_id, r.title as reward_title, g.rejected_at, g.rejection_comment, g.created_at 
+    $stmt = $db->prepare("SELECT 
+                             g.id, 
+                             g.title, 
+                             g.target_points, 
+                             g.start_date, 
+                             g.end_date, 
+                             g.status, 
+                             g.reward_id, 
+                             r.title AS reward_title, 
+                             g.rejected_at, 
+                             g.rejection_comment, 
+                             g.created_at,
+                             COALESCE(
+                                 NULLIF(TRIM(CONCAT(COALESCE(creator.first_name, ''), ' ', COALESCE(creator.last_name, ''))), ''),
+                                 NULLIF(creator.name, ''),
+                                 creator.username,
+                                 'Unknown'
+                             ) AS creator_display_name
                          FROM goals g 
                          LEFT JOIN rewards r ON g.reward_id = r.id 
+                         LEFT JOIN users creator ON g.created_by = creator.id
                          WHERE g.child_user_id = :child_id 
                          ORDER BY g.start_date ASC");
     $stmt->execute([':child_id' => $_SESSION['user_id']]);
@@ -142,10 +183,33 @@ $rejected_goals = array_filter($goals, function($g) { return $g['status'] === 'r
 // Fetch all goals for parent view (including active, pending, completed, rejected)
 $all_goals = [];
 if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
-    $stmt = $db->prepare("SELECT g.id, g.title, g.target_points, g.start_date, g.end_date, g.status, g.reward_id, r.title as reward_title, u.username as child_username, g.rejected_at, g.rejection_comment, g.created_at 
+    $stmt = $db->prepare("SELECT 
+                             g.id, 
+                             g.title, 
+                             g.target_points, 
+                             g.start_date, 
+                             g.end_date, 
+                             g.status, 
+                             g.reward_id, 
+                             r.title AS reward_title, 
+                             COALESCE(
+                                 NULLIF(TRIM(CONCAT(COALESCE(u.first_name, ''), ' ', COALESCE(u.last_name, ''))), ''),
+                                 NULLIF(u.name, ''),
+                                 u.username
+                             ) AS child_display_name, 
+                             g.rejected_at, 
+                             g.rejection_comment, 
+                             g.created_at,
+                             COALESCE(
+                                 NULLIF(TRIM(CONCAT(COALESCE(creator.first_name, ''), ' ', COALESCE(creator.last_name, ''))), ''),
+                                 NULLIF(creator.name, ''),
+                                 creator.username,
+                                 'Unknown'
+                             ) AS creator_display_name
                          FROM goals g 
                          JOIN users u ON g.child_user_id = u.id 
                          LEFT JOIN rewards r ON g.reward_id = r.id 
+                         LEFT JOIN users creator ON g.created_by = creator.id
                          WHERE g.parent_user_id = :parent_id 
                          ORDER BY g.start_date ASC");
     $stmt->execute([':parent_id' => $family_root_id]);
@@ -322,9 +386,12 @@ if (!$welcome_role_label) {
                             <p>Target Points: <?php echo htmlspecialchars($goal['target_points']); ?></p>
                             <p>Period: <?php echo htmlspecialchars($goal['start_date_formatted']); ?> to <?php echo htmlspecialchars($goal['end_date_formatted']); ?></p>
                             <p>Reward: <?php echo htmlspecialchars($goal['reward_title'] ?? 'None'); ?></p>
+                            <?php if (!empty($goal['creator_display_name'])): ?>
+                                <p>Created by: <?php echo htmlspecialchars($goal['creator_display_name']); ?></p>
+                            <?php endif; ?>
                             <p>Status: <?php echo htmlspecialchars($goal['status']); ?></p>
                             <?php if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])): ?>
-                                <p>Child: <?php echo htmlspecialchars($goal['child_username']); ?></p>
+                                <p>Assigned to: <?php echo htmlspecialchars($goal['child_display_name']); ?></p>
                                 <?php if ($goal['status'] === 'pending_approval'): ?>
                                     <form method="POST" action="goal.php">
                                         <input type="hidden" name="goal_id" value="<?php echo $goal['id']; ?>">
@@ -363,8 +430,11 @@ if (!$welcome_role_label) {
                             <p>Period: <?php echo htmlspecialchars($goal['start_date_formatted']); ?> to <?php echo htmlspecialchars($goal['end_date_formatted']); ?></p>
                             <p>Reward: <?php echo htmlspecialchars($goal['reward_title'] ?? 'None'); ?></p>
                             <p>Status: Completed</p>
+                            <?php if (!empty($goal['creator_display_name'])): ?>
+                                <p>Created by: <?php echo htmlspecialchars($goal['creator_display_name']); ?></p>
+                            <?php endif; ?>
                             <?php if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])): ?>
-                                <p>Child: <?php echo htmlspecialchars($goal['child_username']); ?></p>
+                                <p>Child: <?php echo htmlspecialchars($goal['child_display_name']); ?></p>
                             <?php endif; ?>
                         </div>
                     <?php endforeach; ?>
@@ -379,11 +449,14 @@ if (!$welcome_role_label) {
                             <p>Target Points: <?php echo htmlspecialchars($goal['target_points']); ?></p>
                             <p>Period: <?php echo htmlspecialchars($goal['start_date_formatted']); ?> to <?php echo htmlspecialchars($goal['end_date_formatted']); ?></p>
                             <p>Reward: <?php echo htmlspecialchars($goal['reward_title'] ?? 'None'); ?></p>
+                            <?php if (!empty($goal['creator_display_name'])): ?>
+                                <p>Created by: <?php echo htmlspecialchars($goal['creator_display_name']); ?></p>
+                            <?php endif; ?>
                             <p>Status: Rejected</p>
                             <p>Rejected on: <?php echo htmlspecialchars($goal['rejected_at_formatted']); ?></p>
                             <p>Comment: <?php echo htmlspecialchars($goal['rejection_comment'] ?? 'No comments available.'); ?></p>
                             <?php if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])): ?>
-                                <p>Child: <?php echo htmlspecialchars($goal['child_username']); ?></p>
+                                <p>Child: <?php echo htmlspecialchars($goal['child_display_name']); ?></p>
                                 <form method="POST" action="goal.php">
                                     <input type="hidden" name="goal_id" value="<?php echo $goal['id']; ?>">
                                     <button type="submit" name="reactivate_goal" class="button">Reactivate</button>

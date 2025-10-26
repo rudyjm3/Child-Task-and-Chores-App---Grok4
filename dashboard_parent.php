@@ -688,11 +688,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       <div class="pending-approvals">
          <h2>Pending Goal Approvals</h2>
          <?php if (isset($data['pending_approvals']) && is_array($data['pending_approvals']) && !empty($data['pending_approvals'])): ?>
-               <?php foreach ($data['pending_approvals'] as $approval): ?>
-                  <div class="goal-item">
-                     <p>Goal: <?php echo htmlspecialchars($approval['title']); ?> (Target: <?php echo htmlspecialchars($approval['target_points']); ?> points)</p>
-                     <p>Child: <?php echo htmlspecialchars($approval['child_username']); ?></p>
-                     <p>Requested on: <?php echo htmlspecialchars($approval['requested_at']); ?></p>
+              <?php foreach ($data['pending_approvals'] as $approval): ?>
+                 <div class="goal-item">
+                    <p>Goal: <?php echo htmlspecialchars($approval['title']); ?> (Target: <?php echo htmlspecialchars($approval['target_points']); ?> points)</p>
+                    <p>Child: <?php echo htmlspecialchars($approval['child_username']); ?></p>
+                    <?php if (!empty($approval['creator_display_name'])): ?>
+                        <p>Created by: <?php echo htmlspecialchars($approval['creator_display_name']); ?></p>
+                    <?php endif; ?>
+                    <p>Requested on: <?php echo htmlspecialchars($approval['requested_at']); ?></p>
                      <form method="POST" action="dashboard_parent.php">
                            <input type="hidden" name="goal_id" value="<?php echo $approval['id']; ?>">
                            <button type="submit" name="approve_goal" class="button approve-button">Approve</button>
@@ -713,19 +716,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
          <?php
          $all_completed_goals = [];
          $parent_id = $_SESSION['user_id'];
-         $stmt = $db->prepare("SELECT g.id, g.title, g.target_points, g.start_date, g.end_date, g.completed_at, u.username as child_username 
+         $stmt = $db->prepare("SELECT 
+                              g.id, 
+                              g.title, 
+                              g.target_points, 
+                              g.start_date, 
+                              g.end_date, 
+                              g.completed_at, 
+                              u.username as child_username,
+                              COALESCE(
+                                 NULLIF(TRIM(CONCAT(COALESCE(creator.first_name, ''), ' ', COALESCE(creator.last_name, ''))), ''),
+                                 NULLIF(creator.name, ''),
+                                 creator.username,
+                                 'Unknown'
+                              ) AS creator_display_name
                               FROM goals g 
                               JOIN users u ON g.child_user_id = u.id 
+                              LEFT JOIN users creator ON g.created_by = creator.id
                               WHERE g.parent_user_id = :parent_id AND g.status = 'completed'");
          $stmt->execute([':parent_id' => $parent_id]);
          $all_completed_goals = $stmt->fetchAll(PDO::FETCH_ASSOC);
          ?>
          <?php if (!empty($all_completed_goals)): ?>
-               <?php foreach ($all_completed_goals as $goal): ?>
-                  <div class="goal-item">
-                     <p>Goal: <?php echo htmlspecialchars($goal['title']); ?> (Target: <?php echo htmlspecialchars($goal['target_points']); ?> points)</p>
-                     <p>Child: <?php echo htmlspecialchars($goal['child_username']); ?></p>
-                     <p>Period: <?php echo htmlspecialchars(date('m/d/Y h:i A', strtotime($goal['start_date']))); ?> to <?php echo htmlspecialchars(date('m/d/Y h:i A', strtotime($goal['end_date']))); ?></p>
+              <?php foreach ($all_completed_goals as $goal): ?>
+                 <div class="goal-item">
+                    <p>Goal: <?php echo htmlspecialchars($goal['title']); ?> (Target: <?php echo htmlspecialchars($goal['target_points']); ?> points)</p>
+                    <p>Child: <?php echo htmlspecialchars($goal['child_username']); ?></p>
+                    <?php if (!empty($goal['creator_display_name'])): ?>
+                        <p>Created by: <?php echo htmlspecialchars($goal['creator_display_name']); ?></p>
+                    <?php endif; ?>
+                    <p>Period: <?php echo htmlspecialchars(date('m/d/Y h:i A', strtotime($goal['start_date']))); ?> to <?php echo htmlspecialchars(date('m/d/Y h:i A', strtotime($goal['end_date']))); ?></p>
                      <p>Completed on: <?php echo htmlspecialchars(date('m/d/Y h:i A', strtotime($goal['completed_at']))); ?></p>
                   </div>
                <?php endforeach; ?>
@@ -736,10 +756,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       <div class="rejected-goals">
          <h2>Rejected Goals</h2>
          <?php
-         $stmt = $db->prepare("SELECT g.id, g.title, g.target_points, g.start_date, g.end_date, g.rejected_at, g.rejection_comment, u.username as child_username, r.title as reward_title 
+         $stmt = $db->prepare("SELECT 
+                              g.id, 
+                              g.title, 
+                              g.target_points, 
+                              g.start_date, 
+                              g.end_date, 
+                              g.rejected_at, 
+                              g.rejection_comment, 
+                              u.username as child_username, 
+                              r.title as reward_title,
+                              COALESCE(
+                                 NULLIF(TRIM(CONCAT(COALESCE(creator.first_name, ''), ' ', COALESCE(creator.last_name, ''))), ''),
+                                 NULLIF(creator.name, ''),
+                                 creator.username,
+                                 'Unknown'
+                              ) AS creator_display_name
                               FROM goals g 
                               JOIN users u ON g.child_user_id = u.id 
                               LEFT JOIN rewards r ON g.reward_id = r.id 
+                              LEFT JOIN users creator ON g.created_by = creator.id
                               WHERE g.parent_user_id = :parent_id AND g.status = 'rejected'");
          $stmt->execute([':parent_id' => $_SESSION['user_id']]);
          $rejected_goals = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -753,11 +789,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
          <?php if (empty($rejected_goals)): ?>
                <p>No rejected goals.</p>
          <?php else: ?>
-               <?php foreach ($rejected_goals as $goal): ?>
-                  <div class="goal-item">
-                     <p>Goal: <?php echo htmlspecialchars($goal['title']); ?> (Target: <?php echo htmlspecialchars($goal['target_points']); ?> points)</p>
-                     <p>Child: <?php echo htmlspecialchars($goal['child_username']); ?></p>
-                     <p>Period: <?php echo htmlspecialchars($goal['start_date_formatted']); ?> to <?php echo htmlspecialchars($goal['end_date_formatted']); ?></p>
+              <?php foreach ($rejected_goals as $goal): ?>
+                 <div class="goal-item">
+                    <p>Goal: <?php echo htmlspecialchars($goal['title']); ?> (Target: <?php echo htmlspecialchars($goal['target_points']); ?> points)</p>
+                    <p>Child: <?php echo htmlspecialchars($goal['child_username']); ?></p>
+                    <?php if (!empty($goal['creator_display_name'])): ?>
+                        <p>Created by: <?php echo htmlspecialchars($goal['creator_display_name']); ?></p>
+                    <?php endif; ?>
+                    <p>Period: <?php echo htmlspecialchars($goal['start_date_formatted']); ?> to <?php echo htmlspecialchars($goal['end_date_formatted']); ?></p>
                      <p>Reward: <?php echo htmlspecialchars($goal['reward_title'] ?? 'None'); ?></p>
                      <p>Status: Rejected</p>
                      <p>Rejected on: <?php echo htmlspecialchars($goal['rejected_at_formatted']); ?></p>

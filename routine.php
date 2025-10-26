@@ -323,6 +323,9 @@ if (!$welcome_role_label) {
                 <?php foreach ($routines as $routine): ?>
                     <div class="routine-card <?php echo ($_SESSION['role'] === 'child') ? 'child-view' : ''; ?>">
                         <p>Title: <?php echo htmlspecialchars($routine['title']); ?></p>
+                        <?php if (!empty($routine['creator_display_name'])): ?>
+                            <p>Created by: <?php echo htmlspecialchars($routine['creator_display_name']); ?></p>
+                        <?php endif; ?>
                         <p>Timeframe: <?php echo date('h:i A', strtotime($routine['start_time'])) . ' - ' . date('h:i A', strtotime($routine['end_time'])); ?></p>
                         <p>Bonus Points: <?php echo $routine['bonus_points']; ?></p>
                         <p>Recurrence: <?php echo htmlspecialchars($routine['recurrence'] ?: 'None'); ?></p>

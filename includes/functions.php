@@ -382,10 +382,22 @@ function getDashboardData($user_id) {
         $data['active_rewards'] = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
         // Pending approvals across this parent's children
-        $stmt = $db->prepare("SELECT g.id, g.title, g.target_points, g.requested_at, COALESCE(CONCAT(u.first_name, ' ', u.last_name), u.name, u.username) AS child_username
+        $stmt = $db->prepare("SELECT 
+                                g.id, 
+                                g.title, 
+                                g.target_points, 
+                                g.requested_at, 
+                                COALESCE(CONCAT(u.first_name, ' ', u.last_name), u.name, u.username) AS child_username,
+                                COALESCE(
+                                    NULLIF(TRIM(CONCAT(COALESCE(creator.first_name, ''), ' ', COALESCE(creator.last_name, ''))), ''),
+                                    NULLIF(creator.name, ''),
+                                    creator.username,
+                                    'Unknown'
+                                ) AS creator_display_name
                               FROM goals g
                               JOIN child_profiles cp ON g.child_user_id = cp.child_user_id
                               JOIN users u ON g.child_user_id = u.id
+                              LEFT JOIN users creator ON g.created_by = creator.id
                               WHERE cp.parent_user_id = :parent_id AND g.status = 'pending_approval'");
         $stmt->execute([':parent_id' => $main_parent_id]);
         $data['pending_approvals'] = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
@@ -421,16 +433,43 @@ function getDashboardData($user_id) {
             $data['rewards'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
         }
 
-        $stmt = $db->prepare("SELECT g.id, g.title, g.target_points, g.start_date, g.end_date, r.title as reward_title 
+        $stmt = $db->prepare("SELECT 
+                                g.id, 
+                                g.title, 
+                                g.target_points, 
+                                g.start_date, 
+                                g.end_date, 
+                                r.title AS reward_title,
+                                COALESCE(
+                                    NULLIF(TRIM(CONCAT(COALESCE(creator.first_name, ''), ' ', COALESCE(creator.last_name, ''))), ''),
+                                    NULLIF(creator.name, ''),
+                                    creator.username,
+                                    'Unknown'
+                                ) AS creator_display_name
                              FROM goals g 
                              LEFT JOIN rewards r ON g.reward_id = r.id 
+                             LEFT JOIN users creator ON g.created_by = creator.id
                              WHERE g.child_user_id = :child_id AND g.status = 'active'");
         $stmt->execute([':child_id' => $user_id]);
         $data['active_goals'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-        $stmt = $db->prepare("SELECT g.id, g.title, g.target_points, g.start_date, g.end_date, g.completed_at, r.title as reward_title 
+        $stmt = $db->prepare("SELECT 
+                                g.id, 
+                                g.title, 
+                                g.target_points, 
+                                g.start_date, 
+                                g.end_date, 
+                                g.completed_at, 
+                                r.title AS reward_title,
+                                COALESCE(
+                                    NULLIF(TRIM(CONCAT(COALESCE(creator.first_name, ''), ' ', COALESCE(creator.last_name, ''))), ''),
+                                    NULLIF(creator.name, ''),
+                                    creator.username,
+                                    'Unknown'
+                                ) AS creator_display_name
                              FROM goals g 
                              LEFT JOIN rewards r ON g.reward_id = r.id 
+                             LEFT JOIN users creator ON g.created_by = creator.id
                              WHERE g.child_user_id = :child_id AND g.status = 'completed'");
         $stmt->execute([':child_id' => $user_id]);
         $data['completed_goals'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -471,10 +510,34 @@ function getTasks($user_id) {
 
     if (in_array($role, ['main_parent', 'secondary_parent', 'family_member', 'caregiver'], true)) {
         $parent_id = getFamilyRootId($user_id);
-        $stmt = $db->prepare("SELECT * FROM tasks WHERE parent_user_id = :parent_id");
+        $stmt = $db->prepare("
+            SELECT 
+                t.*,
+                COALESCE(
+                    NULLIF(TRIM(CONCAT(COALESCE(creator.first_name, ''), ' ', COALESCE(creator.last_name, ''))), ''),
+                    NULLIF(creator.name, ''),
+                    creator.username,
+                    'Unknown'
+                ) AS creator_display_name
+            FROM tasks t
+            LEFT JOIN users creator ON t.created_by = creator.id
+            WHERE t.parent_user_id = :parent_id
+        ");
         $stmt->execute([':parent_id' => $parent_id]);
     } else {
-        $stmt = $db->prepare("SELECT * FROM tasks WHERE child_user_id = :child_id");
+        $stmt = $db->prepare("
+            SELECT 
+                t.*,
+                COALESCE(
+                    NULLIF(TRIM(CONCAT(COALESCE(creator.first_name, ''), ' ', COALESCE(creator.last_name, ''))), ''),
+                    NULLIF(creator.name, ''),
+                    creator.username,
+                    'Unknown'
+                ) AS creator_display_name
+            FROM tasks t
+            LEFT JOIN users creator ON t.created_by = creator.id
+            WHERE t.child_user_id = :child_id
+        ");
         $stmt->execute([':child_id' => $user_id]);
     }
     return $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -882,10 +945,34 @@ function getRoutines($user_id) {
 
     if (in_array($role, ['main_parent', 'secondary_parent', 'family_member', 'caregiver'], true)) {
         $parent_id = getFamilyRootId($user_id);
-        $stmt = $db->prepare("SELECT * FROM routines WHERE parent_user_id = :parent_id");
+        $stmt = $db->prepare("
+            SELECT 
+                r.*,
+                COALESCE(
+                    NULLIF(TRIM(CONCAT(COALESCE(creator.first_name, ''), ' ', COALESCE(creator.last_name, ''))), ''),
+                    NULLIF(creator.name, ''),
+                    creator.username,
+                    'Unknown'
+                ) AS creator_display_name
+            FROM routines r
+            LEFT JOIN users creator ON r.created_by = creator.id
+            WHERE r.parent_user_id = :parent_id
+        ");
         $stmt->execute([':parent_id' => $parent_id]);
     } else {
-        $stmt = $db->prepare("SELECT * FROM routines WHERE child_user_id = :child_id");
+        $stmt = $db->prepare("
+            SELECT 
+                r.*,
+                COALESCE(
+                    NULLIF(TRIM(CONCAT(COALESCE(creator.first_name, ''), ' ', COALESCE(creator.last_name, ''))), ''),
+                    NULLIF(creator.name, ''),
+                    creator.username,
+                    'Unknown'
+                ) AS creator_display_name
+            FROM routines r
+            LEFT JOIN users creator ON r.created_by = creator.id
+            WHERE r.child_user_id = :child_id
+        ");
         $stmt->execute([':child_id' => $user_id]);
     }
     $routines = $stmt->fetchAll(PDO::FETCH_ASSOC);
