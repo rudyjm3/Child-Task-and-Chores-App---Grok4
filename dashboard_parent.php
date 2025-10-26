@@ -215,22 +215,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <style>
         .dashboard { padding: 20px; max-width: 900px; margin: 0 auto; }
         .children-overview, .management-links, .active-rewards, .redeemed-rewards, .pending-approvals, .completed-goals, .manage-family { margin-top: 20px; }
-        .child-info-card, .reward-item, .goal-item { background-color: #f5f5f5; padding: 15px; margin: 5px 0; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
-        .child-info-card { display: flex; flex-direction: column; gap: 12px; }
+        .children-overview-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; }
+        .child-info-card, .reward-item, .goal-item { background-color: #f5f5f5; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        .child-info-card { display: flex; flex-direction: column; gap: 16px; min-height: 100%; }
         .child-info-header { display: flex; align-items: center; gap: 16px; }
         .child-info-header img { width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 2px solid #ececec; }
         .child-info-header-details { display: flex; flex-direction: column; gap: 4px; }
         .child-info-name { font-size: 1.15em; font-weight: 600; margin: 0; color: #333; }
         .child-info-meta { margin: 0; font-size: 0.9em; color: #666; }
-        .child-info-stats { display: flex; flex-wrap: wrap; gap: 20px; }
-        .child-info-stats .stat { min-width: 150px; }
+        .child-info-body { display: flex; gap: 16px; align-items: flex-start; }
+        .child-info-stats { display: flex; flex-direction: column; gap: 12px; min-width: 160px; }
+        .child-info-stats .stat { }
         .child-info-stats .stat-label { display: block; font-size: 0.85em; color: #666; }
-        .child-info-stats .stat-value { font-size: 1.3em; font-weight: 600; color: #2e7d32; }
+        .child-info-stats .stat-value { font-size: 1.4em; font-weight: 600; color: #2e7d32; }
         .child-info-stats .stat-subvalue { display: block; font-size: 0.85em; color: #888; margin-top: 2px; }
-        .points-progress-wrapper { margin-top: 4px; }
-        .points-progress-label { font-size: 0.9em; color: #555; margin-bottom: 4px; }
-        .points-progress-bar { width: 100%; height: 12px; background: #e0e0e0; border-radius: 6px; position: relative; overflow: hidden; }
-        .points-progress-fill { position: absolute; top: 0; left: 0; height: 100%; width: 0; background: linear-gradient(90deg, #4caf50, #81c784); border-radius: 6px; transition: width 1.2s ease-out; }
+        .points-progress-wrapper { display: flex; flex-direction: column; align-items: center; gap: 10px; flex: 1; }
+        .points-progress-label { font-size: 0.9em; color: #555; text-align: center; }
+        .points-progress-container { width: 70px; height: 160px; background: #e0e0e0; border-radius: 12px; display: flex; align-items: flex-end; justify-content: center; position: relative; overflow: hidden; }
+        .points-progress-fill { width: 100%; height: 0; background: linear-gradient(180deg, #81c784, #4caf50); border-radius: 12px; transition: height 1.2s ease-out; }
+        .points-progress-target { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); font-size: 0.8em; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,0.3); opacity: 0.9; }
         .child-info-actions { display: flex; flex-wrap: wrap; gap: 10px; }
         .child-info-actions form { margin: 0; }
         .button { padding: 10px 20px; margin: 5px; background-color: #4caf50; color: white; border: none; border-radius: 5px; cursor: pointer; text-decoration: none; display: inline-block; font-size: 16px; min-height: 44px; }
@@ -253,9 +256,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         @media (max-width: 768px) {
             .manage-family { padding: 10px; }
             .button { width: 100%; }
-            .child-info-stats { flex-direction: column; }
             .child-info-header { flex-direction: column; align-items: flex-start; }
             .child-info-header img { width: 56px; height: 56px; }
+            .child-info-body { flex-direction: column; }
+            .points-progress-container { width: 100%; height: 140px; }
         }
     </style>
     <script>
@@ -309,13 +313,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             }
 
-            const progressBars = document.querySelectorAll('.points-progress-bar');
-            progressBars.forEach(bar => {
+            const verticalBars = document.querySelectorAll('.points-progress-container');
+            verticalBars.forEach(bar => {
                 const fill = bar.querySelector('.points-progress-fill');
                 const target = parseInt(bar.dataset.progress, 10) || 0;
                 if (fill) {
                     requestAnimationFrame(() => {
-                        fill.style.width = `${Math.min(100, Math.max(0, target))}%`;
+                        fill.style.height = `${Math.min(100, Math.max(0, target))}%`;
                     });
                 }
             });
@@ -337,6 +341,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       <div class="children-overview">
          <h2>Children Overview</h2>
          <?php if (isset($data['children']) && is_array($data['children']) && !empty($data['children'])): ?>
+               <div class="children-overview-grid">
                <?php foreach ($data['children'] as $child): ?>
                   <div class="child-info-card">
                      <div class="child-info-header">
@@ -346,25 +351,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                            <p class="child-info-meta">Age: <?php echo htmlspecialchars($child['age'] ?? 'N/A'); ?></p>
                         </div>
                      </div>
-                     <div class="child-info-stats">
-                        <div class="stat">
-                           <span class="stat-label">Tasks Assigned</span>
-                           <span class="stat-value"><?php echo (int)($child['task_count'] ?? 0); ?></span>
+                     <div class="child-info-body">
+                        <div class="child-info-stats">
+                           <div class="stat">
+                              <span class="stat-label">Tasks Assigned</span>
+                              <span class="stat-value"><?php echo (int)($child['task_count'] ?? 0); ?></span>
+                           </div>
+                           <div class="stat">
+                              <span class="stat-label">Goals</span>
+                              <span class="stat-value"><?php echo (int)($child['goals_assigned'] ?? 0); ?></span>
+                              <span class="stat-subvalue">Target: <?php echo (int)($child['goal_target_points'] ?? 0); ?> pts</span>
+                           </div>
+                           <div class="stat">
+                              <span class="stat-label">Rewards Claimed</span>
+                              <span class="stat-value"><?php echo (int)($child['rewards_claimed'] ?? 0); ?></span>
+                           </div>
                         </div>
-                        <div class="stat">
-                           <span class="stat-label">Goals</span>
-                           <span class="stat-value"><?php echo (int)($child['goals_assigned'] ?? 0); ?></span>
-                           <span class="stat-subvalue">Target: <?php echo (int)($child['goal_target_points'] ?? 0); ?> pts</span>
-                        </div>
-                        <div class="stat">
-                           <span class="stat-label">Rewards Claimed</span>
-                           <span class="stat-value"><?php echo (int)($child['rewards_claimed'] ?? 0); ?></span>
-                        </div>
-                     </div>
-                     <div class="points-progress-wrapper">
-                        <div class="points-progress-label">Points Earned: <strong><?php echo (int)($child['points_earned'] ?? 0); ?> pts</strong></div>
-                        <div class="points-progress-bar" data-progress="<?php echo (int)($child['points_progress_percent'] ?? 0); ?>" aria-label="Points progress for <?php echo htmlspecialchars($child['child_name']); ?>">
-                           <span class="points-progress-fill"></span>
+                        <div class="points-progress-wrapper">
+                           <div class="points-progress-label">Points Earned</div>
+                           <div class="points-progress-container" data-progress="<?php echo (int)($child['points_progress_percent'] ?? 0); ?>" aria-label="Points progress for <?php echo htmlspecialchars($child['child_name']); ?>">
+                              <div class="points-progress-fill"></div>
+                              <span class="points-progress-target"><?php echo (int)($child['points_earned'] ?? 0); ?> pts</span>
+                           </div>
                         </div>
                      </div>
                      <div class="child-info-actions">
@@ -380,6 +388,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                      </div>
                   </div>
                <?php endforeach; ?>
+               </div>
          <?php else: ?>
                <p>No children added yet. Add your first child below!</p>
          <?php endif; ?>
