@@ -166,22 +166,251 @@ if (!$welcome_role_label) {
         .edit-delete a:hover {
             text-decoration: underline;
         }
+        .timer-controls {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 8px;
+        }
+        .timer-button {
+            padding: 10px 20px;
+            background-color: #2196f3;
+            color: #fff;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .timer-cancel-button {
+            padding: 10px 20px;
+            background-color: #f44336;
+            color: #fff;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            display: none;
+        }
+        .pause-hold-countdown {
+            display: none;
+            font-weight: bold;
+            color: #ff5722;
+            width: 100%;
+        }
     </style>
     <script>
-        function startTimer(taskId, limit) {
-            let time = limit * 60;
-            const timerElement = document.getElementById(`timer-${taskId}`);
-            const interval = setInterval(() => {
-                let minutes = Math.floor(time / 60);
-                let seconds = time % 60;
-                timerElement.textContent = `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
-                if (time <= 0) {
-                    clearInterval(interval);
+        const taskTimers = {};
+
+        document.addEventListener('DOMContentLoaded', () => {
+            document.querySelectorAll('.timer-button').forEach((button) => {
+                const taskId = button.dataset.taskId;
+                const limitMinutes = parseInt(button.dataset.limit, 10) || 5;
+                const timerElement = document.getElementById(`timer-${taskId}`);
+                const countdownElement = document.getElementById(`pause-countdown-${taskId}`);
+                const cancelButton = document.querySelector(`.timer-cancel-button[data-task-id="${taskId}"]`);
+
+                if (!timerElement || !cancelButton) return;
+
+                const limitSeconds = limitMinutes * 60;
+                taskTimers[taskId] = {
+                    remaining: limitSeconds,
+                    initial: limitSeconds,
+                    intervalId: null,
+                    holdIntervalId: null,
+                    holdRemaining: 0,
+                    isRunning: false,
+                    ignoreNextClick: false,
+                    activePointerId: null,
+                    timerElement,
+                    button,
+                    countdownElement,
+                    cancelButton
+                };
+
+                updateTimerDisplay(taskId);
+
+                button.addEventListener('click', (event) => handleTimerClick(event, taskId));
+
+                const holdStartEvents = ['pointerdown', 'touchstart', 'mousedown'];
+                const holdEndEvents = ['pointerup', 'pointerleave', 'pointercancel', 'touchend', 'touchcancel', 'mouseup'];
+
+                holdStartEvents.forEach((evt) => {
+                    button.addEventListener(evt, (event) => beginHold(event, taskId), { passive: false });
+                });
+                holdEndEvents.forEach((evt) => {
+                    button.addEventListener(evt, (event) => cancelHold(taskId, { event }));
+                });
+                cancelButton.addEventListener('click', () => cancelTimer(taskId));
+            });
+        });
+
+        function updateTimerDisplay(taskId) {
+            const state = taskTimers[taskId];
+            if (!state || !state.timerElement) return;
+            const minutes = Math.floor(state.remaining / 60);
+            const seconds = state.remaining % 60;
+            state.timerElement.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+        }
+
+        function handleTimerClick(event, taskId) {
+            const state = taskTimers[taskId];
+            if (!state) return;
+
+            if (state.ignoreNextClick) {
+                state.ignoreNextClick = false;
+                event.preventDefault();
+                return;
+            }
+
+            if (state.isRunning) {
+                event.preventDefault();
+                return;
+            }
+
+            if (state.remaining <= 0) {
+                state.remaining = state.initial;
+                updateTimerDisplay(taskId);
+            }
+
+            startTimer(taskId);
+        }
+
+        function startTimer(taskId) {
+            const state = taskTimers[taskId];
+            if (!state || state.isRunning) return;
+
+            state.isRunning = true;
+            state.button.textContent = 'Pause Timer';
+            state.cancelButton.style.display = 'none';
+            hideCountdown(state);
+
+            clearInterval(state.intervalId);
+            state.intervalId = setInterval(() => {
+                state.remaining -= 1;
+                if (state.remaining <= 0) {
+                    state.remaining = 0;
+                    updateTimerDisplay(taskId);
+                    clearInterval(state.intervalId);
+                    state.intervalId = null;
+                    state.isRunning = false;
+                    state.button.textContent = 'Restart';
+                    state.cancelButton.style.display = 'inline-block';
+                    state.ignoreNextClick = false;
+                    hideCountdown(state);
                     alert("Time's up! Try to hurry and finish up.");
+                    return;
                 }
-                time--;
+                updateTimerDisplay(taskId);
             }, 1000);
-            localStorage.setItem(`timer-${taskId}`, Date.now() + limit * 1000);
+
+            updateTimerDisplay(taskId);
+        }
+
+        function pauseTimer(taskId) {
+            const state = taskTimers[taskId];
+            if (!state || !state.isRunning) return;
+            clearInterval(state.intervalId);
+            state.intervalId = null;
+            state.isRunning = false;
+            state.button.textContent = 'Resume';
+            state.cancelButton.style.display = 'inline-block';
+            state.ignoreNextClick = true;
+        }
+
+        function cancelTimer(taskId) {
+            const state = taskTimers[taskId];
+            if (!state) return;
+            if (state.intervalId) {
+                clearInterval(state.intervalId);
+                state.intervalId = null;
+            }
+            cancelHold(taskId);
+            state.isRunning = false;
+            state.remaining = state.initial;
+            state.button.textContent = 'Start Timer';
+            state.cancelButton.style.display = 'none';
+            state.ignoreNextClick = false;
+            updateTimerDisplay(taskId);
+        }
+
+        function beginHold(event, taskId) {
+            const state = taskTimers[taskId];
+            if (!state || !state.isRunning) return;
+            if (event.type === 'mousedown' && event.button !== 0) return;
+            if (state.holdIntervalId) return;
+
+            if (typeof event.preventDefault === 'function') {
+                event.preventDefault();
+            }
+
+            if (event.pointerId !== undefined && state.button.setPointerCapture) {
+                try {
+                    state.button.setPointerCapture(event.pointerId);
+                    state.activePointerId = event.pointerId;
+                } catch (error) {
+                    state.activePointerId = null;
+                }
+            }
+
+            state.holdRemaining = 5;
+            showCountdown(state, `Hold for ${state.holdRemaining}s to pause`);
+
+            state.holdIntervalId = setInterval(() => {
+                state.holdRemaining -= 1;
+                if (state.holdRemaining > 0) {
+                    showCountdown(state, `Hold for ${state.holdRemaining}s to pause`);
+                    return;
+                }
+
+                clearInterval(state.holdIntervalId);
+                state.holdIntervalId = null;
+                showCountdown(state, 'Pausing...');
+                pauseTimer(taskId);
+                if (state.activePointerId !== null && state.button && state.button.releasePointerCapture) {
+                    try {
+                        state.button.releasePointerCapture(state.activePointerId);
+                    } catch (error) {
+                        // ignore release failures
+                    }
+                }
+                state.activePointerId = null;
+                setTimeout(() => hideCountdown(state), 600);
+            }, 1000);
+        }
+
+        function cancelHold(taskId, { event } = {}) {
+            const state = taskTimers[taskId];
+            if (!state) return;
+            if (state.holdIntervalId) {
+                clearInterval(state.holdIntervalId);
+                state.holdIntervalId = null;
+            }
+            if (event && event.pointerId !== undefined && state.button && state.button.hasPointerCapture && state.button.hasPointerCapture(event.pointerId)) {
+                try {
+                    state.button.releasePointerCapture(event.pointerId);
+                } catch (error) {
+                    // ignore release failures
+                }
+            } else if (state.activePointerId !== null && state.button && state.button.releasePointerCapture) {
+                try {
+                    state.button.releasePointerCapture(state.activePointerId);
+                } catch (error) {
+                    // ignore release failures
+                }
+            }
+            state.activePointerId = null;
+            hideCountdown(state);
+        }
+
+        function showCountdown(state, message) {
+            if (!state.countdownElement) return;
+            state.countdownElement.style.display = 'block';
+            state.countdownElement.textContent = message;
+        }
+
+        function hideCountdown(state) {
+            if (!state.countdownElement) return;
+            state.countdownElement.style.display = 'none';
+            state.countdownElement.textContent = '';
         }
     </script>
 </head>
@@ -276,8 +505,13 @@ if (!$welcome_role_label) {
                             <p>Task Description: <?php echo htmlspecialchars($task['description']); ?></p>
                             <p>Timing Mode: <?php echo htmlspecialchars($task['timing_mode']); ?></p>
                             <?php if ($task['timing_mode'] === 'timer'): ?>
-                                <p class="timer" id="timer-<?php echo $task['id']; ?>">5:00</p>
-                                <button onclick="startTimer(<?php echo $task['id']; ?>, 5)">Start Timer</button>
+                                <?php $timerMinutes = 5; ?>
+                                <p class="timer" id="timer-<?php echo $task['id']; ?>"><?php echo sprintf('%02d:00', $timerMinutes); ?></p>
+                                <div class="timer-controls">
+                                    <div class="pause-hold-countdown" id="pause-countdown-<?php echo $task['id']; ?>" aria-live="polite"></div>
+                                    <button type="button" class="timer-button" data-task-id="<?php echo $task['id']; ?>" data-limit="<?php echo $timerMinutes; ?>">Start Timer</button>
+                                    <button type="button" class="timer-cancel-button" data-task-id="<?php echo $task['id']; ?>">Cancel</button>
+                                </div>
                             <?php elseif ($task['timing_mode'] === 'suggested'): ?>
                                 <p>Suggested Time: 10min (guideline)</p>
                             <?php endif; ?>
