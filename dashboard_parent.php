@@ -213,9 +213,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <title>Parent Dashboard</title>
     <link rel="stylesheet" href="css/main.css">
     <style>
-        .dashboard { padding: 20px; max-width: 800px; margin: 0 auto; }
+        .dashboard { padding: 20px; max-width: 900px; margin: 0 auto; }
         .children-overview, .management-links, .active-rewards, .redeemed-rewards, .pending-approvals, .completed-goals, .manage-family { margin-top: 20px; }
-        .child-item, .reward-item, .goal-item { background-color: #f5f5f5; padding: 10px; margin: 5px 0; border-radius: 5px; }
+        .child-info-card, .reward-item, .goal-item { background-color: #f5f5f5; padding: 15px; margin: 5px 0; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        .child-info-card { display: flex; flex-direction: column; gap: 12px; }
+        .child-info-header { display: flex; align-items: center; gap: 16px; }
+        .child-info-header img { width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 2px solid #ececec; }
+        .child-info-header-details { display: flex; flex-direction: column; gap: 4px; }
+        .child-info-name { font-size: 1.15em; font-weight: 600; margin: 0; color: #333; }
+        .child-info-meta { margin: 0; font-size: 0.9em; color: #666; }
+        .child-info-stats { display: flex; flex-wrap: wrap; gap: 20px; }
+        .child-info-stats .stat { min-width: 150px; }
+        .child-info-stats .stat-label { display: block; font-size: 0.85em; color: #666; }
+        .child-info-stats .stat-value { font-size: 1.3em; font-weight: 600; color: #2e7d32; }
+        .child-info-stats .stat-subvalue { display: block; font-size: 0.85em; color: #888; margin-top: 2px; }
+        .points-progress-wrapper { margin-top: 4px; }
+        .points-progress-label { font-size: 0.9em; color: #555; margin-bottom: 4px; }
+        .points-progress-bar { width: 100%; height: 12px; background: #e0e0e0; border-radius: 6px; position: relative; overflow: hidden; }
+        .points-progress-fill { position: absolute; top: 0; left: 0; height: 100%; width: 0; background: linear-gradient(90deg, #4caf50, #81c784); border-radius: 6px; transition: width 1.2s ease-out; }
+        .child-info-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+        .child-info-actions form { margin: 0; }
         .button { padding: 10px 20px; margin: 5px; background-color: #4caf50; color: white; border: none; border-radius: 5px; cursor: pointer; text-decoration: none; display: inline-block; font-size: 16px; min-height: 44px; }
         .approve-button { background-color: #4caf50; }
         .reject-button { background-color: #f44336; }
@@ -233,7 +250,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         .upload-preview { max-width: 100px; max-height: 100px; border-radius: 50%; }
         .mother-badge { background: #e91e63; color: white; padding: 2px 6px; border-radius: 3px; font-size: 0.8em; }
         .father-badge { background: #2196f3; color: white; padding: 2px 6px; border-radius: 3px; font-size: 0.8em; }
-        @media (max-width: 768px) { .manage-family { padding: 10px; } .button { width: 100%; } }
+        @media (max-width: 768px) {
+            .manage-family { padding: 10px; }
+            .button { width: 100%; }
+            .child-info-stats { flex-direction: column; }
+            .child-info-header { flex-direction: column; align-items: flex-start; }
+            .child-info-header img { width: 56px; height: 56px; }
+        }
     </style>
     <script>
         // JS for Manage Family Wizard (step-by-step)
@@ -285,6 +308,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     });
                 }
             }
+
+            const progressBars = document.querySelectorAll('.points-progress-bar');
+            progressBars.forEach(bar => {
+                const fill = bar.querySelector('.points-progress-fill');
+                const target = parseInt(bar.dataset.progress, 10) || 0;
+                if (fill) {
+                    requestAnimationFrame(() => {
+                        fill.style.width = `${Math.min(100, Math.max(0, target))}%`;
+                    });
+                }
+            });
         });
     </script>
 </head>
@@ -304,18 +338,46 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
          <h2>Children Overview</h2>
          <?php if (isset($data['children']) && is_array($data['children']) && !empty($data['children'])): ?>
                <?php foreach ($data['children'] as $child): ?>
-                  <div class="child-item">
-                     <p>Child: <?php echo htmlspecialchars($child['child_name']); ?>, Age=<?php echo htmlspecialchars($child['age'] ?? 'N/A'); ?></p>
-                     <img src="<?php echo htmlspecialchars($child['avatar'] ?? 'default-avatar.png'); ?>" alt="Avatar" style="width: 50px; border-radius: 50%;">
-                     <?php if (in_array($role_type, ['main_parent', 'secondary_parent'])): ?>
-                         <a href="profile.php?user_id=<?php echo $child['child_user_id']; ?>&type=child" class="button">Edit Child</a>
-                     <?php endif; ?>
-                     <?php if ($role_type === 'main_parent'): ?>
-                         <form method="POST" style="display:inline">
-                             <input type="hidden" name="delete_user_id" value="<?php echo $child['child_user_id']; ?>">
-                             <button type="submit" name="delete_user" class="button delete-btn" onclick="return confirm('Remove this child and all their data?')">Remove</button>
-                         </form>
-                     <?php endif; ?>
+                  <div class="child-info-card">
+                     <div class="child-info-header">
+                        <img src="<?php echo htmlspecialchars($child['avatar'] ?? 'default-avatar.png'); ?>" alt="Avatar for <?php echo htmlspecialchars($child['child_name']); ?>">
+                        <div class="child-info-header-details">
+                           <p class="child-info-name"><?php echo htmlspecialchars($child['child_name']); ?></p>
+                           <p class="child-info-meta">Age: <?php echo htmlspecialchars($child['age'] ?? 'N/A'); ?></p>
+                        </div>
+                     </div>
+                     <div class="child-info-stats">
+                        <div class="stat">
+                           <span class="stat-label">Tasks Assigned</span>
+                           <span class="stat-value"><?php echo (int)($child['task_count'] ?? 0); ?></span>
+                        </div>
+                        <div class="stat">
+                           <span class="stat-label">Goals</span>
+                           <span class="stat-value"><?php echo (int)($child['goals_assigned'] ?? 0); ?></span>
+                           <span class="stat-subvalue">Target: <?php echo (int)($child['goal_target_points'] ?? 0); ?> pts</span>
+                        </div>
+                        <div class="stat">
+                           <span class="stat-label">Rewards Claimed</span>
+                           <span class="stat-value"><?php echo (int)($child['rewards_claimed'] ?? 0); ?></span>
+                        </div>
+                     </div>
+                     <div class="points-progress-wrapper">
+                        <div class="points-progress-label">Points Earned: <strong><?php echo (int)($child['points_earned'] ?? 0); ?> pts</strong></div>
+                        <div class="points-progress-bar" data-progress="<?php echo (int)($child['points_progress_percent'] ?? 0); ?>" aria-label="Points progress for <?php echo htmlspecialchars($child['child_name']); ?>">
+                           <span class="points-progress-fill"></span>
+                        </div>
+                     </div>
+                     <div class="child-info-actions">
+                        <?php if (in_array($role_type, ['main_parent', 'secondary_parent'])): ?>
+                            <a href="profile.php?user_id=<?php echo $child['child_user_id']; ?>&type=child" class="button">Edit Child</a>
+                        <?php endif; ?>
+                        <?php if ($role_type === 'main_parent'): ?>
+                            <form method="POST">
+                                <input type="hidden" name="delete_user_id" value="<?php echo $child['child_user_id']; ?>">
+                                <button type="submit" name="delete_user" class="button delete-btn" onclick="return confirm('Remove this child and all their data?')">Remove</button>
+                            </form>
+                        <?php endif; ?>
+                     </div>
                   </div>
                <?php endforeach; ?>
          <?php else: ?>

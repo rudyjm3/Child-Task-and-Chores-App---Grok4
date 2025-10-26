@@ -371,10 +371,75 @@ function getDashboardData($user_id) {
         $stmt->execute([':parent_id' => $main_parent_id]);
         $data['children'] = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
+        $childIds = array_column($data['children'], 'child_user_id');
+        $taskCounts = [];
+        $pointsMap = [];
+        $goalStats = [];
+        $rewardsClaimed = [];
+        $maxChildPoints = 0;
+
+        if (!empty($childIds)) {
+            $placeholders = implode(',', array_fill(0, count($childIds), '?'));
+
+            // Tasks assigned per child
+            $stmt = $db->prepare("SELECT child_user_id, COUNT(*) AS task_count FROM tasks WHERE child_user_id IN ($placeholders) GROUP BY child_user_id");
+            $stmt->execute($childIds);
+            while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+                $taskCounts[(int)$row['child_user_id']] = (int)$row['task_count'];
+            }
+
+            // Points earned per child
+            $stmt = $db->prepare("SELECT child_user_id, total_points FROM child_points WHERE child_user_id IN ($placeholders)");
+            $stmt->execute($childIds);
+            while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+                $childId = (int)$row['child_user_id'];
+                $points = (int)$row['total_points'];
+                $pointsMap[$childId] = $points;
+                if ($points > $maxChildPoints) {
+                    $maxChildPoints = $points;
+                }
+            }
+
+            // Active/pending goals per child
+            $stmt = $db->prepare("SELECT child_user_id, COUNT(*) AS goal_count, COALESCE(SUM(target_points), 0) AS total_target_points
+                                  FROM goals
+                                  WHERE child_user_id IN ($placeholders) AND status IN ('active', 'pending_approval')
+                                  GROUP BY child_user_id");
+            $stmt->execute($childIds);
+            while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+                $goalStats[(int)$row['child_user_id']] = [
+                    'goal_count' => (int)$row['goal_count'],
+                    'total_target_points' => (int)$row['total_target_points']
+                ];
+            }
+
+            // Rewards claimed per child
+            $stmt = $db->prepare("SELECT redeemed_by AS child_user_id, COUNT(*) AS rewards_claimed
+                                  FROM rewards
+                                  WHERE redeemed_by IN ($placeholders) AND status = 'redeemed'
+                                  GROUP BY redeemed_by");
+            $stmt->execute($childIds);
+            while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+                $rewardsClaimed[(int)$row['child_user_id']] = (int)$row['rewards_claimed'];
+            }
+        }
+
+        $maxChildPoints = max(100, $maxChildPoints);
+
         foreach ($data['children'] as &$child) {
+            $childId = (int)$child['child_user_id'];
             $child['age'] = calculateAge($child['birthday'] ?? null);
+            $child['task_count'] = $taskCounts[$childId] ?? 0;
+            $childPoints = $pointsMap[$childId] ?? 0;
+            $child['points_earned'] = $childPoints;
+            $child['points_progress_percent'] = $maxChildPoints > 0 ? min(100, (int)round(($childPoints / $maxChildPoints) * 100)) : 0;
+            $childGoalStats = $goalStats[$childId] ?? ['goal_count' => 0, 'total_target_points' => 0];
+            $child['goals_assigned'] = $childGoalStats['goal_count'];
+            $child['goal_target_points'] = $childGoalStats['total_target_points'];
+            $child['rewards_claimed'] = $rewardsClaimed[$childId] ?? 0;
         }
         unset($child);
+        $data['max_child_points'] = $maxChildPoints;
 
         // Active rewards for the family
         $stmt = $db->prepare("SELECT id, title, description, point_cost, created_on FROM rewards WHERE parent_user_id = :parent_id AND status = 'available'");
@@ -403,12 +468,7 @@ function getDashboardData($user_id) {
         $data['pending_approvals'] = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
         // Sum total points across children
-        $data['total_points_earned'] = 0;
-        foreach ($data['children'] as $child) {
-            $stmt = $db->prepare("SELECT total_points FROM child_points WHERE child_user_id = :child_id");
-            $stmt->execute([':child_id' => $child['child_user_id']]);
-            $data['total_points_earned'] += (int)($stmt->fetchColumn() ?: 0);
-        }
+        $data['total_points_earned'] = array_sum($pointsMap);
 
         $stmt = $db->prepare("SELECT COUNT(*) FROM goals WHERE parent_user_id = :parent_id AND status = 'completed'");
         $stmt->execute([':parent_id' => $main_parent_id]);
