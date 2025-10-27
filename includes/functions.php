@@ -809,6 +809,107 @@ function getRoutineTasks($parent_user_id) {
     return $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
+function getRoutineTasksByIds($parent_user_id, array $task_ids) {
+    global $db;
+    if (empty($task_ids)) {
+        return [];
+    }
+    $placeholders = implode(',', array_fill(0, count($task_ids), '?'));
+    $sql = "SELECT * FROM routine_tasks 
+            WHERE id IN ($placeholders) 
+              AND (parent_user_id = 0 OR parent_user_id = ?)";
+    $params = array_map('intval', $task_ids);
+    $params[] = $parent_user_id;
+    $stmt = $db->prepare($sql);
+    $stmt->execute($params);
+    $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    $indexed = [];
+    foreach ($results as $row) {
+        $indexed[$row['id']] = $row;
+    }
+    return $indexed;
+}
+
+function calculateRoutineDurationMinutes($start_time, $end_time) {
+    if (!$start_time || !$end_time) {
+        return null;
+    }
+    $baseDate = date('Y-m-d');
+    $start = DateTime::createFromFormat('Y-m-d H:i', $baseDate . ' ' . $start_time);
+    $end = DateTime::createFromFormat('Y-m-d H:i', $baseDate . ' ' . $end_time);
+    if (!$start || !$end) {
+        return null;
+    }
+    $duration = ($end->getTimestamp() - $start->getTimestamp()) / 60;
+    if ($duration <= 0) {
+        $end = $end->modify('+1 day');
+        $duration = ($end->getTimestamp() - $start->getTimestamp()) / 60;
+    }
+    return (int) round($duration);
+}
+
+function replaceRoutineTasks($routine_id, array $tasks) {
+    global $db;
+    $stmt = $db->prepare("DELETE FROM routines_routine_tasks WHERE routine_id = :routine_id");
+    $stmt->execute([':routine_id' => $routine_id]);
+    foreach ($tasks as $task) {
+        $taskId = (int) ($task['id'] ?? 0);
+        if ($taskId <= 0) {
+            continue;
+        }
+        $sequence = (int) ($task['sequence_order'] ?? 0);
+        if ($sequence <= 0) {
+            continue;
+        }
+        $dependencyId = $task['dependency_id'] !== null ? (int) $task['dependency_id'] : null;
+        addRoutineTaskToRoutine($routine_id, $taskId, $sequence, $dependencyId);
+    }
+    return true;
+}
+
+function getRoutinePreferences($parent_user_id) {
+    global $db;
+    $stmt = $db->prepare("SELECT adaptive_warnings_enabled, sub_timer_label FROM routine_preferences WHERE parent_user_id = :parent LIMIT 1");
+    $stmt->execute([':parent' => $parent_user_id]);
+    $prefs = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$prefs) {
+        return [
+            'adaptive_warnings_enabled' => 1,
+            'sub_timer_label' => 'hurry_goal'
+        ];
+    }
+    $prefs['adaptive_warnings_enabled'] = (int) $prefs['adaptive_warnings_enabled'];
+    return $prefs;
+}
+
+function saveRoutinePreferences($parent_user_id, $adaptive_warnings_enabled, $sub_timer_label) {
+    global $db;
+    $stmt = $db->prepare("INSERT INTO routine_preferences (parent_user_id, adaptive_warnings_enabled, sub_timer_label)
+                          VALUES (:parent_id, :adaptive, :label)
+                          ON DUPLICATE KEY UPDATE adaptive_warnings_enabled = VALUES(adaptive_warnings_enabled),
+                                                  sub_timer_label = VALUES(sub_timer_label)");
+    return $stmt->execute([
+        ':parent_id' => $parent_user_id,
+        ':adaptive' => $adaptive_warnings_enabled ? 1 : 0,
+        ':label' => $sub_timer_label
+    ]);
+}
+
+function logRoutineOvertime($routine_id, $routine_task_id, $child_user_id, $scheduled_seconds, $actual_seconds, $overtime_seconds) {
+    global $db;
+    $stmt = $db->prepare("INSERT INTO routine_overtime_logs (routine_id, routine_task_id, child_user_id, scheduled_seconds, actual_seconds, overtime_seconds)
+                          VALUES (:routine_id, :task_id, :child_id, :scheduled, :actual, :overtime)");
+    return $stmt->execute([
+        ':routine_id' => $routine_id,
+        ':task_id' => $routine_task_id,
+        ':child_id' => $child_user_id,
+        ':scheduled' => (int) $scheduled_seconds,
+        ':actual' => (int) $actual_seconds,
+        ':overtime' => (int) $overtime_seconds
+    ]);
+}
+
 function updateRoutineTask($routine_task_id, $updates) {
     global $db;
     $fields = [];
@@ -1264,12 +1365,25 @@ try {
         category ENUM('hygiene', 'homework', 'household') DEFAULT 'household',
         icon_url VARCHAR(255),
         audio_url VARCHAR(255),
+        created_by INT NULL,
         status ENUM('pending', 'completed', 'approved') DEFAULT 'pending',
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (parent_user_id) REFERENCES users(id) ON DELETE CASCADE
+        FOREIGN KEY (parent_user_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
     )";
     $db->exec($sql);
     error_log("Created/verified routine_tasks table successfully");
+
+    try {
+        $db->exec("ALTER TABLE routine_tasks ADD COLUMN IF NOT EXISTS created_by INT NULL");
+    } catch (PDOException $e) {
+        error_log("routine_tasks.created_by add column skipped: " . $e->getMessage());
+    }
+    try {
+        $db->exec("ALTER TABLE routine_tasks ADD CONSTRAINT fk_routine_tasks_created_by FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL");
+    } catch (PDOException $e) {
+        error_log("routine_tasks.created_by constraint ensure skipped: " . $e->getMessage());
+    }
 
     // Create routines_routine_tasks association table if not exists
     $sql = "CREATE TABLE IF NOT EXISTS routines_routine_tasks (
@@ -1284,6 +1398,37 @@ try {
     )";
     $db->exec($sql);
     error_log("Created/verified routines_routine_tasks table successfully");
+
+    // Create routine_preferences table if not exists (family-level routine settings)
+    $sql = "CREATE TABLE IF NOT EXISTS routine_preferences (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        parent_user_id INT NOT NULL,
+        adaptive_warnings_enabled TINYINT(1) DEFAULT 1,
+        sub_timer_label VARCHAR(50) DEFAULT 'hurry_goal',
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY uniq_parent (parent_user_id),
+        FOREIGN KEY (parent_user_id) REFERENCES users(id) ON DELETE CASCADE
+    )";
+    $db->exec($sql);
+    error_log("Created/verified routine_preferences table successfully");
+
+    // Create routine_overtime_logs table if not exists
+    $sql = "CREATE TABLE IF NOT EXISTS routine_overtime_logs (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        routine_id INT NOT NULL,
+        routine_task_id INT NOT NULL,
+        child_user_id INT NOT NULL,
+        scheduled_seconds INT NOT NULL,
+        actual_seconds INT NOT NULL,
+        overtime_seconds INT NOT NULL,
+        occurred_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (routine_id) REFERENCES routines(id) ON DELETE CASCADE,
+        FOREIGN KEY (routine_task_id) REFERENCES routine_tasks(id) ON DELETE CASCADE,
+        FOREIGN KEY (child_user_id) REFERENCES users(id) ON DELETE CASCADE
+    )";
+    $db->exec($sql);
+    error_log("Created/verified routine_overtime_logs table successfully");
 
     // New: Create family_links table for secondary parents
     $sql = "CREATE TABLE IF NOT EXISTS family_links (
