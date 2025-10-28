@@ -231,11 +231,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         .child-info-stats .stat-subvalue { display: block; font-size: 0.85em; color: #888; margin-top: 2px; }
         .points-progress-wrapper { display: flex; flex-direction: column; align-items: center; gap: 10px; flex: 1; }
         .points-progress-label { font-size: 0.9em; color: #555; text-align: center; }
-        .points-progress-container { width: 70px; height: 160px; background: #e0e0e0; border-radius: 12px; display: flex; align-items: flex-end; justify-content: center; position: relative; overflow: hidden; }
-        .points-progress-fill { width: 100%; height: 0; background: linear-gradient(180deg, #81c784, #4caf50); border-radius: 12px; transition: height 1.2s ease-out; }
-        .points-progress-target { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); font-size: 0.8em; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,0.3); opacity: 0.9; }
+        .points-progress-container { width: 70px; height: 160px; background: #e0e0e0; border-radius: 35px; display: flex; align-items: flex-end; justify-content: center; position: relative; overflow: hidden; }
+        .points-progress-fill { width: 100%; height: 90%; background: linear-gradient(180deg, #81c784, #4caf50); border-radius: 5px; transition: height 1.2s ease-out; }
+        .points-progress-target { position: absolute; top: 25px; left: 50%; transform: translateX(-50%); font-size: 1em; font-weight: 700; width: 100%; color: #fff; text-shadow: 0 2px 2px rgba(0,0,0,0.4); opacity: 0.9; }
         .child-info-actions { display: flex; flex-wrap: wrap; gap: 10px; }
-        .child-info-actions form { margin: 0; }
+        .child-info-actions form { margin: 0; flex-grow: 1; }
+         .child-info-actions a { flex-grow: 1; }
+         .child-info-actions form button{ width: 100%;}
         .button { padding: 10px 20px; margin: 5px; background-color: #4caf50; color: white; border: none; border-radius: 5px; cursor: pointer; text-decoration: none; display: inline-block; font-size: 16px; min-height: 44px; }
         .approve-button { background-color: #4caf50; }
         .reject-button { background-color: #f44336; }
