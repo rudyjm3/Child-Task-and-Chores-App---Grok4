@@ -50,6 +50,14 @@ function routineBelongsToParent(int $routine_id, int $family_root_id): bool {
     return (int) $ownerId === $family_root_id;
 }
 
+function routineBelongsToChild(int $routine_id, int $child_user_id): bool {
+    global $db;
+    $stmt = $db->prepare("SELECT child_user_id FROM routines WHERE id = :id LIMIT 1");
+    $stmt->execute([':id' => $routine_id]);
+    $ownerId = $stmt->fetchColumn();
+    return (int) $ownerId === $child_user_id;
+}
+
 function normalizeRoutineStructure(?string $rawStructure, int $family_root_id, array &$errors): array {
     if (!$rawStructure) {
         $errors[] = 'Add at least one routine task.';
@@ -315,14 +323,51 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             if (createRoutineTask($family_root_id, $title, $description, $time_limit, $point_value, $category, null, null, $_SESSION['user_id'])) {
                 $messages[] = ['type' => 'success', 'text' => 'Routine task added to the library.'];
+                $routine_tasks = getRoutineTasks($family_root_id);
             } else {
                 $messages[] = ['type' => 'error', 'text' => 'Failed to add routine task.'];
+            }
+        }
+    } elseif ($isParentContext && isset($_POST['update_routine_task'])) {
+        $routine_task_id = filter_input(INPUT_POST, 'routine_task_id', FILTER_VALIDATE_INT);
+        $title = trim((string) filter_input(INPUT_POST, 'edit_rt_title', FILTER_SANITIZE_STRING));
+        $description = trim((string) filter_input(INPUT_POST, 'edit_rt_description', FILTER_SANITIZE_STRING));
+        $time_limit = filter_input(INPUT_POST, 'edit_rt_time_limit', FILTER_VALIDATE_INT);
+        $point_value = filter_input(INPUT_POST, 'edit_rt_point_value', FILTER_VALIDATE_INT);
+        $category = filter_input(INPUT_POST, 'edit_rt_category', FILTER_SANITIZE_STRING);
+
+        $updates = [];
+        if ($title !== '') {
+            $updates['title'] = $title;
+        }
+        if ($description !== '') {
+            $updates['description'] = $description;
+        } else {
+            $updates['description'] = null;
+        }
+        if ($time_limit !== false && $time_limit > 0) {
+            $updates['time_limit'] = $time_limit;
+        }
+        if ($point_value !== false && $point_value >= 0) {
+            $updates['point_value'] = $point_value;
+        }
+        $updates['category'] = in_array($category, ['hygiene', 'homework', 'household'], true) ? $category : 'household';
+
+        if (!$routine_task_id || empty($updates)) {
+            $messages[] = ['type' => 'error', 'text' => 'Unable to update routine task.'];
+        } else {
+            if (updateRoutineTask($routine_task_id, $updates)) {
+                $messages[] = ['type' => 'success', 'text' => 'Routine task updated.'];
+                $routine_tasks = getRoutineTasks($family_root_id);
+            } else {
+                $messages[] = ['type' => 'error', 'text' => 'Failed to update routine task.'];
             }
         }
     } elseif ($isParentContext && isset($_POST['delete_routine_task'])) {
         $routine_task_id = filter_input(INPUT_POST, 'routine_task_id', FILTER_VALIDATE_INT);
         if ($routine_task_id && deleteRoutineTask($routine_task_id, $family_root_id)) {
             $messages[] = ['type' => 'success', 'text' => 'Routine task removed from the library.'];
+            $routine_tasks = getRoutineTasks($family_root_id);
         } else {
             $messages[] = ['type' => 'error', 'text' => 'Unable to delete routine task.'];
         }
@@ -344,7 +389,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($bonus !== false) {
             $messages[] = ['type' => 'success', 'text' => "Routine completed! Bonus points awarded: {$bonus}"];
         } else {
-            $messages[] = ['type' => 'error', 'text' => 'Failed to complete routine. Ensure all tasks are approved.'];
+            $messages[] = ['type' => 'error', 'text' => 'Failed to complete routine.'];
         }
     }
 }
@@ -459,6 +504,15 @@ $pageState = [
         .library-table th { background: #f0f4f7; }
         .no-data { font-style: italic; color: #757575; }
         footer { text-align: center; padding: 24px 0; color: #607d8b; }
+        .routine-task-edit { margin-top: 8px; }
+        .routine-task-edit summary { cursor: pointer; font-weight: 600; }
+        .routine-task-edit-form { display: grid; gap: 8px; margin-top: 8px; }
+        .routine-task-edit-form label { display: flex; flex-direction: column; gap: 4px; font-size: 0.9em; }
+        .task-list li.task-completed,
+        .checklist li.completed { border-left-color: #4caf50; background: #e8f5e9; }
+        .status-pill { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 0.8em; background: #eceff1; color: #37474f; margin-left: 6px; text-transform: capitalize; }
+        .status-pill.completed { background: #4caf50; color: #fff; }
+        .status-pill.pending { background: #ff9800; color: #fff; }
         @media (max-width: 720px) {
             .selected-task-item { grid-template-columns: 1fr; }
             .drag-handle { display: none; }
@@ -644,6 +698,37 @@ $pageState = [
                                     <td><?php echo htmlspecialchars($task['category']); ?></td>
                                     <td>
                                         <?php if ((int) $task['parent_user_id'] === $family_root_id): ?>
+                                            <details class="routine-task-edit">
+                                                <summary>Edit</summary>
+                                                <form method="POST" class="routine-task-edit-form">
+                                                    <input type="hidden" name="routine_task_id" value="<?php echo (int) $task['id']; ?>">
+                                                    <label>
+                                                        Title
+                                                        <input type="text" name="edit_rt_title" value="<?php echo htmlspecialchars($task['title']); ?>" required>
+                                                    </label>
+                                                    <label>
+                                                        Description
+                                                        <textarea name="edit_rt_description" rows="2"><?php echo htmlspecialchars($task['description'] ?? ''); ?></textarea>
+                                                    </label>
+                                                    <label>
+                                                        Time Limit (min)
+                                                        <input type="number" name="edit_rt_time_limit" min="1" value="<?php echo (int) $task['time_limit']; ?>" required>
+                                                    </label>
+                                                    <label>
+                                                        Point Value
+                                                        <input type="number" name="edit_rt_point_value" min="0" value="<?php echo (int) $task['point_value']; ?>">
+                                                    </label>
+                                                    <label>
+                                                        Category
+                                                        <select name="edit_rt_category">
+                                                            <option value="hygiene" <?php echo ($task['category'] === 'hygiene') ? 'selected' : ''; ?>>Hygiene</option>
+                                                            <option value="homework" <?php echo ($task['category'] === 'homework') ? 'selected' : ''; ?>>Homework</option>
+                                                            <option value="household" <?php echo ($task['category'] === 'household') ? 'selected' : ''; ?>>Household</option>
+                                                        </select>
+                                                    </label>
+                                                    <button type="submit" name="update_routine_task" class="button">Save Changes</button>
+                                                </form>
+                                            </details>
                                             <form method="POST" style="display:inline;">
                                                 <input type="hidden" name="routine_task_id" value="<?php echo (int) $task['id']; ?>">
                                                 <button type="submit" name="delete_routine_task" class="button danger" onclick="return confirm('Delete this routine task from the library?');">Delete</button>
@@ -686,14 +771,32 @@ $pageState = [
                         <div class="collapsible-content" data-role="collapsible">
                             <ul class="task-list">
                                 <?php foreach ($routine['tasks'] as $task): ?>
-                                    <li>
+                                    <?php
+                                        $taskStatus = $task['status'] ?? 'pending';
+                                        $isCompleted = ($taskStatus === 'completed');
+                                        $itemClasses = [];
+                                        if ($isCompleted) {
+                                            $itemClasses[] = $isChildView ? 'task-completed' : 'completed';
+                                        }
+                                        $classAttr = !empty($itemClasses) ? ' class="' . implode(' ', $itemClasses) . '"' : '';
+                                    ?>
+                                    <li data-routine-task-id="<?php echo (int) $task['id']; ?>"<?php echo $classAttr; ?>>
+                                        <?php if ($isChildView): ?>
+                                            <input type="checkbox" <?php echo ($taskStatus === 'completed') ? 'checked' : ''; ?> disabled>
+                                        <?php endif; ?>
                                         <strong><?php echo htmlspecialchars($task['title']); ?></strong>
-                                        <div class="task-meta"><?php echo (int) $task['time_limit']; ?> min, Status: <?php echo htmlspecialchars($task['status']); ?></div>
+                                        <div class="task-meta">
+                                            <?php echo (int) $task['time_limit']; ?> min
+                                            <span class="status-pill status-<?php echo htmlspecialchars($taskStatus); ?> <?php echo htmlspecialchars($taskStatus); ?>">
+                                                <?php echo htmlspecialchars($taskStatus); ?>
+                                            </span>
+                                        </div>
                                         <?php if (!empty($task['dependency_id'])): ?>
                                             <div class="dependency">Depends on Task ID: <?php echo (int) $task['dependency_id']; ?></div>
                                         <?php endif; ?>
                                     </li>
                                 <?php endforeach; ?>
+                            </ul>
                             <?php if ($isChildView): ?>
                                 <div class="timer-stack" data-role="child-controls">
                                     <div class="timer-widget">
@@ -723,8 +826,10 @@ $pageState = [
                                         $rid = (int) $routine['id'];
                                         $override = $editFieldOverrides[$rid] ?? null;
                                         $titleValue = htmlspecialchars($override['title'] ?? $routine['title'], ENT_QUOTES);
-                                        $startValue = htmlspecialchars($override['start_time'] ?? $routine['start_time'], ENT_QUOTES);
-                                        $endValue = htmlspecialchars($override['end_time'] ?? $routine['end_time'], ENT_QUOTES);
+                                        $startRaw = $override['start_time'] ?? $routine['start_time'];
+                                        $endRaw = $override['end_time'] ?? $routine['end_time'];
+                                        $startValue = htmlspecialchars(substr($startRaw, 0, 5), ENT_QUOTES);
+                                        $endValue = htmlspecialchars(substr($endRaw, 0, 5), ENT_QUOTES);
                                         $bonusValue = (int) ($override['bonus_points'] ?? $routine['bonus_points']);
                                         $recurrenceValue = $override['recurrence'] ?? $routine['recurrence'];
                                     ?>
@@ -929,15 +1034,14 @@ $pageState = [
 
                         const handle = document.createElement('span');
                         handle.className = 'drag-handle';
-                        handle.textContent = '?';
+                        handle.textContent = String.fromCharCode(0x283F);
 
                         const body = document.createElement('div');
                         const title = document.createElement('div');
                         title.innerHTML = `<strong>${taskData.title}</strong>`;
                         const meta = document.createElement('div');
                         meta.className = 'task-meta';
-                        meta.textContent = `${taskData.time_limit || 0} min • ${taskData.category}`;
-
+                        meta.textContent = `${taskData.time_limit || 0} min ${String.fromCharCode(0x2022)} ${taskData.category}`;
                         const dependencyWrapper = document.createElement('div');
                         dependencyWrapper.className = 'dependency-select';
                         const label = document.createElement('label');
@@ -954,9 +1058,16 @@ $pageState = [
                             const option = document.createElement('option');
                             option.value = String(allowedTask.id);
                             option.textContent = allowedData.title;
+                            if (allowedTask.id === task.dependency_id) {
+                                option.selected = true;
+                            }
                             select.appendChild(option);
                         }
-                        select.value = task.dependency_id !== null ? String(task.dependency_id) : '';
+                        if (task.dependency_id !== null) {
+                            select.value = String(task.dependency_id);
+                        } else {
+                            select.value = '';
+                        }
                         select.addEventListener('change', () => {
                             task.dependency_id = select.value !== '' ? parseInt(select.value, 10) : null;
                         });
@@ -1064,6 +1175,11 @@ $pageState = [
                         }
                         return;
                     }
+                    this.resetRoutineStatuses();
+                    this.tasks.forEach(task => {
+                        task.status = 'pending';
+                        this.markTaskPending(task.id);
+                    });
                     this.clearTimers();
                     this.overtimeBuffer = [];
                     this.lastCompletedTaskTitle = '';
@@ -1121,6 +1237,9 @@ $pageState = [
                             overtime_seconds: overtime
                         });
                     }
+                    this.updateTaskStatus(this.currentTask.id, 'completed');
+                    this.currentTask.status = 'completed';
+                    this.markTaskCompleted(this.currentTask.id);
                     this.lastCompletedTaskTitle = this.currentTask.title;
                     this.currentIndex += 1;
                     this.clearTaskTimer();
@@ -1167,7 +1286,9 @@ $pageState = [
                     const futureSeconds = this.tasks.slice(this.currentIndex + 1).reduce((sum, task) => sum + ((parseInt(task.time_limit, 10) || 0) * 60), 0);
                     const currentRemaining = Math.max(0, this.taskRemainingSeconds || 0);
                     const scheduledRemaining = currentRemaining + futureSeconds;
-                    if (this.remainingRoutineSeconds < scheduledRemaining) {
+                    const overtimeCurrent = (this.taskRemainingSeconds ?? 0) < 0;
+                    const routineExpired = this.remainingRoutineSeconds <= 0;
+                    if (this.remainingRoutineSeconds < scheduledRemaining || overtimeCurrent || routineExpired) {
                         const adjusted = Math.max(0, this.remainingRoutineSeconds - futureSeconds);
                         const template = this.subTimerLabelMap[this.preferences.sub_timer_label] || '';
                         const previousName = this.lastCompletedTaskTitle || (this.currentTask ? this.currentTask.title : 'this task');
@@ -1178,7 +1299,7 @@ $pageState = [
                             .replace(/\[task name\]/g, previousName)
                             .replace(/\[task\]/g, previousName);
                         if (this.warningEl) {
-                            this.warningEl.textContent = 'Buffer low: keep moving!';
+                            this.warningEl.textContent = this.remainingRoutineSeconds <= 0 ? 'Routine timer finished!' : 'Buffer low: keep moving!';
                         }
                         if (this.subTimerLabelEl) {
                             this.subTimerLabelEl.textContent = labelText;
@@ -1206,14 +1327,50 @@ $pageState = [
                     this.updateWarning();
                     this.sendOvertimeLogs();
                 }
+                resetRoutineStatuses() {
+                    const payload = new FormData();
+                    payload.append('action', 'reset_routine_tasks');
+                    payload.append('routine_id', this.routine.id);
+                    fetch('routine.php', { method: 'POST', body: payload }).catch(() => { /* silent */ });
+                }
 
-                sendOvertimeLogs() {
-                    const entries = this.overtimeBuffer.filter(entry => entry.overtime_seconds > 0);
-                    if (!entries.length) return;
-                    const formData = new FormData();
-                    formData.append('action', 'log_overtime');
-                    formData.append('overtime_payload', JSON.stringify(entries));
-                    fetch('routine.php', { method: 'POST', body: formData }).catch(() => { /* silent */ });
+                updateTaskStatus(taskId, status) {
+                    const payload = new FormData();
+                    payload.append('action', 'set_routine_task_status');
+                    payload.append('routine_id', this.routine.id);
+                    payload.append('routine_task_id', taskId);
+                    payload.append('status', status);
+                    fetch('routine.php', { method: 'POST', body: payload }).catch(() => { /* silent */ });
+                }
+
+                markTaskCompleted(taskId) {
+                    const item = this.card.querySelector(`li[data-routine-task-id="${taskId}"]`);
+                    if (item) {
+                        item.classList.add('task-completed');
+                        const checkbox = item.querySelector('input[type="checkbox"]');
+                        if (checkbox) checkbox.checked = true;
+                        const pill = item.querySelector('.status-pill');
+                        if (pill) {
+                            pill.textContent = 'completed';
+                            pill.classList.add('completed');
+                            pill.classList.remove('pending');
+                        }
+                    }
+                }
+
+                markTaskPending(taskId) {
+                    const item = this.card.querySelector(`li[data-routine-task-id="${taskId}"]`);
+                    if (item) {
+                        item.classList.remove('task-completed');
+                        const checkbox = item.querySelector('input[type="checkbox"]');
+                        if (checkbox) checkbox.checked = false;
+                        const pill = item.querySelector('.status-pill');
+                        if (pill) {
+                            pill.textContent = 'pending';
+                            pill.classList.remove('completed');
+                            pill.classList.add('pending');
+                        }
+                    }
                 }
 
                 clearTaskTimer() {
@@ -1267,6 +1424,23 @@ $pageState = [
     </script>
 </body>
 </html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

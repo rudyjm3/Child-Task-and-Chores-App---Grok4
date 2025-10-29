@@ -48,8 +48,16 @@ if (!isset($_SESSION['username'])) {
 
 $data = getDashboardData($_SESSION['user_id']);
 
-// Fetch Routine Tasks for parent dashboard (fix undefined)
-$routine_tasks = getRoutineTasks($main_parent_id);
+$routine_overtime_logs = getRoutineOvertimeLogs($main_parent_id, 25);
+$routine_overtime_stats = getRoutineOvertimeStats($main_parent_id);
+$overtimeByChild = $routine_overtime_stats['by_child'] ?? [];
+$overtimeByRoutine = $routine_overtime_stats['by_routine'] ?? [];
+$formatDuration = function($seconds) {
+    $seconds = max(0, (int) $seconds);
+    $minutes = intdiv($seconds, 60);
+    $remaining = $seconds % 60;
+    return sprintf('%02d:%02d', $minutes, $remaining);
+};
 
 $welcome_role_label = getUserRoleLabel($_SESSION['user_id']);
 if (!$welcome_role_label) {
@@ -255,6 +263,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         .upload-preview { max-width: 100px; max-height: 100px; border-radius: 50%; }
         .mother-badge { background: #e91e63; color: white; padding: 2px 6px; border-radius: 3px; font-size: 0.8em; }
         .father-badge { background: #2196f3; color: white; padding: 2px 6px; border-radius: 3px; font-size: 0.8em; }
+        .routine-analytics { margin-top: 20px; background: #fafafa; border-radius: 8px; padding: 20px; box-shadow: 0 2px 6px rgba(0,0,0,0.08); }
+        .routine-analytics h2 { margin-top: 0; }
+        .overtime-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin-top: 16px; }
+        .overtime-card { background: #ffffff; border-radius: 8px; padding: 16px; box-shadow: 0 1px 4px rgba(0,0,0,0.05); }
+        .overtime-card h3 { margin-top: 0; font-size: 1.05em; }
+        .overtime-table { width: 100%; border-collapse: collapse; margin-top: 16px; font-size: 0.95em; }
+        .overtime-table th, .overtime-table td { border: 1px solid #e0e0e0; padding: 8px; text-align: left; }
+        .overtime-table th { background: #f0f4f8; font-weight: 600; }
+        .overtime-empty { font-style: italic; color: #666; margin-top: 12px; }
         @media (max-width: 768px) {
             .manage-family { padding: 10px; }
             .button { width: 100%; }
@@ -639,95 +656,96 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       <div class="routine-management">
          <h2>Routine Management</h2>
          <a href="routine.php" class="button">Full Routine Editor</a>
-         <div class="routine-pool">
-            <h3>Routine Tasks Pool</h3>
-            <form method="POST" action="dashboard_parent.php">
-               <div class="form-group">
-                  <label for="title">Title:</label>
-                  <input type="text" id="title" name="title" required>
-               </div>
-               <div class="form-group">
-                  <label for="description">Description:</label>
-                  <textarea id="description" name="description"></textarea>
-               </div>
-               <div class="form-group">
-                  <label for="time_limit">Time Limit (min):</label>
-                  <input type="number" id="time_limit" name="time_limit" min="1">
-               </div>
-               <div class="form-group">
-                  <label for="point_value">Point Value:</label>
-                  <input type="number" id="point_value" name="point_value" min="0">
-               </div>
-               <div class="form-group">
-                  <label for="category">Category:</label>
-                  <select id="category" name="category">
-                     <option value="hygiene">Hygiene</option>
-                     <option value="homework">Homework</option>
-                     <option value="household">Household</option>
-                  </select>
-               </div>
-               <button type="submit" name="create_routine_task" class="button">Add Routine Task</button>
-            </form>
-            <ul class="routine-task-list">
-               <?php foreach ($routine_tasks as $rt): ?>
-                  <li class="routine-task-item">
-                     <span><?php echo htmlspecialchars($rt['title']); ?> (<?php echo htmlspecialchars($rt['category']); ?>, <?php echo htmlspecialchars($rt['time_limit']); ?>min)</span>
-                     <div>
-                        <a href="routine.php?edit_rt=<?php echo $rt['id']; ?>" class="button" style="background: #ff9800; font-size: 12px; padding: 2px 8px;">Edit</a>
-                        <form method="POST" style="display: inline;">
-                           <input type="hidden" name="routine_task_id" value="<?php echo $rt['id']; ?>">
-                           <button type="submit" name="delete_routine_task" class="button" style="background: #f44336; font-size: 12px; padding: 2px 8px;" onclick="return confirm('Delete this Routine Task?')">Delete</button>
-                        </form>
-                     </div>
-                  </li>
-               <?php endforeach; ?>
-            </ul>
+      </div>
+      <div class="routine-analytics">
+         <h2>Routine Overtime Insights</h2>
+         <p>Track where routines run long so you can coach kids on timing and adjust expectations.</p>
+         <div class="overtime-grid">
+            <div class="overtime-card">
+               <h3>Top Overtime by Child</h3>
+               <?php $topChild = array_slice($overtimeByChild, 0, 5); ?>
+               <?php if (!empty($topChild)): ?>
+                   <table class="overtime-table">
+                      <thead>
+                         <tr>
+                            <th>Child</th>
+                            <th>Occurrences</th>
+                            <th>Total OT (min)</th>
+                         </tr>
+                      </thead>
+                      <tbody>
+                         <?php foreach ($topChild as $childRow): ?>
+                             <tr>
+                                <td><?php echo htmlspecialchars($childRow['child_display_name']); ?></td>
+                                <td><?php echo (int) $childRow['occurrences']; ?></td>
+                                <td><?php echo round(((int) $childRow['total_overtime_seconds']) / 60, 1); ?></td>
+                             </tr>
+                         <?php endforeach; ?>
+                      </tbody>
+                   </table>
+               <?php else: ?>
+                   <p class="overtime-empty">No overtime data recorded yet.</p>
+               <?php endif; ?>
+            </div>
+            <div class="overtime-card">
+               <h3>Routines with Most Overtime</h3>
+               <?php $topRoutine = array_slice($overtimeByRoutine, 0, 5); ?>
+               <?php if (!empty($topRoutine)): ?>
+                   <table class="overtime-table">
+                      <thead>
+                         <tr>
+                            <th>Routine</th>
+                            <th>Occurrences</th>
+                            <th>Total OT (min)</th>
+                         </tr>
+                      </thead>
+                      <tbody>
+                         <?php foreach ($topRoutine as $routineRow): ?>
+                             <tr>
+                                <td><?php echo htmlspecialchars($routineRow['routine_title']); ?></td>
+                                <td><?php echo (int) $routineRow['occurrences']; ?></td>
+                                <td><?php echo round(((int) $routineRow['total_overtime_seconds']) / 60, 1); ?></td>
+                             </tr>
+                         <?php endforeach; ?>
+                      </tbody>
+                   </table>
+               <?php else: ?>
+                   <p class="overtime-empty">No recurring overtime yet. Great job!</p>
+               <?php endif; ?>
+            </div>
          </div>
-         <div class="routine-form">
-            <h3>Quick Create Routine</h3>
-            <form method="POST" action="dashboard_parent.php">
-               <div class="form-group">
-                  <label for="child_user_id_routine">Child:</label>
-                  <select id="child_user_id_routine" name="child_user_id" required>
-                     <?php foreach ($data['children'] as $child): ?>
-                        <option value="<?php echo $child['child_user_id']; ?>"><?php echo htmlspecialchars($child['child_name']); ?></option>
-                     <?php endforeach; ?>
-                  </select>
-               </div>
-               <div class="form-group">
-                  <label for="title_routine">Title:</label>
-                  <input type="text" id="title_routine" name="title" required>
-               </div>
-               <div class="form-group">
-                  <label for="start_time">Start Time:</label>
-                  <input type="time" id="start_time" name="start_time" required>
-               </div>
-               <div class="form-group">
-                  <label for="end_time">End Time:</label>
-                  <input type="time" id="end_time" name="end_time" required>
-               </div>
-               <div class="form-group">
-                  <label for="recurrence">Recurrence:</label>
-                  <select id="recurrence" name="recurrence">
-                     <option value="">None</option>
-                     <option value="daily">Daily</option>
-                     <option value="weekly">Weekly</option>
-                  </select>
-               </div>
-               <div class="form-group">
-                  <label for="bonus_points">Bonus Points:</label>
-                  <input type="number" id="bonus_points" name="bonus_points" min="0" value="0" required>
-               </div>
-               <div class="form-group">
-                  <label>Routine Tasks:</label>
-                  <select multiple name="routine_task_ids[]" size="5">
-                     <?php foreach ($routine_tasks as $rt): ?>
-                        <option value="<?php echo $rt['id']; ?>"><?php echo htmlspecialchars($rt['title']); ?> (<?php echo $rt['time_limit']; ?>min)</option>
-                     <?php endforeach; ?>
-                  </select>
-               </div>
-               <button type="submit" name="create_routine" class="button">Create Routine</button>
-            </form>
+         <div class="overtime-card" style="margin-top: 20px;">
+            <h3>Most Recent Overtime Events</h3>
+            <?php if (!empty($routine_overtime_logs)): ?>
+                <table class="overtime-table">
+                   <thead>
+                      <tr>
+                         <th>When</th>
+                         <th>Child</th>
+                         <th>Routine</th>
+                         <th>Task</th>
+                         <th>Scheduled</th>
+                         <th>Actual</th>
+                         <th>Overtime</th>
+                      </tr>
+                   </thead>
+                   <tbody>
+                      <?php foreach ($routine_overtime_logs as $log): ?>
+                          <tr>
+                             <td><?php echo htmlspecialchars(date('m/d/Y h:i A', strtotime($log['occurred_at']))); ?></td>
+                             <td><?php echo htmlspecialchars($log['child_display_name']); ?></td>
+                             <td><?php echo htmlspecialchars($log['routine_title']); ?></td>
+                             <td><?php echo htmlspecialchars($log['task_title']); ?></td>
+                             <td><?php echo $formatDuration($log['scheduled_seconds']); ?></td>
+                             <td><?php echo $formatDuration($log['actual_seconds']); ?></td>
+                             <td><?php echo $formatDuration($log['overtime_seconds']); ?></td>
+                          </tr>
+                      <?php endforeach; ?>
+                   </tbody>
+                </table>
+            <?php else: ?>
+                <p class="overtime-empty">No overtime events have been logged yet.</p>
+            <?php endif; ?>
          </div>
       </div>
       <div class="active-rewards">

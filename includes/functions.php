@@ -836,8 +836,19 @@ function calculateRoutineDurationMinutes($start_time, $end_time) {
         return null;
     }
     $baseDate = date('Y-m-d');
-    $start = DateTime::createFromFormat('Y-m-d H:i', $baseDate . ' ' . $start_time);
-    $end = DateTime::createFromFormat('Y-m-d H:i', $baseDate . ' ' . $end_time);
+    $formats = ['Y-m-d H:i', 'Y-m-d H:i:s'];
+    $start = $end = false;
+    foreach ($formats as $format) {
+        if (!$start) {
+            $start = DateTime::createFromFormat($format, $baseDate . ' ' . $start_time);
+        }
+        if (!$end) {
+            $end = DateTime::createFromFormat($format, $baseDate . ' ' . $end_time);
+        }
+        if ($start && $end) {
+            break;
+        }
+    }
     if (!$start || !$end) {
         return null;
     }
@@ -1074,14 +1085,15 @@ function deleteRoutine($routine_id, $parent_user_id) {
     return $stmt->execute([':id' => $routine_id, ':parent_id' => $parent_user_id]);
 }
 
-function addRoutineTaskToRoutine($routine_id, $routine_task_id, $sequence_order, $dependency_id = null) {
+function addRoutineTaskToRoutine($routine_id, $routine_task_id, $sequence_order, $dependency_id = null, $status = 'pending') {
     global $db;
-    $stmt = $db->prepare("INSERT INTO routines_routine_tasks (routine_id, routine_task_id, sequence_order, dependency_id) VALUES (:routine_id, :routine_task_id, :sequence_order, :dependency_id)");
+    $stmt = $db->prepare("INSERT INTO routines_routine_tasks (routine_id, routine_task_id, sequence_order, dependency_id, status) VALUES (:routine_id, :routine_task_id, :sequence_order, :dependency_id, :status)");
     return $stmt->execute([
         ':routine_id' => $routine_id,
         ':routine_task_id' => $routine_task_id,
         ':sequence_order' => $sequence_order,
-        ':dependency_id' => $dependency_id
+        ':dependency_id' => $dependency_id,
+        ':status' => in_array($status, ['pending', 'completed'], true) ? $status : 'pending'
     ]);
 }
 
@@ -1139,9 +1151,16 @@ function getRoutines($user_id) {
     $routines = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
     foreach ($routines as &$routine) {
-        $taskStmt = $db->prepare("SELECT rt.*, rrt.sequence_order, rrt.dependency_id FROM routine_tasks rt JOIN routines_routine_tasks rrt ON rt.id = rrt.routine_task_id WHERE rrt.routine_id = :routine_id ORDER BY rrt.sequence_order");
+        $taskStmt = $db->prepare("SELECT rt.*, rrt.sequence_order, rrt.dependency_id, rrt.status AS routine_status, rrt.completed_at AS routine_completed_at FROM routine_tasks rt JOIN routines_routine_tasks rrt ON rt.id = rrt.routine_task_id WHERE rrt.routine_id = :routine_id ORDER BY rrt.sequence_order");
         $taskStmt->execute([':routine_id' => $routine['id']]);
-        $routine['tasks'] = $taskStmt->fetchAll(PDO::FETCH_ASSOC);
+        $tasks = $taskStmt->fetchAll(PDO::FETCH_ASSOC);
+        foreach ($tasks as &$task) {
+            $task['library_status'] = $task['status'] ?? null;
+            $task['status'] = $task['routine_status'] ?? 'pending';
+            $task['completed_at'] = $task['routine_completed_at'] ?? null;
+            unset($task['routine_status'], $task['routine_completed_at']);
+        }
+        $routine['tasks'] = $tasks;
     }
     return $routines;
 }
@@ -1152,9 +1171,16 @@ function getRoutineWithTasks($routine_id) {
     $stmt->execute([':id' => $routine_id]);
     $routine = $stmt->fetch(PDO::FETCH_ASSOC);
     if ($routine) {
-        $taskStmt = $db->prepare("SELECT rt.*, rrt.sequence_order FROM routine_tasks rt JOIN routines_routine_tasks rrt ON rt.id = rrt.routine_task_id WHERE rrt.routine_id = :routine_id ORDER BY rrt.sequence_order");
+        $taskStmt = $db->prepare("SELECT rt.*, rrt.sequence_order, rrt.dependency_id, rrt.status AS routine_status, rrt.completed_at AS routine_completed_at FROM routine_tasks rt JOIN routines_routine_tasks rrt ON rt.id = rrt.routine_task_id WHERE rrt.routine_id = :routine_id ORDER BY rrt.sequence_order");
         $taskStmt->execute([':routine_id' => $routine_id]);
-        $routine['tasks'] = $taskStmt->fetchAll(PDO::FETCH_ASSOC);
+        $tasks = $taskStmt->fetchAll(PDO::FETCH_ASSOC);
+        foreach ($tasks as &$task) {
+            $task['library_status'] = $task['status'] ?? null;
+            $task['status'] = $task['routine_status'] ?? 'pending';
+            $task['completed_at'] = $task['routine_completed_at'] ?? null;
+            unset($task['routine_status'], $task['routine_completed_at']);
+        }
+        $routine['tasks'] = $tasks;
     }
     return $routine;
 }
@@ -1167,16 +1193,6 @@ function completeRoutine($routine_id, $child_id) {
         $stmt->execute([':id' => $routine_id, ':child_id' => $child_id]);
         $routine = $stmt->fetch(PDO::FETCH_ASSOC);
         if (!$routine) {
-            $db->rollBack();
-            return false;
-        }
-
-        // Check if all routine tasks are approved
-        $stmt = $db->prepare("SELECT COUNT(*) FROM routines_routine_tasks rrt 
-                             JOIN routine_tasks rt ON rrt.routine_task_id = rt.id 
-                             WHERE rrt.routine_id = :routine_id AND rt.status != 'approved'");
-        $stmt->execute([':routine_id' => $routine_id]);
-        if ($stmt->fetchColumn() > 0) {
             $db->rollBack();
             return false;
         }
@@ -1202,6 +1218,114 @@ function completeRoutine($routine_id, $child_id) {
         error_log("Routine completion failed for ID $routine_id: " . $e->getMessage());
         return false;
     }
+}
+
+function resetRoutineTaskStatuses($routine_id) {
+    global $db;
+    $stmt = $db->prepare("UPDATE routines_routine_tasks SET status = 'pending', completed_at = NULL WHERE routine_id = :routine_id");
+    return $stmt->execute([':routine_id' => $routine_id]);
+}
+
+function setRoutineTaskStatus($routine_id, $routine_task_id, $status) {
+    global $db;
+    $allowed = ['pending', 'completed'];
+    if (!in_array($status, $allowed, true)) {
+        return false;
+    }
+    $params = [
+        ':routine_id' => $routine_id,
+        ':routine_task_id' => $routine_task_id,
+        ':status' => $status,
+        ':completed_at' => $status === 'completed' ? date('Y-m-d H:i:s') : null
+    ];
+    $stmt = $db->prepare("UPDATE routines_routine_tasks SET status = :status, completed_at = :completed_at WHERE routine_id = :routine_id AND routine_task_id = :routine_task_id");
+    if (!$stmt->execute($params)) {
+        return false;
+    }
+    return $stmt->rowCount() > 0;
+}
+
+function getRoutineOvertimeLogs($parent_user_id, $limit = 25) {
+    global $db;
+    $limit = max(1, (int) $limit);
+    $sql = "
+        SELECT 
+            rol.id,
+            rol.routine_id,
+            rol.routine_task_id,
+            rol.child_user_id,
+            rol.scheduled_seconds,
+            rol.actual_seconds,
+            rol.overtime_seconds,
+            rol.occurred_at,
+            r.title AS routine_title,
+            rt.title AS task_title,
+            COALESCE(
+                NULLIF(TRIM(CONCAT(COALESCE(cu.first_name, ''), ' ', COALESCE(cu.last_name, ''))), ''),
+                NULLIF(cu.name, ''),
+                cu.username,
+                'Unknown'
+            ) AS child_display_name
+        FROM routine_overtime_logs rol
+        JOIN routines r ON rol.routine_id = r.id
+        JOIN routine_tasks rt ON rol.routine_task_id = rt.id
+        JOIN users cu ON rol.child_user_id = cu.id
+        WHERE r.parent_user_id = :parent_id
+        ORDER BY rol.occurred_at DESC
+        LIMIT :log_limit
+    ";
+    $stmt = $db->prepare($sql);
+    $stmt->bindValue(':parent_id', $parent_user_id, PDO::PARAM_INT);
+    $stmt->bindValue(':log_limit', $limit, PDO::PARAM_INT);
+    $stmt->execute();
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
+function getRoutineOvertimeStats($parent_user_id) {
+    global $db;
+
+    $childSql = "
+        SELECT 
+            rol.child_user_id,
+            COALESCE(
+                NULLIF(TRIM(CONCAT(COALESCE(cu.first_name, ''), ' ', COALESCE(cu.last_name, ''))), ''),
+                NULLIF(cu.name, ''),
+                cu.username,
+                'Unknown'
+            ) AS child_display_name,
+            COUNT(*) AS occurrences,
+            SUM(rol.overtime_seconds) AS total_overtime_seconds
+        FROM routine_overtime_logs rol
+        JOIN routines r ON rol.routine_id = r.id
+        JOIN users cu ON rol.child_user_id = cu.id
+        WHERE r.parent_user_id = :parent_id
+        GROUP BY rol.child_user_id
+        ORDER BY total_overtime_seconds DESC
+    ";
+    $stmt = $db->prepare($childSql);
+    $stmt->execute([':parent_id' => $parent_user_id]);
+    $byChild = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    $routineSql = "
+        SELECT 
+            rol.routine_id,
+            r.title AS routine_title,
+            COUNT(*) AS occurrences,
+            SUM(rol.overtime_seconds) AS total_overtime_seconds
+        FROM routine_overtime_logs rol
+        JOIN routines r ON rol.routine_id = r.id
+        WHERE r.parent_user_id = :parent_id
+        GROUP BY rol.routine_id
+        ORDER BY total_overtime_seconds DESC
+    ";
+    $stmt = $db->prepare($routineSql);
+    $stmt->execute([':parent_id' => $parent_user_id]);
+    $byRoutine = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    return [
+        'by_child' => $byChild,
+        'by_routine' => $byRoutine
+    ];
 }
 
 // Below code commented out so Notice message does not show up on the login page
@@ -1391,6 +1515,8 @@ try {
         routine_task_id INT NOT NULL,
         sequence_order INT NOT NULL,
         dependency_id INT DEFAULT NULL,
+        status ENUM('pending', 'completed') DEFAULT 'pending',
+        completed_at DATETIME DEFAULT NULL,
         PRIMARY KEY (routine_id, routine_task_id),
         FOREIGN KEY (routine_id) REFERENCES routines(id) ON DELETE CASCADE,
         FOREIGN KEY (routine_task_id) REFERENCES routine_tasks(id) ON DELETE CASCADE,
@@ -1398,6 +1524,17 @@ try {
     )";
     $db->exec($sql);
     error_log("Created/verified routines_routine_tasks table successfully");
+
+    try {
+        $db->exec("ALTER TABLE routines_routine_tasks ADD COLUMN IF NOT EXISTS status ENUM('pending','completed') DEFAULT 'pending'");
+    } catch (PDOException $e) {
+        error_log("routines_routine_tasks.status ensure skipped: " . $e->getMessage());
+    }
+    try {
+        $db->exec("ALTER TABLE routines_routine_tasks ADD COLUMN IF NOT EXISTS completed_at DATETIME DEFAULT NULL");
+    } catch (PDOException $e) {
+        error_log("routines_routine_tasks.completed_at ensure skipped: " . $e->getMessage());
+    }
 
     // Create routine_preferences table if not exists (family-level routine settings)
     $sql = "CREATE TABLE IF NOT EXISTS routine_preferences (
