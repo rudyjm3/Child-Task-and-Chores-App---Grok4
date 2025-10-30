@@ -1048,6 +1048,19 @@ function updateChildPoints($child_id, $points) {
     }
 }
 
+function getChildTotalPoints($child_id) {
+    global $db;
+    try {
+        $stmt = $db->prepare("SELECT total_points FROM child_points WHERE child_user_id = :child_id");
+        $stmt->execute([':child_id' => $child_id]);
+        $points = $stmt->fetchColumn();
+        return $points !== false ? (int)$points : 0;
+    } catch (Exception $e) {
+        error_log("Failed to fetch points for child $child_id: " . $e->getMessage());
+        return 0;
+    }
+}
+
 // **[Revised] Routine Functions (now use routine_task_id instead of task_id) **
 function createRoutine($parent_user_id, $child_user_id, $title, $start_time, $end_time, $recurrence, $bonus_points, $creator_user_id = null) {
     global $db;
@@ -1185,7 +1198,7 @@ function getRoutineWithTasks($routine_id) {
     return $routine;
 }
 
-function completeRoutine($routine_id, $child_id) {
+function completeRoutine($routine_id, $child_id, $grant_bonus = true) {
     global $db;
     try {
         $db->beginTransaction();
@@ -1197,19 +1210,17 @@ function completeRoutine($routine_id, $child_id) {
             return false;
         }
 
-        // Check if current time is within start-end
-        $current_time = new DateTime();
-        $start = new DateTime(date('Y-m-d') . ' ' . $routine['start_time']);
-        $end = new DateTime(date('Y-m-d') . ' ' . $routine['end_time']);
-        if ($end < $start) {
-            $end->modify('+1 day');
+        $bonus = 0;
+        if ($grant_bonus) {
+            $bonus = max(0, (int) $routine['bonus_points']);
         }
-        $bonus = ($current_time >= $start && $current_time <= $end) ? $routine['bonus_points'] : 0;
 
         // Award bonus to child's points
-        updateChildPoints($child_id, $bonus);
+        if ($bonus > 0) {
+            updateChildPoints($child_id, $bonus);
+        }
 
-        error_log("Routine $routine_id completed by child $child_id with bonus $bonus");
+        error_log("Routine $routine_id completed by child $child_id with bonus $bonus (grant flag " . ($grant_bonus ? 'true' : 'false') . ")");
 
         $db->commit();
         return $bonus;

@@ -80,6 +80,11 @@ if (!$welcome_role_label) {
         $welcome_role_label = ucfirst(str_replace('_', ' ', $fallback_role));
     }
 }
+
+$bodyClasses = [];
+if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
+    $bodyClasses[] = 'child-theme';
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -414,7 +419,7 @@ if (!$welcome_role_label) {
         }
     </script>
 </head>
-<body>
+<body<?php echo !empty($bodyClasses) ? ' class="' . implode(' ', $bodyClasses) . '"' : ''; ?>>
     <header>
          <h1>Task Management</h1>
         <p>Welcome, <?php echo htmlspecialchars($_SESSION['name'] ?? $_SESSION['username'] ?? 'Unknown User'); ?>

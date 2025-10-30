@@ -41,15 +41,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             $message = "Not enough points to redeem this reward.";
         }
-    } elseif (isset($_POST['complete_routine'])) {
-        $routine_id = filter_input(INPUT_POST, 'routine_id', FILTER_VALIDATE_INT);
-        $bonus = completeRoutine($routine_id, $_SESSION['user_id']);
-        if ($bonus !== false) {
-            $message = "Routine completed! Bonus points awarded: $bonus";
-            $routines = getRoutines($_SESSION['user_id']); // Refresh
-        } else {
-            $message = "Failed to complete routine (ensure all tasks are approved).";
-        }
     }
 }
 ?>
@@ -61,15 +52,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <title>Child Dashboard</title>
     <link rel="stylesheet" href="css/main.css">
     <style>
-        .dashboard { padding: 20px; max-width: 600px; margin: 0 auto; text-align: center; }
-        .progress { margin: 20px 0; font-size: 1.2em; color: #4caf50; }
+        .dashboard { padding: 20px; max-width: 720px; margin: 0 auto; text-align: center; }
+        .progress { margin: 20px 0; display: grid; gap: 12px; text-align: left; color: #263238; }
+        .points-progress-title { font-size: 1.05rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #ff6f61; }
+        .points-progress-wrap { display: grid; grid-template-columns: 1fr auto; gap: 16px; align-items: center; }
+        .points-progress-track { position: relative; height: 34px; background: rgba(30,136,229,0.08); border-radius: 20px; overflow: hidden; box-shadow: inset 0 1px 3px rgba(0,0,0,0.08); border: 2px solid #d8d8d8; }
+        .points-progress-fill { position: absolute; inset: 0; background-image: linear-gradient(90deg, #f7d564 0%, #efb710 100%), repeating-linear-gradient(45deg, rgba(255,255,255,0.35) 0, rgba(255,255,255,0.35) 14px, rgba(239,183,16,0.15) 14px, rgba(239,183,16,0.15) 28px); background-size: 100% 100%, 180px 100%; transform: scaleX(0); transform-origin: left center; transition: transform 1800ms ease; animation: progressStripes 2.8s linear infinite; }
+        .points-progress-value { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; font-weight: 700; color: #f9f9f9; text-shadow: 0 2px 6px rgba(0,0,0,0.45); pointer-events: none; letter-spacing: 0.04em; }
+        .points-progress-total { font-weight: 700; font-size: 1.2rem; color: #00bb01; min-width: 88px; text-align: right; }
+        .points-extra { margin: 0; font-size: 1rem; font-weight: 600; color: #333; }
+        .extra-points-num { color: #00bb01; }
+        @keyframes progressStripes {
+            0% { background-position: 0 0, 0 0; }
+            100% { background-position: 0 0, 360px 0; }
+        }
         .rewards, .redeemed-rewards, .active-goals, .completed-goals, .rejected-goals, .routines { margin: 20px 0; }
         .reward-item, .redeemed-item, .goal-item, .routine-item { background-color: #f5f5f5; padding: 10px; margin: 5px 0; border-radius: 5px; }
         .button { padding: 10px 20px; margin: 5px; background-color: #ff9800; color: white; border: none; border-radius: 5px; cursor: pointer; text-decoration: none; display: inline-block; font-size: 16px; min-height: 44px; }
         .redeem-button { background-color: #2196f3; }
         .request-button { background-color: #9c27b0; }
         .start-routine-button { background-color: #4caf50; }
-        .complete-routine-button { background-color: #ffeb3b; color: #333; }
         /* Kid-Friendly Styles - Autism-Friendly: Bright pastels, large buttons */
         .routine-item { background: linear-gradient(135deg, #e3f2fd, #f3e5f5); border: 2px solid #bbdefb; margin: 10px 0; }
         .routine-item h3 { color: #1976d2; font-size: 1.5em; }
@@ -82,9 +84,48 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // Redirect to routine.php for full flow
             window.location.href = 'routine.php?start=' + routineId;
         }
+
+        document.addEventListener('DOMContentLoaded', function () {
+            document.querySelectorAll('[data-progress-fill]').forEach(function (fill) {
+                const target = parseFloat(fill.dataset.target || '0');
+                const clamped = Math.max(0, Math.min(100, target));
+                requestAnimationFrame(function () {
+                    fill.style.transform = 'scaleX(' + (clamped / 100) + ')';
+                });
+            });
+
+            const easeOutCubic = function (t) { return 1 - Math.pow(1 - t, 3); };
+            const animateCount = function (element) {
+                const target = parseFloat(element.dataset.target || '0');
+                const prefix = element.dataset.prefix || '';
+                const suffix = element.dataset.suffix || '';
+                const decimals = parseInt(element.dataset.decimals || '0', 10);
+                const duration = parseInt(element.dataset.duration || '1800', 10);
+                const startValue = parseFloat(element.dataset.start || '0');
+                const startTime = performance.now();
+
+                function update(now) {
+                    const elapsed = now - startTime;
+                    const progress = Math.min(1, elapsed / duration);
+                    const eased = easeOutCubic(progress);
+                    const value = startValue + (target - startValue) * eased;
+                    const display = decimals > 0 ? value.toFixed(decimals) : Math.round(value).toString();
+                    element.textContent = prefix + display + suffix;
+                    if (progress < 1) {
+                        requestAnimationFrame(update);
+                    }
+                }
+                requestAnimationFrame(update);
+            };
+
+            document.querySelectorAll('[data-animate-count]').forEach(function (element) {
+                element.textContent = (element.dataset.prefix || '') + (element.dataset.start || '0') + (element.dataset.suffix || '');
+                animateCount(element);
+            });
+        });
     </script>
 </head>
-<body>
+<body class="child-theme">
    <header>
    <h1>Child Dashboard</h1>
    <p>Hi, <?php echo htmlspecialchars($_SESSION['name']); ?>!</p>
@@ -92,9 +133,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
    </header>
    <main class="dashboard">
       <?php if (isset($message)) echo "<p>$message</p>"; ?>
+      <?php
+         $childTotalPoints = isset($data['remaining_points']) ? max(0, (int)$data['remaining_points']) : 0;
+         $progressPercent = isset($data['points_progress']) ? max(0, min(100, (int)$data['points_progress'])) : 0;
+         $displayPoints = min(100, $childTotalPoints);
+         $extraPoints = max(0, $childTotalPoints - 100);
+      ?>
       <div class="progress">
-         <p>Points Progress: <?php echo isset($data['points_progress']) ? htmlspecialchars($data['points_progress']) . '%' : '0%'; ?></p>
-         <p>Remaining Points: <?php echo isset($data['remaining_points']) ? htmlspecialchars($data['remaining_points']) : '0'; ?></p>
+         <span class="points-progress-title">Total Points</span>
+         <div class="points-progress-wrap">
+            <div class="points-progress-track">
+               <div class="points-progress-fill" data-progress-fill data-target="<?php echo $progressPercent; ?>"></div>
+               <span class="points-progress-value" data-animate-count data-target="<?php echo $progressPercent; ?>" data-suffix="%" data-start="0">0%</span>
+            </div>
+            <div class="points-progress-total"><span data-animate-count data-target="<?php echo $displayPoints; ?>" data-start="0">0</span> / 100</div>
+         </div>
+         <p class="points-extra">Extra points: <span class="extra-points-num" data-animate-count data-target="<?php echo $extraPoints; ?>" data-start="0">0</span></p>
       </div>
       <div class="rewards">
          <h2>Available Rewards</h2>
@@ -220,10 +274,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                      <p>Time: <?php echo date('h:i A', strtotime($routine['start_time'])) . ' - ' . date('h:i A', strtotime($routine['end_time'])); ?></p>
                      <p>Bonus: <?php echo $routine['bonus_points']; ?> points</p>
                      <button onclick="startRoutine(<?php echo $routine['id']; ?>)" class="button start-routine-button">Start Routine</button>
-                     <form method="POST" action="dashboard_child.php">
-                        <input type="hidden" name="routine_id" value="<?php echo $routine['id']; ?>">
-                        <button type="submit" name="complete_routine" class="button complete-routine-button">Complete Routine</button>
-                     </form>
                      <ul>
                         <?php foreach ($routine['tasks'] as $task): ?>
                            <li><?php echo htmlspecialchars($task['title']); ?> (<?php echo $task['time_limit']; ?> min)</li>

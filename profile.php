@@ -313,6 +313,11 @@ if ($display_name === '') {
     $display_name = $user['username'];
 }
 $child_display_name = $profile['child_name'] ?? $display_name;
+
+$bodyClasses = [];
+if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
+    $bodyClasses[] = 'child-theme';
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -404,7 +409,7 @@ $child_display_name = $profile['child_name'] ?? $display_name;
         });
     </script>
 </head>
-<body>
+<body<?php echo !empty($bodyClasses) ? ' class="' . implode(' ', $bodyClasses) . '"' : ''; ?>>
     <div class="profile">
         <h1>Profile</h1>
         <?php if (isset($message)) echo "<p>$message</p>"; ?>

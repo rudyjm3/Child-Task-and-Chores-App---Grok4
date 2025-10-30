@@ -240,7 +240,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         .points-progress-wrapper { display: flex; flex-direction: column; align-items: center; gap: 10px; flex: 1; }
         .points-progress-label { font-size: 0.9em; color: #555; text-align: center; }
         .points-progress-container { width: 70px; height: 160px; background: #e0e0e0; border-radius: 35px; display: flex; align-items: flex-end; justify-content: center; position: relative; overflow: hidden; }
-        .points-progress-fill { width: 100%; height: 90%; background: linear-gradient(180deg, #81c784, #4caf50); border-radius: 5px; transition: height 1.2s ease-out; }
+        .points-progress-fill { width: 100%; height: 0; background: linear-gradient(180deg, #81c784, #4caf50); border-radius: 5px; transition: height 1.2s ease-out; }
         .points-progress-target { position: absolute; top: 25px; left: 50%; transform: translateX(-50%); font-size: 1em; font-weight: 700; width: 100%; color: #fff; text-shadow: 0 2px 2px rgba(0,0,0,0.4); opacity: 0.9; }
         .child-info-actions { display: flex; flex-wrap: wrap; gap: 10px; }
         .child-info-actions form { margin: 0; flex-grow: 1; }

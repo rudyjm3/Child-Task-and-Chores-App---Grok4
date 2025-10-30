@@ -138,47 +138,253 @@ function validateRoutineTimeframe(?string $start_time, ?string $end_time, array 
     return $duration;
 }
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'log_overtime') {
-    header('Content-Type: application/json');
-    if (!isset($_SESSION['user_id'])) {
-        http_response_code(403);
-        echo json_encode(['status' => 'error', 'message' => 'Not authenticated.']);
+function calculateRoutineTaskAwardPoints(int $pointValue, int $scheduledSeconds, int $actualSeconds): int {
+    if ($pointValue <= 0) {
+        return 0;
+    }
+    if ($scheduledSeconds <= 0) {
+        return $pointValue;
+    }
+    if ($actualSeconds <= $scheduledSeconds) {
+        return $pointValue;
+    }
+    if ($actualSeconds <= $scheduledSeconds + 60) {
+        return (int) max(1, (int) ceil($pointValue / 2));
+    }
+    return 0;
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
+    $action = is_string($_POST['action']) ? $_POST['action'] : '';
+
+    if ($action === 'log_overtime') {
+        header('Content-Type: application/json');
+        if (!isset($_SESSION['user_id'])) {
+            http_response_code(403);
+            echo json_encode(['status' => 'error', 'message' => 'Not authenticated.']);
+            exit;
+        }
+        if (getEffectiveRole($_SESSION['user_id']) !== 'child') {
+            http_response_code(403);
+            echo json_encode(['status' => 'error', 'message' => 'Only children can log overtime.']);
+            exit;
+        }
+        $payload = json_decode($_POST['overtime_payload'] ?? '[]', true);
+        if (!is_array($payload)) {
+            http_response_code(400);
+            echo json_encode(['status' => 'error', 'message' => 'Malformed payload.']);
+            exit;
+        }
+        $logged = 0;
+        foreach ($payload as $entry) {
+            $routineId = isset($entry['routine_id']) ? (int) $entry['routine_id'] : 0;
+            $taskId = isset($entry['routine_task_id']) ? (int) $entry['routine_task_id'] : 0;
+            $scheduled = isset($entry['scheduled_seconds']) ? (int) $entry['scheduled_seconds'] : 0;
+            $actual = isset($entry['actual_seconds']) ? (int) $entry['actual_seconds'] : 0;
+            $overtime = isset($entry['overtime_seconds']) ? (int) $entry['overtime_seconds'] : 0;
+            if ($routineId <= 0 || $taskId <= 0 || $scheduled <= 0 || $actual <= 0 || $overtime <= 0) {
+                continue;
+            }
+            global $db;
+            $stmt = $db->prepare("SELECT child_user_id FROM routines WHERE id = :id LIMIT 1");
+            $stmt->execute([':id' => $routineId]);
+            $childId = $stmt->fetchColumn();
+            if ((int) $childId !== (int) $_SESSION['user_id']) {
+                continue;
+            }
+            if (logRoutineOvertime($routineId, $taskId, (int) $childId, $scheduled, $actual, $overtime)) {
+                $logged++;
+            }
+        }
+        echo json_encode(['status' => 'ok', 'logged' => $logged]);
+        exit;
+    } elseif ($action === 'reset_routine_tasks') {
+        header('Content-Type: application/json');
+        if (!isset($_SESSION['user_id'])) {
+            http_response_code(403);
+            echo json_encode(['status' => 'error', 'message' => 'Not authenticated.']);
+            exit;
+        }
+        if (getEffectiveRole($_SESSION['user_id']) !== 'child') {
+            http_response_code(403);
+            echo json_encode(['status' => 'error', 'message' => 'Only children can reset routines.']);
+            exit;
+        }
+        $routineId = filter_input(INPUT_POST, 'routine_id', FILTER_VALIDATE_INT);
+        if (!$routineId) {
+            http_response_code(400);
+            echo json_encode(['status' => 'error', 'message' => 'Missing routine ID.']);
+            exit;
+        }
+        if (!routineBelongsToChild($routineId, (int) $_SESSION['user_id'])) {
+            http_response_code(403);
+            echo json_encode(['status' => 'error', 'message' => 'Routine not assigned to this child.']);
+            exit;
+        }
+        $reset = resetRoutineTaskStatuses($routineId);
+        if ($reset && isset($_SESSION['routine_awards'][$routineId])) {
+            unset($_SESSION['routine_awards'][$routineId]);
+        }
+        echo json_encode(['status' => $reset ? 'ok' : 'error']);
+        exit;
+    } elseif ($action === 'set_routine_task_status') {
+        header('Content-Type: application/json');
+        if (!isset($_SESSION['user_id'])) {
+            http_response_code(403);
+            echo json_encode(['status' => 'error', 'message' => 'Not authenticated.']);
+            exit;
+        }
+        if (getEffectiveRole($_SESSION['user_id']) !== 'child') {
+            http_response_code(403);
+            echo json_encode(['status' => 'error', 'message' => 'Only children can update task status.']);
+            exit;
+        }
+        $routineId = filter_input(INPUT_POST, 'routine_id', FILTER_VALIDATE_INT);
+        $taskId = filter_input(INPUT_POST, 'routine_task_id', FILTER_VALIDATE_INT);
+        $status = isset($_POST['status']) ? (string) $_POST['status'] : '';
+        if (!$routineId || !$taskId || !in_array($status, ['pending', 'completed'], true)) {
+            http_response_code(400);
+            echo json_encode(['status' => 'error', 'message' => 'Invalid task status payload.']);
+            exit;
+        }
+        if (!routineBelongsToChild($routineId, (int) $_SESSION['user_id'])) {
+            http_response_code(403);
+            echo json_encode(['status' => 'error', 'message' => 'Routine not assigned to this child.']);
+            exit;
+        }
+        $updated = setRoutineTaskStatus($routineId, $taskId, $status);
+        echo json_encode(['status' => $updated ? 'ok' : 'error']);
+        exit;
+    } elseif ($action === 'complete_routine_flow') {
+        header('Content-Type: application/json');
+        if (!isset($_SESSION['user_id'])) {
+            http_response_code(403);
+            echo json_encode(['status' => 'error', 'message' => 'Not authenticated.']);
+            exit;
+        }
+        if (getEffectiveRole($_SESSION['user_id']) !== 'child') {
+            http_response_code(403);
+            echo json_encode(['status' => 'error', 'message' => 'Only children can complete routines.']);
+            exit;
+        }
+        $routineId = filter_input(INPUT_POST, 'routine_id', FILTER_VALIDATE_INT);
+        $metricsRaw = $_POST['task_metrics'] ?? '[]';
+        $metrics = json_decode($metricsRaw, true);
+        if (!$routineId) {
+            http_response_code(400);
+            echo json_encode(['status' => 'error', 'message' => 'Missing routine ID.']);
+            exit;
+        }
+        if (!routineBelongsToChild($routineId, (int) $_SESSION['user_id'])) {
+            http_response_code(403);
+            echo json_encode(['status' => 'error', 'message' => 'Routine not assigned to this child.']);
+            exit;
+        }
+        if ($metricsRaw !== '[]' && !is_array($metrics)) {
+            http_response_code(400);
+            echo json_encode(['status' => 'error', 'message' => 'Malformed metrics payload.']);
+            exit;
+        }
+
+        $routine = getRoutineWithTasks($routineId);
+        if (!$routine) {
+            http_response_code(404);
+            echo json_encode(['status' => 'error', 'message' => 'Routine not found.']);
+            exit;
+        }
+        $childId = (int) $_SESSION['user_id'];
+        if (!isset($_SESSION['routine_awards'])) {
+            $_SESSION['routine_awards'] = [];
+        }
+        if (!empty($_SESSION['routine_awards'][$routineId])) {
+            $currentTotal = getChildTotalPoints($childId);
+            echo json_encode([
+                'status' => 'duplicate',
+                'message' => 'Routine already finalized for this session.',
+                'task_points_awarded' => 0,
+                'bonus_points_awarded' => 0,
+                'new_total_points' => $currentTotal
+            ]);
+            exit;
+        }
+
+        $tasks = $routine['tasks'] ?? [];
+        $taskLookup = [];
+        foreach ($tasks as $taskRow) {
+            $taskLookup[(int) $taskRow['id']] = $taskRow;
+        }
+        if (empty($taskLookup)) {
+            echo json_encode([
+                'status' => 'error',
+                'message' => 'No tasks found for this routine.'
+            ]);
+            exit;
+        }
+
+        $metricsById = [];
+        if (is_array($metrics)) {
+            foreach ($metrics as $entry) {
+                $tid = isset($entry['id']) ? (int) $entry['id'] : 0;
+                if ($tid > 0 && !isset($metricsById[$tid])) {
+                    $metricsById[$tid] = [
+                        'actual_seconds' => max(0, (int) ($entry['actual_seconds'] ?? 0)),
+                        'scheduled_seconds' => max(0, (int) ($entry['scheduled_seconds'] ?? 0))
+                    ];
+                }
+            }
+        }
+
+        $awards = [];
+        $taskPointsAwarded = 0;
+        $allWithinLimits = true;
+
+        foreach ($taskLookup as $taskId => $taskRow) {
+            $scheduledSeconds = max(0, (int) ($taskRow['time_limit'] ?? 0) * 60);
+            $pointValue = max(0, (int) ($taskRow['point_value'] ?? 0));
+            $actualSeconds = $scheduledSeconds;
+            if (isset($metricsById[$taskId])) {
+                $actualSeconds = max(0, (int) $metricsById[$taskId]['actual_seconds']);
+            }
+            $awardedPoints = calculateRoutineTaskAwardPoints($pointValue, $scheduledSeconds, $actualSeconds);
+            if ($scheduledSeconds > 0 && $actualSeconds > $scheduledSeconds) {
+                $allWithinLimits = false;
+            }
+            $taskPointsAwarded += $awardedPoints;
+            $awards[] = [
+                'id' => $taskId,
+                'title' => $taskRow['title'],
+                'point_value' => $pointValue,
+                'scheduled_seconds' => $scheduledSeconds,
+                'actual_seconds' => $actualSeconds,
+                'awarded_points' => $awardedPoints
+            ];
+            setRoutineTaskStatus($routineId, $taskId, 'completed');
+        }
+
+        $bonusPossible = max(0, (int) ($routine['bonus_points'] ?? 0));
+
+        if ($taskPointsAwarded > 0) {
+            updateChildPoints($childId, $taskPointsAwarded);
+        }
+
+        $grantBonus = $allWithinLimits && count($awards) === count($taskLookup);
+        $bonus = completeRoutine($routineId, $childId, $grantBonus);
+        $bonusAwarded = is_numeric($bonus) ? (int) $bonus : 0;
+        $_SESSION['routine_awards'][$routineId] = true;
+        $newTotal = getChildTotalPoints($childId);
+
+        echo json_encode([
+            'status' => 'ok',
+            'task_points_awarded' => $taskPointsAwarded,
+            'bonus_points_awarded' => $bonusAwarded,
+            'bonus_possible' => $bonusPossible,
+            'bonus_eligible' => $grantBonus,
+            'new_total_points' => $newTotal,
+            'task_results' => $awards,
+            'all_within_limits' => $allWithinLimits
+        ]);
         exit;
     }
-    if (getEffectiveRole($_SESSION['user_id']) !== 'child') {
-        http_response_code(403);
-        echo json_encode(['status' => 'error', 'message' => 'Only children can log overtime.']);
-        exit;
-    }
-    $payload = json_decode($_POST['overtime_payload'] ?? '[]', true);
-    if (!is_array($payload)) {
-        http_response_code(400);
-        echo json_encode(['status' => 'error', 'message' => 'Malformed payload.']);
-        exit;
-    }
-    $logged = 0;
-    foreach ($payload as $entry) {
-        $routineId = isset($entry['routine_id']) ? (int) $entry['routine_id'] : 0;
-        $taskId = isset($entry['routine_task_id']) ? (int) $entry['routine_task_id'] : 0;
-        $scheduled = isset($entry['scheduled_seconds']) ? (int) $entry['scheduled_seconds'] : 0;
-        $actual = isset($entry['actual_seconds']) ? (int) $entry['actual_seconds'] : 0;
-        $overtime = isset($entry['overtime_seconds']) ? (int) $entry['overtime_seconds'] : 0;
-        if ($routineId <= 0 || $taskId <= 0 || $scheduled <= 0 || $actual <= 0 || $overtime <= 0) {
-            continue;
-        }
-        global $db;
-        $stmt = $db->prepare("SELECT child_user_id FROM routines WHERE id = :id LIMIT 1");
-        $stmt->execute([':id' => $routineId]);
-        $childId = $stmt->fetchColumn();
-        if ((int) $childId !== (int) $_SESSION['user_id']) {
-            continue;
-        }
-        if (logRoutineOvertime($routineId, $taskId, (int) $childId, $scheduled, $actual, $overtime)) {
-            $logged++;
-        }
-    }
-    echo json_encode(['status' => 'ok', 'logged' => $logged]);
-    exit;
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -383,19 +589,82 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             $messages[] = ['type' => 'error', 'text' => 'Failed to save routine preferences.'];
         }
-    } elseif (isset($_POST['complete_routine'])) {
+    } elseif ($isParentContext && isset($_POST['parent_complete_routine'])) {
         $routine_id = filter_input(INPUT_POST, 'routine_id', FILTER_VALIDATE_INT);
-        $bonus = completeRoutine($routine_id, $_SESSION['user_id']);
-        if ($bonus !== false) {
-            $messages[] = ['type' => 'success', 'text' => "Routine completed! Bonus points awarded: {$bonus}"];
+        $completedRaw = $_POST['parent_completed'] ?? [];
+        $selected = [];
+        if (is_array($completedRaw)) {
+            foreach ($completedRaw as $value) {
+                $selected[] = (int) $value;
+            }
+        }
+        if (!$routine_id || !routineBelongsToParent($routine_id, $family_root_id)) {
+            $messages[] = ['type' => 'error', 'text' => 'Unable to complete routine for this child.'];
         } else {
-            $messages[] = ['type' => 'error', 'text' => 'Failed to complete routine.'];
+            $routineData = getRoutineWithTasks($routine_id);
+            if (!$routineData) {
+                $messages[] = ['type' => 'error', 'text' => 'Routine could not be loaded.'];
+            } else {
+                $tasks = $routineData['tasks'] ?? [];
+                $pendingBefore = 0;
+                $taskMap = [];
+                foreach ($tasks as $task) {
+                    $taskMap[(int) $task['id']] = $task;
+                    if (($task['status'] ?? 'pending') !== 'completed') {
+                        $pendingBefore++;
+                    }
+                }
+                $selected = array_values(array_unique(array_filter($selected, function ($id) use ($taskMap) {
+                    return isset($taskMap[$id]);
+                })));
+
+                $awardedPoints = 0;
+                foreach ($tasks as $task) {
+                    $taskId = (int) $task['id'];
+                    $status = in_array($taskId, $selected, true) ? 'completed' : 'pending';
+                    setRoutineTaskStatus($routine_id, $taskId, $status);
+                    if ($status === 'completed' && (($task['status'] ?? 'pending') !== 'completed')) {
+                        $awardedPoints += max(0, (int) ($task['point_value'] ?? 0));
+                    }
+                }
+
+                $childId = (int) ($routineData['child_user_id'] ?? 0);
+                if ($awardedPoints > 0 && $childId > 0) {
+                    updateChildPoints($childId, $awardedPoints);
+                }
+                $awardCount = count($selected);
+                $grantBonus = $pendingBefore > 0 && $awardCount > 0 && $awardCount === count($tasks);
+                $bonusAwarded = 0;
+                if ($childId > 0) {
+                    $bonusAwarded = completeRoutine($routine_id, $childId, $grantBonus);
+                }
+                $summaryParts = [];
+                if ($awardedPoints > 0) {
+                    $summaryParts[] = "{$awardedPoints} routine points applied";
+                }
+                if ($grantBonus && $bonusAwarded > 0) {
+                    $summaryParts[] = "{$bonusAwarded} bonus points added";
+                } elseif ($grantBonus && $bonusAwarded === 0 && (int) ($routineData['bonus_points'] ?? 0) > 0) {
+                    $summaryParts[] = 'Bonus points not available outside the routine window';
+                } elseif (!$grantBonus && (int) ($routineData['bonus_points'] ?? 0) > 0) {
+                    $summaryParts[] = 'Bonus points withheld (not all tasks checked)';
+                }
+                if (empty($summaryParts)) {
+                    $summaryParts[] = 'No points were awarded';
+                }
+                $messages[] = ['type' => 'success', 'text' => 'Routine updated manually: ' . implode('. ', $summaryParts) . '.'];
+            }
         }
     }
 }
 
 $routine_tasks = $isParentContext ? getRoutineTasks($family_root_id) : [];
 $routines = getRoutines($_SESSION['user_id']);
+
+$childStartingPoints = 0;
+if (getEffectiveRole($_SESSION['user_id']) === 'child') {
+    $childStartingPoints = getChildTotalPoints((int) $_SESSION['user_id']);
+}
 
 $children = [];
 if ($isParentContext) {
@@ -438,8 +707,14 @@ $pageState = [
     'preferences' => $routinePreferences,
     'subTimerLabels' => $subTimerLabelOptions,
     'createFormHasErrors' => $createFormHasErrors,
-    'editFormErrors' => array_keys($editFormErrors)
+    'editFormErrors' => array_keys($editFormErrors),
+    'childPoints' => $childStartingPoints
 ];
+
+$bodyClasses = [];
+if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
+    $bodyClasses[] = 'child-theme';
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -489,9 +764,14 @@ $pageState = [
         .task-list li { background: rgba(255,255,255,0.85); border-radius: 8px; padding: 10px 12px; border-left: 4px solid #64b5f6; }
         .task-list li .dependency { font-size: 0.8rem; color: #6d4c41; }
         .card-actions { margin-top: 16px; display: flex; flex-wrap: wrap; gap: 12px; }
-        .collapse-toggle { background: #1e88e5; color: #fff; border: none; padding: 8px 14px; border-radius: 6px; cursor: pointer; font-weight: 600; }
+        .collapsible-card { border: none; margin: 12px 0 0; padding: 0; }
+        .collapsible-card summary { list-style: none; }
+        .collapsible-card summary::-webkit-details-marker,
+        .collapsible-card summary::marker { display: none; }
+        .collapse-toggle { background: #1e88e5; color: #fff; border: none; padding: 8px 14px; border-radius: 6px; cursor: pointer; font-weight: 600; display: inline-flex; align-items: center; gap: 8px; }
+        .collapsible-card[open] .collapse-toggle { background: #1565c0; }
         .collapsible-content { margin-top: 12px; display: none; }
-        .collapsible-content.active { display: block; }
+        .collapsible-card[open] .collapsible-content { display: block; }
         .timer-stack { display: grid; gap: 12px; margin-top: 12px; }
         .timer-widget { background: rgba(255,255,255,0.92); border-radius: 10px; padding: 12px 16px; border: 1px solid rgba(33,150,243,0.2); }
         .timer-title { font-weight: 700; color: #1e88e5; margin-bottom: 4px; }
@@ -513,15 +793,67 @@ $pageState = [
         .status-pill { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 0.8em; background: #eceff1; color: #37474f; margin-left: 6px; text-transform: capitalize; }
         .status-pill.completed { background: #4caf50; color: #fff; }
         .status-pill.pending { background: #ff9800; color: #fff; }
+        .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+        .task-list li { display: flex; align-items: flex-start; gap: 12px; }
+        .task-checkbox { display: inline-flex; align-items: center; margin-top: 4px; }
+        .task-checkbox input { width: 18px; height: 18px; }
+        .parent-complete-form { margin-top: 16px; display: flex; flex-direction: column; gap: 8px; }
+        .parent-complete-form .button { align-self: flex-start; }
+        .parent-complete-note { font-size: 0.85rem; color: #546e7a; margin: 0; }
+        .routine-flow-overlay { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(10, 24, 64, 0.72); z-index: 1200; opacity: 0; pointer-events: none; transition: opacity 250ms ease; }
+        .routine-flow-overlay.active { opacity: 1; pointer-events: auto; }
+        .routine-flow-container { width: min(1040px, 95vw); max-height: 90vh; background: linear-gradient(155deg, #7bc4ff, #a077ff); border-radius: 26px; padding: 32px; box-shadow: 0 18px 48px rgba(0,0,0,0.25); color: #fff; display: flex; flex-direction: column; position: relative; overflow: hidden; }
+        .routine-flow-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; margin-bottom: 24px; }
+        .routine-flow-heading { display: flex; flex-direction: column; gap: 10px; flex: 1; }
+        .routine-flow-bar { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; }
+        .routine-flow-title { font-size: 1.9rem; font-weight: 700; margin: 0; }
+        .routine-flow-next-inline { display: flex; align-items: baseline; gap: 8px; font-size: 1rem; font-weight: 600; color: rgba(255,255,255,0.85); }
+        .routine-flow-next-inline .label { text-transform: uppercase; letter-spacing: 0.08em; font-size: 0.78rem; opacity: 0.8; }
+        .routine-flow-next-inline .value { font-size: 1.05rem; font-weight: 700; }
+        .routine-flow-close { background: #d71919; border: none; color: #fff; font-weight: 600; padding: 8px 18px; border-radius: 999px; cursor: pointer; transition: background 200ms ease; }
+        .routine-flow-close:hover { background: #b71515; }
+        .routine-flow-stage { flex: 1; display: grid; }
+        .routine-scene { display: none; height: 100%; }
+        .routine-scene.active { display: grid; grid-template-rows: auto 1fr auto; gap: 24px; }
+        .routine-scene-task .task-top { display: grid; gap: 18px; }
+        .flow-progress-area { display: grid; gap: 8px; }
+        .flow-progress-track { position: relative; height: 34px; background: rgba(255,255,255,0.22); border-radius: 20px; overflow: hidden; }
+        .flow-progress-fill { position: absolute; inset: 0; background: linear-gradient(90deg, #43d67e, #8fdc5d); transform: scaleX(0); transform-origin: left center; }
+        .flow-countdown { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 1.28rem; font-weight: 700; color: #f9f9f9; text-shadow: 0 2px 6px rgba(0,0,0,0.45); letter-spacing: 0.04em; z-index: 1; pointer-events: none; transition: color 200ms ease; }
+        .flow-progress-labels { display: flex; align-items: center; justify-content: space-between; font-size: 0.95rem; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; }
+        .flow-progress-labels .start-label { opacity: 0.85; }
+        .flow-progress-labels .limit-label { opacity: 0.85; }
+        .routine-scene .illustration { min-height: 240px; border-radius: 22px; background: rgba(255,255,255,0.18); display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden; }
+        .routine-scene .illustration::after { content: ''; position: absolute; inset: 10%; border-radius: 20px; border: 2px dashed rgba(255,255,255,0.32); }
+        .routine-scene .illustration .character { width: 140px; height: 140px; border-radius: 50%; background: linear-gradient(145deg, #ffe082, #ffca28); position: relative; }
+        .routine-scene .illustration .character::after { content: ''; position: absolute; inset: 18px; border-radius: 50%; background: #fff3e0; }
+        .routine-primary-button { align-self: flex-end; background: #ffeb3b; border: none; color: #1a237e; font-weight: 800; padding: 12px 36px; border-radius: 18px; font-size: 1.1rem; cursor: pointer; transition: transform 150ms ease, box-shadow 150ms ease; }
+        .routine-primary-button:hover { transform: translateY(-2px); box-shadow: 0 10px 24px rgba(0,0,0,0.25); }
+        .status-stars { display: flex; gap: 12px; justify-content: center; }
+        .status-stars span { width: 60px; height: 60px; background: radial-gradient(circle at 30% 30%, #fff59d, #fbc02d); clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%); box-shadow: 0 6px 16px rgba(0,0,0,0.3); opacity: 0.2; transform: scale(0.8); transition: transform 200ms ease, opacity 200ms ease; }
+        .status-stars span.active { opacity: 1; transform: scale(1); }
+        .status-summary { text-align: center; font-size: 1.1rem; display: grid; gap: 8px; }
+        .status-summary strong { font-size: 1.4rem; }
+        .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
+        .summary-card { background: rgba(255,255,255,0.18); border-radius: 14px; padding: 14px 16px; display: flex; justify-content: space-between; font-weight: 600; }
+        .summary-footer { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 16px; margin-top: 16px; font-size: 1.05rem; align-items: end; }
+        .summary-footer strong { display: block; font-size: 1.6rem; }
+        .summary-bonus { text-align: center; font-size: 1rem; font-weight: 600; margin-top: 12px; }
         @media (max-width: 720px) {
             .selected-task-item { grid-template-columns: 1fr; }
             .drag-handle { display: none; }
             .card-actions { flex-direction: column; }
+            .routine-flow-container { padding: 22px; border-radius: 20px; }
+            .routine-flow-header { flex-direction: column; align-items: stretch; }
+            .routine-flow-bar { flex-direction: column; align-items: flex-start; gap: 6px; }
+            .routine-flow-title { font-size: 1.6rem; }
+            .routine-flow-next-inline { align-items: flex-start; }
+            .routine-primary-button { width: 100%; text-align: center; }
         }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
 </head>
-<body>
+<body<?php echo !empty($bodyClasses) ? ' class="' . implode(' ', $bodyClasses) . '"' : ''; ?>>
     <header>
         <h1>Routine Management</h1>
         <p>
@@ -767,8 +1099,9 @@ $pageState = [
                                 <?php endif; ?>
                             </div>
                         </header>
-                        <button type="button" class="collapse-toggle" data-role="toggle-card">Toggle Routine Details</button>
-                        <div class="collapsible-content" data-role="collapsible">
+                        <details class="collapsible-card" data-role="collapsible-wrapper">
+                            <summary class="collapse-toggle">Toggle Routine Details</summary>
+                            <div class="collapsible-content" data-role="collapsible">
                             <ul class="task-list">
                                 <?php foreach ($routine['tasks'] as $task): ?>
                                     <?php
@@ -782,7 +1115,12 @@ $pageState = [
                                     ?>
                                     <li data-routine-task-id="<?php echo (int) $task['id']; ?>"<?php echo $classAttr; ?>>
                                         <?php if ($isChildView): ?>
-                                            <input type="checkbox" <?php echo ($taskStatus === 'completed') ? 'checked' : ''; ?> disabled>
+                                            <input class="task-checkbox" type="checkbox" <?php echo ($taskStatus === 'completed') ? 'checked' : ''; ?> disabled>
+                                        <?php elseif ($isParentContext): ?>
+                                            <label class="task-checkbox">
+                                                <input type="checkbox" name="parent_completed[]" value="<?php echo (int) $task['id']; ?>" form="parent-complete-form-<?php echo (int) $routine['id']; ?>" <?php echo $isCompleted ? 'checked' : ''; ?>>
+                                                <span class="sr-only">Mark <?php echo htmlspecialchars($task['title']); ?> completed</span>
+                                            </label>
                                         <?php endif; ?>
                                         <strong><?php echo htmlspecialchars($task['title']); ?></strong>
                                         <div class="task-meta">
@@ -798,28 +1136,83 @@ $pageState = [
                                 <?php endforeach; ?>
                             </ul>
                             <?php if ($isChildView): ?>
-                                <div class="timer-stack" data-role="child-controls">
-                                    <div class="timer-widget">
-                                        <div class="timer-title">Routine Timer</div>
-                                        <div class="timer-value" data-role="routine-timer">--:--</div>
-                                        <div class="timer-warning" data-role="routine-warning"></div>
-                                    </div>
-                                    <div class="timer-widget" data-role="task-widget">
-                                        <div class="timer-title">Current Task</div>
-                                        <div class="task-meta" data-role="current-task-title">Press Start to begin.</div>
-                                        <div class="timer-value" data-role="task-timer">--:--</div>
-                                        <div class="sub-timer-label" data-role="sub-timer-label"></div>
-                                    </div>
-                                </div>
                                 <div class="card-actions">
-                                    <button type="button" class="button start-next-button" data-action="start-routine">Start Routine</button>
-                                    <button type="button" class="button secondary" data-action="finish-task" disabled>Finish Task</button>
+                                    <button type="button" class="button start-next-button" data-action="open-flow">Start Routine</button>
                                 </div>
-                                <form method="POST" action="routine.php">
-                                    <input type="hidden" name="routine_id" value="<?php echo (int) $routine['id']; ?>">
-                                    <button type="submit" name="complete_routine" class="button">Complete Routine</button>
-                                </form>
+                                <div class="routine-flow-overlay" data-role="routine-flow" aria-hidden="true">
+                                    <div class="routine-flow-container" role="dialog" aria-modal="true">
+                                        <header class="routine-flow-header">
+                                            <div class="routine-flow-heading">
+                                                <div class="routine-flow-bar">
+                                                    <h2 class="routine-flow-title" data-role="flow-title">Ready to begin</h2>
+                                                    <div class="routine-flow-next-inline">
+                                                        <span class="label">Next</span>
+                                                        <span class="value" data-role="flow-next-label">First task</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                        <button type="button" class="routine-flow-close" data-action="flow-exit">Stop</button>
+                                        </header>
+                                        <main class="routine-flow-stage">
+                                            <section class="routine-scene routine-scene-task active" data-scene="task">
+                                                <div class="task-top">
+                                                    <div class="flow-progress-area">
+                                                        <div class="flow-progress-track">
+                                                            <div class="flow-progress-fill" data-role="flow-progress"></div>
+                                                            <span class="flow-countdown" data-role="flow-countdown">--:--</span>
+                                                        </div>
+                                                        <div class="flow-progress-labels">
+                                                            <span class="start-label">Start</span>
+                                                            <span class="limit-label" data-role="flow-limit">Time Limit: --</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div class="illustration">
+                                                    <div class="character"></div>
+                                                </div>
+                                                <button type="button" class="routine-primary-button" data-action="flow-complete-task">Next</button>
+                                            </section>
+                                            <section class="routine-scene routine-scene-status" data-scene="status">
+                                                <div class="status-stars">
+                                                    <span></span>
+                                                    <span></span>
+                                                    <span></span>
+                                                </div>
+                                                <div class="status-summary">
+                                                    <strong data-role="status-points">+0 points</strong>
+                                                    <span data-role="status-time">You finished in 0:00.</span>
+                                                    <span data-role="status-feedback">Great job!</span>
+                                                </div>
+                                                <button type="button" class="routine-primary-button" data-action="flow-next-task">Next Task</button>
+                                            </section>
+                                            <section class="routine-scene routine-scene-summary" data-scene="summary">
+                                                <div class="summary-grid" data-role="summary-list"></div>
+                                                <p class="summary-bonus" data-role="summary-bonus"></p>
+                                                <div class="summary-footer">
+                                                    <div>
+                                                        <span>Routine Points</span>
+                                                        <strong data-role="summary-total">0</strong>
+                                                    </div>
+                                                    <div>
+                                                        <span>Bonus Points</span>
+                                                        <strong data-role="summary-bonus-total">0</strong>
+                                                    </div>
+                                                    <div>
+                                                        <span>Total Points Now</span>
+                                                        <strong data-role="summary-account-total">0</strong>
+                                                    </div>
+                                                </div>
+                                                <button type="button" class="routine-primary-button" data-action="flow-finish">Done</button>
+                                            </section>
+                                        </main>
+                                    </div>
+                                </div>
                             <?php elseif ($isParentContext): ?>
+                                <form method="POST" action="routine.php" class="parent-complete-form" id="parent-complete-form-<?php echo (int) $routine['id']; ?>">
+                                    <input type="hidden" name="routine_id" value="<?php echo (int) $routine['id']; ?>">
+                                    <button type="submit" name="parent_complete_routine" class="button">Complete Routine</button>
+                                    <p class="parent-complete-note">Check the tasks completed to award points. Bonus points apply only when all tasks are checked.</p>
+                                </form>
                                 <details class="routine-section" style="margin-top: 16px; background: rgba(250,250,250,0.9);">
                                     <summary><strong>Edit Routine</strong></summary>
                                     <?php
@@ -886,10 +1279,11 @@ $pageState = [
                                             <button type="submit" name="update_routine" class="button">Save Changes</button>
                                             <button type="submit" name="delete_routine" class="button danger" onclick="return confirm('Delete this routine?');">Delete Routine</button>
                                         </div>
-                                    </form>
-                                </details>
-                            <?php endif; ?>
-                        </div>
+                                        </form>
+                                    </details>
+                                <?php endif; ?>
+                            </div>
+                        </details>
                     </article>
                 <?php endforeach; ?>
             <?php endif; ?>
@@ -938,6 +1332,48 @@ $pageState = [
                 const minutes = Math.floor(safe / 60);
                 const seconds = safe % 60;
                 return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+            }
+
+            function formatCountdownDisplay(seconds) {
+                if (!Number.isFinite(seconds)) {
+                    return '--:--';
+                }
+                if (seconds >= 0) {
+                    const safe = Math.max(0, Math.ceil(seconds));
+                    const minutes = Math.floor(safe / 60);
+                    const secs = safe % 60;
+                    return `${minutes}:${secs.toString().padStart(2, '0')}`;
+                }
+                const over = Math.ceil(Math.abs(seconds));
+                const minutes = Math.floor(over / 60);
+                const secs = over % 60;
+                return `+${minutes}:${secs.toString().padStart(2, '0')}`;
+            }
+
+            function calculateRoutineTaskAwardPoints(pointValue, scheduledSeconds, actualSeconds) {
+                const points = Math.max(0, parseInt(pointValue, 10) || 0);
+                const normaliseSeconds = (value) => {
+                    if (Number.isFinite(value)) {
+                        return value;
+                    }
+                    const numeric = parseFloat(value);
+                    return Number.isFinite(numeric) ? numeric : 0;
+                };
+                const scheduled = Math.max(0, Math.floor(normaliseSeconds(scheduledSeconds)));
+                const actual = Math.max(0, Math.floor(normaliseSeconds(actualSeconds)));
+                if (points === 0) {
+                    return 0;
+                }
+                if (scheduled === 0) {
+                    return points;
+                }
+                if (actual <= scheduled) {
+                    return points;
+                }
+                if (actual <= scheduled + 60) {
+                    return Math.max(1, Math.ceil(points / 2));
+                }
+                return 0;
             }
 
             function formatSignedSeconds(seconds) {
@@ -1137,201 +1573,458 @@ $pageState = [
                 constructor(card, routine, preferences, labelMap) {
                     this.card = card;
                     this.routine = routine;
-                    this.preferences = preferences || { adaptive_warnings_enabled: 1, sub_timer_label: 'hurry_goal' };
+                    this.preferences = preferences || {};
                     this.subTimerLabelMap = labelMap || {};
                     this.tasks = Array.isArray(routine.tasks) ? [...routine.tasks] : [];
                     this.tasks.sort((a, b) => (parseInt(a.sequence_order, 10) || 0) - (parseInt(b.sequence_order, 10) || 0));
-                    this.startButton = card.querySelector('[data-action="start-routine"]');
-                    this.finishButton = card.querySelector('[data-action="finish-task"]');
-                    this.routineTimerEl = card.querySelector('[data-role="routine-timer"]');
-                    this.taskTimerEl = card.querySelector('[data-role="task-timer"]');
-                    this.currentTaskTitleEl = card.querySelector('[data-role="current-task-title"]');
-                    this.subTimerLabelEl = card.querySelector('[data-role="sub-timer-label"]');
-                    this.warningEl = card.querySelector('[data-role="routine-warning"]');
-                    this.currentIndex = -1;
+
+                    this.openButton = card.querySelector("[data-action='open-flow']");
+                    this.overlay = card.querySelector("[data-role='routine-flow']");
+                    this.flowTitleEl = this.overlay ? this.overlay.querySelector("[data-role='flow-title']") : null;
+                    this.nextLabelEl = this.overlay ? this.overlay.querySelector("[data-role='flow-next-label']") : null;
+                    this.progressFillEl = this.overlay ? this.overlay.querySelector("[data-role='flow-progress']") : null;
+                    this.countdownEl = this.overlay ? this.overlay.querySelector("[data-role='flow-countdown']") : null;
+                    this.limitLabelEl = this.overlay ? this.overlay.querySelector("[data-role='flow-limit']") : null;
+                    this.statusPointsEl = this.overlay ? this.overlay.querySelector("[data-role='status-points']") : null;
+                    this.statusTimeEl = this.overlay ? this.overlay.querySelector("[data-role='status-time']") : null;
+                    this.statusFeedbackEl = this.overlay ? this.overlay.querySelector("[data-role='status-feedback']") : null;
+                    this.statusStars = this.overlay ? Array.from(this.overlay.querySelectorAll('.status-stars span')) : [];
+                    this.summaryListEl = this.overlay ? this.overlay.querySelector("[data-role='summary-list']") : null;
+                    this.summaryTotalEl = this.overlay ? this.overlay.querySelector("[data-role='summary-total']") : null;
+                    this.summaryAccountEl = this.overlay ? this.overlay.querySelector("[data-role='summary-account-total']") : null;
+                    this.summaryBonusTotalEl = this.overlay ? this.overlay.querySelector("[data-role='summary-bonus-total']") : null;
+                    this.summaryBonusEl = this.overlay ? this.overlay.querySelector("[data-role='summary-bonus']") : null;
+                    this.bonusPossible = Math.max(0, parseInt(this.routine.bonus_points, 10) || 0);
+                    this.bonusAwarded = 0;
+
+                    this.sceneMap = new Map();
+                    if (this.overlay) {
+                        this.overlay.querySelectorAll('.routine-scene').forEach(scene => {
+                            this.sceneMap.set(scene.dataset.scene, scene);
+                        });
+                    }
+                    this.exitButton = this.overlay ? this.overlay.querySelector("[data-action='flow-exit']") : null;
+                    this.completeButton = this.overlay ? this.overlay.querySelector("[data-action='flow-complete-task']") : null;
+                    this.statusNextButton = this.overlay ? this.overlay.querySelector("[data-action='flow-next-task']") : null;
+                    this.finishButton = this.overlay ? this.overlay.querySelector("[data-action='flow-finish']") : null;
+
+                    this.currentIndex = 0;
                     this.currentTask = null;
-                    this.taskInterval = null;
-                    this.routineInterval = null;
+                    this.taskStartTime = null;
+                    this.elapsedSeconds = 0;
+                    this.scheduledSeconds = 0;
+                    this.taskAnimationFrame = null;
                     this.overtimeBuffer = [];
-                    this.lastCompletedTaskTitle = '';
-                    this.remainingRoutineSeconds = 0;
-                    this.totalRoutineSeconds = 0;
+                    this.taskResults = [];
+                    this.totalEarnedPoints = 0;
+                    this.allWithinLimit = true;
+                    this.childPoints = typeof page.childPoints === 'number' ? page.childPoints : 0;
+
                     this.init();
                 }
 
                 init() {
-                    if (this.startButton) {
-                        this.startButton.addEventListener('click', () => this.startRoutine());
+                    if (!this.openButton || !this.overlay) {
+                        return;
+                    }
+                    this.openButton.addEventListener('click', () => this.openFlow());
+                    if (this.exitButton) {
+                        this.exitButton.addEventListener('click', () => this.handleExit());
+                    }
+                    if (this.completeButton) {
+                        this.completeButton.addEventListener('click', () => this.handleTaskComplete());
+                    }
+                    if (this.statusNextButton) {
+                        this.statusNextButton.addEventListener('click', () => this.advanceFromStatus());
                     }
                     if (this.finishButton) {
-                        this.finishButton.addEventListener('click', () => this.finishTask());
+                        this.finishButton.addEventListener('click', () => this.closeOverlay(false));
+                    }
+                    this.updateNextLabel();
+                }
+
+                openFlow() {
+                    if (!this.tasks.length) {
+                        alert('No tasks are available in this routine yet.');
+                        return;
+                    }
+                    this.overlay.classList.add('active');
+                    this.overlay.setAttribute('aria-hidden', 'false');
+                    this.startRoutine();
+                }
+
+                handleExit() {
+                    this.closeOverlay();
+                    this.resetRoutineStatuses();
+                    this.tasks.forEach(task => this.markTaskPending(task.id));
+                    this.taskResults = [];
+                    this.totalEarnedPoints = 0;
+                    this.overtimeBuffer = [];
+                    if (this.openButton) {
+                        this.openButton.textContent = 'Start Routine';
+                    }
+                    if (this.completeButton) {
+                        this.completeButton.disabled = false;
+                    }
+                    if (this.countdownEl) {
+                        this.countdownEl.textContent = '--:--';
+                        this.countdownEl.style.color = '#f9f9f9';
+                        this.countdownEl.style.textShadow = '0 2px 6px rgba(0,0,0,0.45)';
+                    }
+                }
+
+                closeOverlay(resetTitle = true) {
+                    this.stopTaskAnimation();
+                    if (this.overlay) {
+                        this.overlay.classList.remove('active');
+                        this.overlay.setAttribute('aria-hidden', 'true');
+                    }
+                    if (resetTitle && this.flowTitleEl) {
+                        this.flowTitleEl.textContent = this.routine.title || 'Routine';
+                    }
+                    if (this.summaryBonusEl) {
+                        this.summaryBonusEl.textContent = '';
+                    }
+                    if (this.completeButton) {
+                        this.completeButton.disabled = false;
                     }
                 }
 
                 startRoutine() {
-                    if (!this.tasks.length) {
-                        if (this.currentTaskTitleEl) {
-                            this.currentTaskTitleEl.textContent = 'No tasks in this routine yet.';
-                        }
-                        return;
-                    }
                     this.resetRoutineStatuses();
                     this.tasks.forEach(task => {
                         task.status = 'pending';
                         this.markTaskPending(task.id);
                     });
-                    this.clearTimers();
+                    this.taskResults = [];
+                    this.totalEarnedPoints = 0;
                     this.overtimeBuffer = [];
-                    this.lastCompletedTaskTitle = '';
+                    this.allWithinLimit = true;
+                    this.bonusAwarded = 0;
                     this.currentIndex = 0;
-                    this.currentTask = null;
-                    this.remainingRoutineSeconds = calculateDurationSeconds(this.routine.start_time, this.routine.end_time);
-                    if (this.remainingRoutineSeconds === null) {
-                        this.remainingRoutineSeconds = this.tasks.reduce((sum, task) => sum + ((parseInt(task.time_limit, 10) || 0) * 60), 0);
+                    this.childPoints = typeof page.childPoints === 'number' ? page.childPoints : this.childPoints;
+                    if (this.openButton) {
+                        this.openButton.textContent = 'Restart Routine';
                     }
-                    this.totalRoutineSeconds = this.remainingRoutineSeconds;
-                    if (this.startButton) {
-                        this.startButton.textContent = 'Restart Routine';
-                    }
-                    if (this.finishButton) {
-                        this.finishButton.disabled = false;
-                    }
+                    this.showScene('task');
                     this.startTask(this.currentIndex);
-                    this.updateRoutineDisplay();
-                    this.routineInterval = setInterval(() => this.tickRoutine(), 1000);
+                    if (this.summaryBonusTotalEl) {
+                        this.summaryBonusTotalEl.textContent = '0';
+                    }
+                    if (this.summaryBonusEl) {
+                        this.summaryBonusEl.textContent = '';
+                    }
                 }
 
                 startTask(index) {
                     if (index >= this.tasks.length) {
-                        this.completeRoutine();
+                        this.displaySummary();
                         return;
                     }
-                    this.clearTaskTimer();
-                    const task = this.tasks[index];
-                    this.currentTask = task;
-                    this.currentTaskScheduledSeconds = Math.max(0, (parseInt(task.time_limit, 10) || 0) * 60);
-                    this.taskRemainingSeconds = this.currentTaskScheduledSeconds;
-                    if (this.currentTaskTitleEl) {
-                        this.currentTaskTitleEl.textContent = task.title;
+                    if (this.completeButton) {
+                        this.completeButton.disabled = false;
                     }
-                    if (this.taskTimerEl) {
-                        this.taskTimerEl.textContent = formatSeconds(this.taskRemainingSeconds);
-                        this.taskTimerEl.style.color = '';
+                    this.currentTask = this.tasks[index];
+                    this.scheduledSeconds = Math.max(0, (parseInt(this.currentTask.time_limit, 10) || 0) * 60);
+                    this.taskStartTime = null;
+                    this.elapsedSeconds = 0;
+                    this.stopTaskAnimation();
+                    this.updateTaskHeader();
+                    this.updateNextLabel();
+                    this.updateTimeLimitLabel();
+                    if (this.countdownEl) {
+                        this.countdownEl.style.color = '#f9f9f9';
+                        this.countdownEl.style.textShadow = '0 2px 6px rgba(0,0,0,0.45)';
                     }
-                    this.taskInterval = setInterval(() => this.tickTask(), 1000);
-                    this.updateWarning();
+                    this.updateProgressDisplay();
+                    this.startTaskAnimation();
                 }
 
-                finishTask() {
+                startTaskAnimation() {
+                    const step = (timestamp) => {
+                        if (this.taskStartTime === null) {
+                            this.taskStartTime = timestamp;
+                        }
+                        const elapsedMs = timestamp - this.taskStartTime;
+                        this.elapsedSeconds = elapsedMs / 1000;
+                        this.updateProgressDisplay();
+                        this.taskAnimationFrame = requestAnimationFrame(step);
+                    };
+                    this.taskAnimationFrame = requestAnimationFrame(step);
+                }
+
+                stopTaskAnimation() {
+                    if (this.taskAnimationFrame) {
+                        cancelAnimationFrame(this.taskAnimationFrame);
+                        this.taskAnimationFrame = null;
+                    }
+                }
+
+                updateProgressDisplay() {
+                    if (!this.progressFillEl) return;
+                    const scheduled = this.scheduledSeconds;
+                    let progress = 1;
+                    let displayValue = '--:--';
+                    let isOvertime = false;
+
+                    if (scheduled > 0) {
+                        progress = Math.min(1, this.elapsedSeconds / Math.max(1, scheduled));
+                        const remaining = scheduled - this.elapsedSeconds;
+                        displayValue = formatCountdownDisplay(remaining);
+                        isOvertime = remaining < 0;
+                    } else {
+                        displayValue = formatSeconds(Math.ceil(this.elapsedSeconds));
+                    }
+
+                    this.progressFillEl.style.transform = `scaleX(${Math.max(0, Math.min(1, progress))})`;
+                    if (this.countdownEl) {
+                        this.countdownEl.textContent = displayValue;
+                        if (isOvertime) {
+                            this.countdownEl.style.color = '#d71919';
+                            this.countdownEl.style.textShadow = '0 2px 6px rgba(0,0,0,0.6)';
+                        } else {
+                            this.countdownEl.style.color = '#f9f9f9';
+                            this.countdownEl.style.textShadow = '0 2px 6px rgba(0,0,0,0.45)';
+                        }
+                    }
+                }
+
+                updateTimeLimitLabel() {
+                    if (!this.limitLabelEl) return;
+                    if (this.scheduledSeconds > 0) {
+                        this.limitLabelEl.textContent = `Time Limit: ${formatSeconds(this.scheduledSeconds)}`;
+                    } else {
+                        this.limitLabelEl.textContent = 'Time Limit: --';
+                    }
+                }
+
+                handleTaskComplete() {
                     if (!this.currentTask) return;
-                    const scheduled = this.currentTaskScheduledSeconds || 0;
-                    const overtime = Math.max(0, -this.taskRemainingSeconds);
-                    const actual = scheduled + overtime;
-                    if (overtime > 0) {
+                    this.stopTaskAnimation();
+                    if (this.completeButton) {
+                        this.completeButton.disabled = true;
+                    }
+                    const actualSeconds = Math.ceil(Math.max(0, this.elapsedSeconds));
+                    const scheduled = this.scheduledSeconds;
+                    const pointValue = parseInt(this.currentTask.point_value, 10) || 0;
+                    if (scheduled > 0 && actualSeconds > scheduled) {
                         this.overtimeBuffer.push({
                             routine_id: parseInt(this.routine.id, 10) || 0,
                             routine_task_id: parseInt(this.currentTask.id, 10) || 0,
                             child_user_id: parseInt(this.routine.child_user_id, 10) || 0,
                             scheduled_seconds: scheduled,
-                            actual_seconds: actual,
-                            overtime_seconds: overtime
+                            actual_seconds: actualSeconds,
+                            overtime_seconds: actualSeconds - scheduled
                         });
+                        this.allWithinLimit = false;
                     }
+                    const awardedPoints = calculateRoutineTaskAwardPoints(pointValue, scheduled, actualSeconds);
+                    if (scheduled > 0 && actualSeconds > scheduled) {
+                        this.allWithinLimit = false;
+                    }
+                    this.totalEarnedPoints += awardedPoints;
+                    this.taskResults.push({
+                        id: parseInt(this.currentTask.id, 10) || 0,
+                        title: this.currentTask.title,
+                        point_value: pointValue,
+                        actual_seconds: actualSeconds,
+                        scheduled_seconds: scheduled,
+                        awarded_points: awardedPoints
+                    });
+
                     this.updateTaskStatus(this.currentTask.id, 'completed');
                     this.currentTask.status = 'completed';
                     this.markTaskCompleted(this.currentTask.id);
-                    this.lastCompletedTaskTitle = this.currentTask.title;
+                    this.presentStatus(awardedPoints, actualSeconds, scheduled);
                     this.currentIndex += 1;
-                    this.clearTaskTimer();
+                }
+
+                presentStatus(points, actualSeconds, scheduledSeconds) {
+                    if (this.statusPointsEl) {
+                        this.statusPointsEl.textContent = `+${points} points`;
+                    }
+                    if (this.statusTimeEl) {
+                        this.statusTimeEl.textContent = `You finished in ${formatSeconds(actualSeconds)}.`;
+                    }
+                    if (this.statusFeedbackEl) {
+                        let feedback = 'Nice work!';
+                        let stars = 1;
+                        if (scheduledSeconds <= 0) {
+                            feedback = 'No timer on this task—keep up the pace!';
+                            stars = 3;
+                        } else {
+                            const ratio = actualSeconds / Math.max(1, scheduledSeconds);
+                            if (ratio <= 1) {
+                                feedback = 'Right on time!';
+                                stars = 3;
+                            } else if (ratio <= 1.4) {
+                                feedback = 'A little late—half points earned.';
+                                stars = 2;
+                            } else {
+                                feedback = 'Over the limit—no points this time.';
+                                stars = 1;
+                            }
+                        }
+                        this.statusFeedbackEl.textContent = feedback;
+                        this.statusStars.forEach((star, idx) => {
+                            if (idx < stars) {
+                                star.classList.add('active');
+                            } else {
+                                star.classList.remove('active');
+                            }
+                        });
+                    }
+                    this.showScene('status');
+                    if (this.statusNextButton) {
+                        const label = this.currentIndex + 1 < this.tasks.length ? 'Next Task' : 'Summary';
+                        this.statusNextButton.textContent = label;
+                    }
+                }
+
+                advanceFromStatus() {
+                    if (this.completeButton) {
+                        this.completeButton.disabled = false;
+                    }
                     if (this.currentIndex < this.tasks.length) {
+                        this.showScene('task');
                         this.startTask(this.currentIndex);
                     } else {
-                        this.completeRoutine();
+                        this.displaySummary();
                     }
                 }
 
-                tickRoutine() {
-                    if (this.remainingRoutineSeconds > 0) {
-                        this.remainingRoutineSeconds -= 1;
+                displaySummary() {
+                    if (this.completeButton) {
+                        this.completeButton.disabled = true;
                     }
-                    this.updateRoutineDisplay();
-                    this.updateWarning();
-                    if (this.remainingRoutineSeconds <= 0) {
-                        this.clearRoutineTimer();
+                    this.showScene('summary');
+                    this.renderSummary(this.taskResults);
+                    this.finalizeRoutine();
+                }
+
+                renderSummary(results) {
+                    if (this.summaryListEl) {
+                        this.summaryListEl.innerHTML = '';
+                        results.forEach(result => {
+                            const card = document.createElement('div');
+                            card.className = 'summary-card';
+                            const title = document.createElement('span');
+                            title.textContent = result.title;
+                            const points = document.createElement('span');
+                            points.textContent = `+${result.awarded_points}`;
+                            card.append(title, points);
+                            this.summaryListEl.appendChild(card);
+                        });
+                    }
+                    if (this.summaryTotalEl) {
+                        this.summaryTotalEl.textContent = this.totalEarnedPoints;
+                    }
+                    if (this.summaryBonusTotalEl) {
+                        this.summaryBonusTotalEl.textContent = String(this.bonusAwarded);
+                    }
+                    if (this.summaryAccountEl) {
+                        this.summaryAccountEl.textContent = this.childPoints;
                     }
                 }
 
-                tickTask() {
-                    this.taskRemainingSeconds -= 1;
-                    if (this.taskTimerEl) {
-                        this.taskTimerEl.textContent = formatSignedSeconds(this.taskRemainingSeconds);
-                        this.taskTimerEl.style.color = this.taskRemainingSeconds < 0 ? '#e53935' : '';
-                    }
-                    this.updateWarning();
+                finalizeRoutine() {
+                    const payload = new FormData();
+                    payload.append('action', 'complete_routine_flow');
+                    payload.append('routine_id', this.routine.id);
+                    const metrics = this.taskResults.map(result => ({
+                        id: result.id,
+                        actual_seconds: result.actual_seconds,
+                        scheduled_seconds: result.scheduled_seconds
+                    }));
+                    payload.append('task_metrics', JSON.stringify(metrics));
+                    fetch('routine.php', { method: 'POST', body: payload })
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data && data.status === 'duplicate') {
+                                if (this.summaryBonusEl) {
+                                    this.summaryBonusEl.textContent = data.message || '';
+                                }
+                                return;
+                            }
+                            if (Array.isArray(data.task_results)) {
+                                this.taskResults = data.task_results;
+                                this.renderSummary(this.taskResults);
+                            }
+                            if (typeof data.new_total_points === 'number') {
+                                this.childPoints = data.new_total_points;
+                                page.childPoints = this.childPoints;
+                                if (this.summaryAccountEl) {
+                                    this.summaryAccountEl.textContent = this.childPoints;
+                                }
+                            }
+                            if (typeof data.task_points_awarded === 'number') {
+                                this.totalEarnedPoints = data.task_points_awarded;
+                                if (this.summaryTotalEl) {
+                                    this.summaryTotalEl.textContent = data.task_points_awarded;
+                                }
+                            }
+                            const bonusPossible = typeof data.bonus_possible === 'number' ? data.bonus_possible : this.bonusPossible;
+                            if (typeof data.bonus_possible === 'number') {
+                                this.bonusPossible = data.bonus_possible;
+                            }
+                            const bonusAwarded = typeof data.bonus_points_awarded === 'number' ? data.bonus_points_awarded : 0;
+                            this.bonusAwarded = bonusAwarded;
+                            if (this.summaryBonusTotalEl) {
+                                this.summaryBonusTotalEl.textContent = String(bonusAwarded);
+                            }
+                            const bonusEligible = typeof data.bonus_eligible === 'boolean' ? data.bonus_eligible : !!data.bonus_eligible;
+                            if (this.summaryBonusEl) {
+                                let message = '';
+                                if (bonusPossible > 0) {
+                                    if (bonusAwarded > 0) {
+                                        message = `Bonus earned: +${bonusAwarded}`;
+                                    } else if (!bonusEligible) {
+                                        message = 'Bonus locked: finish every task on time.';
+                                    }
+                                }
+                                this.summaryBonusEl.textContent = message;
+                            }
+                        })
+                        .catch(() => {
+                            if (this.summaryBonusEl) {
+                                this.summaryBonusEl.textContent = 'Could not update totals—check your connection.';
+                            }
+                        })
+                        .finally(() => {
+                            this.sendOvertimeLogs();
+                        });
                 }
 
-                updateRoutineDisplay() {
-                    if (this.routineTimerEl) {
-                        this.routineTimerEl.textContent = formatSeconds(this.remainingRoutineSeconds);
-                    }
-                }
-
-                updateWarning() {
-                    if (!this.preferences || !this.preferences.adaptive_warnings_enabled) {
-                        if (this.warningEl) this.warningEl.textContent = '';
-                        if (this.subTimerLabelEl) this.subTimerLabelEl.textContent = '';
-                        this.card.classList.remove('warning-active');
-                        return;
-                    }
-                    const futureSeconds = this.tasks.slice(this.currentIndex + 1).reduce((sum, task) => sum + ((parseInt(task.time_limit, 10) || 0) * 60), 0);
-                    const currentRemaining = Math.max(0, this.taskRemainingSeconds || 0);
-                    const scheduledRemaining = currentRemaining + futureSeconds;
-                    const overtimeCurrent = (this.taskRemainingSeconds ?? 0) < 0;
-                    const routineExpired = this.remainingRoutineSeconds <= 0;
-                    if (this.remainingRoutineSeconds < scheduledRemaining || overtimeCurrent || routineExpired) {
-                        const adjusted = Math.max(0, this.remainingRoutineSeconds - futureSeconds);
-                        const template = this.subTimerLabelMap[this.preferences.sub_timer_label] || '';
-                        const previousName = this.lastCompletedTaskTitle || (this.currentTask ? this.currentTask.title : 'this task');
-                        const formattedTime = formatSeconds(adjusted);
-                        const labelText = template
-                            .replace(/\[time\]/g, formattedTime)
-                            .replace(/\[previous task\]/g, previousName)
-                            .replace(/\[task name\]/g, previousName)
-                            .replace(/\[task\]/g, previousName);
-                        if (this.warningEl) {
-                            this.warningEl.textContent = this.remainingRoutineSeconds <= 0 ? 'Routine timer finished!' : 'Buffer low: keep moving!';
+                showScene(name) {
+                    this.sceneMap.forEach((scene, key) => {
+                        if (key === name) {
+                            scene.classList.add('active');
+                        } else {
+                            scene.classList.remove('active');
                         }
-                        if (this.subTimerLabelEl) {
-                            this.subTimerLabelEl.textContent = labelText;
-                        }
-                        this.card.classList.add('warning-active');
-                    } else {
-                        if (this.warningEl) this.warningEl.textContent = '';
-                        if (this.subTimerLabelEl) this.subTimerLabelEl.textContent = '';
-                        this.card.classList.remove('warning-active');
+                    });
+                    if (name === 'summary' && this.summaryAccountEl) {
+                        this.summaryAccountEl.textContent = this.childPoints;
                     }
                 }
 
-                completeRoutine() {
-                    this.clearTimers();
-                    if (this.finishButton) {
-                        this.finishButton.disabled = true;
+                updateTaskHeader() {
+                    if (this.flowTitleEl) {
+                        this.flowTitleEl.textContent = this.currentTask ? this.currentTask.title : 'Routine Task';
                     }
-                    if (this.currentTaskTitleEl) {
-                        this.currentTaskTitleEl.textContent = 'Routine finished!';
-                    }
-                    if (this.taskTimerEl) {
-                        this.taskTimerEl.textContent = '--:--';
-                        this.taskTimerEl.style.color = '';
-                    }
-                    this.updateWarning();
-                    this.sendOvertimeLogs();
                 }
+
+                updateNextLabel() {
+                    if (!this.nextLabelEl) return;
+                    const nextTask = this.tasks[this.currentIndex + 1];
+                    this.nextLabelEl.textContent = nextTask ? nextTask.title : 'All done!';
+                }
+
                 resetRoutineStatuses() {
                     const payload = new FormData();
                     payload.append('action', 'reset_routine_tasks');
                     payload.append('routine_id', this.routine.id);
-                    fetch('routine.php', { method: 'POST', body: payload }).catch(() => { /* silent */ });
+                    fetch('routine.php', { method: 'POST', body: payload }).catch(() => {});
                 }
 
                 updateTaskStatus(taskId, status) {
@@ -1340,7 +2033,7 @@ $pageState = [
                     payload.append('routine_id', this.routine.id);
                     payload.append('routine_task_id', taskId);
                     payload.append('status', status);
-                    fetch('routine.php', { method: 'POST', body: payload }).catch(() => { /* silent */ });
+                    fetch('routine.php', { method: 'POST', body: payload }).catch(() => {});
                 }
 
                 markTaskCompleted(taskId) {
@@ -1373,33 +2066,17 @@ $pageState = [
                     }
                 }
 
-                clearTaskTimer() {
-                    if (this.taskInterval) {
-                        clearInterval(this.taskInterval);
-                        this.taskInterval = null;
+                sendOvertimeLogs() {
+                    if (!this.overtimeBuffer.length) {
+                        return;
                     }
-                }
-
-                clearRoutineTimer() {
-                    if (this.routineInterval) {
-                        clearInterval(this.routineInterval);
-                        this.routineInterval = null;
-                    }
-                }
-
-                clearTimers() {
-                    this.clearTaskTimer();
-                    this.clearRoutineTimer();
+                    const payload = new FormData();
+                    payload.append('action', 'log_overtime');
+                    payload.append('overtime_payload', JSON.stringify(this.overtimeBuffer));
+                    fetch('routine.php', { method: 'POST', body: payload }).catch(() => {});
+                    this.overtimeBuffer = [];
                 }
             }
-
-            document.querySelectorAll('[data-role="toggle-card"]').forEach(button => {
-                const content = button.parentElement.querySelector('[data-role="collapsible"]');
-                if (!content) return;
-                button.addEventListener('click', () => {
-                    content.classList.toggle('active');
-                });
-            });
 
             document.querySelectorAll('.routine-builder').forEach(container => {
                 const id = container.dataset.builderId || '';
@@ -1424,6 +2101,17 @@ $pageState = [
     </script>
 </body>
 </html>
+
+
+
+
+
+
+
+
+
+
+
 
 
 
