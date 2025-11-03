@@ -18,14 +18,6 @@ if (!isset($_SESSION['name'])) {
 $family_root_id = getFamilyRootId($_SESSION['user_id']);
 $isParentContext = canCreateContent($_SESSION['user_id']);
 
-$subTimerLabelOptions = [
-    'hurry_goal' => 'Hurry Goal: Finish in [time] to end routine on time!',
-    'adjusted_time' => 'Adjusted Time: [time] left due to extra on [previous task].',
-    'routine_target' => 'Routine Target: Complete by [time] (buffer low).',
-    'quick_finish' => 'Quick Finish: [time] to stay on schedule after [task].',
-    'new_limit' => 'New Limit: [time] because of overrun on [task name].'
-];
-
 $routinePreferences = getRoutinePreferences($family_root_id);
 
 $messages = [];
@@ -519,15 +511,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $time_limit = filter_input(INPUT_POST, 'rt_time_limit', FILTER_VALIDATE_INT);
         $point_value = filter_input(INPUT_POST, 'rt_point_value', FILTER_VALIDATE_INT);
         $category = filter_input(INPUT_POST, 'rt_category', FILTER_SANITIZE_STRING);
+        $min_minutes_input = filter_input(INPUT_POST, 'rt_min_time', FILTER_SANITIZE_NUMBER_FLOAT, FILTER_FLAG_ALLOW_FRACTION);
 
         $time_limit = ($time_limit !== false && $time_limit > 0) ? $time_limit : null;
         $point_value = ($point_value !== false && $point_value >= 0) ? $point_value : 0;
         $category = in_array($category, ['hygiene', 'homework', 'household'], true) ? $category : 'household';
+        $minimum_seconds = null;
+        if ($min_minutes_input !== null && $min_minutes_input !== false && $min_minutes_input !== '') {
+            $min_minutes = (float) $min_minutes_input;
+            if ($min_minutes >= 0) {
+                $minimum_seconds = (int) round($min_minutes * 60);
+            }
+        }
+        $min_toggle = ($minimum_seconds !== null && $minimum_seconds > 0) ? 1 : 0;
 
         if ($title === '' || $time_limit === null) {
             $messages[] = ['type' => 'error', 'text' => 'Routine task needs a title and a positive time limit.'];
         } else {
-            if (createRoutineTask($family_root_id, $title, $description, $time_limit, $point_value, $category, null, null, $_SESSION['user_id'])) {
+            if (createRoutineTask($family_root_id, $title, $description, $time_limit, $point_value, $category, $minimum_seconds, $min_toggle, null, null, $_SESSION['user_id'])) {
                 $messages[] = ['type' => 'success', 'text' => 'Routine task added to the library.'];
                 $routine_tasks = getRoutineTasks($family_root_id);
             } else {
@@ -542,6 +543,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $point_value = filter_input(INPUT_POST, 'edit_rt_point_value', FILTER_VALIDATE_INT);
         $category = filter_input(INPUT_POST, 'edit_rt_category', FILTER_SANITIZE_STRING);
 
+        if (!isset($routine_tasks) || !is_array($routine_tasks)) {
+            $routine_tasks = getRoutineTasks($family_root_id);
+        }
+        $existingTask = null;
+        foreach ($routine_tasks as $candidateTask) {
+            if ((int) ($candidateTask['id'] ?? 0) === (int) $routine_task_id) {
+                $existingTask = $candidateTask;
+                break;
+            }
+        }
+        $minToggle = isset($_POST['edit_rt_min_enabled']) ? 1 : 0;
+        $min_minutes_input = filter_input(INPUT_POST, 'edit_rt_min_minutes', FILTER_SANITIZE_NUMBER_FLOAT, FILTER_FLAG_ALLOW_FRACTION);
+        $minSecondsFromInput = null;
+        if ($min_minutes_input !== null && $min_minutes_input !== false && $min_minutes_input !== '') {
+            $minMinutesCast = (float) $min_minutes_input;
+            if ($minMinutesCast >= 0) {
+                $minSecondsFromInput = (int) round($minMinutesCast * 60);
+            }
+        }
+        $existingMinSeconds = $existingTask ? (int) ($existingTask['minimum_seconds'] ?? 0) : 0;
         $updates = [];
         if ($title !== '') {
             $updates['title'] = $title;
@@ -558,6 +579,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $updates['point_value'] = $point_value;
         }
         $updates['category'] = in_array($category, ['hygiene', 'homework', 'household'], true) ? $category : 'household';
+        if ($minSecondsFromInput !== null) {
+            if ($minSecondsFromInput > 0) {
+                $updates['minimum_seconds'] = $minSecondsFromInput;
+            } else {
+                $updates['minimum_seconds'] = null;
+            }
+        }
+        $minimumToggleError = false;
+        if ($minToggle) {
+            $effectiveMin = null;
+            if (array_key_exists('minimum_seconds', $updates)) {
+                $effectiveMin = $updates['minimum_seconds'];
+            } else {
+                $effectiveMin = $existingMinSeconds;
+            }
+            if ($effectiveMin !== null && $effectiveMin > 0) {
+                $updates['minimum_enabled'] = 1;
+            } else {
+                $updates['minimum_enabled'] = 0;
+                $minimumToggleError = true;
+            }
+        } else {
+            $updates['minimum_enabled'] = 0;
+        }
 
         if (!$routine_task_id || empty($updates)) {
             $messages[] = ['type' => 'error', 'text' => 'Unable to update routine task.'];
@@ -565,6 +610,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (updateRoutineTask($routine_task_id, $updates)) {
                 $messages[] = ['type' => 'success', 'text' => 'Routine task updated.'];
                 $routine_tasks = getRoutineTasks($family_root_id);
+                if ($minimumToggleError) {
+                    $messages[] = ['type' => 'info', 'text' => 'Minimum time remained disabled because no positive duration was provided.'];
+                }
             } else {
                 $messages[] = ['type' => 'error', 'text' => 'Failed to update routine task.'];
             }
@@ -579,8 +627,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     } elseif ($isParentContext && isset($_POST['save_routine_preferences'])) {
         $adaptive = isset($_POST['adaptive_warnings_enabled']) ? 1 : 0;
-        $label = filter_input(INPUT_POST, 'sub_timer_label', FILTER_SANITIZE_STRING);
-        if (!array_key_exists($label, $subTimerLabelOptions)) {
+        $label = $routinePreferences['sub_timer_label'] ?? 'hurry_goal';
+        if (!is_string($label) || $label === '') {
             $label = 'hurry_goal';
         }
         if (saveRoutinePreferences($family_root_id, $adaptive, $label)) {
@@ -661,6 +709,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $routine_tasks = $isParentContext ? getRoutineTasks($family_root_id) : [];
 $routines = getRoutines($_SESSION['user_id']);
 
+foreach ($routines as &$routineEntry) {
+    $adaptiveEnabled = !empty($routinePreferences['adaptive_warnings_enabled']) ? 1 : 0;
+    $routineEntry['adaptive_warnings_enabled'] = $adaptiveEnabled;
+}
+unset($routineEntry);
+
 $childStartingPoints = 0;
 if (getEffectiveRole($_SESSION['user_id']) === 'child') {
     $childStartingPoints = getChildTotalPoints((int) $_SESSION['user_id']);
@@ -698,14 +752,19 @@ foreach ($routines as $routine) {
     }, $routine['tasks']);
 }
 
+$pagePreferences = [
+    'adaptive_warnings_enabled' => isset($routinePreferences['adaptive_warnings_enabled'])
+        ? (int) $routinePreferences['adaptive_warnings_enabled']
+        : 1
+];
+
 $jsonOptions = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP;
 $pageState = [
     'tasks' => $routine_tasks,
     'createInitial' => $createBuilderInitial,
     'editInitial' => $editBuilderInitial,
     'routines' => $routines,
-    'preferences' => $routinePreferences,
-    'subTimerLabels' => $subTimerLabelOptions,
+    'preferences' => $pagePreferences,
     'createFormHasErrors' => $createFormHasErrors,
     'editFormErrors' => array_keys($editFormErrors),
     'childPoints' => $childStartingPoints
@@ -817,17 +876,23 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
         .routine-scene.active { display: grid; grid-template-rows: auto 1fr auto; gap: 24px; }
         .routine-scene-task .task-top { display: grid; gap: 18px; }
         .flow-progress-area { display: grid; gap: 8px; }
-        .flow-progress-track { position: relative; height: 34px; background: rgba(255,255,255,0.22); border-radius: 20px; overflow: hidden; }
-        .flow-progress-fill { position: absolute; inset: 0; background: linear-gradient(90deg, #43d67e, #8fdc5d); transform: scaleX(0); transform-origin: left center; }
+        .flow-progress-track { position: relative; height: 44px; background: rgba(255,255,255,0.22); border-radius: 20px; overflow: hidden; }
+        .flow-progress-fill { position: absolute; inset: 0; background: linear-gradient(90deg, #43d67e, #8fdc5d); transform: scaleX(0); transform-origin: left center; transition: background 240ms ease, box-shadow 240ms ease; z-index: 0; }
+        .flow-progress-fill.warning { background: linear-gradient(90deg, #ffcc00, #ffb300); box-shadow: 0 0 12px rgba(255,204,0,0.45); }
+        .flow-progress-fill.critical { background: linear-gradient(90deg, #ff7043, #ef5350); box-shadow: 0 0 14px rgba(255,120,80,0.55); }
+        .flow-progress-min { position: absolute; inset: 0; background: rgba(252,185,50,0.4); transform: scaleX(0); transform-origin: left center; pointer-events: none; z-index: 1; transition: transform 200ms ease, opacity 200ms ease; opacity: 0; }
+        .flow-progress-min.active { opacity: 1; }
         .flow-countdown { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 1.28rem; font-weight: 700; color: #f9f9f9; text-shadow: 0 2px 6px rgba(0,0,0,0.45); letter-spacing: 0.04em; z-index: 1; pointer-events: none; transition: color 200ms ease; }
-        .flow-progress-labels { display: flex; align-items: center; justify-content: space-between; font-size: 0.95rem; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; }
-        .flow-warning { min-height: 1.2em; font-size: 0.96rem; font-weight: 700; color: #ffe082; text-shadow: 0 2px 4px rgba(0,0,0,0.3); opacity: 0; transform: translateY(-4px); transition: opacity 200ms ease, transform 200ms ease; pointer-events: none; }
+        .flow-min-label { position: absolute; left: 50%; bottom: 4px; transform: translateX(-50%); font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: rgba(255,255,255,0.85); text-shadow: 0 2px 4px rgba(0,0,0,0.45); pointer-events: none; opacity: 0; transition: opacity 180ms ease, color 180ms ease; z-index: 2; }
+        .flow-min-label.active { opacity: 1; }
+        .flow-min-label.met { color: #c8e6c9; }
+        .flow-progress-labels { display: flex; align-items: center; gap: 16px; font-size: 0.95rem; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; }
+        .flow-progress-labels .start-label,
+        .flow-progress-labels .limit-label { flex: 0 0 auto; opacity: 0.85; }
+        .flow-warning { flex: 1; display: inline-flex; justify-content: center; align-items: center; min-height: 1.4em; font-size: 0.96rem; font-weight: 700; color: #ffe082; text-shadow: 0 2px 6px rgba(0,0,0,0.35); opacity: 0; transform: translateY(-4px); transition: opacity 200ms ease, transform 200ms ease, color 200ms ease; pointer-events: none; }
         .flow-warning.visible { opacity: 1; transform: translateY(0); }
-        .flow-warning.warning { color: #ffecb3; }
-        .flow-warning.critical { color: #ffd54f; }
-        .flow-warning.late { color: #ff9e80; }
-        .flow-progress-labels .start-label { opacity: 0.85; }
-        .flow-progress-labels .limit-label { opacity: 0.85; }
+        .flow-warning.warning { color: #ffcc00; }
+        .flow-warning.critical { color: #ffae42; }
         .routine-scene .illustration { min-height: 240px; border-radius: 22px; background: rgba(255,255,255,0.18); display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden; }
         .routine-scene .illustration::after { content: ''; position: absolute; inset: 10%; border-radius: 20px; border: 2px dashed rgba(255,255,255,0.32); }
         .routine-scene .illustration .character { width: 140px; height: 140px; border-radius: 50%; background: linear-gradient(145deg, #ffe082, #ffca28); position: relative; }
@@ -844,6 +909,13 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
         .summary-footer { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 16px; margin-top: 16px; font-size: 1.05rem; align-items: end; }
         .summary-footer strong { display: block; font-size: 1.6rem; }
         .summary-bonus { text-align: center; font-size: 1rem; font-weight: 600; margin-top: 12px; }
+        .hold-overlay { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; pointer-events: none; z-index: 1400; }
+        .hold-overlay.active { display: flex; }
+        .hold-overlay .hold-overlay-box { background: rgba(0,0,0,0.65); color: #ffffff; padding: 18px 32px; border-radius: 10px; font-size: 2.4rem; font-weight: 700; letter-spacing: 0.05em; box-shadow: 0 8px 24px rgba(0,0,0,0.35); transition: font-size 160ms ease; }
+        .hold-overlay .hold-overlay-box.is-message { font-size: 1.8rem; }
+        .toggle-inline { display: inline-flex; align-items: center; gap: 8px; margin-top: 6px; font-weight: 600; }
+        .toggle-inline input[type="checkbox"] { margin: 0; }
+        .routine-flow-container audio[data-role="flow-music"] { display: none; }
         @media (max-width: 720px) {
             .selected-task-item { grid-template-columns: 1fr; }
             .drag-handle { display: none; }
@@ -893,19 +965,9 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                     <div class="form-group">
                         <label>
                             <input type="checkbox" name="adaptive_warnings_enabled" value="1" <?php echo $routinePreferences['adaptive_warnings_enabled'] ? 'checked' : ''; ?>>
-                            Enable Adaptive Time Warnings
+                            Enable Task Time Warnings
                         </label>
-                        <small>Warns children when routine buffer is low.</small>
-                    </div>
-                    <div class="form-group">
-                        <label for="sub_timer_label">Sub-Timer Label</label>
-                        <select id="sub_timer_label" name="sub_timer_label">
-                            <?php foreach ($subTimerLabelOptions as $key => $label): ?>
-                                <option value="<?php echo htmlspecialchars($key); ?>" <?php echo ($routinePreferences['sub_timer_label'] === $key) ? 'selected' : ''; ?>>
-                                    <?php echo htmlspecialchars($label); ?>
-                                </option>
-                            <?php endforeach; ?>
-                        </select>
+                        <small>Shows task alerts at 80% and 95% of the timer so children know when to hurry.</small>
                     </div>
                     <div class="form-actions">
                         <button type="submit" name="save_routine_preferences" class="button">Save Preferences</button>
@@ -998,6 +1060,11 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                         <input type="number" id="rt_time_limit" name="rt_time_limit" min="1" required>
                     </div>
                     <div class="form-group">
+                        <label for="rt_min_time">Minimum Time Before Completion (minutes)</label>
+                        <input type="number" id="rt_min_time" name="rt_min_time" min="0" step="0.1" placeholder="Optional">
+                        <small>Leave blank to allow the child to finish whenever they are ready.</small>
+                    </div>
+                    <div class="form-group">
                         <label for="rt_point_value">Point Value</label>
                         <input type="number" id="rt_point_value" name="rt_point_value" min="0" value="0">
                     </div>
@@ -1021,6 +1088,7 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                             <tr>
                                 <th>Title</th>
                                 <th>Time Limit (min)</th>
+                                <th>Minimum Time</th>
                                 <th>Points</th>
                                 <th>Category</th>
                                 <th>Actions</th>
@@ -1028,9 +1096,25 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                         </thead>
                         <tbody>
                             <?php foreach ($routine_tasks as $task): ?>
+                                <?php
+                                    $taskMinSeconds = isset($task['minimum_seconds']) ? (int) $task['minimum_seconds'] : 0;
+                                    $taskMinEnabled = !empty($task['minimum_enabled']);
+                                    if ($taskMinSeconds > 0) {
+                                        $taskMinMinutesPart = floor($taskMinSeconds / 60);
+                                        $taskMinSecondsPart = $taskMinSeconds % 60;
+                                        $taskMinDisplayBase = sprintf('%02d:%02d', $taskMinMinutesPart, $taskMinSecondsPart);
+                                        $taskMinDisplay = $taskMinEnabled ? $taskMinDisplayBase : $taskMinDisplayBase . ' (off)';
+                                    } else {
+                                        $taskMinDisplay = '--';
+                                    }
+                                    $taskMinMinutesValue = $taskMinSeconds > 0
+                                        ? rtrim(rtrim(number_format($taskMinSeconds / 60, 2, '.', ''), '0'), '.')
+                                        : '';
+                                ?>
                                 <tr>
                                     <td><?php echo htmlspecialchars($task['title']); ?></td>
                                     <td><?php echo (int) $task['time_limit']; ?></td>
+                                    <td><?php echo htmlspecialchars($taskMinDisplay); ?></td>
                                     <td><?php echo (int) $task['point_value']; ?></td>
                                     <td><?php echo htmlspecialchars($task['category']); ?></td>
                                     <td>
@@ -1051,6 +1135,15 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                                                         Time Limit (min)
                                                         <input type="number" name="edit_rt_time_limit" min="1" value="<?php echo (int) $task['time_limit']; ?>" required>
                                                     </label>
+                                                    <label>
+                                                        Minimum Time (min)
+                                                        <input type="number" name="edit_rt_min_minutes" min="0" step="0.1" value="<?php echo htmlspecialchars($taskMinMinutesValue); ?>">
+                                                    </label>
+                                                    <label class="toggle-inline">
+                                                        <input type="checkbox" name="edit_rt_min_enabled" value="1" <?php echo $taskMinEnabled ? 'checked' : ''; ?>>
+                                                        Require minimum time before completion
+                                                    </label>
+                                                    <small>Children must stay on this task at least this long before moving on.</small>
                                                     <label>
                                                         Point Value
                                                         <input type="number" name="edit_rt_point_value" min="0" value="<?php echo (int) $task['point_value']; ?>">
@@ -1091,16 +1184,8 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                     <?php
                         $isChildView = (getEffectiveRole($_SESSION['user_id']) === 'child');
                         $cardClasses = 'routine-card' . ($isChildView ? ' child-view' : '');
-                        $selectedLabelKey = $routinePreferences['sub_timer_label'] ?? 'hurry_goal';
-                        if (!isset($subTimerLabelOptions[$selectedLabelKey])) {
-                            $selectedLabelKey = 'hurry_goal';
-                        }
-                        $selectedTemplate = $subTimerLabelOptions[$selectedLabelKey] ?? reset($subTimerLabelOptions);
-                        $adaptiveEnabledAttr = !empty($routinePreferences['adaptive_warnings_enabled']) ? '1' : '0';
-                        $warningLabelAttr = htmlspecialchars($selectedLabelKey, ENT_QUOTES);
-                        $warningTemplateAttr = htmlspecialchars($selectedTemplate, ENT_QUOTES);
                     ?>
-                    <article class="<?php echo $cardClasses; ?>" data-routine-id="<?php echo (int) $routine['id']; ?>" data-adaptive-enabled="<?php echo $adaptiveEnabledAttr; ?>" data-warning-label="<?php echo $warningLabelAttr; ?>" data-warning-template="<?php echo $warningTemplateAttr; ?>">
+                    <article class="<?php echo $cardClasses; ?>" data-routine-id="<?php echo (int) $routine['id']; ?>">
                         <header>
                             <h3><?php echo htmlspecialchars($routine['title']); ?></h3>
                             <div class="routine-details">
@@ -1166,19 +1251,27 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                                             </div>
                         <button type="button" class="routine-flow-close" data-action="flow-exit">Stop</button>
                                         </header>
+                                        <div class="hold-overlay" data-role="hold-overlay" aria-hidden="true">
+                                            <div class="hold-overlay-box" data-role="hold-countdown">5</div>
+                                        </div>
+                                        <audio data-role="flow-music" preload="auto" loop>
+                                            <source src="sounds/backgroundMusic/music-for-game-fun-kid-game-163649.mp3" type="audio/mpeg">
+                                        </audio>
                                         <main class="routine-flow-stage">
                                             <section class="routine-scene routine-scene-task active" data-scene="task">
                                                 <div class="task-top">
                                                     <div class="flow-progress-area">
                                                         <div class="flow-progress-track">
+                                                            <div class="flow-progress-min" data-role="flow-min"></div>
                                                             <div class="flow-progress-fill" data-role="flow-progress"></div>
                                                             <span class="flow-countdown" data-role="flow-countdown">--:--</span>
+                                                            <span class="flow-min-label" data-role="flow-min-label">&nbsp;</span>
                                                         </div>
                                                         <div class="flow-progress-labels">
                                                             <span class="start-label">Start</span>
+                                                            <span class="flow-warning sub-timer-label" data-role="flow-warning" aria-live="polite">&nbsp;</span>
                                                             <span class="limit-label" data-role="flow-limit">Time Limit: --</span>
                                                         </div>
-                                                        <div class="flow-warning sub-timer-label" data-role="flow-warning" aria-live="polite"></div>
                                                     </div>
                                                 </div>
                                                 <div class="illustration">
@@ -1316,8 +1409,7 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                 createInitial: [],
                 editInitial: {},
                 routines: [],
-                preferences: { adaptive_warnings_enabled: 1, sub_timer_label: 'hurry_goal' },
-                subTimerLabels: {}
+                preferences: { adaptive_warnings_enabled: 1 }
             };
 
             const taskLookup = new Map((Array.isArray(page.tasks) ? page.tasks : []).map(task => [String(task.id), task]));
@@ -1500,7 +1592,16 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                         title.innerHTML = `<strong>${taskData.title}</strong>`;
                         const meta = document.createElement('div');
                         meta.className = 'task-meta';
-                        meta.textContent = `${taskData.time_limit || 0} min ${String.fromCharCode(0x2022)} ${taskData.category}`;
+                        const metaSegments = [];
+                        const timeLimitMinutes = parseInt(taskData.time_limit, 10) || 0;
+                        metaSegments.push(`${timeLimitMinutes} min`);
+                        const taskMinimumSeconds = parseInt(taskData.minimum_seconds, 10);
+                        const taskMinimumEnabled = parseInt(taskData.minimum_enabled, 10) > 0;
+                        if (taskMinimumEnabled && Number.isFinite(taskMinimumSeconds) && taskMinimumSeconds > 0) {
+                            metaSegments.push(`Min ${formatSeconds(taskMinimumSeconds)}`);
+                        }
+                        metaSegments.push(taskData.category);
+                        meta.textContent = metaSegments.join(` ${String.fromCharCode(0x2022)} `);
                         const dependencyWrapper = document.createElement('div');
                         dependencyWrapper.className = 'dependency-select';
                         const label = document.createElement('label');
@@ -1593,11 +1694,10 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
             }
 
             class RoutinePlayer {
-                constructor(card, routine, preferences, labelMap) {
+                constructor(card, routine, preferences) {
                     this.card = card;
                     this.routine = routine;
-                    this.preferences = preferences || {};
-                    this.subTimerLabelMap = labelMap || {};
+                    this.preferences = (preferences && typeof preferences === 'object') ? preferences : {};
                     this.tasks = Array.isArray(routine.tasks) ? [...routine.tasks] : [];
                     this.tasks.sort((a, b) => (parseInt(a.sequence_order, 10) || 0) - (parseInt(b.sequence_order, 10) || 0));
 
@@ -1608,7 +1708,10 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                     this.progressFillEl = this.overlay ? this.overlay.querySelector("[data-role='flow-progress']") : null;
                     this.countdownEl = this.overlay ? this.overlay.querySelector("[data-role='flow-countdown']") : null;
                     this.limitLabelEl = this.overlay ? this.overlay.querySelector("[data-role='flow-limit']") : null;
+                    this.minMarkerEl = this.overlay ? this.overlay.querySelector("[data-role='flow-min']") : null;
+                    this.minLabelEl = this.overlay ? this.overlay.querySelector("[data-role='flow-min-label']") : null;
                     this.warningEl = this.overlay ? this.overlay.querySelector("[data-role='flow-warning']") : null;
+                    this.backgroundAudio = this.overlay ? this.overlay.querySelector("[data-role='flow-music']") : null;
                     this.statusPointsEl = this.overlay ? this.overlay.querySelector("[data-role='status-points']") : null;
                     this.statusTimeEl = this.overlay ? this.overlay.querySelector("[data-role='status-time']") : null;
                     this.statusFeedbackEl = this.overlay ? this.overlay.querySelector("[data-role='status-feedback']") : null;
@@ -1618,16 +1721,27 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                     this.summaryAccountEl = this.overlay ? this.overlay.querySelector("[data-role='summary-account-total']") : null;
                     this.summaryBonusTotalEl = this.overlay ? this.overlay.querySelector("[data-role='summary-bonus-total']") : null;
                     this.summaryBonusEl = this.overlay ? this.overlay.querySelector("[data-role='summary-bonus']") : null;
+                    this.holdOverlay = this.overlay ? this.overlay.querySelector("[data-role='hold-overlay']") : null;
+                    this.holdCountdownEl = this.overlay ? this.overlay.querySelector("[data-role='hold-countdown']") : null;
                     this.bonusPossible = Math.max(0, parseInt(this.routine.bonus_points, 10) || 0);
                     this.bonusAwarded = 0;
+                    if (this.backgroundAudio) {
+                        this.backgroundAudio.loop = true;
+                        this.backgroundAudio.volume = 0.35;
+                    }
 
-                    const cardDataset = (this.card && this.card.dataset) ? this.card.dataset : {};
-                    this.cardAdaptiveEnabled = typeof cardDataset.adaptiveEnabled !== 'undefined'
-                        ? cardDataset.adaptiveEnabled
-                        : cardDataset.adaptiveenabled;
-                    this.cardWarningLabel = (cardDataset.warningLabel || cardDataset.warninglabel || '').trim();
-                    const rawTemplate = cardDataset.warningTemplate || cardDataset.warningtemplate || '';
-                    this.cardWarningTemplate = rawTemplate ? decodeHtmlEntities(rawTemplate).trim() : '';
+                    const resolvedToggle = (() => {
+                        const routineValue = Number(routine.adaptive_warnings_enabled);
+                        if (Number.isFinite(routineValue)) {
+                            return routineValue;
+                        }
+                        const prefValue = Number(this.preferences.adaptive_warnings_enabled);
+                        if (Number.isFinite(prefValue)) {
+                            return prefValue;
+                        }
+                        return 1;
+                    })();
+                    this.adaptiveEnabled = resolvedToggle > 0;
 
                     this.sceneMap = new Map();
                     if (this.overlay) {
@@ -1652,21 +1766,19 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                     this.allWithinLimit = true;
                     this.childPoints = typeof page.childPoints === 'number' ? page.childPoints : 0;
                     this.taskScheduledSeconds = [];
-                    this.remainingScheduledAhead = [];
-                    this.totalScheduledSeconds = 0;
-                    this.completedActualSeconds = 0;
-                    this.completedScheduledSeconds = 0;
-                    this.selectedLabelKey = 'hurry_goal';
-                    this.adaptiveEnabled = false;
-                    this.adaptiveThresholdSeconds = 120;
                     this.currentScene = 'task';
                     this.warningState = { visible: false, message: '', state: '' };
-                    this.criticalBufferSeconds = 30;
-                    this.tardyBufferSeconds = 5;
+                    this.minimumSeconds = 0;
+                    this.minimumSecondsActive = false;
+                    this.holdInterval = null;
+                    this.holdTimeout = null;
+                    this.holdActive = false;
+                    this.holdRemaining = 5;
+                    this.exitPointerId = null;
+                    this.messageTimeout = null;
 
-                    this.initializeScheduleCache();
-                    this.configureAdaptiveSettings();
-                    this.setWarning('');
+                    this.initializeTaskDurations();
+                    this.resetWarningState();
 
                     this.init();
                 }
@@ -1677,7 +1789,20 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                     }
                     this.openButton.addEventListener('click', () => this.openFlow());
                     if (this.exitButton) {
-                        this.exitButton.addEventListener('click', () => this.handleExit());
+                        this.exitButton.addEventListener('pointerdown', event => this.startHoldToExit(event, false));
+                        this.exitButton.addEventListener('pointerup', () => this.cancelHoldToExit());
+                        this.exitButton.addEventListener('pointerleave', () => this.cancelHoldToExit());
+                        this.exitButton.addEventListener('pointercancel', () => this.cancelHoldToExit());
+                        this.exitButton.addEventListener('keydown', event => {
+                            if (event.code === 'Space' || event.code === 'Enter') {
+                                this.startHoldToExit(event, true);
+                            }
+                        });
+                        this.exitButton.addEventListener('keyup', event => {
+                            if (event.code === 'Space' || event.code === 'Enter') {
+                                this.cancelHoldToExit();
+                            }
+                        });
                     }
                     if (this.completeButton) {
                         this.completeButton.addEventListener('click', () => this.handleTaskComplete());
@@ -1691,76 +1816,11 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                     this.updateNextLabel();
                 }
 
-                initializeScheduleCache() {
+                initializeTaskDurations() {
                     this.taskScheduledSeconds = this.tasks.map(task => {
                         const raw = parseInt(task.time_limit, 10);
                         return Math.max(0, (Number.isFinite(raw) ? raw : 0) * 60);
                     });
-                    const length = this.taskScheduledSeconds.length;
-                    this.remainingScheduledAhead = new Array(length + 1).fill(0);
-                    for (let i = length - 1; i >= 0; i--) {
-                        this.remainingScheduledAhead[i] = this.remainingScheduledAhead[i + 1] + this.taskScheduledSeconds[i];
-                    }
-                    this.totalScheduledSeconds = this.remainingScheduledAhead[0] || 0;
-                }
-
-                configureAdaptiveSettings() {
-                    const prefSource = this.preferences && typeof this.preferences === 'object' ? this.preferences : {};
-                    let rawPref;
-                    if (prefSource.hasOwnProperty('adaptive_warnings_enabled')) {
-                        rawPref = prefSource.adaptive_warnings_enabled;
-                    } else {
-                        rawPref = this.cardAdaptiveEnabled;
-                    }
-                    rawPref = parseInt(rawPref, 10);
-                    if (!Number.isFinite(rawPref)) {
-                        rawPref = 1;
-                    }
-
-                    let labelKey = '';
-                    if (prefSource.sub_timer_label) {
-                        labelKey = prefSource.sub_timer_label;
-                    } else if (this.cardWarningLabel) {
-                        labelKey = this.cardWarningLabel;
-                    }
-                    labelKey = (labelKey || '').trim();
-                    this.selectedLabelKey = labelKey || 'hurry_goal';
-
-                    if (!this.cardWarningTemplate || !this.cardWarningTemplate.length) {
-                        if (prefSource.sub_timer_template) {
-                            this.cardWarningTemplate = decodeHtmlEntities(String(prefSource.sub_timer_template)).trim();
-                        } else if (this.subTimerLabelMap && this.subTimerLabelMap[this.selectedLabelKey]) {
-                            this.cardWarningTemplate = this.subTimerLabelMap[this.selectedLabelKey];
-                        }
-                    }
-
-                    this.cardWarningTemplate = this.cardWarningTemplate ? this.cardWarningTemplate.trim() : '';
-                    this.adaptiveEnabled = rawPref > 0 && this.totalScheduledSeconds > 0;
-                    this.warningState = { visible: false, message: '', state: '' };
-                    this.setWarning('');
-                }
-
-                getFutureScheduledSeconds(index) {
-                    if (!Array.isArray(this.remainingScheduledAhead)) {
-                        return 0;
-                    }
-                    return this.remainingScheduledAhead[index] || 0;
-                }
-
-                resolveSubTimerLabel() {
-                    let template = this.cardWarningTemplate || '';
-                    if (!template && this.subTimerLabelMap && typeof this.subTimerLabelMap === 'object') {
-                        if (this.selectedLabelKey && this.subTimerLabelMap[this.selectedLabelKey]) {
-                            template = this.subTimerLabelMap[this.selectedLabelKey];
-                        } else if (this.subTimerLabelMap.hurry_goal) {
-                            template = this.subTimerLabelMap.hurry_goal;
-                        }
-                    }
-                    template = template ? decodeHtmlEntities(template) : '';
-                    if (!template && this.subTimerLabelMap && this.subTimerLabelMap.hurry_goal) {
-                        template = decodeHtmlEntities(this.subTimerLabelMap.hurry_goal);
-                    }
-                    return template;
                 }
 
                 setWarning(message, state = '') {
@@ -1776,7 +1836,7 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                         return;
                     }
                     if (!visible) {
-                        this.warningEl.textContent = '';
+                        this.warningEl.textContent = '\u00A0';
                         this.warningEl.classList.remove('visible', 'warning', 'critical', 'late');
                     } else {
                         this.warningEl.textContent = message;
@@ -1789,80 +1849,240 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                     this.warningState = { visible, message: visible ? message : '', state: visible ? state : '' };
                 }
 
-                updateAdaptiveWarning() {
-                    if (!this.warningEl) {
-                        return;
+                resetWarningState() {
+                    if (this.progressFillEl) {
+                        this.progressFillEl.classList.remove('warning', 'critical');
                     }
-                    if (!this.adaptiveEnabled || !this.currentTask || this.currentScene !== 'task') {
-                        this.setWarning('');
-                        return;
+                    if (this.minMarkerEl) {
+                        this.minMarkerEl.classList.remove('active');
+                        this.minMarkerEl.style.transform = 'scaleX(0)';
                     }
-                    if (!Number.isFinite(this.totalScheduledSeconds) || this.totalScheduledSeconds <= 0) {
-                        this.setWarning('');
-                        return;
+                    if (this.minLabelEl) {
+                        this.minLabelEl.textContent = '\u00A0';
+                        this.minLabelEl.classList.remove('active', 'met');
                     }
-                    const scheduledCurrent = this.scheduledSeconds || 0;
-                    const elapsed = Math.max(0, this.elapsedSeconds || 0);
-                    const futureScheduled = this.getFutureScheduledSeconds(this.currentIndex + 1);
-                    const scheduledConsumedCurrent = Math.min(elapsed, scheduledCurrent);
-                    const scheduledRemainingCurrent = Math.max(scheduledCurrent - scheduledConsumedCurrent, 0);
-                    const scheduledRemaining = futureScheduled + scheduledRemainingCurrent;
-                    const scheduledSpentSoFar = this.totalScheduledSeconds - scheduledRemaining;
-                    const actualSpentSoFar = this.completedActualSeconds + elapsed;
-                    const slack = scheduledSpentSoFar - actualSpentSoFar;
+                    this.minimumSecondsActive = false;
+                    this.setWarning('');
+                }
 
-                    if (scheduledSpentSoFar < 1 && actualSpentSoFar < 1) {
-                        this.setWarning('');
+                updateTaskWarning(progressRatio, isOvertime) {
+                    if (!this.progressFillEl) {
                         return;
                     }
-
-                    const slackSeconds = Math.round(slack);
-
-                    if (slackSeconds >= this.adaptiveThresholdSeconds) {
+                    this.progressFillEl.classList.remove('warning', 'critical');
+                    if (!this.adaptiveEnabled || !this.currentTask || this.currentScene !== 'task' || this.scheduledSeconds <= 0) {
                         this.setWarning('');
                         return;
                     }
 
-                    const template = this.resolveSubTimerLabel();
-                    if (!template) {
-                        this.setWarning('');
-                        return;
-                    }
-
-                    const currentTitle = this.currentTask ? this.currentTask.title : 'this task';
-                    const previousTitle = this.taskResults.length ? (this.taskResults[this.taskResults.length - 1].title || 'the last task') : 'the last task';
-                    const slackPositive = Math.max(slackSeconds, 0);
-                    const overSeconds = Math.max(-slackSeconds, 0);
-
-                    if (slackSeconds >= 0 && scheduledSpentSoFar < this.adaptiveThresholdSeconds) {
-                        this.setWarning('');
-                        return;
-                    }
-
-                    let message = template
-                        .replace(/\[time\]/gi, formatSeconds(slackPositive))
-                        .replace(/\[previous task\]/gi, previousTitle)
-                        .replace(/\[task name\]/gi, currentTitle)
-                        .replace(/\[task\]/gi, currentTitle);
-
-                    if (message.includes('[overage]')) {
-                        message = message.replace(/\[overage\]/gi, formatSeconds(overSeconds));
-                    }
-
-                    let severity;
-                    if (slackSeconds <= -this.tardyBufferSeconds) {
-                        const overText = formatSeconds(overSeconds);
-                        if (overSeconds > 0 && !message.toLowerCase().includes('over')) {
-                            message = `${message} (Over by ${overText})`;
-                        }
-                        severity = 'late';
-                    } else if (slackSeconds <= this.criticalBufferSeconds) {
-                        severity = 'critical';
+                    const ratio = Math.max(0, Math.min(1, progressRatio));
+                    if (ratio >= 0.9 || isOvertime) {
+                        this.progressFillEl.classList.add('critical');
+                        this.setWarning('Not much time left, finish soon to earn full points.', 'critical');
+                    } else if (ratio >= 0.75) {
+                        this.progressFillEl.classList.add('warning');
+                        this.setWarning('Time is almost up, hurry to finish task on time.', 'warning');
                     } else {
-                        severity = 'warning';
+                        this.setWarning('');
                     }
+                }
 
-                    this.setWarning(message, severity);
+                updateMinimumIndicators() {
+                    if (!this.minMarkerEl || !this.minLabelEl) {
+                        return;
+                    }
+                    const totalSeconds = Math.max(0, this.scheduledSeconds || 0);
+                    const minSeconds = Math.max(0, this.minimumSeconds || 0);
+                    this.minimumSecondsActive = minSeconds > 0 && totalSeconds > 0;
+                    if (!this.minimumSecondsActive) {
+                        this.minMarkerEl.style.transform = 'scaleX(0)';
+                        this.minMarkerEl.classList.remove('active');
+                        this.minLabelEl.textContent = '\u00A0';
+                        this.minLabelEl.classList.remove('active', 'met');
+                        return;
+                    }
+                    const ratio = Math.min(1, minSeconds / Math.max(1, totalSeconds));
+                    this.minMarkerEl.style.transform = `scaleX(${ratio})`;
+                    this.minMarkerEl.classList.add('active');
+                    this.minLabelEl.textContent = `Minimum duration (${formatSeconds(minSeconds)})`;
+                    this.minLabelEl.classList.add('active');
+                    this.minLabelEl.classList.toggle('met', this.elapsedSeconds >= minSeconds);
+                }
+
+                updateMinimumProgressState() {
+                    if (!this.minimumSecondsActive || !this.minLabelEl) {
+                        return;
+                    }
+                    const minSeconds = Math.max(0, this.minimumSeconds || 0);
+                    this.minLabelEl.classList.toggle('met', this.elapsedSeconds >= minSeconds);
+                }
+
+                playBackgroundMusic() {
+                    if (!this.backgroundAudio) {
+                        return;
+                    }
+                    if (this.backgroundAudio.paused) {
+                        const attempt = this.backgroundAudio.play();
+                        if (attempt && typeof attempt.catch === 'function') {
+                            attempt.catch(() => {});
+                        }
+                    }
+                }
+
+                pauseBackgroundMusic(reset = false) {
+                    if (!this.backgroundAudio) {
+                        return;
+                    }
+                    this.backgroundAudio.pause();
+                    if (reset) {
+                        try {
+                            this.backgroundAudio.currentTime = 0;
+                        } catch (e) {
+                            // ignore resetting issues
+                        }
+                    }
+                }
+
+                displayMinimumTimeMessage() {
+                    const message = '\u23F1\uFE0F Too quick, keep going!';
+                    this.clearHoldTimers();
+                    this.clearMessageTimeout();
+                    this.holdActive = false;
+                    this.showHoldOverlay('message', message);
+                    this.messageTimeout = setTimeout(() => {
+                        this.hideHoldOverlay();
+                        this.messageTimeout = null;
+                    }, 1800);
+                }
+
+                clearMessageTimeout() {
+                    if (this.messageTimeout) {
+                        clearTimeout(this.messageTimeout);
+                        this.messageTimeout = null;
+                    }
+                }
+
+                startHoldToExit(event, fromKeyboard) {
+                    if (event) {
+                        event.preventDefault();
+                        event.stopPropagation();
+                    }
+                    if (!this.exitButton || this.holdActive) {
+                        return;
+                    }
+                    this.clearMessageTimeout();
+                    this.holdActive = true;
+                    this.holdRemaining = 5;
+                    if (!fromKeyboard && event && typeof event.pointerId === 'number') {
+                        this.exitPointerId = event.pointerId;
+                        if (this.exitButton.setPointerCapture) {
+                            try {
+                                this.exitButton.setPointerCapture(this.exitPointerId);
+                            } catch (e) {
+                                this.exitPointerId = null;
+                            }
+                        }
+                    }
+                    this.showHoldOverlay('countdown', String(this.holdRemaining));
+                    this.updateHoldCountdown(this.holdRemaining);
+                    this.clearHoldTimers();
+                    this.holdInterval = setInterval(() => {
+                        this.holdRemaining -= 1;
+                        if (this.holdRemaining <= 0) {
+                            this.completeHoldExit();
+                        } else {
+                            this.updateHoldCountdown(this.holdRemaining);
+                        }
+                    }, 1000);
+                    this.holdTimeout = setTimeout(() => this.completeHoldExit(), 5000);
+                }
+
+                cancelHoldToExit() {
+                    if (!this.holdActive) {
+                        return;
+                    }
+                    this.holdActive = false;
+                    this.clearHoldTimers();
+                    this.clearMessageTimeout();
+                    this.holdRemaining = 5;
+                    this.hideHoldOverlay();
+                    if (this.exitPointerId !== null && this.exitButton && this.exitButton.releasePointerCapture) {
+                        try {
+                            this.exitButton.releasePointerCapture(this.exitPointerId);
+                        } catch (e) {
+                            // ignore
+                        }
+                    }
+                    this.exitPointerId = null;
+                }
+
+                completeHoldExit() {
+                    if (!this.holdActive) {
+                        return;
+                    }
+                    this.holdActive = false;
+                    this.clearHoldTimers();
+                    this.clearMessageTimeout();
+                    this.hideHoldOverlay();
+                    if (this.exitPointerId !== null && this.exitButton && this.exitButton.releasePointerCapture) {
+                        try {
+                            this.exitButton.releasePointerCapture(this.exitPointerId);
+                        } catch (e) {
+                            // ignore
+                        }
+                    }
+                    this.exitPointerId = null;
+                    this.handleExit();
+                }
+
+                clearHoldTimers() {
+                    if (this.holdTimeout) {
+                        clearTimeout(this.holdTimeout);
+                        this.holdTimeout = null;
+                    }
+                    if (this.holdInterval) {
+                        clearInterval(this.holdInterval);
+                        this.holdInterval = null;
+                    }
+                }
+
+                showHoldOverlay(mode = 'countdown', text = null) {
+                    if (!this.holdOverlay) {
+                        return;
+                    }
+                    this.holdOverlay.classList.add('active');
+                    this.holdOverlay.setAttribute('aria-hidden', 'false');
+                    if (this.holdCountdownEl) {
+                        if (mode === 'message') {
+                            this.holdCountdownEl.classList.add('is-message');
+                            this.holdCountdownEl.textContent = text ?? '';
+                        } else {
+                            this.holdCountdownEl.classList.remove('is-message');
+                            this.holdCountdownEl.textContent = text ?? String(this.holdRemaining);
+                        }
+                    }
+                }
+
+                hideHoldOverlay() {
+                    if (!this.holdOverlay) {
+                        return;
+                    }
+                    this.clearMessageTimeout();
+                    this.holdOverlay.classList.remove('active');
+                    this.holdOverlay.setAttribute('aria-hidden', 'true');
+                    this.holdRemaining = 5;
+                    if (this.holdCountdownEl) {
+                        this.holdCountdownEl.classList.remove('is-message');
+                        this.holdCountdownEl.textContent = '5';
+                    }
+                }
+
+                updateHoldCountdown(value) {
+                    if (!this.holdCountdownEl) {
+                        return;
+                    }
+                    this.holdCountdownEl.classList.remove('is-message');
+                    this.holdCountdownEl.textContent = String(value);
                 }
 
                 openFlow() {
@@ -1893,7 +2113,7 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                         this.countdownEl.style.color = '#f9f9f9';
                         this.countdownEl.style.textShadow = '0 2px 6px rgba(0,0,0,0.45)';
                     }
-                    this.setWarning('');
+                    this.resetWarningState();
                 }
 
                 closeOverlay(resetTitle = true) {
@@ -1911,16 +2131,19 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                     if (this.completeButton) {
                         this.completeButton.disabled = false;
                     }
-                    this.setWarning('');
+                    this.clearHoldTimers();
+                    this.clearMessageTimeout();
+                    this.hideHoldOverlay();
+                    this.holdActive = false;
+                    this.exitPointerId = null;
+                    this.pauseBackgroundMusic(true);
+                    this.resetWarningState();
                 }
 
                 startRoutine() {
-                    this.initializeScheduleCache();
-                    this.configureAdaptiveSettings();
-                    this.completedActualSeconds = 0;
-                    this.completedScheduledSeconds = 0;
+                    this.initializeTaskDurations();
+                    this.resetWarningState();
                     this.currentScene = 'task';
-                    this.setWarning('');
                     this.resetRoutineStatuses();
                     this.tasks.forEach(task => {
                         task.status = 'pending';
@@ -1959,9 +2182,14 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                         ? this.taskScheduledSeconds[index]
                         : Math.max(0, (parseInt(this.currentTask.time_limit, 10) || 0) * 60);
                     this.scheduledSeconds = predefined;
+                    const rawMinimum = parseInt(this.currentTask.minimum_seconds, 10);
+                    const minimumEnabled = parseInt(this.currentTask.minimum_enabled, 10) > 0;
+                    this.minimumSeconds = (minimumEnabled && Number.isFinite(rawMinimum) && rawMinimum > 0) ? rawMinimum : 0;
                     this.taskStartTime = null;
                     this.elapsedSeconds = 0;
                     this.stopTaskAnimation();
+                    this.resetWarningState();
+                    this.updateMinimumIndicators();
                     this.updateTaskHeader();
                     this.updateNextLabel();
                     this.updateTimeLimitLabel();
@@ -1996,20 +2224,22 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                 updateProgressDisplay() {
                     if (!this.progressFillEl) return;
                     const scheduled = this.scheduledSeconds;
-                    let progress = 1;
+                    let ratio = 1;
                     let displayValue = '--:--';
                     let isOvertime = false;
 
                     if (scheduled > 0) {
-                        progress = Math.min(1, this.elapsedSeconds / Math.max(1, scheduled));
+                        ratio = this.elapsedSeconds / Math.max(1, scheduled);
                         const remaining = scheduled - this.elapsedSeconds;
                         displayValue = formatCountdownDisplay(remaining);
                         isOvertime = remaining < 0;
                     } else {
+                        ratio = 0;
                         displayValue = formatSeconds(Math.ceil(this.elapsedSeconds));
                     }
 
-                    this.progressFillEl.style.transform = `scaleX(${Math.max(0, Math.min(1, progress))})`;
+                    const clamped = Math.max(0, Math.min(1, ratio));
+                    this.progressFillEl.style.transform = `scaleX(${clamped})`;
                     if (this.countdownEl) {
                         this.countdownEl.textContent = displayValue;
                         if (isOvertime) {
@@ -2020,7 +2250,8 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                             this.countdownEl.style.textShadow = '0 2px 6px rgba(0,0,0,0.45)';
                         }
                     }
-                    this.updateAdaptiveWarning();
+                    this.updateTaskWarning(ratio, isOvertime);
+                    this.updateMinimumProgressState();
                 }
 
                 updateTimeLimitLabel() {
@@ -2034,11 +2265,16 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
 
                 handleTaskComplete() {
                     if (!this.currentTask) return;
+                    const elapsedSeconds = Math.max(0, this.elapsedSeconds || 0);
+                    if (this.minimumSeconds > 0 && elapsedSeconds < this.minimumSeconds) {
+                        this.displayMinimumTimeMessage();
+                        return;
+                    }
                     this.stopTaskAnimation();
                     if (this.completeButton) {
                         this.completeButton.disabled = true;
                     }
-                    const actualSeconds = Math.ceil(Math.max(0, this.elapsedSeconds));
+                    const actualSeconds = Math.ceil(elapsedSeconds);
                     const scheduled = this.scheduledSeconds;
                     const pointValue = parseInt(this.currentTask.point_value, 10) || 0;
                     if (scheduled > 0 && actualSeconds > scheduled) {
@@ -2056,9 +2292,7 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                     if (scheduled > 0 && actualSeconds > scheduled) {
                         this.allWithinLimit = false;
                     }
-                    this.completedActualSeconds += actualSeconds;
-                    this.completedScheduledSeconds += scheduled;
-                    this.setWarning('');
+                    this.resetWarningState();
                     this.totalEarnedPoints += awardedPoints;
                     this.taskResults.push({
                         id: parseInt(this.currentTask.id, 10) || 0,
@@ -2077,7 +2311,7 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                 }
 
                 presentStatus(points, actualSeconds, scheduledSeconds) {
-                    this.setWarning('');
+                    this.resetWarningState();
                     if (this.statusPointsEl) {
                         this.statusPointsEl.textContent = `+${points} points`;
                     }
@@ -2088,18 +2322,18 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                         let feedback = 'Nice work!';
                         let stars = 1;
                         if (scheduledSeconds <= 0) {
-                            feedback = 'No timer on this task—keep up the pace!';
+                            feedback = 'No timer on this task-keep up the pace!';
                             stars = 3;
                         } else {
-                            const ratio = actualSeconds / Math.max(1, scheduledSeconds);
-                            if (ratio <= 1) {
+                            const overtimeSeconds = actualSeconds - scheduledSeconds;
+                            if (overtimeSeconds <= 0) {
                                 feedback = 'Right on time!';
                                 stars = 3;
-                            } else if (ratio <= 1.4) {
-                                feedback = 'A little late—half points earned.';
+                            } else if (overtimeSeconds <= 60) {
+                                feedback = 'A little late-half points earned.';
                                 stars = 2;
                             } else {
-                                feedback = 'Over the limit—no points this time.';
+                                feedback = 'Over the limit-no points this time.';
                                 stars = 1;
                             }
                         }
@@ -2246,9 +2480,17 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                         this.summaryAccountEl.textContent = this.childPoints;
                     }
                     if (name === 'task') {
-                        this.updateAdaptiveWarning();
+                        this.clearMessageTimeout();
+                        this.hideHoldOverlay();
+                        this.playBackgroundMusic();
+                        const scheduled = this.scheduledSeconds;
+                        const ratio = scheduled > 0 ? this.elapsedSeconds / Math.max(1, scheduled) : 0;
+                        const isOvertime = scheduled > 0 && this.elapsedSeconds > scheduled;
+                        this.updateTaskWarning(ratio, isOvertime);
                     } else {
-                        this.setWarning('');
+                        const resetAudio = name === 'summary' || name === 'status';
+                        this.pauseBackgroundMusic(resetAudio);
+                        this.resetWarningState();
                     }
                 }
 
@@ -2338,48 +2580,11 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                 const card = document.querySelector(`.routine-card[data-routine-id="${routine.id}"]`);
                 if (!card) return;
                 if (card.classList.contains('child-view')) {
-                    new RoutinePlayer(card, routine, page.preferences, page.subTimerLabels);
+                    new RoutinePlayer(card, routine, page.preferences);
                 }
             });
         })();
     </script>
 </body>
 </html>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 

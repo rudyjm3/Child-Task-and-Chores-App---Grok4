@@ -785,9 +785,17 @@ function rejectGoal($goal_id, $parent_user_id, $rejection_comment) {
 }
 
 // **[New] Routine Task Functions **
-function createRoutineTask($parent_user_id, $title, $description, $time_limit, $point_value, $category, $icon_url = null, $audio_url = null, $creator_user_id = null) {
+function createRoutineTask($parent_user_id, $title, $description, $time_limit, $point_value, $category, $minimum_seconds = null, $minimum_enabled = 0, $icon_url = null, $audio_url = null, $creator_user_id = null) {
     global $db;
-    $stmt = $db->prepare("INSERT INTO routine_tasks (parent_user_id, title, description, time_limit, point_value, category, icon_url, audio_url, created_by) VALUES (:parent_id, :title, :description, :time_limit, :point_value, :category, :icon_url, :audio_url, :created_by)");
+    if ($minimum_seconds !== null) {
+        $minimum_seconds = max(0, (int) $minimum_seconds);
+    }
+    $minimum_enabled = $minimum_enabled ? 1 : 0;
+    if ($minimum_seconds === null || $minimum_seconds === 0) {
+        $minimum_seconds = null;
+        $minimum_enabled = 0;
+    }
+    $stmt = $db->prepare("INSERT INTO routine_tasks (parent_user_id, title, description, time_limit, point_value, category, minimum_seconds, minimum_enabled, icon_url, audio_url, created_by) VALUES (:parent_id, :title, :description, :time_limit, :point_value, :category, :minimum_seconds, :minimum_enabled, :icon_url, :audio_url, :created_by)");
     return $stmt->execute([
         ':parent_id' => $parent_user_id,
         ':title' => $title,
@@ -795,6 +803,8 @@ function createRoutineTask($parent_user_id, $title, $description, $time_limit, $
         ':time_limit' => $time_limit,
         ':point_value' => $point_value,
         ':category' => $category,
+        ':minimum_seconds' => $minimum_seconds,
+        ':minimum_enabled' => $minimum_enabled,
         ':icon_url' => $icon_url,
         ':audio_url' => $audio_url,
         ':created_by' => $creator_user_id ?? $parent_user_id
@@ -896,15 +906,39 @@ function getRoutinePreferences($parent_user_id) {
 
 function saveRoutinePreferences($parent_user_id, $adaptive_warnings_enabled, $sub_timer_label) {
     global $db;
+    
+    // Validate label
+    $validLabels = [
+        'hurry_goal',
+        'adjusted_time',
+        'routine_target',
+        'quick_finish',
+        'new_limit'
+    ];
+    
+    if (!in_array($sub_timer_label, $validLabels)) {
+        error_log("Invalid timer label attempted: $sub_timer_label");
+        $sub_timer_label = 'hurry_goal'; // Fallback to default
+    }
+    
     $stmt = $db->prepare("INSERT INTO routine_preferences (parent_user_id, adaptive_warnings_enabled, sub_timer_label)
                           VALUES (:parent_id, :adaptive, :label)
                           ON DUPLICATE KEY UPDATE adaptive_warnings_enabled = VALUES(adaptive_warnings_enabled),
                                                   sub_timer_label = VALUES(sub_timer_label)");
-    return $stmt->execute([
+    
+    $result = $stmt->execute([
         ':parent_id' => $parent_user_id,
         ':adaptive' => $adaptive_warnings_enabled ? 1 : 0,
         ':label' => $sub_timer_label
     ]);
+    
+    if ($result) {
+        error_log("Routine preferences updated for parent $parent_user_id: adaptive=$adaptive_warnings_enabled, label=$sub_timer_label");
+    } else {
+        error_log("Failed to update routine preferences for parent $parent_user_id");
+    }
+    
+    return $result;
 }
 
 function logRoutineOvertime($routine_id, $routine_task_id, $child_user_id, $scheduled_seconds, $actual_seconds, $overtime_seconds) {
