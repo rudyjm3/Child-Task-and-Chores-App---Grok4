@@ -1852,6 +1852,7 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                     this.summaryChime = this.overlay ? this.overlay.querySelector("[data-role='summary-sound']") : null;
                     this.statusSequenceToken = 0;
                     this.starAnimationTimers = [];
+                    this.pendingStarTargets = [];
                     this.activeCoinClips = [];
                     this.holdOverlay = this.overlay ? this.overlay.querySelector("[data-role='hold-overlay']") : null;
                     this.holdCountdownEl = this.overlay ? this.overlay.querySelector("[data-role='hold-countdown']") : null;
@@ -2207,19 +2208,35 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                     if (Array.isArray(this.statusStars)) {
                         this.statusStars.forEach(star => star.classList.remove('sparkle'));
                     }
+                    if (incrementToken) {
+                        this.pendingStarTargets = Array.isArray(this.pendingStarTargets)
+                            ? this.pendingStarTargets.filter(star => star && star.classList.contains('will-activate'))
+                            : [];
+                    }
                     return this.statusSequenceToken;
                 }
 
                 handleStatusSceneEnter() {
                     const sequenceToken = this.clearStatusAnimations();
-                    const activeStars = Array.isArray(this.statusStars)
-                        ? this.statusStars.filter(star => star.classList.contains('active'))
-                        : [];
-                    this.runStatusSequence(sequenceToken, activeStars);
+                    const targetStars = Array.isArray(this.pendingStarTargets) && this.pendingStarTargets.length
+                        ? [...this.pendingStarTargets]
+                        : (Array.isArray(this.statusStars)
+                            ? this.statusStars.filter(star => star.classList.contains('will-activate'))
+                            : []);
+                    this.runStatusSequence(sequenceToken, targetStars);
                 }
 
-                runStatusSequence(sequenceToken, activeStars) {
-                    const stars = Array.isArray(activeStars) ? activeStars.filter(star => star.classList.contains('active')) : [];
+                runStatusSequence(sequenceToken, starsInput) {
+                    const stars = Array.isArray(starsInput) && starsInput.length
+                        ? starsInput.filter(star => star && star.classList.contains('will-activate'))
+                        : (Array.isArray(this.statusStars)
+                            ? this.statusStars.filter(star => star.classList.contains('will-activate'))
+                            : []);
+                    if (!Array.isArray(this.pendingStarTargets)) {
+                        this.pendingStarTargets = [];
+                    } else {
+                        this.pendingStarTargets = this.pendingStarTargets.filter(star => star && star.classList.contains('will-activate'));
+                    }
                     this.playAudioClip(this.statusChime, true);
                     if (!stars.length) {
                         return;
@@ -2227,36 +2244,32 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                     if (!Array.isArray(this.starAnimationTimers)) {
                         this.starAnimationTimers = [];
                     }
-                    const leadInMs = 1500;
-                    const timer = setTimeout(() => {
-                        const idx = this.starAnimationTimers.indexOf(timer);
-                        if (idx !== -1) {
-                            this.starAnimationTimers.splice(idx, 1);
-                        }
-                        if (this.statusSequenceToken !== sequenceToken) {
-                            return;
-                        }
-                        this.executeStarSequence(sequenceToken, stars).catch(() => {});
-                    }, leadInMs);
-                    this.starAnimationTimers.push(timer);
-                }
-
-                async executeStarSequence(sequenceToken, stars) {
-                    for (const star of stars) {
-                        if (this.statusSequenceToken !== sequenceToken) {
-                            break;
-                        }
-                        star.classList.remove('sparkle');
-                        void star.offsetWidth;
-                        star.classList.add('sparkle');
-                        star.addEventListener('animationend', () => {
+                    const baseDelay = 1500;
+                    stars.forEach((star, index) => {
+                        const delay = baseDelay + index * 260;
+                        const timerId = setTimeout(() => {
+                            const storedIndex = this.starAnimationTimers.indexOf(timerId);
+                            if (storedIndex !== -1) {
+                                this.starAnimationTimers.splice(storedIndex, 1);
+                            }
+                            if (this.statusSequenceToken !== sequenceToken || !star) {
+                                return;
+                            }
+                            star.classList.remove('will-activate');
+                            if (Array.isArray(this.pendingStarTargets)) {
+                                this.pendingStarTargets = this.pendingStarTargets.filter(item => item !== star);
+                            }
+                            star.classList.add('active');
                             star.classList.remove('sparkle');
-                        }, { once: true });
-                        await this.playCoinSoundOverlap(sequenceToken);
-                        if (this.statusSequenceToken !== sequenceToken) {
-                            break;
-                        }
-                    }
+                            void star.offsetWidth;
+                            star.classList.add('sparkle');
+                            star.addEventListener('animationend', () => {
+                                star.classList.remove('sparkle');
+                            }, { once: true });
+                            this.playCoinSoundOverlap(sequenceToken);
+                        }, delay);
+                        this.starAnimationTimers.push(timerId);
+                    });
                 }
 
                 playCoinSoundOverlap(sequenceToken) {
@@ -2538,8 +2551,9 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                     this.summaryPlayed = false;
                     this.clearStatusAnimations();
                     if (Array.isArray(this.statusStars) && this.statusStars.length) {
-                        this.statusStars.forEach(star => star.classList.remove('active'));
+                        this.statusStars.forEach(star => star.classList.remove('active', 'will-activate'));
                     }
+                    this.pendingStarTargets = [];
                     this.tasks.forEach(task => {
                         task.status = 'pending';
                         this.markTaskPending(task.id);
@@ -2738,11 +2752,14 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                             }
                         }
                         this.statusFeedbackEl.textContent = feedback;
+                        this.pendingStarTargets = [];
                         this.statusStars.forEach((star, idx) => {
+                            star.classList.remove('active');
                             if (idx < stars) {
-                                star.classList.add('active');
+                                star.classList.add('will-activate');
+                                this.pendingStarTargets.push(star);
                             } else {
-                                star.classList.remove('active');
+                                star.classList.remove('will-activate');
                             }
                         });
                     }
