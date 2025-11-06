@@ -42,7 +42,20 @@ function getFamilyRootId($user_id) {
     $stmt->execute([':id' => $user_id]);
     $main_parent_id = $stmt->fetchColumn();
 
-    return $main_parent_id ?: $user_id;
+    if ($main_parent_id) {
+        return (int) $main_parent_id;
+    }
+
+    if ($role === 'child') {
+        $childStmt = $db->prepare("SELECT parent_user_id FROM child_profiles WHERE child_user_id = :id LIMIT 1");
+        $childStmt->execute([':id' => $user_id]);
+        $parentId = $childStmt->fetchColumn();
+        if ($parentId) {
+            return (int) $parentId;
+        }
+    }
+
+    return $user_id;
 }
 
 // Retrieve parent title (mother/father) for a user if assigned
@@ -891,20 +904,35 @@ function replaceRoutineTasks($routine_id, array $tasks) {
 
 function getRoutinePreferences($parent_user_id) {
     global $db;
-    $stmt = $db->prepare("SELECT adaptive_warnings_enabled, sub_timer_label FROM routine_preferences WHERE parent_user_id = :parent LIMIT 1");
+    $stmt = $db->prepare("SELECT timer_warnings_enabled, sub_timer_label, show_countdown FROM routine_preferences WHERE parent_user_id = :parent LIMIT 1");
     $stmt->execute([':parent' => $parent_user_id]);
     $prefs = $stmt->fetch(PDO::FETCH_ASSOC);
     if (!$prefs) {
         return [
-            'adaptive_warnings_enabled' => 1,
-            'sub_timer_label' => 'hurry_goal'
+            'timer_warnings_enabled' => 1,
+            'sub_timer_label' => 'hurry_goal',
+            'show_countdown' => 1,
+            '__from_db' => false,
         ];
     }
-    $prefs['adaptive_warnings_enabled'] = (int) $prefs['adaptive_warnings_enabled'];
+
+    $prefs['timer_warnings_enabled'] = (int) $prefs['timer_warnings_enabled'];
+
+    if (!isset($prefs['sub_timer_label']) || $prefs['sub_timer_label'] === '') {
+        $prefs['sub_timer_label'] = 'hurry_goal';
+    }
+
+    if (!array_key_exists('show_countdown', $prefs)) {
+        $prefs['show_countdown'] = 1;
+    }
+    $prefs['show_countdown'] = (int) $prefs['show_countdown'];
+
+    $prefs['__from_db'] = true;
+
     return $prefs;
 }
 
-function saveRoutinePreferences($parent_user_id, $adaptive_warnings_enabled, $sub_timer_label) {
+function saveRoutinePreferences($parent_user_id, $timer_warnings_enabled, $sub_timer_label, $show_countdown) {
     global $db;
     
     // Validate label
@@ -921,19 +949,21 @@ function saveRoutinePreferences($parent_user_id, $adaptive_warnings_enabled, $su
         $sub_timer_label = 'hurry_goal'; // Fallback to default
     }
     
-    $stmt = $db->prepare("INSERT INTO routine_preferences (parent_user_id, adaptive_warnings_enabled, sub_timer_label)
-                          VALUES (:parent_id, :adaptive, :label)
-                          ON DUPLICATE KEY UPDATE adaptive_warnings_enabled = VALUES(adaptive_warnings_enabled),
-                                                  sub_timer_label = VALUES(sub_timer_label)");
+    $stmt = $db->prepare("INSERT INTO routine_preferences (parent_user_id, timer_warnings_enabled, sub_timer_label, show_countdown)
+                          VALUES (:parent_id, :timer_enabled, :label, :countdown)
+                          ON DUPLICATE KEY UPDATE timer_warnings_enabled = VALUES(timer_warnings_enabled),
+                                                  sub_timer_label = VALUES(sub_timer_label),
+                                                  show_countdown = VALUES(show_countdown)");
     
     $result = $stmt->execute([
         ':parent_id' => $parent_user_id,
-        ':adaptive' => $adaptive_warnings_enabled ? 1 : 0,
-        ':label' => $sub_timer_label
+        ':timer_enabled' => $timer_warnings_enabled ? 1 : 0,
+        ':label' => $sub_timer_label,
+        ':countdown' => $show_countdown ? 1 : 0
     ]);
     
     if ($result) {
-        error_log("Routine preferences updated for parent $parent_user_id: adaptive=$adaptive_warnings_enabled, label=$sub_timer_label");
+        error_log("Routine preferences updated for parent $parent_user_id: timer_warnings=$timer_warnings_enabled, label=$sub_timer_label, show_countdown=$show_countdown");
     } else {
         error_log("Failed to update routine preferences for parent $parent_user_id");
     }
@@ -1585,8 +1615,9 @@ try {
     $sql = "CREATE TABLE IF NOT EXISTS routine_preferences (
         id INT AUTO_INCREMENT PRIMARY KEY,
         parent_user_id INT NOT NULL,
-        adaptive_warnings_enabled TINYINT(1) DEFAULT 1,
+        timer_warnings_enabled TINYINT(1) DEFAULT 1,
         sub_timer_label VARCHAR(50) DEFAULT 'hurry_goal',
+        show_countdown TINYINT(1) DEFAULT 1,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         UNIQUE KEY uniq_parent (parent_user_id),
@@ -1680,3 +1711,5 @@ $sql = "ALTER TABLE child_profiles
 $db->exec($sql);
 
 ?>
+
+

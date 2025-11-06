@@ -1,6 +1,6 @@
 ﻿<?php
 // routine.php - Routine management (Phase 5 upgrade)
-// Provides parent routine builder with validation, adaptive timers for children, and overtime tracking.
+// Provides parent routine builder with validation, timer warnings for children, and overtime tracking.
 
 session_start();
 
@@ -626,12 +626,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $messages[] = ['type' => 'error', 'text' => 'Unable to delete routine task.'];
         }
     } elseif ($isParentContext && isset($_POST['save_routine_preferences'])) {
-        $adaptive = isset($_POST['adaptive_warnings_enabled']) ? 1 : 0;
+        $timerWarnings = isset($_POST['timer_warnings_enabled']) ? 1 : 0;
+        $showCountdown = isset($_POST['show_countdown']) ? 1 : 0;
         $label = $routinePreferences['sub_timer_label'] ?? 'hurry_goal';
         if (!is_string($label) || $label === '') {
             $label = 'hurry_goal';
         }
-        if (saveRoutinePreferences($family_root_id, $adaptive, $label)) {
+        if (saveRoutinePreferences($family_root_id, $timerWarnings, $label, $showCountdown)) {
             $routinePreferences = getRoutinePreferences($family_root_id);
             $messages[] = ['type' => 'success', 'text' => 'Routine timer preferences saved.'];
         } else {
@@ -710,8 +711,11 @@ $routine_tasks = $isParentContext ? getRoutineTasks($family_root_id) : [];
 $routines = getRoutines($_SESSION['user_id']);
 
 foreach ($routines as &$routineEntry) {
-    $adaptiveEnabled = !empty($routinePreferences['adaptive_warnings_enabled']) ? 1 : 0;
-    $routineEntry['adaptive_warnings_enabled'] = $adaptiveEnabled;
+    $timerWarningEnabled = !empty($routinePreferences['timer_warnings_enabled']) ? 1 : 0;
+    $routineEntry['timer_warnings_enabled'] = $timerWarningEnabled;
+    $routineEntry['show_countdown'] = isset($routinePreferences['show_countdown'])
+        ? (int) $routinePreferences['show_countdown']
+        : 1;
 }
 unset($routineEntry);
 
@@ -753,8 +757,11 @@ foreach ($routines as $routine) {
 }
 
 $pagePreferences = [
-    'adaptive_warnings_enabled' => isset($routinePreferences['adaptive_warnings_enabled'])
-        ? (int) $routinePreferences['adaptive_warnings_enabled']
+    'timer_warnings_enabled' => isset($routinePreferences['timer_warnings_enabled'])
+        ? (int) $routinePreferences['timer_warnings_enabled']
+        : 1,
+    'show_countdown' => isset($routinePreferences['show_countdown'])
+        ? (int) $routinePreferences['show_countdown']
         : 1
 ];
 
@@ -836,7 +843,7 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
         .timer-title { font-weight: 700; color: #1e88e5; margin-bottom: 4px; }
         .timer-value { font-size: 1.6rem; font-weight: 700; letter-spacing: 1px; }
         .timer-warning { color: #c62828; font-weight: 600; margin-top: 6px; }
-        .sub-timer-label { font-size: 0.95rem; font-weight: 600; color: #ef6c00; margin-top: 6px; }
+        .sub-timer-label { font-size: 0.80rem; font-weight: 600; color: #ef6c00; margin-top: 0px; }
         .warning-active .timer-widget { border-color: #e53935; box-shadow: 0 0 12px rgba(229,57,53,0.25); }
         .library-table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 0.92rem; }
         .library-table th, .library-table td { border: 1px solid #e0e0e0; padding: 8px; text-align: left; }
@@ -876,20 +883,20 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
         .routine-scene.active { display: grid; grid-template-rows: auto 1fr auto; gap: 24px; }
         .routine-scene-task .task-top { display: grid; gap: 18px; }
         .flow-progress-area { display: grid; gap: 8px; }
-        .flow-progress-track { position: relative; height: 44px; background: rgba(255,255,255,0.22); border-radius: 20px; overflow: hidden; }
-        .flow-progress-fill { position: absolute; inset: 0; background: linear-gradient(90deg, #43d67e, #8fdc5d); transform: scaleX(0); transform-origin: left center; transition: background 240ms ease, box-shadow 240ms ease; z-index: 0; }
+        .flow-progress-track { position: relative; height: 52px; background: rgba(255,255,255,0.22); border-radius: 24px; overflow: hidden; border: 3px solid #c3c3c3; box-sizing: border-box; }
+        .flow-progress-fill { position: absolute; inset: 0; background: linear-gradient(90deg, #43d67e, #8fdc5d); transform: scaleX(0); transform-origin: left center; transition: background 360ms ease, box-shadow 360ms ease, filter 360ms ease; z-index: 2; }
         .flow-progress-fill.warning { background: linear-gradient(90deg, #ffcc00, #ffb300); box-shadow: 0 0 12px rgba(255,204,0,0.45); }
         .flow-progress-fill.critical { background: linear-gradient(90deg, #ff7043, #ef5350); box-shadow: 0 0 14px rgba(255,120,80,0.55); }
-        .flow-progress-min { position: absolute; inset: 0; background: rgba(252,185,50,0.4); transform: scaleX(0); transform-origin: left center; pointer-events: none; z-index: 1; transition: transform 200ms ease, opacity 200ms ease; opacity: 0; }
+        .flow-progress-min { position: absolute; inset: 0; background: #fcb932; transform: scaleX(0); transform-origin: left center; pointer-events: none; z-index: 1; transition: transform 200ms ease, opacity 200ms ease; opacity: 0; }
         .flow-progress-min.active { opacity: 1; }
-        .flow-countdown { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 1.28rem; font-weight: 700; color: #f9f9f9; text-shadow: 0 2px 6px rgba(0,0,0,0.45); letter-spacing: 0.04em; z-index: 1; pointer-events: none; transition: color 200ms ease; }
-        .flow-min-label { position: absolute; left: 50%; bottom: 4px; transform: translateX(-50%); font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: rgba(255,255,255,0.85); text-shadow: 0 2px 4px rgba(0,0,0,0.45); pointer-events: none; opacity: 0; transition: opacity 180ms ease, color 180ms ease; z-index: 2; }
+        .flow-countdown { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 1.36rem; font-weight: 700; color: #f9f9f9; text-shadow: 0 2px 6px rgba(0,0,0,0.45); letter-spacing: 0.04em; z-index: 3; pointer-events: none; transition: color 200ms ease; }
+        .flow-min-label { position: absolute; left: 50%; bottom: -2px; transform: translateX(-50%); font-size: 0.70rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: rgba(255,255,255,0.92); text-shadow: 0 2px 4px rgba(0,0,0,0.45); pointer-events: none; opacity: 0; transition: opacity 180ms ease, color 180ms ease; z-index: 4; }
         .flow-min-label.active { opacity: 1; }
         .flow-min-label.met { color: #c8e6c9; }
         .flow-progress-labels { display: flex; align-items: center; gap: 16px; font-size: 0.95rem; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; }
         .flow-progress-labels .start-label,
         .flow-progress-labels .limit-label { flex: 0 0 auto; opacity: 0.85; }
-        .flow-warning { flex: 1; display: inline-flex; justify-content: center; align-items: center; min-height: 1.4em; font-size: 0.96rem; font-weight: 700; color: #ffe082; text-shadow: 0 2px 6px rgba(0,0,0,0.35); opacity: 0; transform: translateY(-4px); transition: opacity 200ms ease, transform 200ms ease, color 200ms ease; pointer-events: none; }
+        .flow-warning { flex: 1; display: inline-flex; justify-content: center; align-items: center; min-height: 1.4em; font-size: 0.80rem; font-weight: 700; color: #ffe082; text-shadow: 0 2px 6px rgba(0,0,0,0.35); opacity: 0; transform: translateY(-4px); transition: opacity 200ms ease, transform 200ms ease, color 200ms ease; pointer-events: none; }
         .flow-warning.visible { opacity: 1; transform: translateY(0); }
         .flow-warning.warning { color: #ffcc00; }
         .flow-warning.critical { color: #ffae42; }
@@ -902,6 +909,12 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
         .status-stars { display: flex; gap: 12px; justify-content: center; }
         .status-stars span { width: 60px; height: 60px; background: radial-gradient(circle at 30% 30%, #fff59d, #fbc02d); clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%); box-shadow: 0 6px 16px rgba(0,0,0,0.3); opacity: 0.2; transform: scale(0.8); transition: transform 200ms ease, opacity 200ms ease; }
         .status-stars span.active { opacity: 1; transform: scale(1); }
+        .status-stars span.sparkle { animation: starSparkle 480ms ease-out forwards; }
+        @keyframes starSparkle {
+            0% { transform: scale(0.4) rotate(-18deg); opacity: 0; }
+            60% { transform: scale(1.2) rotate(8deg); opacity: 1; }
+            100% { transform: scale(1) rotate(0deg); opacity: 1; }
+        }
         .status-summary { text-align: center; font-size: 1.1rem; display: grid; gap: 8px; }
         .status-summary strong { font-size: 1.4rem; }
         .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
@@ -915,9 +928,23 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
         .hold-overlay .hold-overlay-box.is-message { font-size: 1.8rem; }
         .toggle-inline { display: inline-flex; align-items: center; gap: 8px; margin-top: 6px; font-weight: 600; }
         .toggle-inline input[type="checkbox"] { margin: 0; }
-        .routine-flow-container audio[data-role="flow-music"] { display: none; }
-        .library-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; }
-        .library-card { background: #fff; border-radius: 16px; box-shadow: 0 6px 18px rgba(15,70,140,0.12); padding: 20px 22px; display: flex; flex-direction: column; gap: 16px; }
+        .routine-flow-container audio[data-role="flow-music"],
+        .routine-flow-container audio[data-role="status-sound"],
+        .routine-flow-container audio[data-role="status-coin"],
+        .routine-flow-container audio[data-role="summary-sound"] { display: none; }
+        .toggle-control { display: flex; align-items: center; gap: 14px; padding: 10px 0; }
+        .toggle-switch { position: relative; display: inline-block; width: 52px; height: 28px; }
+        .toggle-switch input { opacity: 0; width: 0; height: 0; }
+        .toggle-slider { position: absolute; inset: 0; border-radius: 999px; background: #b0bec5; transition: background 160ms ease; cursor: pointer; }
+        .toggle-slider::before { content: ''; position: absolute; width: 22px; height: 22px; left: 4px; top: 3px; border-radius: 50%; background: #fff; transition: transform 160ms ease; }
+        .toggle-switch input:checked + .toggle-slider { background: linear-gradient(135deg, #42a5f5, #1e88e5); }
+        .toggle-switch input:checked + .toggle-slider::before { transform: translateX(24px); }
+        .toggle-copy { display: flex; flex-direction: column; gap: 2px; }
+        .toggle-title { font-weight: 700; color: #0d47a1; }
+        .toggle-sub { font-size: 0.8rem; color: #546e7a; }
+        body.countdown-disabled .flow-countdown { display: none !important; }
+        .library-grid { display: flex; flex-direction: column; gap: 20px; }
+        .library-card { width: 100%; background: #fff; border-radius: 16px; box-shadow: 0 6px 18px rgba(15,70,140,0.12); padding: 20px 22px; display: flex; flex-direction: column; gap: 16px; }
         .library-card h3 { margin: 0; font-size: 1.4rem; color: #0d47a1; font-weight: 700; }
         .library-form .input-group { display: grid; gap: 6px; margin-bottom: 12px; }
         .library-form label { font-weight: 600; color: #37474f; }
@@ -938,9 +965,10 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
         .library-filters select { border: 1px solid #c5cae9; border-radius: 10px; padding: 8px 12px; font-size: 0.9rem; }
         .library-collapse { border: 1px solid rgba(13, 71, 161, 0.1); border-radius: 12px; padding: 0 0 6px; background: rgba(236, 245, 255, 0.55); }
         .library-toggle { cursor: pointer; font-weight: 700; padding: 12px 16px; position: relative; display: flex; align-items: center; gap: 10px; color: #1565c0; }
-        .library-toggle::after { content: '?'; font-size: 0.9rem; transition: transform 160ms ease; }
+        .library-toggle::after { content: '\25BC'; font-size: 0.95rem; transition: transform 200ms ease; }
         .library-collapse[open] .library-toggle::after { transform: rotate(180deg); }
-        .library-table-wrap { overflow-x: auto; padding: 0 12px 12px; }
+        .library-table-wrap { overflow: hidden; max-height: 0; opacity: 0; transform: translateY(-6px); transition: max-height 260ms ease, opacity 220ms ease, transform 220ms ease; padding: 0 12px; }
+        .library-collapse[open] .library-table-wrap { max-height: 2000px; opacity: 1; transform: translateY(0); padding: 0 12px 12px; overflow: auto; }
         .library-table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
         .library-table thead th { text-align: left; padding: 10px 8px; background: rgba(21,101,192,0.15); color: #0d47a1; font-weight: 700; }
         .library-table tbody tr { border-bottom: 1px solid rgba(96,125,139,0.18); transition: background 140ms ease; }
@@ -994,12 +1022,25 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
             <section class="routine-section">
                 <h2>Routine Timer Preferences</h2>
                 <form method="POST" class="form-grid" autocomplete="off">
-                    <div class="form-group">
-                        <label>
-                            <input type="checkbox" name="adaptive_warnings_enabled" value="1" <?php echo $routinePreferences['adaptive_warnings_enabled'] ? 'checked' : ''; ?>>
-                            Enable Task Time Warnings
+                    <div class="toggle-control">
+                        <label class="toggle-switch">
+                            <input type="checkbox" name="timer_warnings_enabled" value="1" <?php echo !empty($routinePreferences['timer_warnings_enabled']) ? 'checked' : ''; ?>>
+                            <span class="toggle-slider"></span>
                         </label>
-                        <small>Shows task alerts at 75% and 90% of the timer so children know when to hurry.</small>
+                        <div class="toggle-copy">
+                            <span class="toggle-title">Timer Warnings</span>
+                            <span class="toggle-sub">Show reminder messages as the task timer nears its limit.</span>
+                        </div>
+                    </div>
+                    <div class="toggle-control">
+                        <label class="toggle-switch">
+                            <input type="checkbox" name="show_countdown" value="1" <?php echo !empty($routinePreferences['show_countdown']) ? 'checked' : ''; ?>>
+                            <span class="toggle-slider"></span>
+                        </label>
+                        <div class="toggle-copy">
+                            <span class="toggle-title">Show Countdown Timer</span>
+                            <span class="toggle-sub">Display remaining time inside the task progress bar.</span>
+                        </div>
                     </div>
                     <div class="form-actions">
                         <button type="submit" name="save_routine_preferences" class="button">Save Preferences</button>
@@ -1201,8 +1242,8 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                         </label>
                         <small>Children must stay on this task at least this long before moving on.</small>
                         <label>
-                            Point Value
-                            <input type="number" name="edit_rt_point_value" min="0" value="<?php echo (int) $task['point_value']; ?>">
+                           Point Value
+                           <input type="number" name="edit_rt_point_value" min="0" value="<?php echo (int) $task['point_value']; ?>">
                         </label>
                         <label>
                             Category
@@ -1244,7 +1285,18 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                         $isChildView = (getEffectiveRole($_SESSION['user_id']) === 'child');
                         $cardClasses = 'routine-card' . ($isChildView ? ' child-view' : '');
                     ?>
-                    <article class="<?php echo $cardClasses; ?>" data-routine-id="<?php echo (int) $routine['id']; ?>">
+                    <?php
+                        $timerWarningAttr = isset($routine['timer_warnings_enabled'])
+                            ? (int) $routine['timer_warnings_enabled']
+                            : (int) ($pagePreferences['timer_warnings_enabled'] ?? 1);
+                        $countdownAttr = isset($routine['show_countdown'])
+                            ? (int) $routine['show_countdown']
+                            : (int) ($pagePreferences['show_countdown'] ?? 1);
+                    ?>
+                    <article class="<?php echo $cardClasses; ?>"
+                        data-routine-id="<?php echo (int) $routine['id']; ?>"
+                        data-timer-warnings="<?php echo $timerWarningAttr; ?>"
+                        data-show-countdown="<?php echo $countdownAttr; ?>">
                         <header>
                             <h3><?php echo htmlspecialchars($routine['title']); ?></h3>
                             <div class="routine-details">
@@ -1296,7 +1348,11 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                                 <div class="card-actions">
                                     <button type="button" class="button start-next-button" data-action="open-flow">Start Routine</button>
                                 </div>
-                                <div class="routine-flow-overlay" data-role="routine-flow" aria-hidden="true">
+                        <div class="routine-flow-overlay"
+                            data-role="routine-flow"
+                            data-timer-warnings="<?php echo $timerWarningAttr; ?>"
+                            data-show-countdown="<?php echo $countdownAttr; ?>"
+                            aria-hidden="true">
                                     <div class="routine-flow-container" role="dialog" aria-modal="true">
                                         <header class="routine-flow-header">
                                             <div class="routine-flow-heading">
@@ -1315,6 +1371,15 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                                         </div>
                                         <audio data-role="flow-music" preload="auto" loop>
                                             <source src="sounds/backgroundMusic/music-for-game-fun-kid-game-163649.mp3" type="audio/mpeg">
+                                        </audio>
+                                        <audio data-role="status-sound" preload="auto">
+                                            <source src="sounds/sfx/charming-twinkle-sound-for-fantasy-and-magic-1.mp3" type="audio/mpeg">
+                                        </audio>
+                                        <audio data-role="status-coin" preload="auto">
+                                            <source src="sounds/sfx/coin-257878.mp3" type="audio/mpeg">
+                                        </audio>
+                                        <audio data-role="summary-sound" preload="auto">
+                                            <source src="sounds/sfx/068232_successwav-82815.mp3" type="audio/mpeg">
                                         </audio>
                                         <main class="routine-flow-stage">
                                             <section class="routine-scene routine-scene-task active" data-scene="task">
@@ -1468,9 +1533,11 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                 createInitial: [],
                 editInitial: {},
                 routines: [],
-                preferences: { adaptive_warnings_enabled: 1 }
+                preferences: { timer_warnings_enabled: 1, show_countdown: 1 }
             };
-
+            const hasCountdownPreference = page.preferences && typeof page.preferences.show_countdown !== 'undefined';
+            const countdownEnabled = hasCountdownPreference ? Number(page.preferences.show_countdown) > 0 : true;
+            document.body.classList.toggle('countdown-disabled', !countdownEnabled);
             const taskLookup = new Map((Array.isArray(page.tasks) ? page.tasks : []).map(task => [String(task.id), task]));
             const htmlDecodeField = document.createElement('textarea');
 
@@ -1780,6 +1847,12 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                     this.summaryAccountEl = this.overlay ? this.overlay.querySelector("[data-role='summary-account-total']") : null;
                     this.summaryBonusTotalEl = this.overlay ? this.overlay.querySelector("[data-role='summary-bonus-total']") : null;
                     this.summaryBonusEl = this.overlay ? this.overlay.querySelector("[data-role='summary-bonus']") : null;
+                    this.statusChime = this.overlay ? this.overlay.querySelector("[data-role='status-sound']") : null;
+                    this.statusCoinSound = this.overlay ? this.overlay.querySelector("[data-role='status-coin']") : null;
+                    this.summaryChime = this.overlay ? this.overlay.querySelector("[data-role='summary-sound']") : null;
+                    this.statusSequenceToken = 0;
+                    this.starAnimationTimers = [];
+                    this.activeCoinClips = [];
                     this.holdOverlay = this.overlay ? this.overlay.querySelector("[data-role='hold-overlay']") : null;
                     this.holdCountdownEl = this.overlay ? this.overlay.querySelector("[data-role='hold-countdown']") : null;
                     this.bonusPossible = Math.max(0, parseInt(this.routine.bonus_points, 10) || 0);
@@ -1789,19 +1862,14 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                         this.backgroundAudio.volume = 0.35;
                     }
 
-                    const resolvedToggle = (() => {
-                        const routineValue = Number(routine.adaptive_warnings_enabled);
-                        if (Number.isFinite(routineValue)) {
-                            return routineValue;
-                        }
-                        const prefValue = Number(this.preferences.adaptive_warnings_enabled);
-                        if (Number.isFinite(prefValue)) {
-                            return prefValue;
-                        }
-                        return 1;
-                    })();
-                    this.adaptiveEnabled = resolvedToggle > 0;
+                    const resolvedToggle = Number(this.preferences.timer_warnings_enabled) > 0;
+                    this.timerWarningsEnabled = resolvedToggle;
 
+                    const resolvedCountdown = Number(this.preferences.show_countdown) > 0;
+                    this.showCountdown = resolvedCountdown;
+                    if (this.countdownEl) {
+                        this.countdownEl.style.display = this.showCountdown ? '' : 'none';
+                    }
                     this.sceneMap = new Map();
                     if (this.overlay) {
                         this.overlay.querySelectorAll('.routine-scene').forEach(scene => {
@@ -1835,6 +1903,8 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                     this.holdRemaining = 5;
                     this.exitPointerId = null;
                     this.messageTimeout = null;
+                    this.starAnimationTimers = [];
+                    this.summaryPlayed = false;
 
                     this.initializeTaskDurations();
                     this.resetWarningState();
@@ -1929,17 +1999,30 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                         return;
                     }
                     this.progressFillEl.classList.remove('warning', 'critical');
-                    if (!this.adaptiveEnabled || !this.currentTask || this.currentScene !== 'task' || this.scheduledSeconds <= 0) {
+                    const canEvaluate = this.currentTask && this.currentScene === 'task' && this.scheduledSeconds > 0;
+                    if (!canEvaluate) {
                         this.setWarning('');
                         return;
                     }
 
                     const ratio = Math.max(0, Math.min(1, progressRatio));
-                    if (ratio >= 0.9 || isOvertime) {
+                    const criticalState = ratio >= 0.9 || isOvertime;
+                    const warningState = !criticalState && ratio >= 0.75;
+
+                    if (criticalState) {
                         this.progressFillEl.classList.add('critical');
-                        this.setWarning('Not much time left, finish soon to earn full points.', 'critical');
-                    } else if (ratio >= 0.75) {
+                    } else if (warningState) {
                         this.progressFillEl.classList.add('warning');
+                    }
+
+                    if (!this.timerWarningsEnabled) {
+                        this.setWarning('');
+                        return;
+                    }
+
+                    if (criticalState) {
+                        this.setWarning('Not much time left, finish soon to earn full points.', 'critical');
+                    } else if (warningState) {
                         this.setWarning('Time is almost up, hurry to finish task on time.', 'warning');
                     } else {
                         this.setWarning('');
@@ -1976,6 +2059,13 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                     this.minLabelEl.classList.toggle('met', this.elapsedSeconds >= minSeconds);
                 }
 
+                updateCountdownVisibility() {
+                    if (!this.countdownEl) {
+                        return;
+                    }
+                    this.countdownEl.style.display = this.showCountdown ? '' : 'none';
+                }
+
                 playBackgroundMusic() {
                     if (!this.backgroundAudio) {
                         return;
@@ -2000,6 +2090,245 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                             // ignore resetting issues
                         }
                     }
+                }
+
+                playAudioClip(audio, reset = true) {
+                    if (!audio) {
+                        return;
+                    }
+                    try {
+                        if (reset) {
+                            audio.currentTime = 0;
+                        }
+                        const attempt = audio.play();
+                        if (attempt && typeof attempt.catch === 'function') {
+                            attempt.catch(() => {});
+                        }
+                    } catch (e) {
+                        // ignore play issues
+                    }
+                }
+
+                playAudioClipAsync(audio, reset = true) {
+                    return new Promise(resolve => {
+                        if (!audio) {
+                            resolve();
+                            return;
+                        }
+                        let resolved = false;
+                        let fallbackTimer = null;
+                        const cleanup = () => {
+                            if (resolved) return;
+                            resolved = true;
+                            audio.removeEventListener('ended', onResolve);
+                            audio.removeEventListener('error', onResolve);
+                            audio.removeEventListener('loadedmetadata', onMetadata);
+                            if (fallbackTimer) {
+                                clearTimeout(fallbackTimer);
+                            }
+                            resolve();
+                        };
+                        const onResolve = () => cleanup();
+                        const durationFallback = () => Math.max(200, ((isFinite(audio.duration) && audio.duration > 0 ? audio.duration : 0.35) * 1000) + 80);
+                        const onMetadata = () => {
+                            if (fallbackTimer) {
+                                clearTimeout(fallbackTimer);
+                            }
+                            if (isFinite(audio.duration) && audio.duration > 0) {
+                                fallbackTimer = setTimeout(cleanup, durationFallback());
+                            }
+                        };
+                        audio.addEventListener('ended', onResolve, { once: true });
+                        audio.addEventListener('error', onResolve, { once: true });
+                        audio.addEventListener('loadedmetadata', onMetadata);
+                        try {
+                            audio.pause();
+                            if (reset) {
+                                audio.currentTime = 0;
+                            }
+                        } catch (e) {
+                            // ignore
+                        }
+                        const playPromise = audio.play();
+                        if (playPromise && typeof playPromise.catch === 'function') {
+                            playPromise.catch(() => cleanup());
+                        }
+                        if (audio.readyState >= 1 && isFinite(audio.duration) && audio.duration > 0) {
+                            fallbackTimer = setTimeout(cleanup, durationFallback());
+                        } else if (!fallbackTimer) {
+                            fallbackTimer = setTimeout(cleanup, 5000);
+                        }
+                    });
+                }
+
+                clearStatusAnimations(incrementToken = true) {
+                    if (incrementToken) {
+                        this.statusSequenceToken += 1;
+                    }
+                    if (!Array.isArray(this.starAnimationTimers)) {
+                        this.starAnimationTimers = [];
+                    }
+                    if (Array.isArray(this.starAnimationTimers) && this.starAnimationTimers.length) {
+                        this.starAnimationTimers.forEach(timer => clearTimeout(timer));
+                        this.starAnimationTimers = [];
+                    }
+                    if (this.statusChime) {
+                        try {
+                            this.statusChime.pause();
+                            this.statusChime.currentTime = 0;
+                        } catch (e) {}
+                    }
+                    if (this.statusCoinSound) {
+                        try {
+                            this.statusCoinSound.pause();
+                            this.statusCoinSound.currentTime = 0;
+                        } catch (e) {}
+                    }
+                    if (!Array.isArray(this.activeCoinClips)) {
+                        this.activeCoinClips = [];
+                    }
+                    if (this.activeCoinClips.length) {
+                        this.activeCoinClips.forEach(record => {
+                            if (!record || !record.clip) {
+                                return;
+                            }
+                            try {
+                                record.clip.pause();
+                            } catch (e) {}
+                            try {
+                                record.clip.currentTime = 0;
+                            } catch (e) {}
+                            if (typeof record.finish === 'function') {
+                                record.finish();
+                            }
+                        });
+                        this.activeCoinClips = [];
+                    }
+                    if (Array.isArray(this.statusStars)) {
+                        this.statusStars.forEach(star => star.classList.remove('sparkle'));
+                    }
+                    return this.statusSequenceToken;
+                }
+
+                handleStatusSceneEnter() {
+                    const sequenceToken = this.clearStatusAnimations();
+                    const activeStars = Array.isArray(this.statusStars)
+                        ? this.statusStars.filter(star => star.classList.contains('active'))
+                        : [];
+                    this.runStatusSequence(sequenceToken, activeStars);
+                }
+
+                runStatusSequence(sequenceToken, activeStars) {
+                    const stars = Array.isArray(activeStars) ? activeStars.filter(star => star.classList.contains('active')) : [];
+                    this.playAudioClip(this.statusChime, true);
+                    if (!stars.length) {
+                        return;
+                    }
+                    if (!Array.isArray(this.starAnimationTimers)) {
+                        this.starAnimationTimers = [];
+                    }
+                    const leadInMs = 1500;
+                    const timer = setTimeout(() => {
+                        const idx = this.starAnimationTimers.indexOf(timer);
+                        if (idx !== -1) {
+                            this.starAnimationTimers.splice(idx, 1);
+                        }
+                        if (this.statusSequenceToken !== sequenceToken) {
+                            return;
+                        }
+                        this.executeStarSequence(sequenceToken, stars).catch(() => {});
+                    }, leadInMs);
+                    this.starAnimationTimers.push(timer);
+                }
+
+                async executeStarSequence(sequenceToken, stars) {
+                    for (const star of stars) {
+                        if (this.statusSequenceToken !== sequenceToken) {
+                            break;
+                        }
+                        star.classList.remove('sparkle');
+                        void star.offsetWidth;
+                        star.classList.add('sparkle');
+                        star.addEventListener('animationend', () => {
+                            star.classList.remove('sparkle');
+                        }, { once: true });
+                        await this.playCoinSoundOverlap(sequenceToken);
+                        if (this.statusSequenceToken !== sequenceToken) {
+                            break;
+                        }
+                    }
+                }
+
+                playCoinSoundOverlap(sequenceToken) {
+                    return new Promise(resolve => {
+                        if (!this.statusCoinSound) {
+                            resolve();
+                            return;
+                        }
+                        const src = this.statusCoinSound.currentSrc || this.statusCoinSound.src;
+                        const clip = src ? new Audio(src) : this.statusCoinSound.cloneNode(true);
+                        if (!clip) {
+                            resolve();
+                            return;
+                        }
+                        clip.volume = typeof this.statusCoinSound.volume === 'number' ? this.statusCoinSound.volume : 1;
+                        if (!Array.isArray(this.activeCoinClips)) {
+                            this.activeCoinClips = [];
+                        }
+                        const record = { clip, finish: null };
+                        this.activeCoinClips.push(record);
+                        let finished = false;
+                        let resolved = false;
+                        const resolveIfNeeded = () => {
+                            if (resolved) return;
+                            resolved = true;
+                            resolve();
+                        };
+                        const finalize = () => {
+                            if (finished) return;
+                            finished = true;
+                            clip.removeEventListener('ended', handleEnd);
+                            clip.removeEventListener('error', handleError);
+                            clearTimeout(timer);
+                            const idx = this.activeCoinClips.indexOf(record);
+                            if (idx !== -1) {
+                                this.activeCoinClips.splice(idx, 1);
+                            }
+                            resolveIfNeeded();
+                        };
+                        const handleEnd = () => {
+                            finalize();
+                        };
+                        const handleError = () => {
+                            finalize();
+                        };
+                        const waitMs = 220;
+                        const timer = setTimeout(() => {
+                            resolveIfNeeded();
+                        }, waitMs);
+                        record.finish = () => {
+                            try {
+                                clip.pause();
+                            } catch (e) {}
+                            try {
+                                clip.currentTime = 0;
+                            } catch (e) {}
+                            finalize();
+                        };
+                        clip.addEventListener('ended', handleEnd, { once: true });
+                        clip.addEventListener('error', handleError, { once: true });
+                        clip.play().catch(() => {
+                            finalize();
+                        });
+                    });
+                }
+
+                playSummaryCelebration() {
+                    if (this.summaryPlayed) {
+                        return;
+                    }
+                    this.summaryPlayed = true;
+                    this.playAudioClip(this.summaryChime);
                 }
 
                 displayMinimumTimeMessage() {
@@ -2173,6 +2502,7 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                         this.countdownEl.style.textShadow = '0 2px 6px rgba(0,0,0,0.45)';
                     }
                     this.resetWarningState();
+                    this.clearStatusAnimations();
                 }
 
                 closeOverlay(resetTitle = true) {
@@ -2197,6 +2527,7 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                     this.exitPointerId = null;
                     this.pauseBackgroundMusic(true);
                     this.resetWarningState();
+                    this.clearStatusAnimations();
                 }
 
                 startRoutine() {
@@ -2204,6 +2535,11 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                     this.resetWarningState();
                     this.currentScene = 'task';
                     this.resetRoutineStatuses();
+                    this.summaryPlayed = false;
+                    this.clearStatusAnimations();
+                    if (Array.isArray(this.statusStars) && this.statusStars.length) {
+                        this.statusStars.forEach(star => star.classList.remove('active'));
+                    }
                     this.tasks.forEach(task => {
                         task.status = 'pending';
                         this.markTaskPending(task.id);
@@ -2249,10 +2585,11 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                     this.stopTaskAnimation();
                     this.resetWarningState();
                     this.updateMinimumIndicators();
+                    this.updateCountdownVisibility();
                     this.updateTaskHeader();
                     this.updateNextLabel();
                     this.updateTimeLimitLabel();
-                    if (this.countdownEl) {
+                    if (this.countdownEl && this.showCountdown) {
                         this.countdownEl.style.color = '#f9f9f9';
                         this.countdownEl.style.textShadow = '0 2px 6px rgba(0,0,0,0.45)';
                     }
@@ -2300,13 +2637,17 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                     const clamped = Math.max(0, Math.min(1, ratio));
                     this.progressFillEl.style.transform = `scaleX(${clamped})`;
                     if (this.countdownEl) {
-                        this.countdownEl.textContent = displayValue;
-                        if (isOvertime) {
-                            this.countdownEl.style.color = '#d71919';
-                            this.countdownEl.style.textShadow = '0 2px 6px rgba(0,0,0,0.6)';
+                        if (this.showCountdown) {
+                            this.countdownEl.textContent = displayValue;
+                            if (isOvertime) {
+                                this.countdownEl.style.color = '#d71919';
+                                this.countdownEl.style.textShadow = '0 2px 6px rgba(0,0,0,0.6)';
+                            } else {
+                                this.countdownEl.style.color = '#f9f9f9';
+                                this.countdownEl.style.textShadow = '0 2px 6px rgba(0,0,0,0.45)';
+                            }
                         } else {
-                            this.countdownEl.style.color = '#f9f9f9';
-                            this.countdownEl.style.textShadow = '0 2px 6px rgba(0,0,0,0.45)';
+                            this.countdownEl.textContent = '';
                         }
                     }
                     this.updateTaskWarning(ratio, isOvertime);
@@ -2541,6 +2882,7 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                     if (name === 'task') {
                         this.clearMessageTimeout();
                         this.hideHoldOverlay();
+                        this.updateCountdownVisibility();
                         this.playBackgroundMusic();
                         const scheduled = this.scheduledSeconds;
                         const ratio = scheduled > 0 ? this.elapsedSeconds / Math.max(1, scheduled) : 0;
@@ -2550,6 +2892,14 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                         const resetAudio = name === 'summary' || name === 'status';
                         this.pauseBackgroundMusic(resetAudio);
                         this.resetWarningState();
+                    }
+                    if (name === 'status') {
+                        this.handleStatusSceneEnter();
+                    } else {
+                        this.clearStatusAnimations();
+                        if (name === 'summary') {
+                            this.playSummaryCelebration();
+                        }
                     }
                 }
 
