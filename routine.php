@@ -876,6 +876,14 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
         .routine-flow-next-inline { display: flex; align-items: baseline; gap: 8px; font-size: 1rem; font-weight: 600; color: rgba(255,255,255,0.85); }
         .routine-flow-next-inline .label { text-transform: uppercase; letter-spacing: 0.08em; font-size: 0.78rem; opacity: 0.8; }
         .routine-flow-next-inline .value { font-size: 1.05rem; font-weight: 700; }
+        .summary-heading { display: none; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 2px; padding: 12px 0 0; }
+        .summary-heading-title { font-size: 1.8rem; font-weight: 700; color: #fff; margin: 0; }
+        .summary-heading-label { text-transform: uppercase; font-family: 'Sigmar One', cursive; font-weight: 500; font-size: 1.1rem;      letter-spacing: 0.03em;
+         text-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
+         color: #fff; }
+        .routine-flow-overlay.summary-active .routine-flow-bar { display: none; }
+        .routine-flow-overlay.summary-active .summary-heading { display: flex; }
+        .routine-flow-overlay.summary-active [data-action="flow-exit"] { display: none; }
         .routine-flow-close { background: #d71919; border: none; color: #fff; font-weight: 600; padding: 8px 18px; border-radius: 999px; cursor: pointer; transition: background 200ms ease; }
         .routine-flow-close:hover { background: #b71515; }
         .routine-flow-stage { flex: 1; display: grid; }
@@ -1121,7 +1129,7 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                 <h2>Routine Task Library</h2>
                 <div class="library-grid">
                     <div class="library-card">
-                        <h3>Add Task</h3>
+                        <h3>Create Routine Task</h3>
                         <form method="POST" class="library-form" autocomplete="off">
                             <div class="input-group">
                                 <label for="rt_title">Task Title</label>
@@ -1363,6 +1371,10 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                                                         <span class="value" data-role="flow-next-label">First task</span>
                                                     </div>
                                                 </div>
+                                                <div class="summary-heading" data-role="summary-heading" aria-hidden="true">
+                                                    <h2 class="summary-heading-title" data-role="summary-title"><?php echo htmlspecialchars($routine['title']); ?></h2>
+                                                    <span class="summary-heading-label">Summary</span>
+                                                </div>
                                             </div>
                         <button type="button" class="routine-flow-close" data-action="flow-exit">Stop</button>
                                         </header>
@@ -1422,11 +1434,11 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                                                 <div class="summary-footer">
                                                     <div>
                                                         <span>Routine Points</span>
-                                                        <strong data-role="summary-total">0</strong>
+                                                        <strong data-role="summary-routine-total">+0</strong>
                                                     </div>
                                                     <div>
                                                         <span>Bonus Points</span>
-                                                        <strong data-role="summary-bonus-total">0</strong>
+                                                        <strong data-role="summary-bonus-total">+0</strong>
                                                     </div>
                                                     <div>
                                                         <span>Total Points Now</span>
@@ -1819,6 +1831,92 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                 }
             }
 
+            class NumberCounter {
+                constructor(element, formatter = value => String(value)) {
+                    this.el = element;
+                    this.formatter = formatter;
+                    this.frameId = null;
+                    this.timeoutId = null;
+                    this.intervalId = null;
+                    this.currentValue = 0;
+                    this.debugName = element && element.dataset ? element.dataset.role : 'counter';
+                }
+
+                setValue(value) {
+                    if (!this.el) return;
+                    this.currentValue = value;
+                    this.el.textContent = this.formatter(value);
+                }
+
+                cancelTimers() {
+                    if (this.frameId) {
+                        cancelAnimationFrame(this.frameId);
+                        this.frameId = null;
+                    }
+                    if (this.timeoutId) {
+                        clearTimeout(this.timeoutId);
+                        this.timeoutId = null;
+                    }
+                    if (this.intervalId) {
+                        clearInterval(this.intervalId);
+                        this.intervalId = null;
+                    }
+                }
+
+                animate({ from, to, duration = 1000, delay = 0, mode = 'ease' } = {}) {
+                    if (!this.el) return;
+                    const startValue = Number.isFinite(from) ? from : this.currentValue;
+                    const targetValue = Number.isFinite(to) ? to : startValue;
+                    this.cancelTimers();
+                    if (startValue === targetValue) {
+                        this.setValue(targetValue);
+                        return;
+                    }
+
+                    const startAnimation = () => {
+                        if (mode === 'step') {
+                            const diff = targetValue - startValue;
+                            const step = diff > 0 ? 1 : -1;
+                            const steps = Math.max(1, Math.abs(diff));
+                            const interval = Math.max(16, duration / steps);
+                            let current = startValue;
+                            this.setValue(current);
+                            this.intervalId = setInterval(() => {
+                                current += step;
+                                if ((step > 0 && current >= targetValue) || (step < 0 && current <= targetValue)) {
+                                    current = targetValue;
+                                }
+                                this.setValue(current);
+                                if (current === targetValue) {
+                                    this.cancelTimers();
+                                }
+                            }, interval);
+                            return;
+                        }
+
+                        const startTime = performance.now();
+                        const animateFrame = (timestamp) => {
+                            const progress = Math.min((timestamp - startTime) / duration, 1);
+                            const eased = 1 - Math.pow(1 - progress, 3);
+                            const value = Math.round(startValue + (targetValue - startValue) * eased);
+                            this.setValue(value);
+                            if (progress < 1) {
+                                this.frameId = requestAnimationFrame(animateFrame);
+                            } else {
+                                this.frameId = null;
+                            }
+                        };
+                        this.frameId = requestAnimationFrame(animateFrame);
+                    };
+
+                    if (delay > 0) {
+                        this.timeoutId = setTimeout(startAnimation, delay);
+                    } else {
+                        startAnimation();
+                    }
+                }
+            }
+
             class RoutinePlayer {
                 constructor(card, routine, preferences) {
                     this.card = card;
@@ -1843,10 +1941,12 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                     this.statusFeedbackEl = this.overlay ? this.overlay.querySelector("[data-role='status-feedback']") : null;
                     this.statusStars = this.overlay ? Array.from(this.overlay.querySelectorAll('.status-stars span')) : [];
                     this.summaryListEl = this.overlay ? this.overlay.querySelector("[data-role='summary-list']") : null;
-                    this.summaryTotalEl = this.overlay ? this.overlay.querySelector("[data-role='summary-total']") : null;
+                    this.summaryTotalEl = this.overlay ? this.overlay.querySelector("[data-role='summary-routine-total']") : null;
                     this.summaryAccountEl = this.overlay ? this.overlay.querySelector("[data-role='summary-account-total']") : null;
                     this.summaryBonusTotalEl = this.overlay ? this.overlay.querySelector("[data-role='summary-bonus-total']") : null;
                     this.summaryBonusEl = this.overlay ? this.overlay.querySelector("[data-role='summary-bonus']") : null;
+                    this.summaryHeadingEl = this.overlay ? this.overlay.querySelector("[data-role='summary-heading']") : null;
+                    this.summaryHeadingTitleEl = this.overlay ? this.overlay.querySelector("[data-role='summary-title']") : null;
                     this.statusChime = this.overlay ? this.overlay.querySelector("[data-role='status-sound']") : null;
                     this.statusCoinSound = this.overlay ? this.overlay.querySelector("[data-role='status-coin']") : null;
                     this.summaryChime = this.overlay ? this.overlay.querySelector("[data-role='summary-sound']") : null;
@@ -1854,6 +1954,14 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                     this.starAnimationTimers = [];
                     this.pendingStarTargets = [];
                     this.activeCoinClips = [];
+                    this.summaryCounters = {
+                        routine: this.summaryTotalEl ? new NumberCounter(this.summaryTotalEl, value => `+${value}`) : null,
+                        bonus: this.summaryBonusTotalEl ? new NumberCounter(this.summaryBonusTotalEl, value => `+${value}`) : null,
+                        account: this.summaryAccountEl ? new NumberCounter(this.summaryAccountEl, value => `${value}`) : null
+                    };
+                    const initialAccount = typeof page.childPoints === 'number' ? page.childPoints : 0;
+                    this.summaryStats = { routine: 0, bonus: 0, account: initialAccount };
+                    this.summaryStatsInitialized = false;
                     this.holdOverlay = this.overlay ? this.overlay.querySelector("[data-role='hold-overlay']") : null;
                     this.holdCountdownEl = this.overlay ? this.overlay.querySelector("[data-role='hold-countdown']") : null;
                     this.bonusPossible = Math.max(0, parseInt(this.routine.bonus_points, 10) || 0);
@@ -1893,6 +2001,10 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                     this.totalEarnedPoints = 0;
                     this.allWithinLimit = true;
                     this.childPoints = typeof page.childPoints === 'number' ? page.childPoints : 0;
+                    this.childPointsStart = this.childPoints;
+                    this.accountDisplayValue = this.childPoints;
+                    this.summaryStats = { routine: 0, bonus: 0, account: this.childPointsStart };
+                    this.summaryStatsInitialized = false;
                     this.taskScheduledSeconds = [];
                     this.currentScene = 'task';
                     this.warningState = { visible: false, message: '', state: '' };
@@ -2336,6 +2448,92 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                     });
                 }
 
+                parseElementNumber(el) {
+                    if (!el) return 0;
+                    const text = (el.textContent || '').replace(/[^0-9-]/g, '');
+                    const value = parseInt(text, 10);
+                    return Number.isFinite(value) ? value : 0;
+                }
+
+                updateSummaryStats({ routineTarget, bonusTarget, accountTarget, reset = false } = {}) {
+                    const desiredRoutine = Math.max(0, Number.isFinite(routineTarget) ? routineTarget : (this.totalEarnedPoints || 0));
+                    const desiredBonus = Math.max(0, Number.isFinite(bonusTarget) ? bonusTarget : (this.bonusAwarded || 0));
+                    const desiredAccount = Math.max(0, Number.isFinite(accountTarget) ? accountTarget : (this.childPoints || 0));
+
+                    const previous = this.summaryStats || {
+                        routine: 0,
+                        bonus: 0,
+                        account: Number.isFinite(this.childPointsStart) ? this.childPointsStart : (this.childPoints || 0)
+                    };
+
+                    const routineStart = reset ? 0 : previous.routine;
+                    const bonusStart = reset ? 0 : previous.bonus;
+                    const accountStart = reset
+                        ? (Number.isFinite(this.childPointsStart) ? this.childPointsStart : previous.account)
+                        : previous.account;
+
+                    if (reset && this.summaryCounters.routine) {
+                        this.summaryCounters.routine.setValue(0);
+                    }
+                    if (reset && this.summaryCounters.bonus) {
+                        this.summaryCounters.bonus.setValue(0);
+                    }
+                    if (reset && this.summaryCounters.account) {
+                        const baseAccount = Number.isFinite(this.childPointsStart) ? this.childPointsStart : 0;
+                        this.summaryCounters.account.setValue(baseAccount);
+                    }
+
+                    const baseDelay = reset ? 400 : 0;
+                    const routineChanged = reset || desiredRoutine !== previous.routine;
+                    const bonusChanged = reset || desiredBonus !== previous.bonus;
+                    const accountChanged = reset || desiredAccount !== previous.account;
+
+                    if (this.summaryCounters.routine) {
+                        if (routineChanged) {
+                        this.summaryCounters.routine.animate({
+                            from: routineStart,
+                            to: desiredRoutine,
+                            duration: 3000,
+                            delay: baseDelay,
+                            mode: 'step'
+                        });
+                        } else {
+                            this.summaryCounters.routine.setValue(desiredRoutine);
+                        }
+                    }
+                    if (this.summaryCounters.bonus) {
+                        if (bonusChanged) {
+                        this.summaryCounters.bonus.animate({
+                            from: bonusStart,
+                            to: desiredBonus,
+                            duration: 3000,
+                            delay: reset ? baseDelay + 250 : 0
+                        });
+                        } else {
+                            this.summaryCounters.bonus.setValue(desiredBonus);
+                        }
+                    }
+                    if (this.summaryCounters.account) {
+                        if (accountChanged) {
+                        this.summaryCounters.account.animate({
+                            from: accountStart,
+                            to: desiredAccount,
+                            duration: 3000,
+                            delay: reset ? baseDelay + 500 : 0
+                        });
+                        } else {
+                            this.summaryCounters.account.setValue(desiredAccount);
+                        }
+                    }
+
+                    this.summaryStats = {
+                        routine: desiredRoutine,
+                        bonus: desiredBonus,
+                        account: desiredAccount
+                    };
+                    this.accountDisplayValue = desiredAccount;
+                }
+
                 playSummaryCelebration() {
                     if (this.summaryPlayed) {
                         return;
@@ -2549,6 +2747,8 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                     this.currentScene = 'task';
                     this.resetRoutineStatuses();
                     this.summaryPlayed = false;
+                    this.childPointsStart = this.childPoints;
+                    this.accountDisplayValue = this.childPoints;
                     this.clearStatusAnimations();
                     if (Array.isArray(this.statusStars) && this.statusStars.length) {
                         this.statusStars.forEach(star => star.classList.remove('active', 'will-activate'));
@@ -2787,11 +2987,11 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                         this.completeButton.disabled = true;
                     }
                     this.showScene('summary');
-                    this.renderSummary(this.taskResults);
+                    this.renderSummary(this.taskResults, { resetAnimation: true });
                     this.finalizeRoutine();
                 }
 
-                renderSummary(results) {
+                renderSummary(results, options = {}) {
                     if (this.summaryListEl) {
                         this.summaryListEl.innerHTML = '';
                         results.forEach(result => {
@@ -2805,14 +3005,23 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                             this.summaryListEl.appendChild(card);
                         });
                     }
-                    if (this.summaryTotalEl) {
-                        this.summaryTotalEl.textContent = this.totalEarnedPoints;
+                    const routineTotal = Array.isArray(results)
+                        ? results.reduce((sum, item) => sum + Math.max(0, parseInt(item.awarded_points, 10) || 0), 0)
+                        : 0;
+                    if (!Number.isFinite(this.totalEarnedPoints)) {
+                        this.totalEarnedPoints = routineTotal;
                     }
-                    if (this.summaryBonusTotalEl) {
-                        this.summaryBonusTotalEl.textContent = String(this.bonusAwarded);
-                    }
-                    if (this.summaryAccountEl) {
-                        this.summaryAccountEl.textContent = this.childPoints;
+                    const skipStats = !!options.skipStats;
+                    if (!skipStats) {
+                        const forceReset = !!options.resetAnimation;
+                        const shouldReset = forceReset || !this.summaryStatsInitialized;
+                        this.summaryStatsInitialized = true;
+                        this.updateSummaryStats({
+                            reset: shouldReset,
+                            routineTarget: routineTotal,
+                            bonusTarget: this.bonusAwarded || 0,
+                            accountTarget: this.childPoints
+                        });
                     }
                 }
 
@@ -2837,20 +3046,14 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                             }
                             if (Array.isArray(data.task_results)) {
                                 this.taskResults = data.task_results;
-                                this.renderSummary(this.taskResults);
+                                this.renderSummary(this.taskResults, { skipStats: true });
                             }
                             if (typeof data.new_total_points === 'number') {
                                 this.childPoints = data.new_total_points;
                                 page.childPoints = this.childPoints;
-                                if (this.summaryAccountEl) {
-                                    this.summaryAccountEl.textContent = this.childPoints;
-                                }
                             }
                             if (typeof data.task_points_awarded === 'number') {
                                 this.totalEarnedPoints = data.task_points_awarded;
-                                if (this.summaryTotalEl) {
-                                    this.summaryTotalEl.textContent = data.task_points_awarded;
-                                }
                             }
                             const bonusPossible = typeof data.bonus_possible === 'number' ? data.bonus_possible : this.bonusPossible;
                             if (typeof data.bonus_possible === 'number') {
@@ -2858,9 +3061,6 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                             }
                             const bonusAwarded = typeof data.bonus_points_awarded === 'number' ? data.bonus_points_awarded : 0;
                             this.bonusAwarded = bonusAwarded;
-                            if (this.summaryBonusTotalEl) {
-                                this.summaryBonusTotalEl.textContent = String(bonusAwarded);
-                            }
                             const bonusEligible = typeof data.bonus_eligible === 'boolean' ? data.bonus_eligible : !!data.bonus_eligible;
                             if (this.summaryBonusEl) {
                                 let message = '';
@@ -2881,6 +3081,20 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                         })
                         .finally(() => {
                             this.sendOvertimeLogs();
+                            const currentStats = this.summaryStats || { routine: 0, bonus: 0, account: this.childPointsStart || 0 };
+                            const routineTarget = Math.max(0, this.totalEarnedPoints || 0);
+                            const bonusTarget = Math.max(0, this.bonusAwarded || 0);
+                            const accountTarget = Math.max(0, this.childPoints || 0);
+                            const shouldAnimate = routineTarget !== currentStats.routine
+                                || bonusTarget !== currentStats.bonus
+                                || accountTarget !== currentStats.account;
+                            if (shouldAnimate) {
+                                this.updateSummaryStats({
+                                    routineTarget,
+                                    bonusTarget,
+                                    accountTarget
+                                });
+                            }
                         });
                 }
 
@@ -2893,8 +3107,14 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                             scene.classList.remove('active');
                         }
                     });
-                    if (name === 'summary' && this.summaryAccountEl) {
-                        this.summaryAccountEl.textContent = this.childPoints;
+                    if (this.overlay) {
+                        this.overlay.classList.toggle('summary-active', name === 'summary');
+                    }
+                    if (this.summaryHeadingEl) {
+                        this.summaryHeadingEl.setAttribute('aria-hidden', name === 'summary' ? 'false' : 'true');
+                    }
+                    if (this.summaryHeadingTitleEl) {
+                        this.summaryHeadingTitleEl.textContent = this.routine.title || 'Routine';
                     }
                     if (name === 'task') {
                         this.clearMessageTimeout();

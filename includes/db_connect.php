@@ -4,11 +4,25 @@
 // Inputs: None (uses defined constants)
 // Outputs: PDO connection object or error termination
 
+
 // Define database credentials (move to config file in later phases for security)
+//Database connection details
+
+// Local Development database
 define('DB_HOST', 'localhost');
 define('DB_USER', 'root'); // Update with your MySQL username
 define('DB_PASS', '');     // Update with your MySQL password
 define('DB_NAME', 'child_chore_app'); // Database name
+
+
+// Live server database
+// define('DB_HOST', 'localhost');
+// define('DB_USER', 'u207292155_rudyjm333');
+// define('DB_PASS', 'Matrix_1645');
+// define('DB_NAME', 'u207292155_child_chore_ap');
+
+
+
 
 try {
     // Create PDO connection with error handling
