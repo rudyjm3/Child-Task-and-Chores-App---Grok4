@@ -798,6 +798,7 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
         .role-badge { margin-left: 8px; padding: 2px 8px; border-radius: 999px; background: #4caf50; color: #fff; font-size: 0.82rem; }
         .routine-layout { max-width: 1080px; margin: 0 auto; padding: 0 16px 40px; }
         .routine-section { background: #fff; border-radius: 10px; box-shadow: 0 2px 6px rgba(0,0,0,0.08); padding: 20px; margin-bottom: 24px; }
+        .routine-card-grid { display: grid; gap: 20px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
         .routine-section h2 { margin-top: 0; font-size: 1.5rem; }
         .form-grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
         .form-group { display: flex; flex-direction: column; gap: 6px; }
@@ -830,6 +831,8 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
         .task-list li { background: rgba(255,255,255,0.85); border-radius: 8px; padding: 10px 12px; border-left: 4px solid #64b5f6; }
         .task-list li .dependency { font-size: 0.8rem; color: #6d4c41; }
         .card-actions { margin-top: 16px; display: flex; flex-wrap: wrap; gap: 12px; }
+        .routine-card-actions { margin-top: 16px; display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: center; }
+        .routine-card-actions .button { flex: 1 1 45%; min-width: 0; text-align: center; }
         .collapsible-card { border: none; margin: 12px 0 0; padding: 0; }
         .collapsible-card summary { list-style: none; }
         .collapsible-card summary::-webkit-details-marker,
@@ -869,7 +872,8 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
         .routine-flow-overlay { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(10, 24, 64, 0.72); z-index: 1200; opacity: 0; pointer-events: none; transition: opacity 250ms ease; }
         .routine-flow-overlay.active { opacity: 1; pointer-events: auto; }
         .routine-flow-container { width: min(1040px, 95vw); max-height: 90vh; background: linear-gradient(155deg, #7bc4ff, #a077ff); border-radius: 26px; padding: 32px; box-shadow: 0 18px 48px rgba(0,0,0,0.25); color: #fff; display: flex; flex-direction: column; position: relative; overflow: hidden; }
-        .routine-flow-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; margin-bottom: 24px; }
+        .routine-flow-header { display: flex; flex-direction: column; align-items: flex-start; gap: 14px; margin-bottom: 24px; }
+        .routine-flow-close { align-self: flex-start; }
         .routine-flow-heading { display: flex; flex-direction: column; gap: 10px; flex: 1; width: 100%;}
         .routine-flow-bar { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; width: 100%;}
         .routine-flow-title { font-size: 1.9rem; font-weight: 700; margin: 0; }
@@ -988,6 +992,7 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
             .selected-task-item { grid-template-columns: 1fr; }
             .drag-handle { display: none; }
             .card-actions { flex-direction: column; }
+            .routine-card-actions { flex-direction: column; align-items: stretch; }
             .routine-flow-container { padding: 22px; border-radius: 20px; }
             .routine-flow-header { flex-direction: column; align-items: stretch; }
             .routine-flow-bar { flex-direction: column; align-items: flex-start; gap: 6px; }
@@ -1288,6 +1293,7 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
             <?php if (empty($routines)): ?>
                 <p class="no-data">No routines available.</p>
             <?php else: ?>
+                <div class="routine-card-grid">
                 <?php foreach ($routines as $routine): ?>
                     <?php
                         $isChildView = (getEffectiveRole($_SESSION['user_id']) === 'child');
@@ -1300,6 +1306,11 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                         $countdownAttr = isset($routine['show_countdown'])
                             ? (int) $routine['show_countdown']
                             : (int) ($pagePreferences['show_countdown'] ?? 1);
+                        $totalRoutinePoints = 0;
+                        foreach ($routine['tasks'] as $taskPoints) {
+                            $totalRoutinePoints += (int) ($taskPoints['point_value'] ?? 0);
+                        }
+                        $detailsId = 'routine-details-' . (int) $routine['id'];
                     ?>
                     <article class="<?php echo $cardClasses; ?>"
                         data-routine-id="<?php echo (int) $routine['id']; ?>"
@@ -1309,53 +1320,58 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                             <h3><?php echo htmlspecialchars($routine['title']); ?></h3>
                             <div class="routine-details">
                                 <span>Timeframe: <?php echo date('g:i A', strtotime($routine['start_time'])) . ' - ' . date('g:i A', strtotime($routine['end_time'])); ?></span>
-                                <span>Bonus Points: <?php echo (int) $routine['bonus_points']; ?></span>
+                                <span>Routine: <?php echo $totalRoutinePoints; ?> pts - Bonus: <?php echo (int) $routine['bonus_points']; ?> pts</span>
                                 <span>Recurrence: <?php echo htmlspecialchars($routine['recurrence'] ?: 'None'); ?></span>
                                 <?php if (!empty($routine['creator_display_name'])): ?>
                                     <span>Created by: <?php echo htmlspecialchars($routine['creator_display_name']); ?></span>
                                 <?php endif; ?>
                             </div>
                         </header>
-                        <details class="collapsible-card" data-role="collapsible-wrapper">
-                            <summary class="collapse-toggle">Toggle Routine Details</summary>
-                            <div class="collapsible-content" data-role="collapsible">
-                            <ul class="task-list">
-                                <?php foreach ($routine['tasks'] as $task): ?>
-                                    <?php
-                                        $taskStatus = $task['status'] ?? 'pending';
-                                        $isCompleted = ($taskStatus === 'completed');
-                                        $itemClasses = [];
-                                        if ($isCompleted) {
-                                            $itemClasses[] = $isChildView ? 'task-completed' : 'completed';
-                                        }
-                                        $classAttr = !empty($itemClasses) ? ' class="' . implode(' ', $itemClasses) . '"' : '';
-                                    ?>
-                                    <li data-routine-task-id="<?php echo (int) $task['id']; ?>"<?php echo $classAttr; ?>>
-                                        <?php if ($isChildView): ?>
-                                            <input class="task-checkbox" type="checkbox" <?php echo ($taskStatus === 'completed') ? 'checked' : ''; ?> disabled>
-                                        <?php elseif ($isParentContext): ?>
-                                            <label class="task-checkbox">
-                                                <input type="checkbox" name="parent_completed[]" value="<?php echo (int) $task['id']; ?>" form="parent-complete-form-<?php echo (int) $routine['id']; ?>" <?php echo $isCompleted ? 'checked' : ''; ?>>
-                                                <span class="sr-only">Mark <?php echo htmlspecialchars($task['title']); ?> completed</span>
-                                            </label>
-                                        <?php endif; ?>
-                                        <strong><?php echo htmlspecialchars($task['title']); ?></strong>
-                                        <div class="task-meta">
-                                            <?php echo (int) $task['time_limit']; ?> min
-                                            <span class="status-pill status-<?php echo htmlspecialchars($taskStatus); ?> <?php echo htmlspecialchars($taskStatus); ?>">
-                                                <?php echo htmlspecialchars($taskStatus); ?>
-                                            </span>
-                                        </div>
-                                        <?php if (!empty($task['dependency_id'])): ?>
-                                            <div class="dependency">Depends on Task ID: <?php echo (int) $task['dependency_id']; ?></div>
-                                        <?php endif; ?>
-                                    </li>
-                                <?php endforeach; ?>
-                            </ul>
+                        <div class="routine-card-actions">
                             <?php if ($isChildView): ?>
-                                <div class="card-actions">
-                                    <button type="button" class="button start-next-button" data-action="open-flow">Start Routine</button>
-                                </div>
+                                <button type="button" class="button start-next-button" data-action="open-flow">Start Routine</button>
+                            <?php endif; ?>
+                            <button type="button" class="button secondary view-details-button" data-toggle-details="<?php echo $detailsId; ?>" aria-expanded="false">View Routine Details</button>
+                        </div>
+                        <details id="<?php echo $detailsId; ?>" class="collapsible-card" data-role="collapsible-wrapper">
+                            <summary class="sr-only">View Routine Details</summary>
+                            <div class="collapsible-content" data-role="collapsible">
+                                <ul class="task-list">
+                                    <?php foreach ($routine['tasks'] as $task): ?>
+                                        <?php
+                                            $taskStatus = $task['status'] ?? 'pending';
+                                            $isCompleted = ($taskStatus === 'completed');
+                                            $itemClasses = [];
+                                            if ($isCompleted) {
+                                                $itemClasses[] = $isChildView ? 'task-completed' : 'completed';
+                                            }
+                                            $classAttr = !empty($itemClasses) ? ' class="' . implode(' ', $itemClasses) . '"' : '';
+                                        ?>
+                                        <li data-routine-task-id="<?php echo (int) $task['id']; ?>"<?php echo $classAttr; ?>>
+                                            <?php if ($isChildView): ?>
+                                                <input class="task-checkbox" type="checkbox" <?php echo ($taskStatus === 'completed') ? 'checked' : ''; ?> disabled>
+                                            <?php elseif ($isParentContext): ?>
+                                                <label class="task-checkbox">
+                                                    <input type="checkbox" name="parent_completed[]" value="<?php echo (int) $task['id']; ?>" form="parent-complete-form-<?php echo (int) $routine['id']; ?>" <?php echo $isCompleted ? 'checked' : ''; ?>>
+                                                    <span class="sr-only">Mark <?php echo htmlspecialchars($task['title']); ?> completed</span>
+                                                </label>
+                                            <?php endif; ?>
+                                            <strong><?php echo htmlspecialchars($task['title']); ?></strong>
+                                            <div class="task-meta">
+                                                <?php echo (int) $task['time_limit']; ?> min
+                                                <span class="status-pill status-<?php echo htmlspecialchars($taskStatus); ?> <?php echo htmlspecialchars($taskStatus); ?>">
+                                                    <?php echo htmlspecialchars($taskStatus); ?>
+                                                </span>
+                                            </div>
+                                            <?php if (!empty($task['dependency_id'])): ?>
+                                                <div class="dependency">Depends on Task ID: <?php echo (int) $task['dependency_id']; ?></div>
+                                            <?php endif; ?>
+                                        </li>
+                                    <?php endforeach; ?>
+                                </ul>
+                            </div>
+                        </details>
+                        <?php if ($isChildView): ?>
                         <div class="routine-flow-overlay"
                             data-role="routine-flow"
                             data-timer-warnings="<?php echo $timerWarningAttr; ?>"
@@ -1450,7 +1466,8 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                                         </main>
                                     </div>
                                 </div>
-                            <?php elseif ($isParentContext): ?>
+                        <?php endif; ?>
+                        <?php if ($isParentContext): ?>
                                 <form method="POST" action="routine.php" class="parent-complete-form" id="parent-complete-form-<?php echo (int) $routine['id']; ?>">
                                     <input type="hidden" name="routine_id" value="<?php echo (int) $routine['id']; ?>">
                                     <button type="submit" name="parent_complete_routine" class="button">Complete Routine</button>
@@ -1529,6 +1546,7 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                         </details>
                     </article>
                 <?php endforeach; ?>
+                </div>
             <?php endif; ?>
         </section>
     </main>
@@ -1927,6 +1945,7 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
 
                     this.openButton = card.querySelector("[data-action='open-flow']");
                     this.overlay = card.querySelector("[data-role='routine-flow']");
+                    this.overlayMounted = false;
                     this.flowTitleEl = this.overlay ? this.overlay.querySelector("[data-role='flow-title']") : null;
                     this.nextLabelEl = this.overlay ? this.overlay.querySelector("[data-role='flow-next-label']") : null;
                     this.progressFillEl = this.overlay ? this.overlay.querySelector("[data-role='flow-progress']") : null;
@@ -2029,7 +2048,12 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                     if (!this.openButton || !this.overlay) {
                         return;
                     }
-                    this.openButton.addEventListener('click', () => this.openFlow());
+                    this.openButton.addEventListener('click', () => {
+                        try {
+                            console.log('[RoutinePlayer] open button click', { routineId: this.routine.id });
+                        } catch (e) {}
+                        this.openFlow();
+                    });
                     if (this.exitButton) {
                         this.exitButton.addEventListener('pointerdown', event => this.startHoldToExit(event, false));
                         this.exitButton.addEventListener('pointerup', () => this.cancelHoldToExit());
@@ -2056,6 +2080,17 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                         this.finishButton.addEventListener('click', () => this.closeOverlay(false));
                     }
                     this.updateNextLabel();
+                }
+
+                mountOverlay() {
+                    if (!this.overlay || this.overlayMounted) {
+                        return;
+                    }
+                    const target = document.body || document.documentElement;
+                    if (target && this.overlay.parentElement !== target) {
+                        target.appendChild(this.overlay);
+                    }
+                    this.overlayMounted = true;
                 }
 
                 initializeTaskDurations() {
@@ -2689,6 +2724,10 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                         alert('No tasks are available in this routine yet.');
                         return;
                     }
+                    try {
+                        console.log('[RoutinePlayer] openFlow', { routineId: this.routine.id });
+                    } catch (e) {}
+                    this.mountOverlay();
                     this.overlay.classList.add('active');
                     this.overlay.setAttribute('aria-hidden', 'false');
                     this.startRoutine();
@@ -2765,9 +2804,6 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                     this.bonusAwarded = 0;
                     this.currentIndex = 0;
                     this.childPoints = typeof page.childPoints === 'number' ? page.childPoints : this.childPoints;
-                    if (this.openButton) {
-                        this.openButton.textContent = 'Restart Routine';
-                    }
                     this.showScene('task');
                     this.startTask(this.currentIndex);
                     if (this.summaryBonusTotalEl) {
@@ -3076,7 +3112,7 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                         })
                         .catch(() => {
                             if (this.summaryBonusEl) {
-                                this.summaryBonusEl.textContent = 'Could not update totals�check your connection.';
+                                this.summaryBonusEl.textContent = 'Could not update totals?check your connection.';
                             }
                         })
                         .finally(() => {
@@ -3237,16 +3273,59 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                 new RoutineBuilder(container, initial);
             });
 
+            const routinePlayers = [];
             (Array.isArray(page.routines) ? page.routines : []).forEach(routine => {
                 const card = document.querySelector(`.routine-card[data-routine-id="${routine.id}"]`);
                 if (!card) return;
                 if (card.classList.contains('child-view')) {
-                    new RoutinePlayer(card, routine, page.preferences);
+                    const player = new RoutinePlayer(card, routine, page.preferences);
+                    routinePlayers.push({ id: String(routine.id), player });
                 }
             });
+
+            document.querySelectorAll('[data-toggle-details]').forEach(button => {
+                const targetId = button.getAttribute('data-toggle-details');
+                const details = targetId ? document.getElementById(targetId) : null;
+                if (!details) {
+                    return;
+                }
+                const sync = () => {
+                    button.setAttribute('aria-expanded', details.open ? 'true' : 'false');
+                };
+                button.addEventListener('click', () => {
+                    details.open = !details.open;
+                    try {
+                        console.log('[RoutineCard] toggle details', { details: targetId, open: details.open });
+                    } catch (e) {}
+                    sync();
+                });
+                details.addEventListener('toggle', sync);
+                sync();
+            });
+
+            const params = new URLSearchParams(window.location.search);
+            const startParam = params.get('start');
+            if (startParam) {
+                const match = routinePlayers.find(entry => entry.id === String(startParam));
+                if (match) {
+                    try {
+                        console.log('[RoutinePage] auto-start routine', { routineId: match.id });
+                    } catch (e) {}
+                    match.player.openFlow();
+                    params.delete('start');
+                    const newQuery = params.toString();
+                    const newUrl = `${window.location.pathname}${newQuery ? `?${newQuery}` : ''}`;
+                    window.history.replaceState({}, document.title, newUrl);
+                }
+            }
         })();
     </script>
 </body>
 </html>
 <?php
+
+
+
+
+
 

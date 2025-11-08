@@ -73,9 +73,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         .request-button { background-color: #9c27b0; }
         .start-routine-button { background-color: #4caf50; }
         /* Kid-Friendly Styles - Autism-Friendly: Bright pastels, large buttons */
-        .routine-item { background: linear-gradient(135deg, #e3f2fd, #f3e5f5); border: 2px solid #bbdefb; margin: 10px 0; }
+        .routine-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+        .routine-item { background: linear-gradient(135deg, #e3f2fd, #f3e5f5); border: 2px solid #bbdefb; margin: 0; display: flex; flex-direction: column; height: 100%; }
         .routine-item h3 { color: #1976d2; font-size: 1.5em; }
         .routine-item p { font-size: 1.1em; }
+        .routine-item .routine-points-line { display: flex; flex-wrap: wrap;    justify-content: center; gap: 12px; font-weight: 600; color: #37474f; margin: 6px 0; }
+        .routine-item .start-routine-button { align-self: center; margin-top: auto; }
         @media (max-width: 768px) { .dashboard { padding: 10px; } .button { width: 100%; } }
     </style>
     <script>
@@ -265,22 +268,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       <div class="routines">
          <h2>Routines <span style="font-size: 1.5em; color: #ff9800;">🌟</span></h2>
          <?php if (!empty($routines)): ?>
+            <div class="routine-grid">
             <?php foreach ($routines as $routine): ?>
+                  <?php
+                     $routinePointsTotal = 0;
+                     foreach ($routine['tasks'] as $task) {
+                        $routinePointsTotal += (int) ($task['point_value'] ?? 0);
+                     }
+                  ?>
                   <div class="routine-item">
                      <h3><?php echo htmlspecialchars($routine['title']); ?></h3>
                      <?php if (!empty($routine['creator_display_name'])): ?>
                         <p>Created by: <?php echo htmlspecialchars($routine['creator_display_name']); ?></p>
                      <?php endif; ?>
                      <p>Time: <?php echo date('h:i A', strtotime($routine['start_time'])) . ' - ' . date('h:i A', strtotime($routine['end_time'])); ?></p>
-                     <p>Bonus: <?php echo $routine['bonus_points']; ?> points</p>
+                     <p class="routine-points-line">
+                        <span>Routine: <?php echo $routinePointsTotal; ?> pts</span>
+                        <span>Bonus: <?php echo (int) $routine['bonus_points']; ?> pts</span>
+                     </p>
                      <button onclick="startRoutine(<?php echo $routine['id']; ?>)" class="button start-routine-button">Start Routine</button>
-                     <ul>
-                        <?php foreach ($routine['tasks'] as $task): ?>
-                           <li><?php echo htmlspecialchars($task['title']); ?> (<?php echo $task['time_limit']; ?> min)</li>
-                        <?php endforeach; ?>
-                     </ul>
                   </div>
             <?php endforeach; ?>
+            </div>
          <?php else: ?>
             <p>No routines assigned yet. Ask your parent!</p>
          <?php endif; ?>
