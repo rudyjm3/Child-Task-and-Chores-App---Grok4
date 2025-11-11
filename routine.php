@@ -1352,6 +1352,9 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                                 <button type="button" class="button start-next-button" data-action="open-flow">Start Routine</button>
                             <?php endif; ?>
                             <button type="button" class="button secondary view-details-button" data-toggle-details="<?php echo $detailsId; ?>" aria-expanded="false">View Routine Details</button>
+                            <?php if ($isParentContext): ?>
+                                <button type="submit" class="button" name="parent_complete_routine" form="parent-complete-form-<?php echo (int) $routine['id']; ?>">Complete Routine</button>
+                            <?php endif; ?>
                         </div>
                         <details id="<?php echo $detailsId; ?>" class="collapsible-card" data-role="collapsible-wrapper">
                             <summary class="sr-only">View Routine Details</summary>
@@ -1490,7 +1493,6 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                         <?php if ($isParentContext): ?>
                                 <form method="POST" action="routine.php" class="parent-complete-form" id="parent-complete-form-<?php echo (int) $routine['id']; ?>">
                                     <input type="hidden" name="routine_id" value="<?php echo (int) $routine['id']; ?>">
-                                    <button type="submit" name="parent_complete_routine" class="button">Complete Routine</button>
                                     <p class="parent-complete-note">Check the tasks completed to award points. Bonus points apply only when all tasks are checked.</p>
                                 </form>
                                 <details class="routine-section" style="margin-top: 16px; background: rgba(250,250,250,0.9);">
