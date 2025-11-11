@@ -798,7 +798,10 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
         .role-badge { margin-left: 8px; padding: 2px 8px; border-radius: 999px; background: #4caf50; color: #fff; font-size: 0.82rem; }
         .routine-layout { max-width: 1080px; margin: 0 auto; padding: 0 16px 40px; }
         .routine-section { background: #fff; border-radius: 10px; box-shadow: 0 2px 6px rgba(0,0,0,0.08); padding: 20px; margin-bottom: 24px; }
-        .routine-card-grid { display: grid; gap: 20px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+        .routine-card-grid { display: grid; gap: 20px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        @media (max-width: 768px) {
+            .routine-card-grid { grid-template-columns: 1fr; }
+        }
         .routine-section h2 { margin-top: 0; font-size: 1.5rem; }
         .form-grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
         .form-group { display: flex; flex-direction: column; gap: 6px; }
@@ -818,8 +821,6 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
         .selected-task-item.error { border-color: #f44336; }
         .drag-handle { cursor: grab; font-size: 1.2rem; color: #9e9e9e; }
         .task-meta { font-size: 0.85rem; color: #616161; }
-        .dependency-select { margin-top: 6px; }
-        .dependency-select label { font-weight: 600; font-size: 0.85rem; display: block; }
         .summary-row { display: flex; flex-wrap: wrap; gap: 16px; font-weight: 600; margin-top: 12px; }
         .summary-row .warning { color: #c62828; }
         .routine-card { border: 1px solid #e0e0e0; border-radius: 12px; padding: 18px; margin-bottom: 20px; background: linear-gradient(145deg, #ffffff, #f5f5f5); box-shadow: 0 3px 8px rgba(0,0,0,0.08); }
@@ -1293,7 +1294,7 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
             <?php if (empty($routines)): ?>
                 <p class="no-data">No routines available.</p>
             <?php else: ?>
-                <div class="routine-card-grid">
+               <div class="routine-card-grid">
                 <?php foreach ($routines as $routine): ?>
                     <?php
                         $isChildView = (getEffectiveRole($_SESSION['user_id']) === 'child');
@@ -1539,14 +1540,12 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                                             <button type="submit" name="update_routine" class="button">Save Changes</button>
                                             <button type="submit" name="delete_routine" class="button danger" onclick="return confirm('Delete this routine?');">Delete Routine</button>
                                         </div>
-                                        </form>
-                                    </details>
-                                <?php endif; ?>
-                            </div>
-                        </details>
+                                </form>
+                            </details>
+                        <?php endif; ?>
                     </article>
                 <?php endforeach; ?>
-                </div>
+               </div>
             <?php endif; ?>
         </section>
     </main>
@@ -1667,10 +1666,9 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                     this.startInput = this.resolveInput(container.dataset.startInput);
                     this.endInput = this.resolveInput(container.dataset.endInput);
                     this.selectedTasks = Array.isArray(initialTasks)
-                        ? initialTasks.map(task => ({
-                            id: parseInt(task.id, 10),
-                            dependency_id: task.dependency_id !== null ? parseInt(task.dependency_id, 10) : null
-                        })).filter(task => task.id > 0)
+                        ? initialTasks
+                            .map(task => ({ id: parseInt(task.id, 10) }))
+                            .filter(task => Number.isFinite(task.id) && task.id > 0)
                         : [];
                     this.setup();
                 }
@@ -1692,7 +1690,7 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                             const numeric = parseInt(value, 10);
                             if (Number.isNaN(numeric)) return;
                             if (this.selectedTasks.some(task => task.id === numeric)) return;
-                            this.selectedTasks.push({ id: numeric, dependency_id: null });
+                            this.selectedTasks.push({ id: numeric });
                             this.render();
                         });
                     }
@@ -1758,41 +1756,8 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                         }
                         metaSegments.push(taskData.category);
                         meta.textContent = metaSegments.join(` ${String.fromCharCode(0x2022)} `);
-                        const dependencyWrapper = document.createElement('div');
-                        dependencyWrapper.className = 'dependency-select';
-                        const label = document.createElement('label');
-                        label.textContent = 'Depends on:';
-                        const select = document.createElement('select');
-                        const noneOption = document.createElement('option');
-                        noneOption.value = '';
-                        noneOption.textContent = 'None';
-                        select.appendChild(noneOption);
-                        for (let i = 0; i < index; i++) {
-                            const allowedTask = this.selectedTasks[i];
-                            const allowedData = taskLookup.get(String(allowedTask.id));
-                            if (!allowedData) continue;
-                            const option = document.createElement('option');
-                            option.value = String(allowedTask.id);
-                            option.textContent = allowedData.title;
-                            if (allowedTask.id === task.dependency_id) {
-                                option.selected = true;
-                            }
-                            select.appendChild(option);
-                        }
-                        if (task.dependency_id !== null) {
-                            select.value = String(task.dependency_id);
-                        } else {
-                            select.value = '';
-                        }
-                        select.addEventListener('change', () => {
-                            task.dependency_id = select.value !== '' ? parseInt(select.value, 10) : null;
-                        });
-                        dependencyWrapper.appendChild(label);
-                        dependencyWrapper.appendChild(select);
-
                         body.appendChild(title);
                         body.appendChild(meta);
-                        body.appendChild(dependencyWrapper);
 
                         const removeButton = document.createElement('button');
                         removeButton.type = 'button';
@@ -1817,8 +1782,7 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                     if (!this.structureInput) return;
                     const payload = {
                         tasks: this.selectedTasks.map(task => ({
-                            id: task.id,
-                            dependency_id: task.dependency_id
+                            id: task.id
                         }))
                     };
                     this.structureInput.value = JSON.stringify(payload);
