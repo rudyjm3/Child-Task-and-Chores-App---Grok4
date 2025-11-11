@@ -1009,8 +1009,8 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
         .library-description { max-width: 320px; color: #455a64; font-size: 0.88rem; }
         .library-category { text-transform: capitalize; font-weight: 600; color: #00796b; }
         @media (max-width: 720px) {
-            .selected-task-item { grid-template-columns: 1fr; }
-            .drag-handle { display: none; }
+            .selected-task-item { grid-template-columns: auto 1fr; grid-template-rows: auto auto; align-items: flex-start; }
+            .selected-task-item .button { grid-column: 1 / -1; }
             .card-actions { flex-direction: column; }
             .routine-card-actions { flex-direction: column; align-items: stretch; }
             .routine-flow-container { padding: 22px; border-radius: 20px; }
