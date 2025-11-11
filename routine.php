@@ -821,6 +821,12 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
         .selected-task-item.error { border-color: #f44336; }
         .drag-handle { cursor: grab; font-size: 1.2rem; color: #9e9e9e; }
         .task-meta { font-size: 0.85rem; color: #616161; }
+        .routine-section-header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+        .task-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.65); display: flex; align-items: center; justify-content: center; padding: 20px; z-index: 2000; opacity: 0; pointer-events: none; transition: opacity 200ms ease; }
+        .task-modal-overlay.active { opacity: 1; pointer-events: auto; }
+        .task-modal { background: #fff; border-radius: 14px; max-width: 520px; width: min(520px, 100%); max-height: 90vh; overflow-y: auto; padding: 28px; position: relative; box-shadow: 0 18px 36px rgba(0,0,0,0.25); }
+        .task-modal h3 { margin-top: 0; }
+        .task-modal-close { position: absolute; top: 12px; right: 12px; border: none; background: transparent; font-size: 1.5rem; line-height: 1; cursor: pointer; color: #455a64; }
         .summary-row { display: flex; flex-wrap: wrap; gap: 16px; font-weight: 600; margin-top: 12px; }
         .summary-row .warning { color: #c62828; }
         .routine-card { border: 1px solid #e0e0e0; border-radius: 12px; padding: 18px; margin-bottom: 20px; background: linear-gradient(145deg, #ffffff, #f5f5f5); box-shadow: 0 3px 8px rgba(0,0,0,0.08); }
@@ -1132,47 +1138,11 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
             </section>
 
             <section class="routine-section">
-                <h2>Routine Task Library</h2>
+                <div class="routine-section-header">
+                    <h2>Routine Task Library</h2>
+                    <button type="button" class="button primary" data-action="open-task-modal">Add Routine Task</button>
+                </div>
                 <div class="library-grid">
-                    <div class="library-card">
-                        <h3>Create Routine Task</h3>
-                        <form method="POST" class="library-form" autocomplete="off">
-                            <div class="input-group">
-                                <label for="rt_title">Task Title</label>
-                                <input type="text" id="rt_title" name="rt_title" required>
-                            </div>
-                            <div class="input-group">
-                                <label for="rt_description">Description</label>
-                                <textarea id="rt_description" name="rt_description" rows="3" placeholder="Describe what the child needs to do"></textarea>
-                            </div>
-                            <div class="dual-inputs">
-                                <div class="input-group">
-                                    <label for="rt_time_limit">Time Limit (minutes)</label>
-                                    <input type="number" id="rt_time_limit" name="rt_time_limit" min="1" required>
-                                </div>
-                                <div class="input-group">
-                                    <label for="rt_point_value">Point Value</label>
-                                    <input type="number" id="rt_point_value" name="rt_point_value" min="0" value="0">
-                                </div>
-                            </div>
-                            <div class="input-group">
-                                <label for="rt_min_time">Minimum Time Before Completion (minutes)</label>
-                                <input type="number" id="rt_min_time" name="rt_min_time" min="0" step="0.1" placeholder="Optional">
-                                <small>Leave blank if the child can move on at any time.</small>
-                            </div>
-                            <div class="input-group">
-                                <label for="rt_category">Category</label>
-                                <select id="rt_category" name="rt_category">
-                                    <option value="hygiene">Hygiene</option>
-                                    <option value="homework">Homework</option>
-                                    <option value="household">Household</option>
-                                </select>
-                            </div>
-                            <div class="form-actions">
-                                <button type="submit" name="create_routine_task" class="button primary">Add Routine Task</button>
-                            </div>
-                        </form>
-                    </div>
                     <div class="library-card">
                         <div class="library-header">
                             <h3>Task Library</h3>
@@ -1283,6 +1253,48 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                                 </div>
                             </details>
                         <?php endif; ?>
+                    </div>
+                </div>
+                <div class="task-modal-overlay" data-role="task-modal" aria-hidden="true">
+                    <div class="task-modal" role="dialog" aria-modal="true" aria-labelledby="task-modal-title">
+                        <button type="button" class="task-modal-close" data-action="close-task-modal" aria-label="Close add routine task dialog">&times;</button>
+                        <h3 id="task-modal-title">Create Routine Task</h3>
+                        <form method="POST" class="library-form" autocomplete="off">
+                            <div class="input-group">
+                                <label for="rt_title">Task Title</label>
+                                <input type="text" id="rt_title" name="rt_title" required>
+                            </div>
+                            <div class="input-group">
+                                <label for="rt_description">Description</label>
+                                <textarea id="rt_description" name="rt_description" rows="3" placeholder="Describe what the child needs to do"></textarea>
+                            </div>
+                            <div class="dual-inputs">
+                                <div class="input-group">
+                                    <label for="rt_time_limit">Time Limit (minutes)</label>
+                                    <input type="number" id="rt_time_limit" name="rt_time_limit" min="1" required>
+                                </div>
+                                <div class="input-group">
+                                    <label for="rt_point_value">Point Value</label>
+                                    <input type="number" id="rt_point_value" name="rt_point_value" min="0" value="0">
+                                </div>
+                            </div>
+                            <div class="input-group">
+                                <label for="rt_min_time">Minimum Time Before Completion (minutes)</label>
+                                <input type="number" id="rt_min_time" name="rt_min_time" min="0" step="0.1" placeholder="Optional">
+                                <small>Leave blank if the child can move on at any time.</small>
+                            </div>
+                            <div class="input-group">
+                                <label for="rt_category">Category</label>
+                                <select id="rt_category" name="rt_category">
+                                    <option value="hygiene">Hygiene</option>
+                                    <option value="homework">Homework</option>
+                                    <option value="household">Household</option>
+                                </select>
+                            </div>
+                            <div class="form-actions">
+                                <button type="submit" name="create_routine_task" class="button primary">Add Routine Task</button>
+                            </div>
+                        </form>
                     </div>
                 </div>
             </section>
@@ -3223,6 +3235,47 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                 };
                 libraryFilter.addEventListener('change', updateLibraryVisibility);
                 updateLibraryVisibility();
+            }
+
+            const taskModal = document.querySelector('[data-role="task-modal"]');
+            const openTaskModalButton = document.querySelector('[data-action="open-task-modal"]');
+            const closeTaskModalButton = taskModal ? taskModal.querySelector('[data-action="close-task-modal"]') : null;
+            let taskModalLastFocus = null;
+            const toggleTaskModal = (shouldOpen) => {
+                if (!taskModal) return;
+                if (shouldOpen) {
+                    taskModalLastFocus = document.activeElement;
+                    taskModal.classList.add('active');
+                    taskModal.setAttribute('aria-hidden', 'false');
+                    const firstField = taskModal.querySelector('input, textarea, select');
+                    if (firstField) {
+                        firstField.focus();
+                    }
+                } else {
+                    taskModal.classList.remove('active');
+                    taskModal.setAttribute('aria-hidden', 'true');
+                    if (taskModalLastFocus && typeof taskModalLastFocus.focus === 'function') {
+                        taskModalLastFocus.focus();
+                    }
+                }
+            };
+            if (openTaskModalButton && taskModal) {
+                openTaskModalButton.addEventListener('click', () => toggleTaskModal(true));
+            }
+            if (closeTaskModalButton && taskModal) {
+                closeTaskModalButton.addEventListener('click', () => toggleTaskModal(false));
+            }
+            if (taskModal) {
+                taskModal.addEventListener('click', (event) => {
+                    if (event.target === taskModal) {
+                        toggleTaskModal(false);
+                    }
+                });
+                document.addEventListener('keydown', (event) => {
+                    if (event.key === 'Escape' && taskModal.classList.contains('active')) {
+                        toggleTaskModal(false);
+                    }
+                });
             }
 
             document.querySelectorAll('.routine-builder').forEach(container => {
