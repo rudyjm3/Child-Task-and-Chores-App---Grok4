@@ -829,6 +829,21 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
         .task-modal-close { position: absolute; top: 12px; right: 12px; border: none; background: transparent; font-size: 1.5rem; line-height: 1; cursor: pointer; color: #455a64; }
         .summary-row { display: flex; flex-wrap: wrap; gap: 16px; font-weight: 600; margin-top: 12px; }
         .summary-row .warning { color: #c62828; }
+        .library-card-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin: 12px auto 0; }
+        @media (min-width: 900px) {
+            .library-card-list { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+        }
+        @media (min-width: 1300px) {
+            .library-card-list { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+        }
+        .library-task-card { background: #fff; border: 1px solid #e0e0e0; border-radius: 10px; padding: 16px; display: flex; flex-direction: column; gap: 10px; box-shadow: 0 2px 6px rgba(0,0,0,0.05); }
+        .library-task-card header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+        .library-task-card h4 { margin: 0; font-size: 1.1rem; }
+        .library-task-points { font-weight: 700; color: #1e88e5; }
+        .library-task-description { margin: 0; font-size: 0.9rem; color: #546e7a; }
+        .library-task-meta { display: flex; flex-wrap: wrap; gap: 8px; font-size: 0.85rem; color: #37474f; }
+        .library-task-meta span { background: #f0f4f7; border-radius: 999px; padding: 4px 10px; }
+        .library-task-actions { margin-top: auto; display: flex; flex-direction: column; gap: 8px; }
         .routine-card { border: 1px solid #e0e0e0; border-radius: 12px; padding: 18px; margin-bottom: 20px; background: linear-gradient(145deg, #ffffff, #f5f5f5); box-shadow: 0 3px 8px rgba(0,0,0,0.08); }
         .routine-card.child-view { background: linear-gradient(160deg, #e3f2fd, #e8f5e9); border-color: #bbdefb; }
         .routine-card header { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; }
@@ -855,9 +870,7 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
         .timer-warning { color: #c62828; font-weight: 600; margin-top: 6px; }
         .sub-timer-label { font-size: 0.80rem; font-weight: 600; color: #ef6c00; margin-top: 0px; }
         .warning-active .timer-widget { border-color: #e53935; box-shadow: 0 0 12px rgba(229,57,53,0.25); }
-        .library-table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 0.92rem; }
-        .library-table th, .library-table td { border: 1px solid #e0e0e0; padding: 8px; text-align: left; }
-        .library-table th { background: #f0f4f7; }
+        .library-table-wrap { margin-top: 12px; }
         .no-data { font-style: italic; color: #757575; }
         footer { text-align: center; padding: 24px 0; color: #607d8b; }
         .routine-task-edit { margin-top: 8px; }
@@ -1159,97 +1172,91 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                         <?php if (empty($routine_tasks)): ?>
                             <p class="no-data">No routine tasks available yet. Add a task to start building routines.</p>
                         <?php else: ?>
-                            <details class="library-collapse" open>
+                            <details class="library-collapse">
                                 <summary class="library-toggle">Show Library Tasks</summary>
                                 <div class="library-table-wrap">
-                                    <table class="library-table" data-role="library-table">
-                                        <thead>
-                                            <tr>
-                                                <th>Title</th>
-                                                <th>Description</th>
-                                                <th>Time Limit</th>
-                                                <th>Minimum Time</th>
-                                                <th>Points</th>
-                                                <th>Category</th>
-                                                <th>Actions</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            <?php foreach ($routine_tasks as $task): ?>
-                                                <?php
-                                                    $taskMinSeconds = isset($task['minimum_seconds']) ? (int) $task['minimum_seconds'] : 0;
-                                                    $taskMinEnabled = !empty($task['minimum_enabled']);
-                                                    if ($taskMinSeconds > 0) {
-                                                        $taskMinMinutesPart = floor($taskMinSeconds / 60);
-                                                        $taskMinSecondsPart = $taskMinSeconds % 60;
-                                                        $taskMinDisplayBase = sprintf('%02d:%02d', $taskMinMinutesPart, $taskMinSecondsPart);
-                                                        $taskMinDisplay = $taskMinEnabled ? $taskMinDisplayBase : $taskMinDisplayBase . ' (off)';
-                                                    } else {
-                                                        $taskMinDisplay = '--';
-                                                    }
-                                                    $taskMinMinutesValue = $taskMinSeconds > 0
-                                                        ? rtrim(rtrim(number_format($taskMinSeconds / 60, 2, '.', ''), '0'), '.')
-                                                        : '';
-                                                ?>
-                                                <tr data-category="<?php echo htmlspecialchars($task['category']); ?>">
-                                                    <td><?php echo htmlspecialchars($task['title']); ?></td>
-                                                    <td class="library-description"><?php echo htmlspecialchars($task['description'] ?? '--'); ?></td>
-                                                    <td><?php echo (int) $task['time_limit']; ?> min</td>
-                                                    <td><?php echo htmlspecialchars($taskMinDisplay); ?></td>
-                                                    <td><?php echo (int) $task['point_value']; ?></td>
-                                                    <td class="library-category"><?php echo htmlspecialchars($task['category']); ?></td>
-        <td>
-            <?php if ((int) $task['parent_user_id'] === $family_root_id): ?>
-                <details class="routine-task-edit">
-                    <summary>Edit</summary>
-                    <form method="POST" class="routine-task-edit-form">
-                        <input type="hidden" name="routine_task_id" value="<?php echo (int) $task['id']; ?>">
-                        <label>
-                            Title
-                            <input type="text" name="edit_rt_title" value="<?php echo htmlspecialchars($task['title']); ?>" required>
-                        </label>
-                        <label>
-                            Description
-                            <textarea name="edit_rt_description" rows="2"><?php echo htmlspecialchars($task['description'] ?? ''); ?></textarea>
-                        </label>
-                        <label>
-                            Time Limit (min)
-                            <input type="number" name="edit_rt_time_limit" min="1" value="<?php echo (int) $task['time_limit']; ?>" required>
-                        </label>
-                        <label>
-                            Minimum Time (min)
-                            <input type="number" name="edit_rt_min_minutes" min="0" step="0.1" value="<?php echo htmlspecialchars($taskMinMinutesValue); ?>">
-                        </label>
-                        <label class="toggle-inline">
-                            <input type="checkbox" name="edit_rt_min_enabled" value="1" <?php echo $taskMinEnabled ? 'checked' : ''; ?>>
-                            Require minimum time before completion
-                        </label>
-                        <small>Children must stay on this task at least this long before moving on.</small>
-                        <label>
-                           Point Value
-                           <input type="number" name="edit_rt_point_value" min="0" value="<?php echo (int) $task['point_value']; ?>">
-                        </label>
-                        <label>
-                            Category
-                            <select name="edit_rt_category">
-                                <option value="hygiene" <?php echo ($task['category'] === 'hygiene') ? 'selected' : ''; ?>>Hygiene</option>
-                                <option value="homework" <?php echo ($task['category'] === 'homework') ? 'selected' : ''; ?>>Homework</option>
-                                <option value="household" <?php echo ($task['category'] === 'household') ? 'selected' : ''; ?>>Household</option>
-                            </select>
-                        </label>
-                        <button type="submit" name="update_routine_task" class="button">Save Changes</button>
-                    </form>
-                </details>
-                <form method="POST" style="display:inline;" onsubmit="return confirm('Delete this task?');">
-                    <input type="hidden" name="routine_task_id" value="<?php echo (int) $task['id']; ?>">
-                    <button type="submit" name="delete_routine_task" class="button danger">Delete</button>
-                </form>
-            <?php endif; ?>
-                                                    </td>
-                                                </tr>
-                                            <?php endforeach; ?>
-                                        </tbody>
-                                    </table>
+                                    <div class="library-card-list">
+                                        <?php foreach ($routine_tasks as $task): ?>
+                                            <?php
+                                                $taskMinSeconds = isset($task['minimum_seconds']) ? (int) $task['minimum_seconds'] : 0;
+                                                $taskMinEnabled = !empty($task['minimum_enabled']);
+                                                if ($taskMinSeconds > 0) {
+                                                    $taskMinMinutesPart = floor($taskMinSeconds / 60);
+                                                    $taskMinSecondsPart = $taskMinSeconds % 60;
+                                                    $taskMinDisplayBase = sprintf('%02d:%02d', $taskMinMinutesPart, $taskMinSecondsPart);
+                                                    $taskMinDisplay = $taskMinEnabled ? $taskMinDisplayBase : $taskMinDisplayBase . ' (off)';
+                                                } else {
+                                                    $taskMinDisplay = '--';
+                                                }
+                                                $taskMinMinutesValue = $taskMinSeconds > 0
+                                                    ? rtrim(rtrim(number_format($taskMinSeconds / 60, 2, '.', ''), '0'), '.')
+                                                    : '';
+                                                $taskDescription = trim((string) ($task['description'] ?? ''));
+                                            ?>
+                                            <article class="library-task-card" data-role="library-item" data-category="<?php echo htmlspecialchars($task['category']); ?>">
+                                                <header>
+                                                    <h4><?php echo htmlspecialchars($task['title']); ?></h4>
+                                                    <span class="library-task-points"><?php echo (int) $task['point_value']; ?> pts</span>
+                                                </header>
+                                                <p class="library-task-description">
+                                                    <?php echo $taskDescription !== '' ? htmlspecialchars($taskDescription) : 'No description provided.'; ?>
+                                                </p>
+                                                <div class="library-task-meta">
+                                                    <span><?php echo (int) $task['time_limit']; ?> min</span>
+                                                    <span>Min: <?php echo htmlspecialchars($taskMinDisplay); ?></span>
+                                                    <span><?php echo htmlspecialchars(ucfirst($task['category'])); ?></span>
+                                                </div>
+                                                <?php if ((int) $task['parent_user_id'] === $family_root_id): ?>
+                                                    <div class="library-task-actions">
+                                                        <details class="routine-task-edit">
+                                                            <summary>Edit</summary>
+                                                            <form method="POST" class="routine-task-edit-form">
+                                                                <input type="hidden" name="routine_task_id" value="<?php echo (int) $task['id']; ?>">
+                                                                <label>
+                                                                    Title
+                                                                    <input type="text" name="edit_rt_title" value="<?php echo htmlspecialchars($task['title']); ?>" required>
+                                                                </label>
+                                                                <label>
+                                                                    Description
+                                                                    <textarea name="edit_rt_description" rows="2"><?php echo htmlspecialchars($task['description'] ?? ''); ?></textarea>
+                                                                </label>
+                                                                <label>
+                                                                    Time Limit (min)
+                                                                    <input type="number" name="edit_rt_time_limit" min="1" value="<?php echo (int) $task['time_limit']; ?>" required>
+                                                                </label>
+                                                                <label>
+                                                                    Minimum Time (min)
+                                                                    <input type="number" name="edit_rt_min_minutes" min="0" step="0.1" value="<?php echo htmlspecialchars($taskMinMinutesValue); ?>">
+                                                                </label>
+                                                                <label class="toggle-inline">
+                                                                    <input type="checkbox" name="edit_rt_min_enabled" value="1" <?php echo $taskMinEnabled ? 'checked' : ''; ?>>
+                                                                    Require minimum time before completion
+                                                                </label>
+                                                                <small>Children must stay on this task at least this long before moving on.</small>
+                                                                <label>
+                                                                   Point Value
+                                                                   <input type="number" name="edit_rt_point_value" min="0" value="<?php echo (int) $task['point_value']; ?>">
+                                                                </label>
+                                                                <label>
+                                                                    Category
+                                                                    <select name="edit_rt_category">
+                                                                        <option value="hygiene" <?php echo ($task['category'] === 'hygiene') ? 'selected' : ''; ?>>Hygiene</option>
+                                                                        <option value="homework" <?php echo ($task['category'] === 'homework') ? 'selected' : ''; ?>>Homework</option>
+                                                                        <option value="household" <?php echo ($task['category'] === 'household') ? 'selected' : ''; ?>>Household</option>
+                                                                    </select>
+                                                                </label>
+                                                                <button type="submit" name="update_routine_task" class="button">Save Changes</button>
+                                                            </form>
+                                                        </details>
+                                                        <form method="POST" onsubmit="return confirm('Delete this task?');">
+                                                            <input type="hidden" name="routine_task_id" value="<?php echo (int) $task['id']; ?>">
+                                                            <button type="submit" name="delete_routine_task" class="button danger">Delete</button>
+                                                        </form>
+                                                    </div>
+                                                <?php endif; ?>
+                                            </article>
+                                        <?php endforeach; ?>
+                                    </div>
                                 </div>
                             </details>
                         <?php endif; ?>
@@ -3223,14 +3230,14 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
             }
 
             const libraryFilter = document.querySelector('[data-role="library-filter"]');
-            const libraryRows = libraryFilter ? Array.from(document.querySelectorAll('[data-role="library-table"] tbody tr')) : [];
-            if (libraryFilter && libraryRows.length) {
+            const libraryItems = libraryFilter ? Array.from(document.querySelectorAll('[data-role="library-item"]')) : [];
+            if (libraryFilter && libraryItems.length) {
                 const updateLibraryVisibility = () => {
                     const value = libraryFilter.value || 'all';
-                    libraryRows.forEach(row => {
-                        const category = row.getAttribute('data-category') || '';
+                    libraryItems.forEach(card => {
+                        const category = card.getAttribute('data-category') || '';
                         const visible = value === 'all' || category === value;
-                        row.style.display = visible ? '' : 'none';
+                        card.style.display = visible ? '' : 'none';
                     });
                 };
                 libraryFilter.addEventListener('change', updateLibraryVisibility);
