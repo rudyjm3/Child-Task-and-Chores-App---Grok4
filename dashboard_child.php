@@ -72,6 +72,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         .redeem-button { background-color: #2196f3; }
         .request-button { background-color: #9c27b0; }
         .start-routine-button { background-color: #4caf50; }
+        .fulfilled-label { font-weight: 600; color: #2e7d32; }
+        .awaiting-label { font-style: italic; color: #bf360c; }
         /* Kid-Friendly Styles - Autism-Friendly: Bright pastels, large buttons */
         .routine-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
         .routine-item { background: linear-gradient(135deg, #e3f2fd, #f3e5f5); border: 2px solid #bbdefb; margin: 0; display: flex; flex-direction: column; height: 100%; }
@@ -172,14 +174,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       </div>
       <div class="redeemed-rewards">
          <h2>Redeemed Rewards</h2>
-         <?php if (isset($data['redeemed_rewards']) && is_array($data['redeemed_rewards']) && !empty($data['redeemed_rewards'])): ?>
-            <?php foreach ($data['redeemed_rewards'] as $reward): ?>
-                  <div class="redeemed-item">
-                     <p>Reward: <?php echo htmlspecialchars($reward['title']); ?> (<?php echo htmlspecialchars($reward['point_cost']); ?> points)</p>
-                     <p>Description: <?php echo htmlspecialchars($reward['description']); ?></p>
-                     <p>Redeemed on: <?php echo !empty($reward['redeemed_on']) ? htmlspecialchars(date('m/d/Y h:i A', strtotime($reward['redeemed_on']))) : 'Date unavailable'; ?></p>
-                  </div>
-            <?php endforeach; ?>
+          <?php if (isset($data['redeemed_rewards']) && is_array($data['redeemed_rewards']) && !empty($data['redeemed_rewards'])): ?>
+             <?php foreach ($data['redeemed_rewards'] as $reward): ?>
+                   <div class="redeemed-item">
+                      <p>Reward: <?php echo htmlspecialchars($reward['title']); ?> (<?php echo htmlspecialchars($reward['point_cost']); ?> points)</p>
+                      <p>Description: <?php echo htmlspecialchars($reward['description']); ?></p>
+                      <p>Redeemed on: <?php echo !empty($reward['redeemed_on']) ? htmlspecialchars(date('m/d/Y h:i A', strtotime($reward['redeemed_on']))) : 'Date unavailable'; ?></p>
+                      <?php if (!empty($reward['fulfilled_on'])): ?>
+                          <p class="fulfilled-label">Fulfilled on: <?php echo htmlspecialchars(date('m/d/Y h:i A', strtotime($reward['fulfilled_on']))); ?></p>
+                      <?php else: ?>
+                          <p class="awaiting-label">Waiting for parent to fulfill this reward.</p>
+                      <?php endif; ?>
+                   </div>
+             <?php endforeach; ?>
          <?php else: ?>
             <p>No rewards redeemed yet.</p>
          <?php endif; ?>

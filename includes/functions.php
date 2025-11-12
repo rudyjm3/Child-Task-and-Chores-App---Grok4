@@ -230,11 +230,12 @@ function createChildProfile($parent_user_id, $first_name, $last_name, $child_use
         $age = calculateAge($birthday);
 
         // Create child profile
+        $family_root_id = getFamilyRootId($parent_user_id);
         $stmt = $db->prepare("INSERT INTO child_profiles (child_user_id, parent_user_id, child_name, birthday, age, avatar) 
                              VALUES (:child_user_id, :parent_id, :child_name, :birthday, :age, :avatar)");
         if (!$stmt->execute([
             ':child_user_id' => $child_user_id,
-            ':parent_id' => $parent_user_id,
+            ':parent_id' => $family_root_id,
             ':child_name' => $first_name . ' ' . $last_name,
             ':birthday' => $birthday,
             ':age' => $age,
@@ -376,12 +377,28 @@ function getDashboardData($user_id) {
             }
         }
 
+        // Determine all parent IDs in this family (main + linked adults)
+        $family_parent_ids = [$main_parent_id];
+        $linkedParentStmt = $db->prepare("SELECT linked_user_id FROM family_links WHERE main_parent_id = :parent_id");
+        $linkedParentStmt->execute([':parent_id' => $main_parent_id]);
+        $linkedParents = $linkedParentStmt->fetchAll(PDO::FETCH_COLUMN) ?: [];
+        foreach ($linkedParents as $linkedId) {
+            $family_parent_ids[] = (int) $linkedId;
+        }
+        $family_parent_ids = array_values(array_unique(array_filter($family_parent_ids, static function ($value) {
+            return $value !== null && $value !== '';
+        })));
+        if (empty($family_parent_ids)) {
+            $family_parent_ids = [$main_parent_id];
+        }
+        $parentPlaceholders = implode(',', array_fill(0, count($family_parent_ids), '?'));
+
         // Children for this family
         $stmt = $db->prepare("SELECT cp.id, cp.child_user_id, COALESCE(CONCAT(u.first_name, ' ', u.last_name), u.name, u.username) AS display_name, cp.avatar, cp.birthday, cp.child_name
                                 FROM child_profiles cp
                                 JOIN users u ON cp.child_user_id = u.id
-                                WHERE cp.parent_user_id = :parent_id");
-        $stmt->execute([':parent_id' => $main_parent_id]);
+                                WHERE cp.parent_user_id IN ($parentPlaceholders)");
+        $stmt->execute($family_parent_ids);
         $data['children'] = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
         $childIds = array_column($data['children'], 'child_user_id');
@@ -459,6 +476,37 @@ function getDashboardData($user_id) {
         $stmt->execute([':parent_id' => $main_parent_id]);
         $data['active_rewards'] = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
+        // Recently redeemed rewards so parents can review them
+        $stmt = $db->prepare("
+            SELECT 
+                r.id,
+                r.title,
+                r.description,
+                r.point_cost,
+                r.redeemed_on,
+                r.fulfilled_on,
+                COALESCE(
+                    NULLIF(TRIM(CONCAT(COALESCE(child.first_name, ''), ' ', COALESCE(child.last_name, ''))), ''),
+                    NULLIF(child.name, ''),
+                    child.username,
+                    'Unknown'
+                ) AS child_username,
+                COALESCE(
+                    NULLIF(TRIM(CONCAT(COALESCE(fulfiller.first_name, ''), ' ', COALESCE(fulfiller.last_name, ''))), ''),
+                    NULLIF(fulfiller.name, ''),
+                    fulfiller.username,
+                    'Unknown'
+                ) AS fulfilled_by_name
+            FROM rewards r
+            LEFT JOIN users child ON r.redeemed_by = child.id
+            LEFT JOIN users fulfiller ON r.fulfilled_by = fulfiller.id
+            WHERE r.parent_user_id = :parent_id AND r.status = 'redeemed'
+            ORDER BY COALESCE(r.redeemed_on, r.created_on) DESC
+            LIMIT 25
+        ");
+        $stmt->execute([':parent_id' => $main_parent_id]);
+        $data['redeemed_rewards'] = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
         // Pending approvals across this parent's children
         $stmt = $db->prepare("SELECT 
                                 g.id, 
@@ -476,8 +524,8 @@ function getDashboardData($user_id) {
                               JOIN child_profiles cp ON g.child_user_id = cp.child_user_id
                               JOIN users u ON g.child_user_id = u.id
                               LEFT JOIN users creator ON g.created_by = creator.id
-                              WHERE cp.parent_user_id = :parent_id AND g.status = 'pending_approval'");
-        $stmt->execute([':parent_id' => $main_parent_id]);
+                              WHERE cp.parent_user_id IN ($parentPlaceholders) AND g.status = 'pending_approval'");
+        $stmt->execute($family_parent_ids);
         $data['pending_approvals'] = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
         // Sum total points across children
@@ -547,7 +595,7 @@ function getDashboardData($user_id) {
         $stmt->execute([':child_id' => $user_id]);
         $data['completed_goals'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-        $stmt = $db->prepare("SELECT r.id, r.title, r.description, r.point_cost, COALESCE(u.name, u.username) as child_username, r.redeemed_on 
+        $stmt = $db->prepare("SELECT r.id, r.title, r.description, r.point_cost, COALESCE(u.name, u.username) as child_username, r.redeemed_on, r.fulfilled_on
                      FROM rewards r 
                      LEFT JOIN users u ON r.redeemed_by = u.id 
                      WHERE r.redeemed_by = :child_id AND r.status = 'redeemed'");
@@ -684,6 +732,24 @@ function redeemReward($child_user_id, $reward_id) {
         $db->rollBack();
         return false;
     }
+}
+
+function fulfillReward($reward_id, $parent_user_id, $actor_user_id) {
+    global $db;
+    $stmt = $db->prepare("
+        UPDATE rewards
+        SET fulfilled_on = NOW(), fulfilled_by = :actor_id
+        WHERE id = :reward_id
+          AND parent_user_id = :parent_id
+          AND status = 'redeemed'
+          AND fulfilled_on IS NULL
+    ");
+    $stmt->execute([
+        ':actor_id' => $actor_user_id,
+        ':reward_id' => $reward_id,
+        ':parent_id' => $parent_user_id
+    ]);
+    return $stmt->rowCount() > 0;
 }
 
 // Create goal
@@ -1489,9 +1555,12 @@ try {
    created_on TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
    redeemed_by INT NULL,
    redeemed_on DATETIME NULL,
+   fulfilled_on DATETIME NULL,
+   fulfilled_by INT NULL,
    created_by INT NULL,
    FOREIGN KEY (parent_user_id) REFERENCES users(id) ON DELETE CASCADE,
    FOREIGN KEY (redeemed_by) REFERENCES users(id) ON DELETE SET NULL,
+   FOREIGN KEY (fulfilled_by) REFERENCES users(id) ON DELETE SET NULL,
    FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
    )";
    $db->exec($sql);
@@ -1500,6 +1569,8 @@ try {
    // Add created_by to existing rewards if not exists
    $db->exec("ALTER TABLE rewards ADD COLUMN IF NOT EXISTS created_by INT NULL");
    error_log("Added/verified created_by in rewards");
+   $db->exec("ALTER TABLE rewards ADD COLUMN IF NOT EXISTS fulfilled_on DATETIME NULL");
+   $db->exec("ALTER TABLE rewards ADD COLUMN IF NOT EXISTS fulfilled_by INT NULL");
 
    // Create goals table with corrected constraints
    $sql = "CREATE TABLE IF NOT EXISTS goals (

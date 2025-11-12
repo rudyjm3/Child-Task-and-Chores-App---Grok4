@@ -46,8 +46,6 @@ if (!isset($_SESSION['username'])) {
     $_SESSION['username'] = $uStmt->fetchColumn() ?: 'Unknown';
 }
 
-$data = getDashboardData($_SESSION['user_id']);
-
 $routine_overtime_logs = getRoutineOvertimeLogs($main_parent_id, 25);
 $routine_overtime_stats = getRoutineOvertimeStats($main_parent_id);
 $overtimeByChild = $routine_overtime_stats['by_child'] ?? [];
@@ -72,11 +70,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $title = filter_input(INPUT_POST, 'reward_title', FILTER_SANITIZE_STRING);
         $description = filter_input(INPUT_POST, 'reward_description', FILTER_SANITIZE_STRING);
         $point_cost = filter_input(INPUT_POST, 'point_cost', FILTER_VALIDATE_INT);
-        if (createReward($_SESSION['user_id'], $title, $description, $point_cost)) {
-            $message = "Reward created successfully!";
-        } else {
-            $message = "Failed to create reward.";
-        }
+        $message = createReward($_SESSION['user_id'], $title, $description, $point_cost)
+            ? "Reward created successfully!"
+            : "Failed to create reward.";
     } elseif (isset($_POST['create_goal'])) {
         $child_user_id = filter_input(INPUT_POST, 'child_user_id', FILTER_VALIDATE_INT);
         $title = filter_input(INPUT_POST, 'goal_title', FILTER_SANITIZE_STRING);
@@ -84,27 +80,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $start_date = filter_input(INPUT_POST, 'start_date', FILTER_SANITIZE_STRING);
         $end_date = filter_input(INPUT_POST, 'end_date', FILTER_SANITIZE_STRING);
         $reward_id = filter_input(INPUT_POST, 'reward_id', FILTER_VALIDATE_INT, FILTER_NULL_ON_FAILURE);
-        if (createGoal($main_parent_id, $child_user_id, $title, $target_points, $start_date, $end_date, $reward_id, $_SESSION['user_id'])) {
-            $message = "Goal created successfully!";
-        } else {
-            $message = "Failed to create goal. Check date range or reward ID.";
-        }
+        $message = createGoal($main_parent_id, $child_user_id, $title, $target_points, $start_date, $end_date, $reward_id, $_SESSION['user_id'])
+            ? "Goal created successfully!"
+            : "Failed to create goal. Check date range or reward ID.";
     } elseif (isset($_POST['approve_goal']) || isset($_POST['reject_goal'])) {
         $goal_id = filter_input(INPUT_POST, 'goal_id', FILTER_VALIDATE_INT);
         $action = isset($_POST['approve_goal']) ? 'approve' : 'reject';
         $comment = filter_input(INPUT_POST, 'rejection_comment', FILTER_SANITIZE_STRING);
         $points = approveGoal($_SESSION['user_id'], $goal_id, $action === 'approve', $comment);
-        if ($points !== false) {
-            $message = $action === 'approve' ? "Goal approved! Child earned $points points." : "Goal rejected.";
-            $data = getDashboardData($_SESSION['user_id']); // Refresh data
-        } else {
-            $message = "Failed to $action goal.";
-        }
+        $message = $points !== false
+            ? ($action === 'approve' ? "Goal approved! Child earned $points points." : "Goal rejected.")
+            : "Failed to $action goal.";
+    } elseif (isset($_POST['fulfill_reward'])) {
+        $reward_id = filter_input(INPUT_POST, 'reward_id', FILTER_VALIDATE_INT);
+        $message = ($reward_id && fulfillReward($reward_id, $main_parent_id, $_SESSION['user_id']))
+            ? "Reward fulfillment recorded."
+            : "Unable to mark reward as fulfilled.";
     } elseif (isset($_POST['add_child'])) {
         if (!canAddEditChild($_SESSION['user_id'])) {
             $message = "You do not have permission to add children.";
         } else {
-            // Get and split child's name into first and last name
             $first_name = filter_input(INPUT_POST, 'first_name', FILTER_SANITIZE_STRING);
             $last_name = filter_input(INPUT_POST, 'last_name', FILTER_SANITIZE_STRING);
             $child_username = filter_input(INPUT_POST, 'child_username', FILTER_SANITIZE_STRING);
@@ -112,7 +107,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $birthday = filter_input(INPUT_POST, 'birthday', FILTER_SANITIZE_STRING);
             $avatar = filter_input(INPUT_POST, 'avatar', FILTER_SANITIZE_STRING);
             $gender = filter_input(INPUT_POST, 'child_gender', FILTER_SANITIZE_STRING);
-            // Handle upload
             $upload_path = '';
             if (isset($_FILES['avatar_upload']) && $_FILES['avatar_upload']['error'] == 0) {
                 $upload_dir = __DIR__ . '/uploads/avatars/';
@@ -123,24 +117,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $file_name = uniqid() . '_' . pathinfo($_FILES['avatar_upload']['name'], PATHINFO_FILENAME) . '.' . $file_ext;
                 $upload_path = 'uploads/avatars/' . $file_name;
                 if (move_uploaded_file($_FILES['avatar_upload']['tmp_name'], __DIR__ . '/' . $upload_path)) {
-                    // Resize image (GD library)
                     $image = imagecreatefromstring(file_get_contents(__DIR__ . '/' . $upload_path));
                     $resized = imagecreatetruecolor(100, 100);
                     imagecopyresampled($resized, $image, 0, 0, 0, 0, 100, 100, imagesx($image), imagesy($image));
                     imagejpeg($resized, __DIR__ . '/' . $upload_path, 90);
                     imagedestroy($image);
                     imagedestroy($resized);
-                    $avatar = $upload_path; // Use uploaded path
+                    $avatar = $upload_path;
                 } else {
                     $message = "Upload failed; using default avatar.";
                 }
             }
-            if (createChildProfile($_SESSION['user_id'], $first_name, $last_name, $child_username, $child_password, $birthday, $avatar, $gender)) {
-                $message = "Child added successfully! Username: $child_username, Password: $child_password (share securely).";
-                $data = getDashboardData($_SESSION['user_id']);
-            } else {
-                $message = "Failed to add child. Check for duplicate username.";
-            }
+            $message = createChildProfile($_SESSION['user_id'], $first_name, $last_name, $child_username, $child_password, $birthday, $avatar, $gender)
+                ? "Child added successfully! Username: $child_username, Password: $child_password (share securely)."
+                : "Failed to add child. Check for duplicate username.";
         }
     } elseif (isset($_POST['add_new_user'])) {
         if (!canAddEditFamilyMember($_SESSION['user_id'])) {
@@ -151,67 +141,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $username = filter_input(INPUT_POST, 'secondary_username', FILTER_SANITIZE_STRING);
             $password = filter_input(INPUT_POST, 'secondary_password', FILTER_SANITIZE_STRING);
             $role_type = filter_input(INPUT_POST, 'role_type', FILTER_SANITIZE_STRING);
-            
-            if ($role_type && in_array($role_type, ['secondary_parent', 'family_member', 'caregiver'])) {
-                if (addLinkedUser($_SESSION['user_id'], $username, $password, $first_name, $last_name, $role_type)) {
-                    $role_display = str_replace('_', ' ', ucwords($role_type));
-                    $message = "$role_display added successfully! Username: $username";
-                } else {
-                    $message = "Failed to add user. Check for duplicate username.";
-                }
+            if ($role_type && in_array($role_type, ['secondary_parent', 'family_member', 'caregiver'], true)) {
+                $message = addLinkedUser($main_parent_id, $username, $password, $first_name, $last_name, $role_type)
+                    ? ucfirst(str_replace('_', ' ', $role_type)) . " added successfully! Username: $username"
+                    : "Failed to add user. Check for duplicate username.";
             } else {
                 $message = "Invalid role type selected.";
             }
         }
-    } elseif (isset($_POST['add_new_user'])) {
-        $secondary_username   = filter_input(INPUT_POST, 'secondary_username', FILTER_SANITIZE_STRING);
-        $secondary_password   = filter_input(INPUT_POST, 'secondary_password', FILTER_SANITIZE_STRING);
-        $secondary_first_name = filter_input(INPUT_POST, 'secondary_first_name', FILTER_SANITIZE_STRING);
-        $secondary_last_name  = filter_input(INPUT_POST, 'secondary_last_name', FILTER_SANITIZE_STRING);
-        $role_type_sel        = filter_input(INPUT_POST, 'role_type', FILTER_SANITIZE_STRING);
-
-        if (addLinkedUser($main_parent_id, $secondary_username, $secondary_password, $secondary_first_name, $secondary_last_name, $role_type_sel)) {
-            $role_label = [
-                'secondary_parent' => 'Secondary parent',
-                'family_member' => 'Family member',
-                'caregiver' => 'Caregiver'
-            ][$role_type_sel] ?? 'User';
-            $message = "$role_label added successfully! Username: $secondary_username.";
-        } else {
-            $message = "Failed to add user. Check for duplicate username.";
-        }
-    } elseif (isset($_POST['delete_user']) && in_array($role_type, ['main_parent', 'secondary_parent'])) {
+    } elseif (isset($_POST['delete_user']) && in_array($role_type, ['main_parent', 'secondary_parent'], true)) {
         $delete_user_id = filter_input(INPUT_POST, 'delete_user_id', FILTER_VALIDATE_INT);
         if ($delete_user_id) {
             if ($delete_user_id == $main_parent_id) {
                 $message = "Cannot remove the main account owner.";
             } else {
-            // Try removing a linked adult first
-            $stmt = $db->prepare("DELETE FROM users 
-                                  WHERE id = :user_id AND id IN (
-                                      SELECT linked_user_id FROM family_links WHERE main_parent_id = :main_parent_id
-                                  )");
-            $stmt->execute([':user_id' => $delete_user_id, ':main_parent_id' => $main_parent_id]);
-
-            if ($stmt->rowCount() === 0) {
-                // If not an adult link, try deleting a child of this parent
-                $stmt2 = $db->prepare("DELETE FROM users 
-                                       WHERE id = :user_id AND id IN (
-                                           SELECT child_user_id FROM child_profiles WHERE parent_user_id = :main_parent_id
-                                       )");
-                $stmt2->execute([':user_id' => $delete_user_id, ':main_parent_id' => $main_parent_id]);
-                if ($stmt2->rowCount() > 0) {
-                    $message = "Child removed successfully.";
+                $stmt = $db->prepare("DELETE FROM users 
+                                      WHERE id = :user_id AND id IN (
+                                          SELECT linked_user_id FROM family_links WHERE main_parent_id = :main_parent_id
+                                      )");
+                $stmt->execute([':user_id' => $delete_user_id, ':main_parent_id' => $main_parent_id]);
+                if ($stmt->rowCount() === 0) {
+                    $stmt2 = $db->prepare("DELETE FROM users 
+                                           WHERE id = :user_id AND id IN (
+                                               SELECT child_user_id FROM child_profiles WHERE parent_user_id = :main_parent_id
+                                           )");
+                    $stmt2->execute([':user_id' => $delete_user_id, ':main_parent_id' => $main_parent_id]);
+                    $message = $stmt2->rowCount() > 0 ? "Child removed successfully." : "Failed to remove user.";
                 } else {
-                    $message = "Failed to remove user.";
+                    $message = "User removed successfully.";
                 }
-            } else {
-                $message = "User removed successfully.";
-            }
             }
         }
     }
 }
+
+$data = getDashboardData($_SESSION['user_id']);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -252,6 +216,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         .form-group { margin-bottom: 15px; }
         .form-group label { display: block; margin-bottom: 5px; }
         .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 8px; }
+        .awaiting-label { font-style: italic; color: #bf360c; margin-bottom: 8px; }
+        .inline-form { margin-top: 6px; }
+        .inline-form .button { width: 100%; }
+        @media (min-width: 600px) {
+            .inline-form { display: inline-block; }
+            .inline-form .button { width: auto; }
+        }
         /* Manage Family Styles - Mobile Responsive, Autism-Friendly Wizard */
         .manage-family { background: #f9f9f9; border-radius: 8px; padding: 20px; }
         .family-form { display: none; } /* JS toggle for wizard */
@@ -763,15 +734,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       </div>
       <div class="redeemed-rewards">
          <h2>Redeemed Rewards</h2>
-         <?php if (isset($data['redeemed_rewards']) && is_array($data['redeemed_rewards']) && !empty($data['redeemed_rewards'])): ?>
-               <?php foreach ($data['redeemed_rewards'] as $reward): ?>
-                  <div class="reward-item">
-                     <p>Reward: <?php echo htmlspecialchars($reward['title']); ?> (<?php echo htmlspecialchars($reward['point_cost']); ?> points)</p>
-                     <p>Description: <?php echo htmlspecialchars($reward['description']); ?></p>
-                     <p>Redeemed by: <?php echo htmlspecialchars($reward['child_username'] ?? 'Unknown'); ?></p>
-                     <p>Redeemed on: <?php echo !empty($reward['redeemed_on']) ? htmlspecialchars(date('m/d/Y h:i A', strtotime($reward['redeemed_on']))) : 'Date unavailable'; ?></p>
-                  </div>
-               <?php endforeach; ?>
+          <?php if (isset($data['redeemed_rewards']) && is_array($data['redeemed_rewards']) && !empty($data['redeemed_rewards'])): ?>
+                <?php foreach ($data['redeemed_rewards'] as $reward): ?>
+                   <div class="reward-item">
+                      <p>Reward: <?php echo htmlspecialchars($reward['title']); ?> (<?php echo htmlspecialchars($reward['point_cost']); ?> points)</p>
+                      <p>Description: <?php echo htmlspecialchars($reward['description']); ?></p>
+                      <p>Redeemed by: <?php echo htmlspecialchars($reward['child_username'] ?? 'Unknown'); ?></p>
+                      <p>Redeemed on: <?php echo !empty($reward['redeemed_on']) ? htmlspecialchars(date('m/d/Y h:i A', strtotime($reward['redeemed_on']))) : 'Date unavailable'; ?></p>
+                      <?php if (!empty($reward['fulfilled_on'])): ?>
+                          <p>Fulfilled on: <?php echo htmlspecialchars(date('m/d/Y h:i A', strtotime($reward['fulfilled_on']))); ?><?php if (!empty($reward['fulfilled_by_name'])): ?> by <?php echo htmlspecialchars($reward['fulfilled_by_name']); ?><?php endif; ?></p>
+                      <?php else: ?>
+                          <p class="awaiting-label">Awaiting fulfillment by parent.</p>
+                          <form method="POST" action="dashboard_parent.php" class="inline-form">
+                              <input type="hidden" name="reward_id" value="<?php echo (int) $reward['id']; ?>">
+                              <button type="submit" name="fulfill_reward" class="button approve-button">Mark Fulfilled</button>
+                          </form>
+                      <?php endif; ?>
+                   </div>
+                <?php endforeach; ?>
          <?php else: ?>
                <p>No rewards redeemed yet.</p>
          <?php endif; ?>
