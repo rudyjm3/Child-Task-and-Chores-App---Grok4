@@ -1269,9 +1269,18 @@ function getRoutines($user_id) {
                     NULLIF(creator.name, ''),
                     creator.username,
                     'Unknown'
-                ) AS creator_display_name
+                ) AS creator_display_name,
+                COALESCE(
+                    NULLIF(TRIM(CONCAT(COALESCE(child.first_name, ''), ' ', COALESCE(child.last_name, ''))), ''),
+                    NULLIF(child.name, ''),
+                    child.username,
+                    'Unknown'
+                ) AS child_display_name,
+                cp.avatar AS child_avatar
             FROM routines r
             LEFT JOIN users creator ON r.created_by = creator.id
+            LEFT JOIN users child ON r.child_user_id = child.id
+            LEFT JOIN child_profiles cp ON cp.child_user_id = child.id
             WHERE r.parent_user_id = :parent_id
         ");
         $stmt->execute([':parent_id' => $parent_id]);
@@ -1284,9 +1293,18 @@ function getRoutines($user_id) {
                     NULLIF(creator.name, ''),
                     creator.username,
                     'Unknown'
-                ) AS creator_display_name
+                ) AS creator_display_name,
+                COALESCE(
+                    NULLIF(TRIM(CONCAT(COALESCE(child.first_name, ''), ' ', COALESCE(child.last_name, ''))), ''),
+                    NULLIF(child.name, ''),
+                    child.username,
+                    'Unknown'
+                ) AS child_display_name,
+                cp.avatar AS child_avatar
             FROM routines r
             LEFT JOIN users creator ON r.created_by = creator.id
+            LEFT JOIN users child ON r.child_user_id = child.id
+            LEFT JOIN child_profiles cp ON cp.child_user_id = child.id
             WHERE r.child_user_id = :child_id
         ");
         $stmt->execute([':child_id' => $user_id]);
