@@ -632,7 +632,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!is_string($label) || $label === '') {
             $label = 'hurry_goal';
         }
-        if (saveRoutinePreferences($family_root_id, $timerWarnings, $label, $showCountdown)) {
+        $progressStyle = isset($_POST['progress_style']) ? $_POST['progress_style'] : 'bar';
+        if (saveRoutinePreferences($family_root_id, $timerWarnings, $label, $showCountdown, $progressStyle)) {
             $routinePreferences = getRoutinePreferences($family_root_id);
             $messages[] = ['type' => 'success', 'text' => 'Routine timer preferences saved.'];
         } else {
@@ -762,7 +763,10 @@ $pagePreferences = [
         : 1,
     'show_countdown' => isset($routinePreferences['show_countdown'])
         ? (int) $routinePreferences['show_countdown']
-        : 1
+        : 1,
+    'progress_style' => isset($routinePreferences['progress_style']) && in_array($routinePreferences['progress_style'], ['bar', 'circle', 'pie'], true)
+        ? $routinePreferences['progress_style']
+        : 'bar'
 ];
 
 $jsonOptions = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP;
@@ -893,34 +897,39 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
         .parent-complete-note { font-size: 0.85rem; color: #546e7a; margin: 0; }
         .routine-flow-overlay { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(10, 24, 64, 0.72); z-index: 1200; opacity: 0; pointer-events: none; transition: opacity 250ms ease; }
         .routine-flow-overlay.active { opacity: 1; pointer-events: auto; }
-        .routine-flow-container { width: min(1040px, 95vw); max-height: 90vh; background: linear-gradient(155deg, #7bc4ff, #a077ff); border-radius: 26px; padding: 32px; box-shadow: 0 18px 48px rgba(0,0,0,0.25); color: #fff; display: flex; flex-direction: column; position: relative; overflow: hidden; }
-        .routine-flow-header { display: flex; flex-direction: column; align-items: flex-start; gap: 14px; margin-bottom: 24px; }
-        .routine-flow-close { align-self: flex-start; }
+        .routine-flow-container { width: min(1040px, 95vw); max-height: 95vh; height: min(95vh, 860px); background: linear-gradient(155deg, #7bc4ff, #a077ff); border-radius: 26px; padding: clamp(20px, 4vh, 32px); box-shadow: 0 18px 48px rgba(0,0,0,0.25); color: #fff; display: flex; flex-direction: column; position: relative; overflow: hidden; }
+        .routine-flow-overlay.status-active .routine-flow-container { background: linear-gradient(155deg, #7bc4ff, #a077ff); }
+        body.routine-flow-locked { overflow: hidden; overscroll-behavior: contain; touch-action: none; }
+        .routine-flow-header { display: flex; flex-direction: column; align-items: flex-start; gap: clamp(10px, 2vh, 14px); margin-bottom: clamp(16px, 3vh, 24px); }
+        .routine-flow-close { align-self: flex-start; touch-action: none; }
         .routine-flow-heading { display: flex; flex-direction: column; gap: 10px; flex: 1; width: 100%;}
-        .routine-flow-bar { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; width: 100%;}
-        .routine-flow-title { font-size: 1.9rem; font-weight: 700; margin: 0; }
+        .routine-flow-bar { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; width: 100%;}
+        .routine-flow-controls { display: inline-flex; align-items: center; gap: 12px; flex-wrap: wrap; justify-content: flex-end; }
+        .routine-flow-controls .routine-flow-close { align-self: center; }
+        .routine-flow-title { font-size: clamp(1.4rem, 2vw, 1.9rem); font-weight: 700; margin: 0; }
         .routine-flow-next-inline { display: flex; align-items: baseline; gap: 8px; font-size: 1rem; font-weight: 600; color: rgba(255,255,255,0.85); }
         .routine-flow-next-inline .label { text-transform: uppercase; letter-spacing: 0.08em; font-size: 0.78rem; opacity: 0.8; }
         .routine-flow-next-inline .value { font-size: 1.05rem; font-weight: 700; }
-        .summary-heading { display: none; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 2px; padding: 12px 0 0; }
+        .summary-heading { display: none; flex-direction: row; align-items: center; justify-content: center; text-align: left; gap: 12px; padding: 12px 0 0; }
+        .summary-heading-avatar { width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 3px solid rgba(255,255,255,0.55); box-shadow: 0 4px 12px rgba(0,0,0,0.25); background: rgba(255,255,255,0.25); flex-shrink: 0; }
+        .summary-heading-text { display: flex; flex-direction: column; gap: 2px; }
         .summary-heading-title { font-size: 1.8rem; font-weight: 700; color: #fff; margin: 0; }
-        .summary-heading-label { text-transform: uppercase; font-family: 'Sigmar One', cursive; font-weight: 500; font-size: 1.1rem;      letter-spacing: 0.03em;
-         text-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
-         color: #fff; }
+        .summary-heading-label { text-transform: uppercase; font-family: 'Sigmar One', cursive; font-weight: 500; font-size: 1.1rem; letter-spacing: 0.03em; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.18); color: #fff; }
         .routine-flow-overlay.summary-active .routine-flow-bar { display: none; }
         .routine-flow-overlay.summary-active .summary-heading { display: flex; }
         .routine-flow-overlay.summary-active [data-action="flow-exit"] { display: none; }
         .routine-flow-close { background: #d71919; border: none; color: #fff; font-weight: 600; padding: 8px 18px; border-radius: 999px; cursor: pointer; transition: background 200ms ease; }
         .routine-flow-close:hover { background: #b71515; }
-        .routine-flow-stage { flex: 1; display: grid; }
+        .routine-flow-stage { flex: 1; display: grid; min-height: 0; }
         .routine-scene { display: none; height: 100%; }
-        .routine-scene.active { display: grid; grid-template-rows: auto 1fr auto; gap: 24px; }
+        .routine-scene.active { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: 18px; }
+        .routine-scene-status.active { /*background: linear-gradient(155deg, #7bc4ff, #a077ff);*/ border-radius: 18px; padding: 12px; }
         .routine-scene-task .task-top { display: grid; gap: 18px; }
         .flow-progress-area { display: grid; gap: 8px; }
-        .flow-progress-track { position: relative; height: 52px; background: rgba(255,255,255,0.22); border-radius: 24px; overflow: hidden; border: 3px solid #c3c3c3; box-sizing: border-box; }
-        .flow-progress-fill { position: absolute; inset: 0; background: linear-gradient(90deg, #43d67e, #8fdc5d); transform: scaleX(0); transform-origin: left center; transition: background 360ms ease, box-shadow 360ms ease, filter 360ms ease; z-index: 2; }
-        .flow-progress-fill.warning { background: linear-gradient(90deg, #ffcc00, #ffb300); box-shadow: 0 0 12px rgba(255,204,0,0.45); }
-        .flow-progress-fill.critical { background: linear-gradient(90deg, #ff7043, #ef5350); box-shadow: 0 0 14px rgba(255,120,80,0.55); }
+        .flow-progress-track { position: relative; height: clamp(40px, 7vh, 52px); background: rgba(255,255,255,0.22); border-radius: 24px; overflow: hidden; border: 3px solid #c3c3c3; box-sizing: border-box; transition: background 900ms ease, box-shadow 900ms ease; }
+        .flow-progress-fill { --fill1: #43d67e; --fill2: #8fdc5d; position: absolute; inset: 0; background: linear-gradient(90deg, var(--fill1), var(--fill2)); transform: scaleX(0); transform-origin: left center; transition: background 900ms ease, box-shadow 900ms ease, filter 900ms ease; z-index: 2; }
+        .flow-progress-fill.warning { --fill1: #ffcc00; --fill2: #ffb300; box-shadow: 0 0 12px rgba(255,204,0,0.45); }
+        .flow-progress-fill.critical { --fill1: #ff7043; --fill2: #ef5350; box-shadow: 0 0 14px rgba(255,120,80,0.55); }
         .flow-progress-min { position: absolute; inset: 0; background: #fcb932; transform: scaleX(0); transform-origin: left center; pointer-events: none; z-index: 1; transition: transform 200ms ease, opacity 200ms ease; opacity: 0; }
         .flow-progress-min.active { opacity: 1; }
         .flow-countdown { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 1.36rem; font-weight: 700; color: #f9f9f9; text-shadow: 0 2px 6px rgba(0,0,0,0.45); letter-spacing: 0.04em; z-index: 3; pointer-events: none; transition: color 200ms ease; }
@@ -930,18 +939,71 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
         .flow-progress-labels { display: flex; align-items: center; gap: 16px; font-size: 0.95rem; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; }
         .flow-progress-labels .start-label,
         .flow-progress-labels .limit-label { flex: 0 0 auto; opacity: 0.85; }
+
+        .flow-progress-track[data-style="circle"],
+        .flow-progress-track[data-style="pie"] {
+            --track-fill: #43d67e;
+            width: min(220px, 70vw);
+            height: min(220px, 70vw);
+            border-radius: 50%;
+            margin: 0 auto;
+            border-width: 0;
+            background: conic-gradient(var(--track-fill) calc(var(--progress-ratio, 0) * 1turn), rgba(255,255,255,0.18) 0);
+            box-shadow: 0 6px 16px rgba(0,0,0,0.2);
+            transition: background 900ms ease, box-shadow 900ms ease;
+        }
+        .flow-progress-track[data-style="circle"] { --ring-thickness: 32px; }
+        .flow-progress-track[data-style="circle"]::after {
+            content: '';
+            position: absolute;
+            inset: 18%;
+            border-radius: 50%;
+            background: rgba(0,0,0,0.25);
+            box-shadow: inset 0 2px 6px rgba(0,0,0,0.35);
+        }
+        .flow-progress-track[data-style="circle"] {
+            -webkit-mask: radial-gradient(closest-side, transparent calc(100% - var(--ring-thickness)), #000 calc(100% - var(--ring-thickness) + 1px));
+            mask: radial-gradient(closest-side, transparent calc(100% - var(--ring-thickness)), #000 calc(100% - var(--ring-thickness) + 1px));
+        }
+        .flow-progress-track[data-style="circle"] .flow-progress-fill,
+        .flow-progress-track[data-style="pie"] .flow-progress-fill,
+        .flow-progress-track[data-style="circle"] .flow-progress-min,
+        .flow-progress-track[data-style="pie"] .flow-progress-min {
+            display: none;
+        }
+        .flow-progress-track[data-style="circle"] .flow-countdown,
+        .flow-progress-track[data-style="pie"] .flow-countdown {
+            font-size: 1.4rem;
+        }
+        .flow-progress-track[data-style="circle"].warning,
+        .flow-progress-track[data-style="pie"].warning {
+            --track-fill: #ffcc00;
+        }
+        .flow-progress-track[data-style="circle"].critical,
+        .flow-progress-track[data-style="pie"].critical {
+            --track-fill: #ff7043;
+        }
+        .flow-progress-track[data-style="circle"].warning,
+        .flow-progress-track[data-style="circle"].critical {
+            -webkit-mask: radial-gradient(closest-side, transparent calc(100% - var(--ring-thickness)), #000 calc(100% - var(--ring-thickness) + 1px));
+            mask: radial-gradient(closest-side, transparent calc(100% - var(--ring-thickness)), #000 calc(100% - var(--ring-thickness) + 1px));
+        }
         .flow-warning { flex: 1; display: inline-flex; justify-content: center; align-items: center; min-height: 1.4em; font-size: 0.80rem; font-weight: 700; color: #ffe082; text-shadow: 0 2px 6px rgba(0,0,0,0.35); opacity: 0; transform: translateY(-4px); transition: opacity 200ms ease, transform 200ms ease, color 200ms ease; pointer-events: none; }
         .flow-warning.visible { opacity: 1; transform: translateY(0); }
         .flow-warning.warning { color: #ffcc00; }
         .flow-warning.critical { color: #ffae42; }
-        .routine-scene .illustration { min-height: 240px; border-radius: 22px; background: rgba(255,255,255,0.18); display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden; }
-        .routine-scene .illustration::after { content: ''; position: absolute; inset: 10%; border-radius: 20px; border: 2px dashed rgba(255,255,255,0.32); }
-        .routine-scene .illustration .character { width: 140px; height: 140px; border-radius: 50%; background: linear-gradient(145deg, #ffe082, #ffca28); position: relative; }
-        .routine-scene .illustration .character::after { content: ''; position: absolute; inset: 18px; border-radius: 50%; background: #fff3e0; }
-        .routine-primary-button { align-self: flex-end; background: #ffeb3b; border: none; color: #1a237e; font-weight: 800; padding: 12px 36px; border-radius: 18px; font-size: 1.1rem; cursor: pointer; transition: transform 150ms ease, box-shadow 150ms ease; }
+        .routine-flow-container { position: relative; }
+        .routine-flow-container > * { position: relative; z-index: 1; }
+        .routine-flow-container .illustration { position: absolute; inset: 0; background: url('images/background_images/boys_bedroom_background.jpg') center/cover no-repeat; z-index: 0; pointer-events: none; }
+        .routine-flow-container .illustration::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(10,24,64,0.38), rgba(10,24,64,0.68)); }
+        .routine-flow-container .illustration.hidden { opacity: 0; visibility: hidden; }
+        .routine-flow-overlay.status-active .illustration,
+        .routine-flow-overlay.summary-active .illustration { display: none; }
+        .routine-primary-button { align-self: flex-end; background: #ffeb3b; border: none; color: #1a237e; font-weight: 800; padding: 10px 22px; border-radius: 18px; font-size: 1.05rem; cursor: pointer; transition: transform 150ms ease, box-shadow 150ms ease; }
         .routine-primary-button:hover { transform: translateY(-2px); box-shadow: 0 10px 24px rgba(0,0,0,0.25); }
+        .routine-action-row { display: flex; justify-content: space-between; gap: 12px; align-items: center; margin-top: 6px; }
         .status-stars { display: flex; gap: 12px; justify-content: center; }
-        .status-stars span { width: 60px; height: 60px; background: radial-gradient(circle at 30% 30%, #fff59d, #fbc02d); clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%); box-shadow: 0 6px 16px rgba(0,0,0,0.3); opacity: 0.2; transform: scale(0.8); transition: transform 200ms ease, opacity 200ms ease; }
+        .status-stars span { width: clamp(44px, 8vh, 60px); height: clamp(44px, 8vh, 60px); background: radial-gradient(circle at 30% 30%, #fff59d, #fbc02d); clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%); box-shadow: 0 6px 16px rgba(0,0,0,0.3); opacity: 0.2; transform: scale(0.8); transition: transform 200ms ease, opacity 200ms ease; }
         .status-stars span.active { opacity: 1; transform: scale(1); }
         .status-stars span.sparkle { animation: starSparkle 480ms ease-out forwards; }
         @keyframes starSparkle {
@@ -956,6 +1018,8 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
         .summary-footer { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 16px; margin-top: 16px; font-size: 1.05rem; align-items: end; }
         .summary-footer strong { display: block; font-size: 1.6rem; }
         .summary-bonus { text-align: center; font-size: 1rem; font-weight: 600; margin-top: 12px; }
+        .routine-scene-summary { overflow-y: auto; scrollbar-width: none; }
+        .routine-scene-summary::-webkit-scrollbar { width: 0; height: 0; }
         .hold-overlay { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; pointer-events: none; z-index: 1400; }
         .hold-overlay.active { display: flex; }
         .hold-overlay .hold-overlay-box { background: rgba(0,0,0,0.65); color: #ffffff; padding: 18px 32px; border-radius: 10px; font-size: 2.4rem; font-weight: 700; letter-spacing: 0.05em; box-shadow: 0 8px 24px rgba(0,0,0,0.35); transition: font-size 160ms ease; }
@@ -1018,9 +1082,29 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
             .routine-flow-container { padding: 22px; border-radius: 20px; }
             .routine-flow-header { flex-direction: column; align-items: stretch; }
             .routine-flow-bar { flex-direction: column; align-items: flex-start; gap: 6px; }
+            .routine-flow-controls { width: 100%; justify-content: flex-start; }
             .routine-flow-title { font-size: 1.6rem; }
             .routine-flow-next-inline { align-items: flex-start; }
             .routine-primary-button { width: 100%; text-align: center; }
+        }
+        @media (max-height: 620px) {
+            .routine-flow-container { padding: 18px; border-radius: 20px; }
+            .routine-flow-header { gap: 8px; }
+            .routine-flow-title { font-size: 1.45rem; }
+            .routine-flow-stage { gap: 12px; }
+            .routine-scene.active { gap: 12px; }
+            .flow-progress-track { height: clamp(36px, 6vh, 46px); }
+            .routine-primary-button { padding: 10px 24px; font-size: 1rem; }
+            .summary-grid { gap: 12px; }
+            .summary-footer { gap: 12px; }
+        }
+        @media (max-height: 520px) {
+            .routine-flow-container { padding: 16px; }
+            .routine-flow-title { font-size: 1.35rem; }
+            .routine-flow-next-inline { font-size: 0.9rem; }
+            .flow-progress-labels { flex-direction: column; align-items: flex-start; gap: 6px; font-size: 0.85rem; }
+            .status-summary { font-size: 1rem; }
+            .summary-footer strong { font-size: 1.3rem; }
         }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
@@ -1076,6 +1160,23 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                             <span class="toggle-title">Show Countdown Timer</span>
                             <span class="toggle-sub">Display remaining time inside the task progress bar.</span>
                         </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="progress_style">Progress Timer Style</label>
+                        <select id="progress_style" name="progress_style">
+                            <?php
+                                $progressStyle = $routinePreferences['progress_style'] ?? 'bar';
+                                $options = [
+                                    'bar' => 'Horizontal Bar (default)',
+                                    'circle' => 'Circular Ring',
+                                    'pie' => 'Pie Fill'
+                                ];
+                                foreach ($options as $value => $label):
+                            ?>
+                                <option value="<?php echo $value; ?>" <?php echo $progressStyle === $value ? 'selected' : ''; ?>><?php echo $label; ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                        <small>Choose how the timer animates during a task.</small>
                     </div>
                     <div class="form-actions">
                         <button type="submit" name="save_routine_preferences" class="button">Save Preferences</button>
@@ -1322,12 +1423,15 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                         $cardClasses = 'routine-card' . ($isChildView ? ' child-view' : '');
                     ?>
                     <?php
-                        $timerWarningAttr = isset($routine['timer_warnings_enabled'])
-                            ? (int) $routine['timer_warnings_enabled']
-                            : (int) ($pagePreferences['timer_warnings_enabled'] ?? 1);
-                        $countdownAttr = isset($routine['show_countdown'])
-                            ? (int) $routine['show_countdown']
-                            : (int) ($pagePreferences['show_countdown'] ?? 1);
+        $timerWarningAttr = isset($routine['timer_warnings_enabled'])
+            ? (int) $routine['timer_warnings_enabled']
+            : (int) ($pagePreferences['timer_warnings_enabled'] ?? 1);
+        $countdownAttr = isset($routine['show_countdown'])
+            ? (int) $routine['show_countdown']
+            : (int) ($pagePreferences['show_countdown'] ?? 1);
+        $progressStyleAttr = isset($routinePreferences['progress_style']) && in_array($routinePreferences['progress_style'], ['bar', 'circle', 'pie'], true)
+            ? $routinePreferences['progress_style']
+            : 'bar';
                         $totalRoutinePoints = 0;
                         foreach ($routine['tasks'] as $taskPoints) {
                             $totalRoutinePoints += (int) ($taskPoints['point_value'] ?? 0);
@@ -1389,7 +1493,7 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                                             <?php endif; ?>
                                             <strong><?php echo htmlspecialchars($task['title']); ?></strong>
                                             <div class="task-meta">
-                                                <?php echo (int) $task['time_limit']; ?> min
+                                                <?php echo (int) $task['time_limit']; ?> min · <?php echo (int) ($task['point_value'] ?? $task['points'] ?? 0); ?> pts
                                                 <span class="status-pill status-<?php echo htmlspecialchars($taskStatus); ?> <?php echo htmlspecialchars($taskStatus); ?>">
                                                     <?php echo htmlspecialchars($taskStatus); ?>
                                                 </span>
@@ -1407,23 +1511,28 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                             data-role="routine-flow"
                             data-timer-warnings="<?php echo $timerWarningAttr; ?>"
                             data-show-countdown="<?php echo $countdownAttr; ?>"
+                            data-progress-style="<?php echo htmlspecialchars($progressStyleAttr); ?>"
                             aria-hidden="true">
                                     <div class="routine-flow-container" role="dialog" aria-modal="true">
                                         <header class="routine-flow-header">
                                             <div class="routine-flow-heading">
                                                 <div class="routine-flow-bar">
                                                     <h2 class="routine-flow-title" data-role="flow-title">Ready to begin</h2>
-                                                    <div class="routine-flow-next-inline">
-                                                        <span class="label">Next</span>
-                                                        <span class="value" data-role="flow-next-label">First task</span>
+                                                    <div class="routine-flow-controls">
+                                                        <div class="routine-flow-next-inline">
+                                                            <span class="label">Next</span>
+                                                            <span class="value" data-role="flow-next-label">First task</span>
+                                                        </div>
                                                     </div>
                                                 </div>
                                                 <div class="summary-heading" data-role="summary-heading" aria-hidden="true">
-                                                    <h2 class="summary-heading-title" data-role="summary-title"><?php echo htmlspecialchars($routine['title']); ?></h2>
-                                                    <span class="summary-heading-label">Summary</span>
+                                                    <img class="summary-heading-avatar" src="<?php echo htmlspecialchars($routine['child_avatar'] ?: 'images/default-avatar.png'); ?>" alt="<?php echo htmlspecialchars($routine['child_display_name'] ?? 'Child Avatar'); ?>">
+                                                    <div class="summary-heading-text">
+                                                        <h2 class="summary-heading-title" data-role="summary-title"><?php echo htmlspecialchars($routine['title']); ?></h2>
+                                                        <span class="summary-heading-label">Summary</span>
+                                                    </div>
                                                 </div>
                                             </div>
-                        <button type="button" class="routine-flow-close" data-action="flow-exit">Stop</button>
                                         </header>
                                         <div class="hold-overlay" data-role="hold-overlay" aria-hidden="true">
                                             <div class="hold-overlay-box" data-role="hold-countdown">5</div>
@@ -1440,6 +1549,7 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                                         <audio data-role="summary-sound" preload="auto">
                                             <source src="sounds/sfx/068232_successwav-82815.mp3" type="audio/mpeg">
                                         </audio>
+                                        <div class="illustration" data-role="flow-illustration" aria-hidden="true"></div>
                                         <main class="routine-flow-stage">
                                             <section class="routine-scene routine-scene-task active" data-scene="task">
                                                 <div class="task-top">
@@ -1457,10 +1567,10 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                                                         </div>
                                                     </div>
                                                 </div>
-                                                <div class="illustration">
-                                                    <div class="character"></div>
+                                                <div class="routine-action-row">
+                                                    <button type="button" class="routine-flow-close" data-action="flow-exit">Stop</button>
+                                                    <button type="button" class="routine-primary-button" data-action="flow-complete-task">Next</button>
                                                 </div>
-                                                <button type="button" class="routine-primary-button" data-action="flow-complete-task">Next</button>
                                             </section>
                                             <section class="routine-scene routine-scene-status" data-scene="status">
                                                 <div class="status-stars">
@@ -1473,7 +1583,10 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                                                     <span data-role="status-time">You finished in 0:00.</span>
                                                     <span data-role="status-feedback">Great job!</span>
                                                 </div>
-                                                <button type="button" class="routine-primary-button" data-action="flow-next-task">Next Task</button>
+                                                <div class="routine-action-row">
+                                                    <button type="button" class="routine-flow-close" data-action="flow-exit">Stop</button>
+                                                    <button type="button" class="routine-primary-button" data-action="flow-next-task">Next Task</button>
+                                                </div>
                                             </section>
                                             <section class="routine-scene routine-scene-summary" data-scene="summary">
                                                 <div class="summary-grid" data-role="summary-list"></div>
@@ -1939,6 +2052,10 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                     this.openButton = card.querySelector("[data-action='open-flow']");
                     this.overlay = card.querySelector("[data-role='routine-flow']");
                     this.overlayMounted = false;
+                    this.bodyLocked = false;
+                    this.exitButtons = this.overlay ? Array.from(this.overlay.querySelectorAll("[data-action='flow-exit']")) : [];
+                    this.exitButton = this.exitButtons[0] || null;
+                    this.progressTrackEl = this.overlay ? this.overlay.querySelector(".flow-progress-track") : null;
                     this.flowTitleEl = this.overlay ? this.overlay.querySelector("[data-role='flow-title']") : null;
                     this.nextLabelEl = this.overlay ? this.overlay.querySelector("[data-role='flow-next-label']") : null;
                     this.progressFillEl = this.overlay ? this.overlay.querySelector("[data-role='flow-progress']") : null;
@@ -1959,6 +2076,7 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                     this.summaryBonusEl = this.overlay ? this.overlay.querySelector("[data-role='summary-bonus']") : null;
                     this.summaryHeadingEl = this.overlay ? this.overlay.querySelector("[data-role='summary-heading']") : null;
                     this.summaryHeadingTitleEl = this.overlay ? this.overlay.querySelector("[data-role='summary-title']") : null;
+                    this.illustrationEl = this.overlay ? this.overlay.querySelector("[data-role='flow-illustration']") : null;
                     this.statusChime = this.overlay ? this.overlay.querySelector("[data-role='status-sound']") : null;
                     this.statusCoinSound = this.overlay ? this.overlay.querySelector("[data-role='status-coin']") : null;
                     this.summaryChime = this.overlay ? this.overlay.querySelector("[data-role='summary-sound']") : null;
@@ -1991,6 +2109,10 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                     if (this.countdownEl) {
                         this.countdownEl.style.display = this.showCountdown ? '' : 'none';
                     }
+
+                    const overlayStyle = this.overlay ? this.overlay.getAttribute('data-progress-style') : null;
+                    this.progressStyle = overlayStyle || this.preferences.progress_style || 'bar';
+                    this.applyProgressStyle();
                     this.sceneMap = new Map();
                     if (this.overlay) {
                         this.overlay.querySelectorAll('.routine-scene').forEach(scene => {
@@ -2025,7 +2147,7 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                     this.holdInterval = null;
                     this.holdTimeout = null;
                     this.holdActive = false;
-                    this.holdRemaining = 5;
+                    this.holdRemaining = 3;
                     this.exitPointerId = null;
                     this.messageTimeout = null;
                     this.starAnimationTimers = [];
@@ -2041,25 +2163,37 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                     if (!this.openButton || !this.overlay) {
                         return;
                     }
+                    const supportsTouch = typeof window !== 'undefined' && (
+                        'ontouchstart' in window ||
+                        (typeof navigator !== 'undefined' && (navigator.maxTouchPoints > 0 || navigator.msMaxTouchPoints > 0))
+                    );
+                    const touchEventOptions = supportsTouch ? { passive: false } : undefined;
                     this.openButton.addEventListener('click', () => {
                         try {
                             console.log('[RoutinePlayer] open button click', { routineId: this.routine.id });
                         } catch (e) {}
                         this.openFlow();
                     });
-                    if (this.exitButton) {
-                        this.exitButton.addEventListener('pointerdown', event => this.startHoldToExit(event, false));
-                        this.exitButton.addEventListener('pointerup', () => this.cancelHoldToExit());
-                        this.exitButton.addEventListener('pointerleave', () => this.cancelHoldToExit());
-                        this.exitButton.addEventListener('pointercancel', () => this.cancelHoldToExit());
-                        this.exitButton.addEventListener('keydown', event => {
-                            if (event.code === 'Space' || event.code === 'Enter') {
-                                this.startHoldToExit(event, true);
-                            }
-                        });
-                        this.exitButton.addEventListener('keyup', event => {
-                            if (event.code === 'Space' || event.code === 'Enter') {
-                                this.cancelHoldToExit();
+                    if (Array.isArray(this.exitButtons)) {
+                        this.exitButtons.forEach(btn => {
+                            btn.addEventListener('pointerdown', event => this.startHoldToExit(event, false, btn));
+                            btn.addEventListener('pointerup', () => this.cancelHoldToExit());
+                            btn.addEventListener('pointerleave', () => this.cancelHoldToExit());
+                            btn.addEventListener('pointercancel', () => this.cancelHoldToExit());
+                            btn.addEventListener('keydown', event => {
+                                if (event.code === 'Space' || event.code === 'Enter') {
+                                    this.startHoldToExit(event, true, btn);
+                                }
+                            });
+                            btn.addEventListener('keyup', event => {
+                                if (event.code === 'Space' || event.code === 'Enter') {
+                                    this.cancelHoldToExit();
+                                }
+                            });
+                            if (supportsTouch) {
+                                btn.addEventListener('touchstart', event => this.startHoldToExit(event, false, btn), touchEventOptions);
+                                btn.addEventListener('touchend', () => this.cancelHoldToExit(), touchEventOptions);
+                                btn.addEventListener('touchcancel', () => this.cancelHoldToExit(), touchEventOptions);
                             }
                         });
                     }
@@ -2086,11 +2220,40 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                     this.overlayMounted = true;
                 }
 
+                lockBodyScroll() {
+                    if (this.bodyLocked) {
+                        return;
+                    }
+                    const target = document.body;
+                    if (!target) {
+                        return;
+                    }
+                    target.classList.add('routine-flow-locked');
+                    this.bodyLocked = true;
+                }
+
+                unlockBodyScroll() {
+                    if (!this.bodyLocked) {
+                        return;
+                    }
+                    const target = document.body;
+                    if (target) {
+                        target.classList.remove('routine-flow-locked');
+                    }
+                    this.bodyLocked = false;
+                }
+
                 initializeTaskDurations() {
                     this.taskScheduledSeconds = this.tasks.map(task => {
                         const raw = parseInt(task.time_limit, 10);
                         return Math.max(0, (Number.isFinite(raw) ? raw : 0) * 60);
                     });
+                }
+
+                applyProgressStyle() {
+                    if (!this.progressTrackEl) return;
+                    const style = ['bar', 'circle', 'pie'].includes(this.progressStyle) ? this.progressStyle : 'bar';
+                    this.progressTrackEl.setAttribute('data-style', style);
                 }
 
                 setWarning(message, state = '') {
@@ -2123,6 +2286,9 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                     if (this.progressFillEl) {
                         this.progressFillEl.classList.remove('warning', 'critical');
                     }
+                    if (this.progressTrackEl) {
+                        this.progressTrackEl.classList.remove('warning', 'critical');
+                    }
                     if (this.minMarkerEl) {
                         this.minMarkerEl.classList.remove('active');
                         this.minMarkerEl.style.transform = 'scaleX(0)';
@@ -2136,10 +2302,15 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                 }
 
                 updateTaskWarning(progressRatio, isOvertime) {
-                    if (!this.progressFillEl) {
+                    if (!this.progressFillEl && !this.progressTrackEl) {
                         return;
                     }
-                    this.progressFillEl.classList.remove('warning', 'critical');
+                    if (this.progressFillEl) {
+                        this.progressFillEl.classList.remove('warning', 'critical');
+                    }
+                    if (this.progressTrackEl) {
+                        this.progressTrackEl.classList.remove('warning', 'critical');
+                    }
                     const canEvaluate = this.currentTask && this.currentScene === 'task' && this.scheduledSeconds > 0;
                     if (!canEvaluate) {
                         this.setWarning('');
@@ -2151,9 +2322,11 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                     const warningState = !criticalState && ratio >= 0.75;
 
                     if (criticalState) {
-                        this.progressFillEl.classList.add('critical');
+                        if (this.progressFillEl) this.progressFillEl.classList.add('critical');
+                        if (this.progressTrackEl) this.progressTrackEl.classList.add('critical');
                     } else if (warningState) {
-                        this.progressFillEl.classList.add('warning');
+                        if (this.progressFillEl) this.progressFillEl.classList.add('warning');
+                        if (this.progressTrackEl) this.progressTrackEl.classList.add('warning');
                     }
 
                     if (!this.timerWarningsEnabled) {
@@ -2589,7 +2762,7 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                     }
                 }
 
-                startHoldToExit(event, fromKeyboard) {
+                startHoldToExit(event, fromKeyboard, triggerButton = null) {
                     if (event) {
                         event.preventDefault();
                         event.stopPropagation();
@@ -2597,21 +2770,22 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                     if (!this.exitButton || this.holdActive) {
                         return;
                     }
+                    this.exitHoldButton = triggerButton || this.exitButton;
                     this.clearMessageTimeout();
                     this.holdActive = true;
-                    this.holdRemaining = 5;
-                    if (!fromKeyboard && event && typeof event.pointerId === 'number') {
+                    this.holdRemaining = 3;
+                    if (!fromKeyboard && event && typeof event.pointerId === 'number' && this.exitHoldButton) {
                         this.exitPointerId = event.pointerId;
-                        if (this.exitButton.setPointerCapture) {
+                        if (this.exitHoldButton.setPointerCapture) {
                             try {
-                                this.exitButton.setPointerCapture(this.exitPointerId);
+                                this.exitHoldButton.setPointerCapture(this.exitPointerId);
                             } catch (e) {
                                 this.exitPointerId = null;
                             }
                         }
                     }
-                    this.showHoldOverlay('countdown', String(this.holdRemaining));
-                    this.updateHoldCountdown(this.holdRemaining);
+                        this.showHoldOverlay('countdown', String(this.holdRemaining));
+                        this.updateHoldCountdown(this.holdRemaining);
                     this.clearHoldTimers();
                     this.holdInterval = setInterval(() => {
                         this.holdRemaining -= 1;
@@ -2631,16 +2805,17 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                     this.holdActive = false;
                     this.clearHoldTimers();
                     this.clearMessageTimeout();
-                    this.holdRemaining = 5;
+                    this.holdRemaining = 3;
                     this.hideHoldOverlay();
-                    if (this.exitPointerId !== null && this.exitButton && this.exitButton.releasePointerCapture) {
+                    if (this.exitPointerId !== null && this.exitHoldButton && this.exitHoldButton.releasePointerCapture) {
                         try {
-                            this.exitButton.releasePointerCapture(this.exitPointerId);
+                            this.exitHoldButton.releasePointerCapture(this.exitPointerId);
                         } catch (e) {
                             // ignore
                         }
                     }
                     this.exitPointerId = null;
+                    this.exitHoldButton = null;
                 }
 
                 completeHoldExit() {
@@ -2651,14 +2826,15 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                     this.clearHoldTimers();
                     this.clearMessageTimeout();
                     this.hideHoldOverlay();
-                    if (this.exitPointerId !== null && this.exitButton && this.exitButton.releasePointerCapture) {
+                    if (this.exitPointerId !== null && this.exitHoldButton && this.exitHoldButton.releasePointerCapture) {
                         try {
-                            this.exitButton.releasePointerCapture(this.exitPointerId);
+                            this.exitHoldButton.releasePointerCapture(this.exitPointerId);
                         } catch (e) {
                             // ignore
                         }
                     }
                     this.exitPointerId = null;
+                    this.exitHoldButton = null;
                     this.handleExit();
                 }
 
@@ -2697,10 +2873,10 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                     this.clearMessageTimeout();
                     this.holdOverlay.classList.remove('active');
                     this.holdOverlay.setAttribute('aria-hidden', 'true');
-                    this.holdRemaining = 5;
+                    this.holdRemaining = 3;
                     if (this.holdCountdownEl) {
                         this.holdCountdownEl.classList.remove('is-message');
-                        this.holdCountdownEl.textContent = '5';
+                        this.holdCountdownEl.textContent = '3';
                     }
                 }
 
@@ -2723,6 +2899,7 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                     this.mountOverlay();
                     this.overlay.classList.add('active');
                     this.overlay.setAttribute('aria-hidden', 'false');
+                    this.lockBodyScroll();
                     this.startRoutine();
                 }
 
@@ -2754,6 +2931,7 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                         this.overlay.classList.remove('active');
                         this.overlay.setAttribute('aria-hidden', 'true');
                     }
+                    this.unlockBodyScroll();
                     if (resetTitle && this.flowTitleEl) {
                         this.flowTitleEl.textContent = this.routine.title || 'Routine';
                     }
@@ -2878,7 +3056,12 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                     }
 
                     const clamped = Math.max(0, Math.min(1, ratio));
-                    this.progressFillEl.style.transform = `scaleX(${clamped})`;
+                    if (this.progressFillEl) {
+                        this.progressFillEl.style.transform = `scaleX(${clamped})`;
+                    }
+                    if (this.progressTrackEl) {
+                        this.progressTrackEl.style.setProperty('--progress-ratio', clamped);
+                    }
                     if (this.countdownEl) {
                         if (this.showCountdown) {
                             this.countdownEl.textContent = displayValue;
@@ -3136,8 +3319,12 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                             scene.classList.remove('active');
                         }
                     });
+                    if (this.illustrationEl) {
+                        this.illustrationEl.classList.toggle('hidden', name !== 'task');
+                    }
                     if (this.overlay) {
                         this.overlay.classList.toggle('summary-active', name === 'summary');
+                        this.overlay.classList.toggle('status-active', name === 'status');
                     }
                     if (this.summaryHeadingEl) {
                         this.summaryHeadingEl.setAttribute('aria-hidden', name === 'summary' ? 'false' : 'true');

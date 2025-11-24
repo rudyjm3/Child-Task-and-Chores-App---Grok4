@@ -91,10 +91,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $message = "Failed to approve goal.";
                 }
             } else {
-                if (rejectGoal($goal_id, $family_root_id, $rejection_comment)) {
+                $rejectError = null;
+                if (rejectGoal($goal_id, $family_root_id, $rejection_comment, $rejectError)) {
                     $message = "Goal rejected.";
                 } else {
-                    $message = "Failed to reject goal.";
+                    $message = "Failed to reject goal." . ($rejectError ? " Reason: " . htmlspecialchars($rejectError) : "");
                 }
             }
         }

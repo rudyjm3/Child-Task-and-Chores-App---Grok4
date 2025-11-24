@@ -83,14 +83,71 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $message = createGoal($main_parent_id, $child_user_id, $title, $target_points, $start_date, $end_date, $reward_id, $_SESSION['user_id'])
             ? "Goal created successfully!"
             : "Failed to create goal. Check date range or reward ID.";
+    } elseif (isset($_POST['adjust_child_points'])) {
+        if (!in_array($role_type, ['main_parent', 'secondary_parent'], true)) {
+            $message = "You do not have permission to adjust points.";
+        } else {
+            $child_user_id = filter_input(INPUT_POST, 'child_user_id', FILTER_VALIDATE_INT);
+            $points_delta_raw = filter_input(INPUT_POST, 'points_delta', FILTER_VALIDATE_INT);
+            $point_reason = trim(filter_input(INPUT_POST, 'point_reason', FILTER_SANITIZE_STRING) ?? '');
+            if (!$child_user_id || $points_delta_raw === false || $points_delta_raw === null || $points_delta_raw == 0) {
+                $message = "Enter a non-zero point amount.";
+            } else {
+                $point_reason = $point_reason !== '' ? substr($point_reason, 0, 255) : 'Manual adjustment';
+                $points_delta = (int) $points_delta_raw;
+                // Ensure log table exists (idempotent)
+                $db->exec("
+                    CREATE TABLE IF NOT EXISTS child_point_adjustments (
+                        id INT AUTO_INCREMENT PRIMARY KEY,
+                        child_user_id INT NOT NULL,
+                        delta_points INT NOT NULL,
+                        reason VARCHAR(255) NOT NULL,
+                        created_by INT NOT NULL,
+                        created_at DATETIME NOT NULL,
+                        INDEX idx_child_created (child_user_id, created_at)
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+                ");
+                updateChildPoints($child_user_id, $points_delta);
+                $stmt = $db->prepare("INSERT INTO child_point_adjustments (child_user_id, delta_points, reason, created_by, created_at) VALUES (:child_id, :delta, :reason, :created_by, NOW())");
+                $stmt->execute([
+                    ':child_id' => $child_user_id,
+                    ':delta' => $points_delta,
+                    ':reason' => $point_reason,
+                    ':created_by' => $_SESSION['user_id']
+                ]);
+                addChildNotification(
+                    (int)$child_user_id,
+                    $points_delta > 0 ? 'points_added' : 'points_deducted',
+                    ($points_delta > 0 ? 'You received ' : 'You lost ') . abs($points_delta) . ' pts: ' . $point_reason,
+                    'dashboard_child.php'
+                );
+                $sign = $points_delta > 0 ? 'added' : 'deducted';
+                $message = ucfirst($sign) . " " . abs($points_delta) . " points. Reason: " . htmlspecialchars($point_reason);
+            }
+        }
     } elseif (isset($_POST['approve_goal']) || isset($_POST['reject_goal'])) {
         $goal_id = filter_input(INPUT_POST, 'goal_id', FILTER_VALIDATE_INT);
         $action = isset($_POST['approve_goal']) ? 'approve' : 'reject';
         $comment = filter_input(INPUT_POST, 'rejection_comment', FILTER_SANITIZE_STRING);
-        $points = approveGoal($_SESSION['user_id'], $goal_id, $action === 'approve', $comment);
-        $message = $points !== false
-            ? ($action === 'approve' ? "Goal approved! Child earned $points points." : "Goal rejected.")
-            : "Failed to $action goal.";
+        if ($action === 'approve') {
+            // Fetch points for message only
+            $pointsStmt = $db->prepare("SELECT target_points FROM goals WHERE id = :goal_id AND parent_user_id = :parent_id");
+            $pointsStmt->execute([':goal_id' => $goal_id, ':parent_id' => $main_parent_id]);
+            $points_value = $pointsStmt->fetchColumn();
+            $approved = approveGoal($goal_id, $main_parent_id);
+            if ($approved) {
+                $message = "Goal approved!" . ($points_value !== false ? " Child earned " . (int)$points_value . " points." : "");
+            } else {
+                $message = "Failed to approve goal.";
+            }
+        } else {
+            $rejectError = null;
+            if (rejectGoal($goal_id, $main_parent_id, $comment, $rejectError)) {
+                $message = "Goal rejected.";
+            } else {
+                $message = "Failed to reject goal." . ($rejectError ? " Reason: " . htmlspecialchars($rejectError) : "");
+            }
+        }
     } elseif (isset($_POST['fulfill_reward'])) {
         $reward_id = filter_input(INPUT_POST, 'reward_id', FILTER_VALIDATE_INT);
         $message = ($reward_id && fulfillReward($reward_id, $main_parent_id, $_SESSION['user_id']))
@@ -208,8 +265,33 @@ $data = getDashboardData($_SESSION['user_id']);
         .points-progress-target { position: absolute; top: 25px; left: 50%; transform: translateX(-50%); font-size: 1em; font-weight: 700; width: 100%; color: #fff; text-shadow: 0 2px 2px rgba(0,0,0,0.4); opacity: 0.9; }
         .child-info-actions { display: flex; flex-wrap: wrap; gap: 10px; }
         .child-info-actions form { margin: 0; flex-grow: 1; }
-         .child-info-actions a { flex-grow: 1; }
-         .child-info-actions form button{ width: 100%;}
+        .child-info-actions a { flex-grow: 1; }
+        .child-info-actions form button { width: 100%; }
+        .adjust-button { background: #ff9800 !important; color: #fff; display: block; gap: 4px; justify-items: center; font-weight: 700; }
+        .adjust-button .label { font-size: 0.95em; }
+        .adjust-button .icon { font-size: 1.1em; line-height: 1; }
+        .points-adjust-card { border: 1px dashed #c8e6c9; background: #fdfefb; padding: 10px 12px; border-radius: 6px; display: grid; gap: 8px; }
+        .points-adjust-card .button { width: 100%; }
+        .adjust-modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.55); display: none; align-items: center; justify-content: center; z-index: 3000; padding: 12px; }
+        .adjust-modal-backdrop.open { display: flex; }
+        .adjust-modal { background: #fff; border-radius: 10px; padding: 18px; max-width: 420px; width: min(420px, 100%); box-shadow: 0 14px 36px rgba(0,0,0,0.25); display: grid; gap: 12px; }
+        .adjust-modal header { display: flex; justify-content: space-between; align-items: center; }
+        .adjust-modal h3 { margin: 0; font-size: 1.1rem; }
+        .adjust-modal-close { background: transparent; border: none; font-size: 1.4rem; cursor: pointer; }
+        .adjust-control { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: center; }
+        .adjust-control button { width: 44px; height: 44px; font-size: 1.2rem; }
+        .adjust-control input[type="number"] { width: 100%; padding: 10px; font-size: 1rem; text-align: center; }
+        .adjust-control input[type="number"]::-webkit-outer-spin-button,
+        .adjust-control input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+        .adjust-control input[type="number"] { -moz-appearance: textfield; }
+        .adjust-history { background: #f9f9f9; border: 1px solid #e0e0e0; border-radius: 8px; padding: 10px; max-height: 180px; overflow-y: auto; }
+        .adjust-history h4 { margin: 0 0 8px; font-size: 0.95rem; }
+        .adjust-history ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
+        .adjust-history li { display: grid; gap: 2px; font-size: 0.9rem; }
+        .adjust-history .delta { font-weight: 700; }
+        .adjust-history .delta.positive { color: #2e7d32; }
+        .adjust-history .delta.negative { color: #c62828; }
+        .adjust-history .meta { color: #666; font-size: 0.85rem; }
         .button { padding: 10px 20px; margin: 5px; background-color: #4caf50; color: white; border: none; border-radius: 5px; cursor: pointer; text-decoration: none; display: inline-block; font-size: 16px; min-height: 44px; }
         .approve-button { background-color: #4caf50; }
         .reject-button { background-color: #f44336; }
@@ -251,6 +333,18 @@ $data = getDashboardData($_SESSION['user_id']);
             .child-info-body { flex-direction: column; }
             .points-progress-container { width: 100%; height: 140px; }
         }
+        .parent-notifications { margin: 16px 0 24px; background: #f5f5f5; border: 1px solid #e0e0e0; border-radius: 10px; padding: 12px 14px; box-shadow: 0 2px 6px rgba(0,0,0,0.06); }
+        .parent-notifications.open .parent-notification-list { display: grid; }
+        .parent-notifications-header { display: flex; align-items: center; gap: 10px; cursor: pointer; }
+        .parent-notifications-title { margin: 0; color: #333; display: flex; align-items: center; gap: 8px; font-weight: 700; }
+        .parent-notification-icon { width: 32px; height: 32px; position: relative; display: inline-flex; align-items: center; justify-content: center; background: #fff; border-radius: 50%; border: 2px solid #c8e6c9; box-shadow: 0 2px 4px rgba(0,0,0,0.12); }
+        .parent-notification-icon svg { width: 18px; height: 18px; fill: #4caf50; }
+        .parent-notification-badge { position: absolute; top: -6px; right: -6px; background: #e53935; color: #fff; border-radius: 12px; padding: 2px 6px; font-size: 0.75rem; font-weight: 700; min-width: 22px; text-align: center; }
+        .parent-notification-list { list-style: none; padding: 0; margin: 12px 0; display: none; gap: 8px; }
+        .parent-notification-item { padding: 10px; background: #fff; border: 1px solid #e0e0e0; border-radius: 8px; display: grid; gap: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+        .parent-notification-meta { font-size: 0.9em; color: #666; }
+        .parent-notifications-footer { display: flex; justify-content: center; }
+        .parent-notifications-footer button { background: transparent; border: none; color: #1565c0; font-weight: 700; cursor: pointer; text-decoration: underline; }
     </style>
     <script>
         // JS for Manage Family Wizard (step-by-step)
@@ -313,6 +407,86 @@ $data = getDashboardData($_SESSION['user_id']);
                     });
                 }
             });
+
+            const parentNotifications = document.querySelector('[data-role="parent-notifications"]');
+            if (parentNotifications) {
+                const toggles = parentNotifications.querySelectorAll('[data-action="toggle-parent-notifications"]');
+                const toggle = () => parentNotifications.classList.toggle('open');
+                toggles.forEach(btn => btn.addEventListener('click', toggle));
+            }
+
+            const adjustModal = document.querySelector('[data-role="adjust-modal"]');
+            const adjustTitle = adjustModal ? adjustModal.querySelector('[data-role="adjust-title"]') : null;
+            const adjustChildIdInput = adjustModal ? adjustModal.querySelector('[data-role="adjust-child-id"]') : null;
+            const adjustHistoryList = adjustModal ? adjustModal.querySelector('[data-role="adjust-history-list"]') : null;
+            const pointsInput = adjustModal ? adjustModal.querySelector('#adjust_points_input') : null;
+            const reasonInput = adjustModal ? adjustModal.querySelector('#adjust_reason_input') : null;
+
+            const renderHistory = (history) => {
+                if (!adjustHistoryList) return;
+                adjustHistoryList.innerHTML = '';
+                if (!history || !history.length) {
+                    const li = document.createElement('li');
+                    li.textContent = 'No recent adjustments.';
+                    adjustHistoryList.appendChild(li);
+                    return;
+                }
+                history.forEach(item => {
+                    const li = document.createElement('li');
+                    const delta = document.createElement('span');
+                    delta.className = 'delta ' + (item.delta_points >= 0 ? 'positive' : 'negative');
+                    delta.textContent = (item.delta_points >= 0 ? '+' : '') + item.delta_points + ' pts';
+                    const reason = document.createElement('span');
+                    reason.textContent = item.reason || 'No reason';
+                    const meta = document.createElement('span');
+                    meta.className = 'meta';
+                    meta.textContent = item.created_at ? new Date(item.created_at).toLocaleString() : '';
+                    li.appendChild(delta);
+                    li.appendChild(reason);
+                    li.appendChild(meta);
+                    adjustHistoryList.appendChild(li);
+                });
+            };
+
+            document.querySelectorAll('[data-role="open-adjust-modal"]').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const childId = btn.dataset.childId || '';
+                    const childName = btn.dataset.childName || 'Child';
+                    const historyRaw = btn.dataset.history || '[]';
+                    let history = [];
+                    try { history = JSON.parse(historyRaw); } catch (e) { history = []; }
+                    if (adjustTitle) { adjustTitle.textContent = 'Adjust Points - ' + childName; }
+                    if (adjustChildIdInput) { adjustChildIdInput.value = childId; }
+                    if (pointsInput) { pointsInput.value = 1; }
+                    if (reasonInput) { reasonInput.value = ''; }
+                    renderHistory(history);
+                    if (adjustModal) { adjustModal.classList.add('open'); }
+                });
+            });
+
+            if (adjustModal) {
+                const closeButtons = adjustModal.querySelectorAll('[data-action="close-adjust"]');
+                closeButtons.forEach(btn => btn.addEventListener('click', () => adjustModal.classList.remove('open')));
+                adjustModal.addEventListener('click', (e) => {
+                    if (e.target === adjustModal) {
+                        adjustModal.classList.remove('open');
+                    }
+                });
+                const decBtn = adjustModal.querySelector('[data-action="decrement-points"]');
+                const incBtn = adjustModal.querySelector('[data-action="increment-points"]');
+                if (decBtn && pointsInput) {
+                    decBtn.addEventListener('click', () => {
+                        const current = parseInt(pointsInput.value || '0', 10) || 0;
+                        pointsInput.value = current - 1;
+                    });
+                }
+                if (incBtn && pointsInput) {
+                    incBtn.addEventListener('click', () => {
+                        const current = parseInt(pointsInput.value || '0', 10) || 0;
+                        pointsInput.value = current + 1;
+                    });
+                }
+            }
         });
     </script>
 </head>
@@ -328,6 +502,54 @@ $data = getDashboardData($_SESSION['user_id']);
    </header>
    <main class="dashboard">
       <?php if (isset($message)) echo "<p>$message</p>"; ?>
+      <?php
+        $parentNotifications = [];
+        if (!empty($data['pending_approvals'])) {
+            foreach ($data['pending_approvals'] as $pending) {
+                $parentNotifications[] = [
+                    'message' => 'Goal approval pending for ' . htmlspecialchars($pending['child_display_name'] ?? 'Child') . ': ' . htmlspecialchars($pending['title'] ?? 'Goal'),
+                    'link' => 'goal.php'
+                ];
+            }
+        }
+        if (!empty($data['redeemed_rewards'])) {
+            foreach ($data['redeemed_rewards'] as $redeemed) {
+                if (empty($redeemed['fulfilled_on'])) {
+                    $parentNotifications[] = [
+                        'message' => 'Reward fulfillment needed: ' . htmlspecialchars($redeemed['title'] ?? 'Reward'),
+                        'link' => 'dashboard_parent.php#rewards'
+                    ];
+                }
+            }
+        }
+        $parentNotificationCount = count($parentNotifications);
+      ?>
+      <section class="parent-notifications" data-role="parent-notifications">
+        <div class="parent-notifications-header" data-action="toggle-parent-notifications">
+            <div class="parent-notification-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" focusable="false"><path d="M12 24a2.5 2.5 0 0 0 2.45-2h-4.9A2.5 2.5 0 0 0 12 24Zm7.12-6.41-1.17-1.11V11a6 6 0 0 0-5-5.9V4a1 1 0 1 0-2 0v1.1A6 6 0 0 0 5.05 11v5.48l-1.17 1.11A1 1 0 0 0 4.6 19h14.8a1 1 0 0 0 .72-1.69Z"/></svg>
+                <span class="parent-notification-badge"><?php echo (int)$parentNotificationCount; ?></span>
+            </div>
+            <h2 class="parent-notifications-title">Notifications</h2>
+        </div>
+        <?php if ($parentNotificationCount): ?>
+            <ul class="parent-notification-list">
+                <?php foreach ($parentNotifications as $note): ?>
+                    <li class="parent-notification-item">
+                        <div><?php echo $note['message']; ?></div>
+                        <?php if (!empty($note['link'])): ?>
+                            <div class="parent-notification-meta"><a href="<?php echo htmlspecialchars($note['link']); ?>">View</a></div>
+                        <?php endif; ?>
+                    </li>
+                <?php endforeach; ?>
+            </ul>
+        <?php else: ?>
+            <p class="parent-notification-meta" style="margin: 12px 0;">No notifications right now.</p>
+        <?php endif; ?>
+        <div class="parent-notifications-footer">
+            <button type="button" data-action="toggle-parent-notifications">View Notifications</button>
+        </div>
+      </section>
       <div class="children-overview">
          <h2>Children Overview</h2>
          <?php if (isset($data['children']) && is_array($data['children']) && !empty($data['children'])): ?>
@@ -363,6 +585,17 @@ $data = getDashboardData($_SESSION['user_id']);
                               <div class="points-progress-fill"></div>
                               <span class="points-progress-target"><?php echo (int)($child['points_earned'] ?? 0); ?> pts</span>
                            </div>
+                           <?php if (in_array($role_type, ['main_parent', 'secondary_parent'], true)): ?>
+                                <button type="button"
+                                    class="button adjust-button"
+                                    data-role="open-adjust-modal"
+                                    data-child-id="<?php echo (int)$child['child_user_id']; ?>"
+                                    data-child-name="<?php echo htmlspecialchars($child['child_name']); ?>"
+                                    data-history='<?php echo htmlspecialchars(json_encode($child['point_adjustments'] ?? [], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT)); ?>'>
+                                    <span class="label">Adjust Points</span>
+                                    <span class="icon">+ / -</span>
+                                </button>
+                            <?php endif; ?>
                         </div>
                      </div>
                      <div class="child-info-actions">
@@ -876,8 +1109,39 @@ $data = getDashboardData($_SESSION['user_id']);
                <?php endforeach; ?>
          <?php endif; ?>
       </div>
-   </main>
-   <footer>
+    </main>
+    <div class="adjust-modal-backdrop" data-role="adjust-modal">
+        <div class="adjust-modal">
+            <header>
+                <h3 data-role="adjust-title">Adjust Points</h3>
+                <button type="button" class="adjust-modal-close" data-action="close-adjust">&times;</button>
+            </header>
+            <form method="POST">
+                <div class="form-group">
+                    <label for="adjust_points_input">Points (positive or negative)</label>
+                    <div class="adjust-control">
+                        <button type="button" data-action="decrement-points">-</button>
+                        <input id="adjust_points_input" type="number" name="points_delta" step="1" value="1" required>
+                        <button type="button" data-action="increment-points">+</button>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="adjust_reason_input">Reason</label>
+                    <input id="adjust_reason_input" type="text" name="point_reason" maxlength="255" placeholder="e.g., Helped sibling, behavior reminder">
+                </div>
+                <input type="hidden" name="child_user_id" data-role="adjust-child-id">
+                <input type="hidden" name="adjust_child_points" value="1">
+                <div class="points-adjust-actions">
+                    <button type="submit" class="button approve-button">Apply</button>
+                </div>
+            </form>
+            <div class="adjust-history" data-role="adjust-history">
+                <h4>Recent adjustments</h4>
+                <ul data-role="adjust-history-list"></ul>
+            </div>
+        </div>
+    </div>
+    <footer>
       <p>Child Task and Chores App - Ver 3.10.14</p>
    </footer>
 </body>

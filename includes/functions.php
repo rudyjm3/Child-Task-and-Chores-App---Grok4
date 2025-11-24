@@ -452,6 +452,45 @@ function getDashboardData($user_id) {
             while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
                 $rewardsClaimed[(int)$row['child_user_id']] = (int)$row['rewards_claimed'];
             }
+
+            // Points adjustments history (latest 10 per child)
+            try {
+                $db->exec("
+                    CREATE TABLE IF NOT EXISTS child_point_adjustments (
+                        id INT AUTO_INCREMENT PRIMARY KEY,
+                        child_user_id INT NOT NULL,
+                        delta_points INT NOT NULL,
+                        reason VARCHAR(255) NOT NULL,
+                        created_by INT NOT NULL,
+                        created_at DATETIME NOT NULL,
+                        INDEX idx_child_created (child_user_id, created_at)
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+                ");
+                $adjStmt = $db->prepare("
+                    SELECT child_user_id, delta_points, reason, created_at
+                    FROM child_point_adjustments
+                    WHERE child_user_id IN ($placeholders)
+                    ORDER BY created_at DESC
+                ");
+                $adjStmt->execute($childIds);
+                $adjustmentsByChild = [];
+                while ($row = $adjStmt->fetch(PDO::FETCH_ASSOC)) {
+                    $cid = (int)$row['child_user_id'];
+                    if (!isset($adjustmentsByChild[$cid])) {
+                        $adjustmentsByChild[$cid] = [];
+                    }
+                    if (count($adjustmentsByChild[$cid]) < 10) {
+                        $adjustmentsByChild[$cid][] = [
+                            'delta_points' => (int)$row['delta_points'],
+                            'reason' => $row['reason'],
+                            'created_at' => $row['created_at']
+                        ];
+                    }
+                }
+            } catch (Exception $e) {
+                error_log("Failed to load point adjustments: " . $e->getMessage());
+                $adjustmentsByChild = [];
+            }
         }
 
         $maxChildPoints = max(100, $maxChildPoints);
@@ -467,6 +506,7 @@ function getDashboardData($user_id) {
             $child['goals_assigned'] = $childGoalStats['goal_count'];
             $child['goal_target_points'] = $childGoalStats['total_target_points'];
             $child['rewards_claimed'] = $rewardsClaimed[$childId] ?? 0;
+            $child['point_adjustments'] = $adjustmentsByChild[$childId] ?? [];
         }
         unset($child);
         $data['max_child_points'] = $maxChildPoints;
@@ -601,6 +641,11 @@ function getDashboardData($user_id) {
                      WHERE r.redeemed_by = :child_id AND r.status = 'redeemed'");
         $stmt->execute([':child_id' => $user_id]);
         $data['redeemed_rewards'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        ensureChildNotificationsTable();
+        $notifStmt = $db->prepare("SELECT id, type, message, link_url, is_read, created_at FROM child_notifications WHERE child_user_id = :child_id ORDER BY is_read ASC, created_at DESC LIMIT 50");
+        $notifStmt->execute([':child_id' => $user_id]);
+        $data['notifications'] = $notifStmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
     return $data;
@@ -671,16 +716,50 @@ function completeTask($task_id, $child_id, $photo_proof = null) {
     return $stmt->execute([':photo_proof' => $photo_proof, ':id' => $task_id, ':child_id' => $child_id]);
 }
 
+function ensureChildNotificationsTable() {
+    global $db;
+    $db->exec("
+        CREATE TABLE IF NOT EXISTS child_notifications (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            child_user_id INT NOT NULL,
+            type VARCHAR(64) NOT NULL,
+            message VARCHAR(255) NOT NULL,
+            link_url VARCHAR(255) NULL,
+            is_read TINYINT(1) NOT NULL DEFAULT 0,
+            created_at DATETIME NOT NULL,
+            INDEX idx_child_read (child_user_id, is_read, created_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    ");
+}
+
+function addChildNotification($child_id, $type, $message, $link_url = null) {
+    global $db;
+    ensureChildNotificationsTable();
+    $stmt = $db->prepare("INSERT INTO child_notifications (child_user_id, type, message, link_url, created_at) VALUES (:child_id, :type, :message, :link_url, NOW())");
+    $stmt->execute([
+        ':child_id' => $child_id,
+        ':type' => substr((string)$type, 0, 64),
+        ':message' => substr((string)$message, 0, 255),
+        ':link_url' => $link_url ? substr((string)$link_url, 0, 255) : null
+    ]);
+}
+
 // Approve a task
 function approveTask($task_id) {
     global $db;
-    $stmt = $db->prepare("SELECT child_user_id, points FROM tasks WHERE id = :id AND status = 'completed'");
+    $stmt = $db->prepare("SELECT child_user_id, points, title FROM tasks WHERE id = :id AND status = 'completed'");
     $stmt->execute([':id' => $task_id]);
     $task = $stmt->fetch(PDO::FETCH_ASSOC);
     if ($task) {
         $stmt = $db->prepare("UPDATE tasks SET status = 'approved' WHERE id = :id");
         if ($stmt->execute([':id' => $task_id])) {
             updateChildPoints($task['child_user_id'], $task['points']);
+            addChildNotification(
+                (int)$task['child_user_id'],
+                'task_approved',
+                'Task approved: ' . ($task['title'] ?? 'Task'),
+                'task.php'
+            );
             return true;
         }
     }
@@ -749,7 +828,21 @@ function fulfillReward($reward_id, $parent_user_id, $actor_user_id) {
         ':reward_id' => $reward_id,
         ':parent_id' => $parent_user_id
     ]);
-    return $stmt->rowCount() > 0;
+    $updated = $stmt->rowCount() > 0;
+    if ($updated) {
+        $fetch = $db->prepare("SELECT redeemed_by, title FROM rewards WHERE id = :reward_id");
+        $fetch->execute([':reward_id' => $reward_id]);
+        $row = $fetch->fetch(PDO::FETCH_ASSOC);
+        if ($row && !empty($row['redeemed_by'])) {
+            addChildNotification(
+                (int)$row['redeemed_by'],
+                'reward_fulfilled',
+                'Reward fulfilled: ' . ($row['title'] ?? 'Reward'),
+                'dashboard_child.php'
+            );
+        }
+    }
+    return $updated;
 }
 
 // Create goal
@@ -811,7 +904,7 @@ function approveGoal($goal_id, $parent_user_id) {
     try {
         $db->beginTransaction();
         
-        $stmt = $db->prepare("SELECT child_user_id, target_points 
+        $stmt = $db->prepare("SELECT child_user_id, target_points, title 
                              FROM goals 
                              WHERE id = :goal_id 
                              AND parent_user_id = :parent_id 
@@ -832,6 +925,12 @@ function approveGoal($goal_id, $parent_user_id) {
             
             // Award points to child
             updateChildPoints($goal['child_user_id'], $goal['target_points']);
+            addChildNotification(
+                (int)$goal['child_user_id'],
+                'goal_approved',
+                'Goal approved: ' . ($goal['title'] ?? 'Goal'),
+                'dashboard_child.php'
+            );
             
             $db->commit();
             return true;
@@ -847,20 +946,48 @@ function approveGoal($goal_id, $parent_user_id) {
 }
 
 // Add back rejectGoal function
-function rejectGoal($goal_id, $parent_user_id, $rejection_comment) {
+function rejectGoal($goal_id, $parent_user_id, $rejection_comment, &$error = null) {
     global $db;
-    $stmt = $db->prepare("UPDATE goals 
-                         SET status = 'rejected', 
-                             rejected_at = NOW(), 
-                             rejection_comment = :comment 
-                         WHERE id = :goal_id 
-                         AND parent_user_id = :parent_id 
-                         AND status = 'pending_approval'");
-    return $stmt->execute([
-        ':goal_id' => $goal_id,
-        ':parent_id' => $parent_user_id,
-        ':comment' => $rejection_comment
-    ]);
+    try {
+        $detail = $db->prepare("SELECT child_user_id, title FROM goals WHERE id = :goal_id AND parent_user_id = :parent_id AND status = 'pending_approval'");
+        $detail->execute([
+            ':goal_id' => $goal_id,
+            ':parent_id' => $parent_user_id
+        ]);
+        $goal = $detail->fetch(PDO::FETCH_ASSOC);
+        if (!$goal) {
+            $error = 'No pending approval goal found for this parent.';
+            return false; // No pending approval to reject
+        }
+
+        $stmt = $db->prepare("UPDATE goals 
+                             SET status = 'rejected', 
+                                 rejected_at = NOW(), 
+                                 rejection_comment = :comment 
+                             WHERE id = :goal_id 
+                             AND parent_user_id = :parent_id 
+                             AND status = 'pending_approval'");
+        $stmt->execute([
+            ':goal_id' => $goal_id,
+            ':parent_id' => $parent_user_id,
+            ':comment' => $rejection_comment
+        ]);
+        if ($stmt->rowCount() > 0) {
+            addChildNotification(
+                (int)$goal['child_user_id'],
+                'goal_rejected',
+                'Goal rejected: ' . ($goal['title'] ?? 'Goal'),
+                'dashboard_child.php'
+            );
+            return true;
+        }
+        $error = 'Goal could not be updated.';
+        return false;
+    } catch (Exception $e) {
+        $error = $e->getMessage();
+        error_log("Goal rejection failed: " . $e->getMessage());
+        return false;
+    }
 }
 
 // **[New] Routine Task Functions **
@@ -970,7 +1097,7 @@ function replaceRoutineTasks($routine_id, array $tasks) {
 
 function getRoutinePreferences($parent_user_id) {
     global $db;
-    $stmt = $db->prepare("SELECT timer_warnings_enabled, sub_timer_label, show_countdown FROM routine_preferences WHERE parent_user_id = :parent LIMIT 1");
+    $stmt = $db->prepare("SELECT timer_warnings_enabled, sub_timer_label, show_countdown, progress_style FROM routine_preferences WHERE parent_user_id = :parent LIMIT 1");
     $stmt->execute([':parent' => $parent_user_id]);
     $prefs = $stmt->fetch(PDO::FETCH_ASSOC);
     if (!$prefs) {
@@ -978,6 +1105,7 @@ function getRoutinePreferences($parent_user_id) {
             'timer_warnings_enabled' => 1,
             'sub_timer_label' => 'hurry_goal',
             'show_countdown' => 1,
+            'progress_style' => 'bar',
             '__from_db' => false,
         ];
     }
@@ -993,12 +1121,16 @@ function getRoutinePreferences($parent_user_id) {
     }
     $prefs['show_countdown'] = (int) $prefs['show_countdown'];
 
+    if (!isset($prefs['progress_style']) || !in_array($prefs['progress_style'], ['bar', 'circle', 'pie'], true)) {
+        $prefs['progress_style'] = 'bar';
+    }
+
     $prefs['__from_db'] = true;
 
     return $prefs;
 }
 
-function saveRoutinePreferences($parent_user_id, $timer_warnings_enabled, $sub_timer_label, $show_countdown) {
+function saveRoutinePreferences($parent_user_id, $timer_warnings_enabled, $sub_timer_label, $show_countdown, $progress_style = 'bar') {
     global $db;
     
     // Validate label
@@ -1014,22 +1146,28 @@ function saveRoutinePreferences($parent_user_id, $timer_warnings_enabled, $sub_t
         error_log("Invalid timer label attempted: $sub_timer_label");
         $sub_timer_label = 'hurry_goal'; // Fallback to default
     }
+
+    if (!in_array($progress_style, ['bar', 'circle', 'pie'], true)) {
+        $progress_style = 'bar';
+    }
     
-    $stmt = $db->prepare("INSERT INTO routine_preferences (parent_user_id, timer_warnings_enabled, sub_timer_label, show_countdown)
-                          VALUES (:parent_id, :timer_enabled, :label, :countdown)
+    $stmt = $db->prepare("INSERT INTO routine_preferences (parent_user_id, timer_warnings_enabled, sub_timer_label, show_countdown, progress_style)
+                          VALUES (:parent_id, :timer_enabled, :label, :countdown, :progress_style)
                           ON DUPLICATE KEY UPDATE timer_warnings_enabled = VALUES(timer_warnings_enabled),
                                                   sub_timer_label = VALUES(sub_timer_label),
-                                                  show_countdown = VALUES(show_countdown)");
+                                                  show_countdown = VALUES(show_countdown),
+                                                  progress_style = VALUES(progress_style)");
     
     $result = $stmt->execute([
         ':parent_id' => $parent_user_id,
         ':timer_enabled' => $timer_warnings_enabled ? 1 : 0,
         ':label' => $sub_timer_label,
-        ':countdown' => $show_countdown ? 1 : 0
+        ':countdown' => $show_countdown ? 1 : 0,
+        ':progress_style' => $progress_style
     ]);
     
     if ($result) {
-        error_log("Routine preferences updated for parent $parent_user_id: timer_warnings=$timer_warnings_enabled, label=$sub_timer_label, show_countdown=$show_countdown");
+        error_log("Routine preferences updated for parent $parent_user_id: timer_warnings=$timer_warnings_enabled, label=$sub_timer_label, show_countdown=$show_countdown, style=$progress_style");
     } else {
         error_log("Failed to update routine preferences for parent $parent_user_id");
     }
@@ -1707,6 +1845,7 @@ try {
         timer_warnings_enabled TINYINT(1) DEFAULT 1,
         sub_timer_label VARCHAR(50) DEFAULT 'hurry_goal',
         show_countdown TINYINT(1) DEFAULT 1,
+        progress_style VARCHAR(12) DEFAULT 'bar',
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         UNIQUE KEY uniq_parent (parent_user_id),
@@ -1714,6 +1853,12 @@ try {
     )";
     $db->exec($sql);
     error_log("Created/verified routine_preferences table successfully");
+    // Ensure progress_style column exists
+    try {
+        $db->exec("ALTER TABLE routine_preferences ADD COLUMN IF NOT EXISTS progress_style VARCHAR(12) DEFAULT 'bar'");
+    } catch (PDOException $e) {
+        // ignore if not supported; table already created with column above
+    }
 
     // Create routine_overtime_logs table if not exists
     $sql = "CREATE TABLE IF NOT EXISTS routine_overtime_logs (

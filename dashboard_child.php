@@ -33,6 +33,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             $message = "Failed to request completion.";
         }
+    } elseif (isset($_POST['mark_notifications_read'])) {
+        $ids = array_map('intval', $_POST['notification_ids'] ?? []);
+        $ids = array_values(array_filter($ids));
+        if (!empty($ids)) {
+            ensureChildNotificationsTable();
+            $placeholders = implode(',', array_fill(0, count($ids), '?'));
+            $params = $ids;
+            $params[] = $_SESSION['user_id'];
+            $stmt = $db->prepare("UPDATE child_notifications SET is_read = 1 WHERE id IN ($placeholders) AND child_user_id = ?");
+            $stmt->execute($params);
+            $message = "Notifications updated.";
+            $data = getDashboardData($_SESSION['user_id']);
+        }
     } elseif (isset($_POST['redeem_reward'])) {
         $reward_id = filter_input(INPUT_POST, 'reward_id', FILTER_VALIDATE_INT);
         if (redeemReward($_SESSION['user_id'], $reward_id)) {
@@ -81,6 +94,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         .routine-item p { font-size: 1.1em; }
         .routine-item .routine-points-line { display: flex; flex-wrap: wrap;    justify-content: center; gap: 12px; font-weight: 600; color: #37474f; margin: 6px 0; }
         .routine-item .start-routine-button { align-self: center; margin-top: auto; }
+        .notifications { margin: 20px 0; text-align: left; background: #fffaf3; border: 1px solid #ffe0b2; border-radius: 10px; padding: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.06); position: relative; }
+        .notifications-header { display: flex; align-items: center; gap: 10px; cursor: pointer; }
+        .notifications h2 { margin: 0; color: #ef6c00; display: flex; align-items: center; gap: 8px; }
+        .notification-icon { width: 32px; height: 32px; position: relative; display: inline-flex; align-items: center; justify-content: center; background: #fff; border-radius: 50%; border: 2px solid #ffb74d; box-shadow: 0 2px 4px rgba(0,0,0,0.15); }
+        .notification-icon svg { width: 18px; height: 18px; fill: #ef6c00; }
+        .notification-badge { position: absolute; top: -6px; right: -6px; background: #d32f2f; color: #fff; border-radius: 12px; padding: 2px 6px; font-size: 0.75rem; font-weight: 700; min-width: 22px; text-align: center; }
+        .notification-list { list-style: none; padding: 0; margin: 12px 0; display: none; gap: 10px; }
+        .notifications.open .notification-list { display: grid; }
+        .notification-item { display: grid; grid-template-columns: auto 1fr; gap: 10px; align-items: flex-start; padding: 10px; border-radius: 8px; background: #fff; border: 1px solid #ffe0b2; }
+        .notification-item.unread { border-color: #ff9800; box-shadow: 0 1px 4px rgba(255,152,0,0.2); }
+        .notification-meta { font-size: 0.85rem; color: #666; margin-top: 4px; }
+        .notification-actions { display: none; justify-content: flex-end; margin-top: 10px; }
+        .notifications.open .notification-actions { display: flex; }
+        .notification-actions .button { margin: 0; }
+        .notification-empty { margin: 0; font-style: italic; color: #777; display: none; }
+        .notifications.open .notification-empty { display: block; }
+        .notifications-footer-toggle { display: flex; justify-content: center; margin-top: 8px; }
+        .notifications-footer-toggle button { background: transparent; border: none; color: #ef6c00; font-weight: 700; cursor: pointer; text-decoration: underline; }
         @media (max-width: 768px) { .dashboard { padding: 10px; } .button { width: 100%; } }
     </style>
     <script>
@@ -127,6 +158,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 element.textContent = (element.dataset.prefix || '') + (element.dataset.start || '0') + (element.dataset.suffix || '');
                 animateCount(element);
             });
+
+            const notifications = document.querySelector('[data-role="notifications"]');
+            if (notifications) {
+                const toggleTargets = notifications.querySelectorAll('[data-action="toggle-notifications"]');
+                const toggle = () => notifications.classList.toggle('open');
+                toggleTargets.forEach(btn => btn.addEventListener('click', toggle));
+            }
         });
     </script>
 </head>
@@ -143,6 +181,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
          $progressPercent = isset($data['points_progress']) ? max(0, min(100, (int)$data['points_progress'])) : 0;
          $displayPoints = min(100, $childTotalPoints);
          $extraPoints = max(0, $childTotalPoints - 100);
+         $notifications = $data['notifications'] ?? [];
+         $notificationCount = is_array($notifications) ? count($notifications) : 0;
+         $unreadCount = is_array($notifications) ? count(array_filter($notifications, static function ($n) { return empty($n['is_read']); })) : 0;
       ?>
       <div class="progress">
          <span class="points-progress-title">Total Points</span>
@@ -154,6 +195,43 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <div class="points-progress-total"><span data-animate-count data-target="<?php echo $displayPoints; ?>" data-start="0">0</span> / 100</div>
          </div>
          <p class="points-extra">Extra points: <span class="extra-points-num" data-animate-count data-target="<?php echo $extraPoints; ?>" data-start="0">0</span></p>
+      </div>
+      <div class="notifications" data-role="notifications">
+         <div class="notifications-header" data-action="toggle-notifications">
+            <div class="notification-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" focusable="false"><path d="M12 24a2.5 2.5 0 0 0 2.45-2h-4.9A2.5 2.5 0 0 0 12 24Zm7.12-6.41-1.17-1.11V11a6 6 0 0 0-5-5.9V4a1 1 0 1 0-2 0v1.1A6 6 0 0 0 5.05 11v5.48l-1.17 1.11A1 1 0 0 0 4.6 19h14.8a1 1 0 0 0 .72-1.69Z"/></svg>
+                <span class="notification-badge"><?php echo (int)($unreadCount ?: $notificationCount); ?></span>
+            </div>
+            <h2>Notifications</h2>
+         </div>
+         <form method="POST" action="dashboard_child.php">
+            <?php if (!empty($notifications)): ?>
+               <ul class="notification-list">
+                  <?php foreach ($notifications as $note): ?>
+                     <li class="notification-item <?php echo !empty($note['is_read']) ? '' : 'unread'; ?>">
+                        <input type="checkbox" name="notification_ids[]" value="<?php echo (int)$note['id']; ?>" aria-label="Mark notification as read">
+                        <div>
+                           <div><?php echo htmlspecialchars($note['message']); ?></div>
+                           <div class="notification-meta">
+                              <?php echo htmlspecialchars(date('m/d/Y h:i A', strtotime($note['created_at']))); ?>
+                              <?php if (!empty($note['type'])): ?> · <?php echo htmlspecialchars(str_replace('_', ' ', $note['type'])); ?><?php endif; ?>
+                              <?php if (!empty($note['link_url'])): ?> · <a href="<?php echo htmlspecialchars($note['link_url']); ?>">View</a><?php endif; ?>
+                           </div>
+                        </div>
+                     </li>
+                  <?php endforeach; ?>
+               </ul>
+               <div class="notification-actions">
+                  <button type="submit" name="mark_notifications_read" class="button">Mark Selected as Read</button>
+               </div>
+            <?php else: ?>
+               <p class="notification-empty">No notifications yet. Keep going!</p>
+            <?php endif; ?>
+         </form>
+         <div class="notifications-footer-toggle">
+            <button type="button" data-action="toggle-notifications">View Notifications</button>
+         </div>
+         <p class="notification-meta">Ideas to add later: streak bonuses, reminders for upcoming routines, and messages when a new goal is assigned.</p>
       </div>
       <div class="rewards">
          <h2>Available Rewards</h2>
