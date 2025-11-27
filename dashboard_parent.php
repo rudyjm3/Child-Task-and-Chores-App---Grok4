@@ -50,6 +50,40 @@ $routine_overtime_logs = getRoutineOvertimeLogs($main_parent_id, 25);
 $routine_overtime_stats = getRoutineOvertimeStats($main_parent_id);
 $overtimeByChild = $routine_overtime_stats['by_child'] ?? [];
 $overtimeByRoutine = $routine_overtime_stats['by_routine'] ?? [];
+$overtimeLogGroups = [];
+$overtimeLogsByRoutine = [];
+if (!empty($routine_overtime_logs) && is_array($routine_overtime_logs)) {
+    foreach ($routine_overtime_logs as $log) {
+        $timestamp = strtotime($log['occurred_at']);
+        $dateKey = $timestamp ? date('Y-m-d', $timestamp) : 'unknown';
+        $dateLabel = $timestamp ? date('l, M j, Y', $timestamp) : 'Unknown date';
+        if (!isset($overtimeLogGroups[$dateKey])) {
+            $overtimeLogGroups[$dateKey] = [
+                'label' => $dateLabel,
+                'count' => 0,
+                'routines' => []
+            ];
+        }
+        $routineId = (int) ($log['routine_id'] ?? 0);
+        $routineKey = $routineId ?: md5($log['routine_title'] ?? 'Routine');
+        if (!isset($overtimeLogGroups[$dateKey]['routines'][$routineKey])) {
+            $overtimeLogGroups[$dateKey]['routines'][$routineKey] = [
+                'title' => $log['routine_title'] ?? 'Routine',
+                'entries' => []
+            ];
+        }
+        $overtimeLogGroups[$dateKey]['routines'][$routineKey]['entries'][] = $log;
+        $overtimeLogGroups[$dateKey]['count']++;
+
+        if (!isset($overtimeLogsByRoutine[$routineKey])) {
+            $overtimeLogsByRoutine[$routineKey] = [
+                'title' => $log['routine_title'] ?? 'Routine',
+                'entries' => []
+            ];
+        }
+        $overtimeLogsByRoutine[$routineKey]['entries'][] = $log;
+    }
+}
 $formatDuration = function($seconds) {
     $seconds = max(0, (int) $seconds);
     $minutes = intdiv($seconds, 60);
@@ -240,7 +274,7 @@ $data = getDashboardData($_SESSION['user_id']);
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Parent Dashboard</title>
-    <link rel="stylesheet" href="css/main.css">
+    <link rel="stylesheet" href="css/main.css?v=3.10.15">
     <style>
         .dashboard { padding: 20px; max-width: 900px; margin: 0 auto; }
         .children-overview, .management-links, .active-rewards, .redeemed-rewards, .pending-approvals, .completed-goals, .manage-family { margin-top: 20px; }
@@ -325,6 +359,40 @@ $data = getDashboardData($_SESSION['user_id']);
         .overtime-table th, .overtime-table td { border: 1px solid #e0e0e0; padding: 8px; text-align: left; }
         .overtime-table th { background: #f0f4f8; font-weight: 600; }
         .overtime-empty { font-style: italic; color: #666; margin-top: 12px; }
+        .routine-log-link { background: none; border: none; color: #1565c0; cursor: pointer; padding: 0; font-weight: 700; text-decoration: underline; }
+        .routine-log-link:hover { color: #0d47a1; }
+        .overtime-accordion { display: grid; gap: 12px; margin-top: 12px; }
+        .overtime-date { border: 1px solid #e3e7eb; border-radius: 10px; overflow: hidden; background: #fff; box-shadow: 0 2px 6px rgba(0,0,0,0.05); }
+        .overtime-date > summary { padding: 12px 14px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; gap: 10px; font-weight: 700; background: #f5f8fb; list-style: none; }
+        .overtime-date > summary::-webkit-details-marker { display: none; }
+        .overtime-date-count { color: #607d8b; font-weight: 600; font-size: 0.92rem; }
+        .overtime-routine { border-top: 1px solid #eef1f4; }
+        .overtime-routine > summary { padding: 12px 16px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; gap: 10px; font-weight: 700; color: #0d47a1; list-style: none; }
+        .overtime-routine > summary::-webkit-details-marker { display: none; }
+        .overtime-routine-count { color: #455a64; font-size: 0.9rem; font-weight: 600; }
+        .overtime-card-list { display: grid; gap: 10px; padding: 0 14px 14px; }
+        .overtime-card-row { background: linear-gradient(145deg, #ffffff, #f7f9fb); border: 1px solid #e3e7eb; border-radius: 10px; padding: 12px; display: grid; gap: 6px; box-shadow: 0 2px 6px rgba(0,0,0,0.05); }
+        .ot-row-header { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+        .ot-task { font-weight: 700; color: #0d47a1; }
+        .ot-time { color: #546e7a; font-size: 0.9rem; }
+        .ot-meta { font-size: 0.92rem; color: #37474f; display: flex; gap: 10px; flex-wrap: wrap; }
+        .ot-meta strong { color: #455a64; }
+        .ot-overtime { color: #c62828; font-weight: 700; }
+        .routine-log-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.55); display: none; align-items: center; justify-content: center; z-index: 3000; padding: 16px; }
+        .routine-log-modal.active { display: flex; }
+        .routine-log-dialog { background: #fff; border-radius: 12px; max-width: 640px; width: min(640px, 100%); max-height: 80vh; overflow: hidden; box-shadow: 0 18px 36px rgba(0,0,0,0.25); display: grid; grid-template-rows: auto 1fr; }
+        .routine-log-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border-bottom: 1px solid #e0e0e0; }
+        .routine-log-title { margin: 0; font-size: 1.1rem; font-weight: 700; color: #0d47a1; }
+        .routine-log-close { border: none; background: transparent; font-size: 1.3rem; cursor: pointer; color: #455a64; }
+        .routine-log-body { padding: 14px 16px; overflow-y: auto; display: grid; gap: 10px; }
+        .routine-log-empty { color: #666; font-style: italic; }
+        .routine-log-item { border: 1px solid #e3e7eb; border-radius: 10px; padding: 10px; display: grid; gap: 6px; background: #f9fbfd; }
+        .routine-log-item .meta { color: #546e7a; font-size: 0.9rem; display: flex; flex-wrap: wrap; gap: 10px; }
+        .routine-log-item .overtime { color: #c62828; font-weight: 700; }
+        @media (max-width: 768px) {
+            .overtime-date > summary, .overtime-routine > summary { padding: 12px; }
+            .ot-row-header { flex-direction: column; align-items: flex-start; }
+        }
         @media (max-width: 768px) {
             .manage-family { padding: 10px; }
             .button { width: 100%; }
@@ -346,6 +414,9 @@ $data = getDashboardData($_SESSION['user_id']);
         .parent-notifications-footer { display: flex; justify-content: center; }
         .parent-notifications-footer button { background: transparent; border: none; color: #1565c0; font-weight: 700; cursor: pointer; text-decoration: underline; }
     </style>
+    <script>
+        window.RoutineOvertimeByRoutine = <?php echo json_encode($overtimeLogsByRoutine, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP); ?>;
+    </script>
     <script>
         // JS for Manage Family Wizard (step-by-step)
         document.addEventListener('DOMContentLoaded', function() {
@@ -487,6 +558,84 @@ $data = getDashboardData($_SESSION['user_id']);
                     });
                 }
             }
+
+            const routineLogModal = document.getElementById('routine-log-modal');
+            const routineLogTitle = routineLogModal ? routineLogModal.querySelector('[data-role="routine-log-title"]') : null;
+            const routineLogBody = routineLogModal ? routineLogModal.querySelector('[data-role="routine-log-body"]') : null;
+            const routineLogClose = routineLogModal ? routineLogModal.querySelector('[data-role="routine-log-close"]') : null;
+            const routineLogsByRoutine = window.RoutineOvertimeByRoutine || {};
+
+            const formatDuration = (seconds) => {
+                const safe = Math.max(0, Math.floor(Number(seconds) || 0));
+                const mins = Math.floor(safe / 60);
+                const secs = safe % 60;
+                return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+            };
+
+            const openRoutineLogModal = (routineId, routineTitle) => {
+                if (!routineLogModal || !routineLogBody || !routineLogTitle) return;
+                const key = String(routineId || routineTitle || '');
+                const group = routineLogsByRoutine[String(routineId)] || routineLogsByRoutine[key] || null;
+                const entries = group && Array.isArray(group.entries) ? group.entries : [];
+                routineLogTitle.textContent = routineTitle || (group ? group.title : 'Routine Overtime');
+                routineLogBody.innerHTML = '';
+                if (!entries.length) {
+                    const empty = document.createElement('div');
+                    empty.className = 'routine-log-empty';
+                    empty.textContent = 'No recent overtime events for this routine.';
+                    routineLogBody.appendChild(empty);
+                } else {
+                    entries.forEach(entry => {
+                        const item = document.createElement('div');
+                        item.className = 'routine-log-item';
+                        const when = entry.occurred_at ? new Date(entry.occurred_at) : null;
+                        const header = document.createElement('div');
+                        header.className = 'meta';
+                        header.textContent = when ? when.toLocaleString() : 'Date unavailable';
+                        const child = document.createElement('div');
+                        child.className = 'meta';
+                        child.textContent = `Child: ${entry.child_display_name || 'Unknown'}`;
+                        const task = document.createElement('div');
+                        task.className = 'meta';
+                        task.textContent = `Task: ${entry.task_title || 'Task'}`;
+                        const times = document.createElement('div');
+                        times.className = 'meta';
+                        times.textContent = `Scheduled: ${formatDuration(entry.scheduled_seconds)} · Actual: ${formatDuration(entry.actual_seconds)}`;
+                        const overtime = document.createElement('div');
+                        overtime.className = 'overtime';
+                        overtime.textContent = `Overtime: ${formatDuration(entry.overtime_seconds)}`;
+                        item.append(header, child, task, times, overtime);
+                        routineLogBody.appendChild(item);
+                    });
+                }
+                routineLogModal.classList.add('active');
+                routineLogModal.setAttribute('aria-hidden', 'false');
+            };
+
+            const closeRoutineLogModal = () => {
+                if (!routineLogModal) return;
+                routineLogModal.classList.remove('active');
+                routineLogModal.setAttribute('aria-hidden', 'true');
+            };
+
+            if (routineLogClose) {
+                routineLogClose.addEventListener('click', closeRoutineLogModal);
+            }
+            if (routineLogModal) {
+                routineLogModal.addEventListener('click', (event) => {
+                    if (event.target === routineLogModal) {
+                        closeRoutineLogModal();
+                    }
+                });
+            }
+
+            document.querySelectorAll('[data-routine-log-trigger]').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const routineId = btn.getAttribute('data-routine-id');
+                    const routineTitle = btn.getAttribute('data-routine-title');
+                    openRoutineLogModal(routineId, routineTitle);
+                });
+            });
         });
     </script>
 </head>
@@ -906,7 +1055,15 @@ $data = getDashboardData($_SESSION['user_id']);
                       <tbody>
                          <?php foreach ($topRoutine as $routineRow): ?>
                              <tr>
-                                <td><?php echo htmlspecialchars($routineRow['routine_title']); ?></td>
+                                <td>
+                                    <button type="button"
+                                            class="routine-log-link"
+                                            data-routine-log-trigger
+                                            data-routine-id="<?php echo (int) $routineRow['routine_id']; ?>"
+                                            data-routine-title="<?php echo htmlspecialchars($routineRow['routine_title']); ?>">
+                                        <?php echo htmlspecialchars($routineRow['routine_title']); ?>
+                                    </button>
+                                </td>
                                 <td><?php echo (int) $routineRow['occurrences']; ?></td>
                                 <td><?php echo round(((int) $routineRow['total_overtime_seconds']) / 60, 1); ?></td>
                              </tr>
@@ -920,36 +1077,58 @@ $data = getDashboardData($_SESSION['user_id']);
          </div>
          <div class="overtime-card" style="margin-top: 20px;">
             <h3>Most Recent Overtime Events</h3>
-            <?php if (!empty($routine_overtime_logs)): ?>
-                <table class="overtime-table">
-                   <thead>
-                      <tr>
-                         <th>When</th>
-                         <th>Child</th>
-                         <th>Routine</th>
-                         <th>Task</th>
-                         <th>Scheduled</th>
-                         <th>Actual</th>
-                         <th>Overtime</th>
-                      </tr>
-                   </thead>
-                   <tbody>
-                      <?php foreach ($routine_overtime_logs as $log): ?>
-                          <tr>
-                             <td><?php echo htmlspecialchars(date('m/d/Y h:i A', strtotime($log['occurred_at']))); ?></td>
-                             <td><?php echo htmlspecialchars($log['child_display_name']); ?></td>
-                             <td><?php echo htmlspecialchars($log['routine_title']); ?></td>
-                             <td><?php echo htmlspecialchars($log['task_title']); ?></td>
-                             <td><?php echo $formatDuration($log['scheduled_seconds']); ?></td>
-                             <td><?php echo $formatDuration($log['actual_seconds']); ?></td>
-                             <td><?php echo $formatDuration($log['overtime_seconds']); ?></td>
-                          </tr>
-                      <?php endforeach; ?>
-                   </tbody>
-                </table>
+            <?php if (!empty($overtimeLogGroups)): ?>
+                <div class="overtime-accordion">
+                    <?php $firstDate = true; ?>
+                    <?php foreach ($overtimeLogGroups as $dateGroup): ?>
+                        <details class="overtime-date" <?php echo $firstDate ? 'open' : ''; ?>>
+                            <summary>
+                                <span class="ot-date-label"><?php echo htmlspecialchars($dateGroup['label']); ?></span>
+                                <span class="overtime-date-count"><?php echo (int) $dateGroup['count']; ?> event<?php echo $dateGroup['count'] === 1 ? '' : 's'; ?></span>
+                            </summary>
+                            <div class="overtime-routine-list">
+                                <?php foreach ($dateGroup['routines'] as $routineGroup): ?>
+                                    <details class="overtime-routine" open>
+                                        <summary>
+                                            <span class="ot-routine-title"><?php echo htmlspecialchars($routineGroup['title']); ?></span>
+                                            <span class="overtime-routine-count"><?php echo count($routineGroup['entries']); ?> miss<?php echo count($routineGroup['entries']) === 1 ? '' : 'es'; ?></span>
+                                        </summary>
+                                        <div class="overtime-card-list">
+                                            <?php foreach ($routineGroup['entries'] as $entry): ?>
+                                                <?php $occurTs = strtotime($entry['occurred_at']); ?>
+                                                <div class="overtime-card-row">
+                                                    <div class="ot-row-header">
+                                                        <span class="ot-task"><?php echo htmlspecialchars($entry['task_title']); ?></span>
+                                                        <span class="ot-time"><?php echo $occurTs ? date('g:i A', $occurTs) : 'Time unavailable'; ?></span>
+                                                    </div>
+                                                    <div class="ot-meta"><strong>Child:</strong> <?php echo htmlspecialchars($entry['child_display_name']); ?></div>
+                                                    <div class="ot-meta">
+                                                        <strong>Scheduled:</strong> <?php echo $formatDuration($entry['scheduled_seconds']); ?>
+                                                        <strong>Actual:</strong> <?php echo $formatDuration($entry['actual_seconds']); ?>
+                                                    </div>
+                                                    <div class="ot-meta ot-overtime"><strong>Overtime:</strong> <?php echo $formatDuration($entry['overtime_seconds']); ?></div>
+                                                </div>
+                                            <?php endforeach; ?>
+                                        </div>
+                                    </details>
+                                <?php endforeach; ?>
+                            </div>
+                        </details>
+                        <?php $firstDate = false; ?>
+                    <?php endforeach; ?>
+                </div>
             <?php else: ?>
                 <p class="overtime-empty">No overtime events have been logged yet.</p>
             <?php endif; ?>
+         </div>
+         <div class="routine-log-modal" id="routine-log-modal" aria-hidden="true" role="dialog" aria-modal="true">
+            <div class="routine-log-dialog">
+                <div class="routine-log-header">
+                    <h4 class="routine-log-title" data-role="routine-log-title">Routine Overtime</h4>
+                    <button type="button" class="routine-log-close" data-role="routine-log-close" aria-label="Close">×</button>
+                </div>
+                <div class="routine-log-body" data-role="routine-log-body"></div>
+            </div>
          </div>
       </div>
       <div class="active-rewards">
@@ -1142,7 +1321,7 @@ $data = getDashboardData($_SESSION['user_id']);
         </div>
     </div>
     <footer>
-      <p>Child Task and Chores App - Ver 3.10.14</p>
+      <p>Child Task and Chores App - Ver 3.10.15</p>
    </footer>
 </body>
 </html>

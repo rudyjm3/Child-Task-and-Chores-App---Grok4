@@ -628,12 +628,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif ($isParentContext && isset($_POST['save_routine_preferences'])) {
         $timerWarnings = isset($_POST['timer_warnings_enabled']) ? 1 : 0;
         $showCountdown = isset($_POST['show_countdown']) ? 1 : 0;
+        $soundEffectsEnabled = isset($_POST['sound_effects_enabled']) ? 1 : 0;
+        $backgroundMusicEnabled = isset($_POST['background_music_enabled']) ? 1 : 0;
         $label = $routinePreferences['sub_timer_label'] ?? 'hurry_goal';
         if (!is_string($label) || $label === '') {
             $label = 'hurry_goal';
         }
         $progressStyle = isset($_POST['progress_style']) ? $_POST['progress_style'] : 'bar';
-        if (saveRoutinePreferences($family_root_id, $timerWarnings, $label, $showCountdown, $progressStyle)) {
+        if (saveRoutinePreferences($family_root_id, $timerWarnings, $label, $showCountdown, $progressStyle, $soundEffectsEnabled, $backgroundMusicEnabled)) {
             $routinePreferences = getRoutinePreferences($family_root_id);
             $messages[] = ['type' => 'success', 'text' => 'Routine timer preferences saved.'];
         } else {
@@ -717,6 +719,12 @@ foreach ($routines as &$routineEntry) {
     $routineEntry['show_countdown'] = isset($routinePreferences['show_countdown'])
         ? (int) $routinePreferences['show_countdown']
         : 1;
+    $routineEntry['sound_effects_enabled'] = isset($routinePreferences['sound_effects_enabled'])
+        ? (int) $routinePreferences['sound_effects_enabled']
+        : 1;
+    $routineEntry['background_music_enabled'] = isset($routinePreferences['background_music_enabled'])
+        ? (int) $routinePreferences['background_music_enabled']
+        : 1;
 }
 unset($routineEntry);
 
@@ -766,7 +774,13 @@ $pagePreferences = [
         : 1,
     'progress_style' => isset($routinePreferences['progress_style']) && in_array($routinePreferences['progress_style'], ['bar', 'circle', 'pie'], true)
         ? $routinePreferences['progress_style']
-        : 'bar'
+        : 'bar',
+    'sound_effects_enabled' => isset($routinePreferences['sound_effects_enabled'])
+        ? (int) $routinePreferences['sound_effects_enabled']
+        : 1,
+    'background_music_enabled' => isset($routinePreferences['background_music_enabled'])
+        ? (int) $routinePreferences['background_music_enabled']
+        : 1
 ];
 
 $jsonOptions = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP;
@@ -792,7 +806,7 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Routine Management</title>
-    <link rel="stylesheet" href="css/main.css">
+    <link rel="stylesheet" href="css/main.css?v=3.10.15">
     <style>
         .page-messages { max-width: 960px; margin: 0 auto 20px; }
         .page-alert { padding: 12px 16px; border-radius: 6px; margin-bottom: 12px; font-weight: 600; }
@@ -812,7 +826,7 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
         .form-group label { font-weight: 600; }
         .form-group input, .form-group select, .form-group textarea { padding: 8px; border: 1px solid #ccc; border-radius: 6px; font-size: 0.95rem; }
         .form-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 12px; }
-        .button { padding: 10px 18px; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 0.95rem; background: #4caf50; color: #fff; }
+        .button { padding: 10px 18px; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 0.95rem; background: #4caf50; color: #fff; height: max-content; }
         .button.secondary { background: #607d8b; }
         .start-next-button { background: #1e88e5; }
         .button.danger { background: #e53935; }
@@ -920,6 +934,10 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
         .routine-flow-overlay.summary-active [data-action="flow-exit"] { display: none; }
         .routine-flow-close { background: #d71919; border: none; color: #fff; font-weight: 600; padding: 8px 18px; border-radius: 999px; cursor: pointer; transition: background 200ms ease; }
         .routine-flow-close:hover { background: #b71515; }
+        .audio-toggle { background: rgba(255,255,255,0.9); color: #0d47a1; border: none; border-radius: 50%; width: 42px; height: 42px; display: inline-flex; align-items: center; justify-content: center; font-size: 1.2rem; box-shadow: 0 6px 16px rgba(0,0,0,0.15); cursor: pointer; transition: transform 120ms ease, box-shadow 200ms ease, background 160ms ease; }
+        .audio-toggle:hover { transform: translateY(-1px); box-shadow: 0 10px 22px rgba(0,0,0,0.25); }
+        .audio-toggle.muted { background: rgba(0,0,0,0.15); color: #fff; }
+        .audio-toggle:disabled { opacity: 0.6; cursor: not-allowed; transform: none; box-shadow: 0 4px 10px rgba(0,0,0,0.12); }
         .routine-flow-stage { flex: 1; display: grid; min-height: 0; }
         .routine-scene { display: none; height: 100%; }
         .routine-scene.active { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: 18px; }
@@ -1011,7 +1029,8 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
          cursor: pointer; 
          transition: transform 150ms ease, box-shadow 150ms ease; }
         .routine-primary-button:hover { transform: translateY(-2px); box-shadow: 0 10px 24px rgba(0,0,0,0.25); }
-        .routine-action-row { display: flex; justify-content: space-between; gap: 12px; align-items: flex-end; margin-top: 6px; }
+        .routine-action-row { display: flex; justify-content: flex-start; gap: 12px; align-items: center; margin-top: 6px; }
+        .routine-action-row .routine-primary-button { margin-left: auto; }
         .status-stars { display: flex; gap: 12px; justify-content: center; }
         .status-stars span { width: clamp(44px, 8vh, 60px); height: clamp(44px, 8vh, 60px); background: radial-gradient(circle at 30% 30%, #fff59d, #fbc02d); clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%); box-shadow: 0 6px 16px rgba(0,0,0,0.3); opacity: 0.2; transform: scale(0.8); transition: transform 200ms ease, opacity 200ms ease; }
         .status-stars span.active { opacity: 1; transform: scale(1); }
@@ -1041,12 +1060,13 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
         .routine-flow-container audio[data-role="status-coin"],
         .routine-flow-container audio[data-role="summary-sound"] { display: none; }
         .toggle-control { display: flex; align-items: center; gap: 14px; padding: 10px 0; }
-        .toggle-switch { position: relative; display: inline-block; width: 52px; height: 28px; }
-        .toggle-switch input { opacity: 0; width: 0; height: 0; }
-        .toggle-slider { position: absolute; inset: 0; border-radius: 999px; background: #b0bec5; transition: background 160ms ease; cursor: pointer; }
-        .toggle-slider::before { content: ''; position: absolute; width: 22px; height: 22px; left: 4px; top: 3px; border-radius: 50%; background: #fff; transition: transform 160ms ease; }
+        .toggle-switch { position: relative; display: inline-block; width: 54px; height: 30px; flex-shrink: 0; }
+        .toggle-switch input { position: absolute; inset: 0; opacity: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; }
+        .toggle-slider { position: absolute; inset: 0; border-radius: 999px; background: #b0bec5; transition: background 160ms ease; cursor: pointer; box-sizing: border-box; }
+        .toggle-slider::before { content: ''; position: absolute; width: 24px; height: 24px; left: 3px; top: 3px; border-radius: 50%; background: #fff; transition: transform 160ms ease; box-shadow: 0 2px 6px rgba(0,0,0,0.2); }
         .toggle-switch input:checked + .toggle-slider { background: linear-gradient(135deg, #42a5f5, #1e88e5); }
         .toggle-switch input:checked + .toggle-slider::before { transform: translateX(24px); }
+        .toggle-switch input:focus-visible + .toggle-slider { outline: 3px solid rgba(66,165,245,0.35); outline-offset: 2px; }
         .toggle-copy { display: flex; flex-direction: column; gap: 2px; }
         .toggle-title { font-weight: 700; color: #0d47a1; }
         .toggle-sub { font-size: 0.8rem; color: #546e7a; }
@@ -1174,6 +1194,26 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                         <div class="toggle-copy">
                             <span class="toggle-title">Show Countdown Timer</span>
                             <span class="toggle-sub">Display remaining time inside the task progress bar.</span>
+                        </div>
+                    </div>
+                    <div class="toggle-control">
+                        <label class="toggle-switch">
+                            <input type="checkbox" name="sound_effects_enabled" value="1" <?php echo !empty($routinePreferences['sound_effects_enabled']) ? 'checked' : ''; ?>>
+                            <span class="toggle-slider"></span>
+                        </label>
+                        <div class="toggle-copy">
+                            <span class="toggle-title">Sound Effects</span>
+                            <span class="toggle-sub">Turn off to disable chimes and task reward sounds during routines.</span>
+                        </div>
+                    </div>
+                    <div class="toggle-control">
+                        <label class="toggle-switch">
+                            <input type="checkbox" name="background_music_enabled" value="1" <?php echo !empty($routinePreferences['background_music_enabled']) ? 'checked' : ''; ?>>
+                            <span class="toggle-slider"></span>
+                        </label>
+                        <div class="toggle-copy">
+                            <span class="toggle-title">Background Music</span>
+                            <span class="toggle-sub">Turn off to disable routine background music.</span>
                         </div>
                     </div>
                     <div class="form-group">
@@ -1584,6 +1624,9 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                                                 </div>
                                                 <div class="routine-action-row">
                                                     <button type="button" class="routine-flow-close" data-action="flow-exit">Stop</button>
+                                                    <button type="button" class="audio-toggle" data-role="audio-toggle" aria-pressed="true" aria-label="Mute all routine sounds" title="Mute all routine sounds">
+                                                        <span aria-hidden="true" data-audio-icon>🔊</span>
+                                                    </button>
                                                     <button type="button" class="routine-primary-button" data-action="flow-complete-task">Next</button>
                                                 </div>
                                             </section>
@@ -1600,6 +1643,9 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                                                 </div>
                                                 <div class="routine-action-row">
                                                     <button type="button" class="routine-flow-close" data-action="flow-exit">Stop</button>
+                                                    <button type="button" class="audio-toggle" data-role="audio-toggle" aria-pressed="true" aria-label="Mute all routine sounds" title="Mute all routine sounds">
+                                                        <span aria-hidden="true" data-audio-icon>🔊</span>
+                                                    </button>
                                                     <button type="button" class="routine-primary-button" data-action="flow-next-task">Next Task</button>
                                                 </div>
                                             </section>
@@ -1707,7 +1753,7 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
         </section>
     </main>
     <footer>
-        <p>Child Task and Chore App - Ver 3.10.14</p>
+        <p>Child Task and Chore App - Ver 3.10.15</p>
     </footer>
     <script>
         window.RoutinePage = <?php echo json_encode($pageState, $jsonOptions); ?>;
@@ -1719,7 +1765,7 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                 createInitial: [],
                 editInitial: {},
                 routines: [],
-                preferences: { timer_warnings_enabled: 1, show_countdown: 1 }
+                preferences: { timer_warnings_enabled: 1, show_countdown: 1, progress_style: 'bar', sound_effects_enabled: 1, background_music_enabled: 1 }
             };
             const hasCountdownPreference = page.preferences && typeof page.preferences.show_countdown !== 'undefined';
             const countdownEnabled = hasCountdownPreference ? Number(page.preferences.show_countdown) > 0 : true;
@@ -2095,6 +2141,7 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                     this.statusChime = this.overlay ? this.overlay.querySelector("[data-role='status-sound']") : null;
                     this.statusCoinSound = this.overlay ? this.overlay.querySelector("[data-role='status-coin']") : null;
                     this.summaryChime = this.overlay ? this.overlay.querySelector("[data-role='summary-sound']") : null;
+                    this.audioToggleButtons = this.overlay ? Array.from(this.overlay.querySelectorAll("[data-role='audio-toggle']")) : [];
                     this.statusSequenceToken = 0;
                     this.starAnimationTimers = [];
                     this.pendingStarTargets = [];
@@ -2111,6 +2158,10 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                     this.holdCountdownEl = this.overlay ? this.overlay.querySelector("[data-role='hold-countdown']") : null;
                     this.bonusPossible = Math.max(0, parseInt(this.routine.bonus_points, 10) || 0);
                     this.bonusAwarded = 0;
+                    this.allowSoundEffects = Number(this.preferences.sound_effects_enabled ?? 1) > 0;
+                    this.allowBackgroundMusic = Number(this.preferences.background_music_enabled ?? 1) > 0;
+                    this.masterAudioEnabled = (this.allowSoundEffects || this.allowBackgroundMusic);
+                    this.audioLocked = !this.allowSoundEffects && !this.allowBackgroundMusic;
                     if (this.backgroundAudio) {
                         this.backgroundAudio.loop = true;
                         this.backgroundAudio.volume = 0.35;
@@ -2170,6 +2221,12 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
 
                     this.initializeTaskDurations();
                     this.resetWarningState();
+                    if (Array.isArray(this.audioToggleButtons) && this.audioToggleButtons.length) {
+                        this.audioToggleButtons.forEach(btn => {
+                            btn.addEventListener('click', () => this.toggleAudio());
+                        });
+                    }
+                    this.syncAudioToggleState();
 
                     this.init();
                 }
@@ -2395,8 +2452,75 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                     this.countdownEl.style.display = this.showCountdown ? '' : 'none';
                 }
 
+                areSoundEffectsEnabled() {
+                    return !this.audioLocked && this.masterAudioEnabled && this.allowSoundEffects;
+                }
+
+                isMusicEnabled() {
+                    return !this.audioLocked && this.masterAudioEnabled && this.allowBackgroundMusic;
+                }
+
+                syncAudioToggleState() {
+                    const audioOn = !this.audioLocked && this.masterAudioEnabled;
+                    if (Array.isArray(this.audioToggleButtons)) {
+                        this.audioToggleButtons.forEach(btn => {
+                            btn.disabled = this.audioLocked;
+                            btn.classList.toggle('muted', !audioOn);
+                            btn.setAttribute('aria-pressed', audioOn ? 'true' : 'false');
+                            const icon = btn.querySelector('[data-audio-icon]');
+                            if (icon) {
+                                icon.textContent = audioOn ? '🔊' : '🔇';
+                            }
+                            const label = this.audioLocked
+                                ? 'Audio disabled by parent preferences'
+                                : audioOn ? 'Mute all routine sounds' : 'Enable all routine sounds';
+                            btn.setAttribute('aria-label', label);
+                            btn.title = label;
+                        });
+                    }
+                }
+
+                toggleAudio() {
+                    if (this.audioLocked) {
+                        return;
+                    }
+                    this.masterAudioEnabled = !this.masterAudioEnabled;
+                    if (!this.masterAudioEnabled) {
+                        this.silenceAllAudio();
+                    } else if (this.currentScene === 'task') {
+                        this.playBackgroundMusic();
+                    }
+                    this.syncAudioToggleState();
+                }
+
+                silenceAllAudio() {
+                    this.pauseBackgroundMusic(true);
+                    [this.statusChime, this.statusCoinSound, this.summaryChime].forEach(audio => {
+                        if (!audio) return;
+                        try {
+                            audio.pause();
+                            audio.currentTime = 0;
+                        } catch (e) {}
+                    });
+                    if (Array.isArray(this.activeCoinClips) && this.activeCoinClips.length) {
+                        this.activeCoinClips.forEach(record => {
+                            if (!record || !record.clip) return;
+                            try { record.clip.pause(); } catch (e) {}
+                            try { record.clip.currentTime = 0; } catch (e) {}
+                            if (typeof record.finish === 'function') {
+                                record.finish();
+                            }
+                        });
+                        this.activeCoinClips = [];
+                    }
+                }
+
                 playBackgroundMusic() {
                     if (!this.backgroundAudio) {
+                        return;
+                    }
+                    if (!this.isMusicEnabled()) {
+                        this.pauseBackgroundMusic(true);
                         return;
                     }
                     if (this.backgroundAudio.paused) {
@@ -2422,6 +2546,9 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                 }
 
                 playAudioClip(audio, reset = true) {
+                    if (!this.areSoundEffectsEnabled()) {
+                        return;
+                    }
                     if (!audio) {
                         return;
                     }
@@ -2440,6 +2567,10 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
 
                 playAudioClipAsync(audio, reset = true) {
                     return new Promise(resolve => {
+                        if (!this.areSoundEffectsEnabled()) {
+                            resolve();
+                            return;
+                        }
                         if (!audio) {
                             resolve();
                             return;
@@ -2602,7 +2733,7 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
 
                 playCoinSoundOverlap(sequenceToken) {
                     return new Promise(resolve => {
-                        if (!this.statusCoinSound) {
+                        if (!this.statusCoinSound || !this.areSoundEffectsEnabled()) {
                             resolve();
                             return;
                         }
@@ -2755,6 +2886,9 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                         return;
                     }
                     this.summaryPlayed = true;
+                    if (!this.areSoundEffectsEnabled()) {
+                        return;
+                    }
                     this.playAudioClip(this.summaryChime);
                 }
 

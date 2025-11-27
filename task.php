@@ -92,7 +92,7 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Task Management</title>
-    <link rel="stylesheet" href="css/main.css">
+      <link rel="stylesheet" href="css/main.css?v=3.10.15">
     <style>
         .task-form, .task-list {
             padding: 20px;
@@ -591,7 +591,7 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
         </div>
     </main>
     <footer>
-      <p>Child Task and Chore App - Ver 3.10.14</p>
-    </footer>
+      <p>Child Task and Chore App - Ver 3.10.15</p>
+   </footer>
 </body>
 </html>

@@ -1097,7 +1097,7 @@ function replaceRoutineTasks($routine_id, array $tasks) {
 
 function getRoutinePreferences($parent_user_id) {
     global $db;
-    $stmt = $db->prepare("SELECT timer_warnings_enabled, sub_timer_label, show_countdown, progress_style FROM routine_preferences WHERE parent_user_id = :parent LIMIT 1");
+    $stmt = $db->prepare("SELECT timer_warnings_enabled, sub_timer_label, show_countdown, progress_style, sound_effects_enabled, background_music_enabled FROM routine_preferences WHERE parent_user_id = :parent LIMIT 1");
     $stmt->execute([':parent' => $parent_user_id]);
     $prefs = $stmt->fetch(PDO::FETCH_ASSOC);
     if (!$prefs) {
@@ -1106,6 +1106,8 @@ function getRoutinePreferences($parent_user_id) {
             'sub_timer_label' => 'hurry_goal',
             'show_countdown' => 1,
             'progress_style' => 'bar',
+            'sound_effects_enabled' => 1,
+            'background_music_enabled' => 1,
             '__from_db' => false,
         ];
     }
@@ -1125,12 +1127,22 @@ function getRoutinePreferences($parent_user_id) {
         $prefs['progress_style'] = 'bar';
     }
 
+    if (!array_key_exists('sound_effects_enabled', $prefs)) {
+        $prefs['sound_effects_enabled'] = 1;
+    }
+    $prefs['sound_effects_enabled'] = (int) $prefs['sound_effects_enabled'];
+
+    if (!array_key_exists('background_music_enabled', $prefs)) {
+        $prefs['background_music_enabled'] = 1;
+    }
+    $prefs['background_music_enabled'] = (int) $prefs['background_music_enabled'];
+
     $prefs['__from_db'] = true;
 
     return $prefs;
 }
 
-function saveRoutinePreferences($parent_user_id, $timer_warnings_enabled, $sub_timer_label, $show_countdown, $progress_style = 'bar') {
+function saveRoutinePreferences($parent_user_id, $timer_warnings_enabled, $sub_timer_label, $show_countdown, $progress_style = 'bar', $sound_effects_enabled = 1, $background_music_enabled = 1) {
     global $db;
     
     // Validate label
@@ -1151,23 +1163,27 @@ function saveRoutinePreferences($parent_user_id, $timer_warnings_enabled, $sub_t
         $progress_style = 'bar';
     }
     
-    $stmt = $db->prepare("INSERT INTO routine_preferences (parent_user_id, timer_warnings_enabled, sub_timer_label, show_countdown, progress_style)
-                          VALUES (:parent_id, :timer_enabled, :label, :countdown, :progress_style)
+    $stmt = $db->prepare("INSERT INTO routine_preferences (parent_user_id, timer_warnings_enabled, sub_timer_label, show_countdown, progress_style, sound_effects_enabled, background_music_enabled)
+                          VALUES (:parent_id, :timer_enabled, :label, :countdown, :progress_style, :sfx_enabled, :music_enabled)
                           ON DUPLICATE KEY UPDATE timer_warnings_enabled = VALUES(timer_warnings_enabled),
                                                   sub_timer_label = VALUES(sub_timer_label),
                                                   show_countdown = VALUES(show_countdown),
-                                                  progress_style = VALUES(progress_style)");
+                                                  progress_style = VALUES(progress_style),
+                                                  sound_effects_enabled = VALUES(sound_effects_enabled),
+                                                  background_music_enabled = VALUES(background_music_enabled)");
     
     $result = $stmt->execute([
         ':parent_id' => $parent_user_id,
         ':timer_enabled' => $timer_warnings_enabled ? 1 : 0,
         ':label' => $sub_timer_label,
         ':countdown' => $show_countdown ? 1 : 0,
-        ':progress_style' => $progress_style
+        ':progress_style' => $progress_style,
+        ':sfx_enabled' => $sound_effects_enabled ? 1 : 0,
+        ':music_enabled' => $background_music_enabled ? 1 : 0
     ]);
     
     if ($result) {
-        error_log("Routine preferences updated for parent $parent_user_id: timer_warnings=$timer_warnings_enabled, label=$sub_timer_label, show_countdown=$show_countdown, style=$progress_style");
+        error_log("Routine preferences updated for parent $parent_user_id: timer_warnings=$timer_warnings_enabled, label=$sub_timer_label, show_countdown=$show_countdown, style=$progress_style, sfx=$sound_effects_enabled, music=$background_music_enabled");
     } else {
         error_log("Failed to update routine preferences for parent $parent_user_id");
     }
@@ -1846,6 +1862,8 @@ try {
         sub_timer_label VARCHAR(50) DEFAULT 'hurry_goal',
         show_countdown TINYINT(1) DEFAULT 1,
         progress_style VARCHAR(12) DEFAULT 'bar',
+        sound_effects_enabled TINYINT(1) DEFAULT 1,
+        background_music_enabled TINYINT(1) DEFAULT 1,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         UNIQUE KEY uniq_parent (parent_user_id),
@@ -1856,6 +1874,16 @@ try {
     // Ensure progress_style column exists
     try {
         $db->exec("ALTER TABLE routine_preferences ADD COLUMN IF NOT EXISTS progress_style VARCHAR(12) DEFAULT 'bar'");
+    } catch (PDOException $e) {
+        // ignore if not supported; table already created with column above
+    }
+    try {
+        $db->exec("ALTER TABLE routine_preferences ADD COLUMN IF NOT EXISTS sound_effects_enabled TINYINT(1) DEFAULT 1");
+    } catch (PDOException $e) {
+        // ignore if not supported; table already created with column above
+    }
+    try {
+        $db->exec("ALTER TABLE routine_preferences ADD COLUMN IF NOT EXISTS background_music_enabled TINYINT(1) DEFAULT 1");
     } catch (PDOException $e) {
         // ignore if not supported; table already created with column above
     }
