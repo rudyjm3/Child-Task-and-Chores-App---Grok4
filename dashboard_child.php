@@ -63,7 +63,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Child Dashboard</title>
-   <link rel="stylesheet" href="css/main.css?v=3.10.15">
+   <link rel="stylesheet" href="css/main.css?v=3.10.16">
     <style>
         .dashboard { padding: 20px; max-width: 720px; margin: 0 auto; text-align: center; }
         .progress { margin: 20px 0; display: grid; gap: 12px; text-align: left; color: #263238; }
@@ -386,7 +386,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       </div>
    </main>
    <footer>
-   <p>Child Task and Chore App - Ver 3.10.15</p>
+   <p>Child Task and Chore App - Ver 3.10.16</p>
 </footer>
 </body>
 </html>

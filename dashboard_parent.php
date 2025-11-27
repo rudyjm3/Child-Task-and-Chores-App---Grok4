@@ -274,7 +274,7 @@ $data = getDashboardData($_SESSION['user_id']);
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Parent Dashboard</title>
-    <link rel="stylesheet" href="css/main.css?v=3.10.15">
+    <link rel="stylesheet" href="css/main.css?v=3.10.16">
     <style>
         .dashboard { padding: 20px; max-width: 900px; margin: 0 auto; }
         .children-overview, .management-links, .active-rewards, .redeemed-rewards, .pending-approvals, .completed-goals, .manage-family { margin-top: 20px; }
@@ -1321,7 +1321,7 @@ $data = getDashboardData($_SESSION['user_id']);
         </div>
     </div>
     <footer>
-      <p>Child Task and Chores App - Ver 3.10.15</p>
+      <p>Child Task and Chores App - Ver 3.10.16</p>
    </footer>
 </body>
 </html>

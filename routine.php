@@ -806,7 +806,7 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Routine Management</title>
-    <link rel="stylesheet" href="css/main.css?v=3.10.15">
+    <link rel="stylesheet" href="css/main.css?v=3.10.16">
     <style>
         .page-messages { max-width: 960px; margin: 0 auto 20px; }
         .page-alert { padding: 12px 16px; border-radius: 6px; margin-bottom: 12px; font-weight: 600; }
@@ -911,7 +911,7 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
         .parent-complete-note { font-size: 0.85rem; color: #546e7a; margin: 0; }
         .routine-flow-overlay { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(10, 24, 64, 0.72); z-index: 1200; opacity: 0; pointer-events: none; transition: opacity 250ms ease; }
         .routine-flow-overlay.active { opacity: 1; pointer-events: auto; }
-        .routine-flow-container { width: min(1040px, 95vw); max-height: 95vh; height: min(95vh, 860px); background: linear-gradient(155deg, #7bc4ff, #a077ff); border-radius: 26px; padding: clamp(20px, 4vh, 32px); box-shadow: 0 18px 48px rgba(0,0,0,0.25); color: #fff; display: flex; flex-direction: column; position: relative; overflow: hidden; }
+        .routine-flow-container { width: min(1040px, 95vw); max-height: 80vh; height: min(80vh, 860px); background: linear-gradient(155deg, #7bc4ff, #a077ff); border-radius: 26px; padding: clamp(20px, 4vh, 32px); box-shadow: 0 18px 48px rgba(0,0,0,0.25); color: #fff; display: flex; flex-direction: column; position: relative; overflow: hidden; }
         .routine-flow-overlay.status-active .routine-flow-container { background: linear-gradient(155deg, #7bc4ff, #a077ff); }
         body.routine-flow-locked { overflow: hidden; overscroll-behavior: contain; touch-action: none; }
         .routine-flow-header { display: flex; flex-direction: column; align-items: flex-start; gap: clamp(10px, 2vh, 14px); margin-bottom: clamp(16px, 3vh, 24px); }
@@ -979,10 +979,6 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
             background: rgba(0,0,0,0.25);
             box-shadow: inset 0 2px 6px rgba(0,0,0,0.35);
         }
-        .flow-progress-track[data-style="circle"] {
-            -webkit-mask: radial-gradient(closest-side, transparent calc(100% - var(--ring-thickness)), #000 calc(100% - var(--ring-thickness) + 1px));
-            mask: radial-gradient(closest-side, transparent calc(100% - var(--ring-thickness)), #000 calc(100% - var(--ring-thickness) + 1px));
-        }
         .flow-progress-track[data-style="circle"] .flow-progress-fill,
         .flow-progress-track[data-style="pie"] .flow-progress-fill,
         .flow-progress-track[data-style="circle"] .flow-progress-min,
@@ -1000,11 +996,6 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
         .flow-progress-track[data-style="circle"].critical,
         .flow-progress-track[data-style="pie"].critical {
             --track-fill: #ff7043;
-        }
-        .flow-progress-track[data-style="circle"].warning,
-        .flow-progress-track[data-style="circle"].critical {
-            -webkit-mask: radial-gradient(closest-side, transparent calc(100% - var(--ring-thickness)), #000 calc(100% - var(--ring-thickness) + 1px));
-            mask: radial-gradient(closest-side, transparent calc(100% - var(--ring-thickness)), #000 calc(100% - var(--ring-thickness) + 1px));
         }
         .flow-warning { flex: 1; display: inline-flex; justify-content: center; align-items: center; min-height: 1.4em; font-size: 0.80rem; font-weight: 700; color: #ffe082; text-shadow: 0 2px 6px rgba(0,0,0,0.35); opacity: 0; transform: translateY(-4px); transition: opacity 200ms ease, transform 200ms ease, color 200ms ease; pointer-events: none; }
         .flow-warning.visible { opacity: 1; transform: translateY(0); }
@@ -1753,7 +1744,7 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
         </section>
     </main>
     <footer>
-        <p>Child Task and Chore App - Ver 3.10.15</p>
+        <p>Child Task and Chore App - Ver 3.10.16</p>
     </footer>
     <script>
         window.RoutinePage = <?php echo json_encode($pageState, $jsonOptions); ?>;
