@@ -901,7 +901,7 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
         .routine-flow-overlay.status-active .routine-flow-container { background: linear-gradient(155deg, #7bc4ff, #a077ff); }
         body.routine-flow-locked { overflow: hidden; overscroll-behavior: contain; touch-action: none; }
         .routine-flow-header { display: flex; flex-direction: column; align-items: flex-start; gap: clamp(10px, 2vh, 14px); margin-bottom: clamp(16px, 3vh, 24px); }
-        .routine-flow-close { align-self: flex-start; touch-action: none; }
+        .routine-flow-close { /*align-self: flex-start;*/ touch-action: none; }
         .routine-flow-heading { display: flex; flex-direction: column; gap: 10px; flex: 1; width: 100%;}
         .routine-flow-bar { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; width: 100%;}
         .routine-flow-controls { display: inline-flex; align-items: center; gap: 12px; flex-wrap: wrap; justify-content: flex-end; }
@@ -923,7 +923,7 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
         .routine-flow-stage { flex: 1; display: grid; min-height: 0; }
         .routine-scene { display: none; height: 100%; }
         .routine-scene.active { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: 18px; }
-        .routine-scene-status.active { /*background: linear-gradient(155deg, #7bc4ff, #a077ff);*/ border-radius: 18px; padding: 12px; }
+        .routine-scene-status.active { /*background: linear-gradient(155deg, #7bc4ff, #a077ff);*/ padding-top: 75px; border-radius: 18px; padding: 12px; }
         .routine-scene-task .task-top { display: grid; gap: 18px; }
         .flow-progress-area { display: grid; gap: 8px; }
         .flow-progress-track { position: relative; height: clamp(40px, 7vh, 52px); background: rgba(255,255,255,0.22); border-radius: 24px; overflow: hidden; border: 3px solid #c3c3c3; box-sizing: border-box; transition: background 900ms ease, box-shadow 900ms ease; }
@@ -999,9 +999,19 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
         .routine-flow-container .illustration.hidden { opacity: 0; visibility: hidden; }
         .routine-flow-overlay.status-active .illustration,
         .routine-flow-overlay.summary-active .illustration { display: none; }
-        .routine-primary-button { align-self: flex-end; background: #ffeb3b; border: none; color: #1a237e; font-weight: 800; padding: 10px 22px; border-radius: 18px; font-size: 1.05rem; cursor: pointer; transition: transform 150ms ease, box-shadow 150ms ease; }
+        .routine-primary-button { 
+         /* align-self: flex-end;  */
+         background: #ffeb3b; 
+         border: none; 
+         color: #1a237e; 
+         font-weight: 800; 
+         padding: 10px 22px; 
+         border-radius: 18px; 
+         font-size: 1.05rem; 
+         cursor: pointer; 
+         transition: transform 150ms ease, box-shadow 150ms ease; }
         .routine-primary-button:hover { transform: translateY(-2px); box-shadow: 0 10px 24px rgba(0,0,0,0.25); }
-        .routine-action-row { display: flex; justify-content: space-between; gap: 12px; align-items: center; margin-top: 6px; }
+        .routine-action-row { display: flex; justify-content: space-between; gap: 12px; align-items: flex-end; margin-top: 6px; }
         .status-stars { display: flex; gap: 12px; justify-content: center; }
         .status-stars span { width: clamp(44px, 8vh, 60px); height: clamp(44px, 8vh, 60px); background: radial-gradient(circle at 30% 30%, #fff59d, #fbc02d); clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%); box-shadow: 0 6px 16px rgba(0,0,0,0.3); opacity: 0.2; transform: scale(0.8); transition: transform 200ms ease, opacity 200ms ease; }
         .status-stars span.active { opacity: 1; transform: scale(1); }
@@ -1011,7 +1021,7 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
             60% { transform: scale(1.2) rotate(8deg); opacity: 1; }
             100% { transform: scale(1) rotate(0deg); opacity: 1; }
         }
-        .status-summary { text-align: center; font-size: 1.1rem; display: grid; gap: 8px; }
+        .status-summary { text-align: center; font-size: 1.1rem; display: grid; gap: 8px; height: max-content;}
         .status-summary strong { font-size: 1.4rem; }
         .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
         .summary-card { background: rgba(255,255,255,0.18); border-radius: 14px; padding: 14px 16px; display: flex; justify-content: space-between; font-weight: 600; }
@@ -1081,11 +1091,11 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
             .routine-card-actions { flex-direction: column; align-items: stretch; }
             .routine-flow-container { padding: 22px; border-radius: 20px; }
             .routine-flow-header { flex-direction: column; align-items: stretch; }
-            .routine-flow-bar { flex-direction: column; align-items: flex-start; gap: 6px; }
-            .routine-flow-controls { width: 100%; justify-content: flex-start; }
+            .routine-flow-bar { /*flex-direction: column;*/ align-items: center; gap: 6px; }
+            .routine-flow-controls { width: max-content; justify-content: flex-start; }
             .routine-flow-title { font-size: 1.6rem; }
-            .routine-flow-next-inline { align-items: flex-start; }
-            .routine-primary-button { width: 100%; text-align: center; }
+            .routine-flow-next-inline { /*align-items: flex-start;*/ flex-direction: column; gap: 4px; font-size: 0.95rem; }
+            .routine-primary-button { /*width: 100%;*/ width: fit-content; text-align: center; }
         }
         @media (max-height: 620px) {
             .routine-flow-container { padding: 18px; border-radius: 20px; }
@@ -1097,12 +1107,17 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
             .routine-primary-button { padding: 10px 24px; font-size: 1rem; }
             .summary-grid { gap: 12px; }
             .summary-footer { gap: 12px; }
+            /* .flow-progress-labels { width: 90px; } */
+            .flow-progess-labels > span {
+               width: auto;
+            }
         }
         @media (max-height: 520px) {
             .routine-flow-container { padding: 16px; }
             .routine-flow-title { font-size: 1.35rem; }
             .routine-flow-next-inline { font-size: 0.9rem; }
-            .flow-progress-labels { flex-direction: column; align-items: flex-start; gap: 6px; font-size: 0.85rem; }
+            .flow-progress-labels { flex-direction: row; justify-content: space-around; align-items: flex-start; gap: 6px; font-size: 0.85rem; }
+            .limit-label { width: 90px; }
             .status-summary { font-size: 1rem; }
             .summary-footer strong { font-size: 1.3rem; }
         }
@@ -3065,13 +3080,10 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                     if (this.countdownEl) {
                         if (this.showCountdown) {
                             this.countdownEl.textContent = displayValue;
-                            if (isOvertime) {
-                                this.countdownEl.style.color = '#d71919';
-                                this.countdownEl.style.textShadow = '0 2px 6px rgba(0,0,0,0.6)';
-                            } else {
-                                this.countdownEl.style.color = '#f9f9f9';
-                                this.countdownEl.style.textShadow = '0 2px 6px rgba(0,0,0,0.45)';
-                            }
+                            this.countdownEl.style.color = '#f9f9f9';
+                            this.countdownEl.style.textShadow = isOvertime
+                                ? '0 2px 6px rgba(0,0,0,0.6)'
+                                : '0 2px 6px rgba(0,0,0,0.45)';
                         } else {
                             this.countdownEl.textContent = '';
                         }
