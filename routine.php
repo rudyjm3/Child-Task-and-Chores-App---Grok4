@@ -903,7 +903,7 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
         .routine-flow-header { display: flex; flex-direction: column; align-items: flex-start; gap: clamp(10px, 2vh, 14px); margin-bottom: clamp(16px, 3vh, 24px); }
         .routine-flow-close { /*align-self: flex-start;*/ touch-action: none; }
         .routine-flow-heading { display: flex; flex-direction: column; gap: 10px; flex: 1; width: 100%;}
-        .routine-flow-bar { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; width: 100%;}
+        .routine-flow-bar { display: flex; align-items: center; justify-content: space-between; gap: 16px; width: 100%;}
         .routine-flow-controls { display: inline-flex; align-items: center; gap: 12px; flex-wrap: wrap; justify-content: flex-end; }
         .routine-flow-controls .routine-flow-close { align-self: center; }
         .routine-flow-title { font-size: clamp(1.4rem, 2vw, 1.9rem); font-weight: 700; margin: 0; }
