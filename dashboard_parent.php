@@ -46,12 +46,44 @@ if (!isset($_SESSION['username'])) {
     $_SESSION['username'] = $uStmt->fetchColumn() ?: 'Unknown';
 }
 
-$data = getDashboardData($_SESSION['user_id']);
-
 $routine_overtime_logs = getRoutineOvertimeLogs($main_parent_id, 25);
 $routine_overtime_stats = getRoutineOvertimeStats($main_parent_id);
 $overtimeByChild = $routine_overtime_stats['by_child'] ?? [];
 $overtimeByRoutine = $routine_overtime_stats['by_routine'] ?? [];
+$overtimeLogGroups = [];
+$overtimeLogsByRoutine = [];
+if (!empty($routine_overtime_logs) && is_array($routine_overtime_logs)) {
+    foreach ($routine_overtime_logs as $log) {
+        $timestamp = strtotime($log['occurred_at']);
+        $dateKey = $timestamp ? date('Y-m-d', $timestamp) : 'unknown';
+        $dateLabel = $timestamp ? date('l, M j, Y', $timestamp) : 'Unknown date';
+        if (!isset($overtimeLogGroups[$dateKey])) {
+            $overtimeLogGroups[$dateKey] = [
+                'label' => $dateLabel,
+                'count' => 0,
+                'routines' => []
+            ];
+        }
+        $routineId = (int) ($log['routine_id'] ?? 0);
+        $routineKey = $routineId ?: md5($log['routine_title'] ?? 'Routine');
+        if (!isset($overtimeLogGroups[$dateKey]['routines'][$routineKey])) {
+            $overtimeLogGroups[$dateKey]['routines'][$routineKey] = [
+                'title' => $log['routine_title'] ?? 'Routine',
+                'entries' => []
+            ];
+        }
+        $overtimeLogGroups[$dateKey]['routines'][$routineKey]['entries'][] = $log;
+        $overtimeLogGroups[$dateKey]['count']++;
+
+        if (!isset($overtimeLogsByRoutine[$routineKey])) {
+            $overtimeLogsByRoutine[$routineKey] = [
+                'title' => $log['routine_title'] ?? 'Routine',
+                'entries' => []
+            ];
+        }
+        $overtimeLogsByRoutine[$routineKey]['entries'][] = $log;
+    }
+}
 $formatDuration = function($seconds) {
     $seconds = max(0, (int) $seconds);
     $minutes = intdiv($seconds, 60);
@@ -72,11 +104,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $title = filter_input(INPUT_POST, 'reward_title', FILTER_SANITIZE_STRING);
         $description = filter_input(INPUT_POST, 'reward_description', FILTER_SANITIZE_STRING);
         $point_cost = filter_input(INPUT_POST, 'point_cost', FILTER_VALIDATE_INT);
-        if (createReward($_SESSION['user_id'], $title, $description, $point_cost)) {
-            $message = "Reward created successfully!";
-        } else {
-            $message = "Failed to create reward.";
-        }
+        $message = createReward($_SESSION['user_id'], $title, $description, $point_cost)
+            ? "Reward created successfully!"
+            : "Failed to create reward.";
     } elseif (isset($_POST['create_goal'])) {
         $child_user_id = filter_input(INPUT_POST, 'child_user_id', FILTER_VALIDATE_INT);
         $title = filter_input(INPUT_POST, 'goal_title', FILTER_SANITIZE_STRING);
@@ -84,27 +114,83 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $start_date = filter_input(INPUT_POST, 'start_date', FILTER_SANITIZE_STRING);
         $end_date = filter_input(INPUT_POST, 'end_date', FILTER_SANITIZE_STRING);
         $reward_id = filter_input(INPUT_POST, 'reward_id', FILTER_VALIDATE_INT, FILTER_NULL_ON_FAILURE);
-        if (createGoal($main_parent_id, $child_user_id, $title, $target_points, $start_date, $end_date, $reward_id, $_SESSION['user_id'])) {
-            $message = "Goal created successfully!";
+        $message = createGoal($main_parent_id, $child_user_id, $title, $target_points, $start_date, $end_date, $reward_id, $_SESSION['user_id'])
+            ? "Goal created successfully!"
+            : "Failed to create goal. Check date range or reward ID.";
+    } elseif (isset($_POST['adjust_child_points'])) {
+        if (!in_array($role_type, ['main_parent', 'secondary_parent'], true)) {
+            $message = "You do not have permission to adjust points.";
         } else {
-            $message = "Failed to create goal. Check date range or reward ID.";
+            $child_user_id = filter_input(INPUT_POST, 'child_user_id', FILTER_VALIDATE_INT);
+            $points_delta_raw = filter_input(INPUT_POST, 'points_delta', FILTER_VALIDATE_INT);
+            $point_reason = trim(filter_input(INPUT_POST, 'point_reason', FILTER_SANITIZE_STRING) ?? '');
+            if (!$child_user_id || $points_delta_raw === false || $points_delta_raw === null || $points_delta_raw == 0) {
+                $message = "Enter a non-zero point amount.";
+            } else {
+                $point_reason = $point_reason !== '' ? substr($point_reason, 0, 255) : 'Manual adjustment';
+                $points_delta = (int) $points_delta_raw;
+                // Ensure log table exists (idempotent)
+                $db->exec("
+                    CREATE TABLE IF NOT EXISTS child_point_adjustments (
+                        id INT AUTO_INCREMENT PRIMARY KEY,
+                        child_user_id INT NOT NULL,
+                        delta_points INT NOT NULL,
+                        reason VARCHAR(255) NOT NULL,
+                        created_by INT NOT NULL,
+                        created_at DATETIME NOT NULL,
+                        INDEX idx_child_created (child_user_id, created_at)
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+                ");
+                updateChildPoints($child_user_id, $points_delta);
+                $stmt = $db->prepare("INSERT INTO child_point_adjustments (child_user_id, delta_points, reason, created_by, created_at) VALUES (:child_id, :delta, :reason, :created_by, NOW())");
+                $stmt->execute([
+                    ':child_id' => $child_user_id,
+                    ':delta' => $points_delta,
+                    ':reason' => $point_reason,
+                    ':created_by' => $_SESSION['user_id']
+                ]);
+                addChildNotification(
+                    (int)$child_user_id,
+                    $points_delta > 0 ? 'points_added' : 'points_deducted',
+                    ($points_delta > 0 ? 'You received ' : 'You lost ') . abs($points_delta) . ' pts: ' . $point_reason,
+                    'dashboard_child.php'
+                );
+                $sign = $points_delta > 0 ? 'added' : 'deducted';
+                $message = ucfirst($sign) . " " . abs($points_delta) . " points. Reason: " . htmlspecialchars($point_reason);
+            }
         }
     } elseif (isset($_POST['approve_goal']) || isset($_POST['reject_goal'])) {
         $goal_id = filter_input(INPUT_POST, 'goal_id', FILTER_VALIDATE_INT);
         $action = isset($_POST['approve_goal']) ? 'approve' : 'reject';
         $comment = filter_input(INPUT_POST, 'rejection_comment', FILTER_SANITIZE_STRING);
-        $points = approveGoal($_SESSION['user_id'], $goal_id, $action === 'approve', $comment);
-        if ($points !== false) {
-            $message = $action === 'approve' ? "Goal approved! Child earned $points points." : "Goal rejected.";
-            $data = getDashboardData($_SESSION['user_id']); // Refresh data
+        if ($action === 'approve') {
+            // Fetch points for message only
+            $pointsStmt = $db->prepare("SELECT target_points FROM goals WHERE id = :goal_id AND parent_user_id = :parent_id");
+            $pointsStmt->execute([':goal_id' => $goal_id, ':parent_id' => $main_parent_id]);
+            $points_value = $pointsStmt->fetchColumn();
+            $approved = approveGoal($goal_id, $main_parent_id);
+            if ($approved) {
+                $message = "Goal approved!" . ($points_value !== false ? " Child earned " . (int)$points_value . " points." : "");
+            } else {
+                $message = "Failed to approve goal.";
+            }
         } else {
-            $message = "Failed to $action goal.";
+            $rejectError = null;
+            if (rejectGoal($goal_id, $main_parent_id, $comment, $rejectError)) {
+                $message = "Goal rejected.";
+            } else {
+                $message = "Failed to reject goal." . ($rejectError ? " Reason: " . htmlspecialchars($rejectError) : "");
+            }
         }
+    } elseif (isset($_POST['fulfill_reward'])) {
+        $reward_id = filter_input(INPUT_POST, 'reward_id', FILTER_VALIDATE_INT);
+        $message = ($reward_id && fulfillReward($reward_id, $main_parent_id, $_SESSION['user_id']))
+            ? "Reward fulfillment recorded."
+            : "Unable to mark reward as fulfilled.";
     } elseif (isset($_POST['add_child'])) {
         if (!canAddEditChild($_SESSION['user_id'])) {
             $message = "You do not have permission to add children.";
         } else {
-            // Get and split child's name into first and last name
             $first_name = filter_input(INPUT_POST, 'first_name', FILTER_SANITIZE_STRING);
             $last_name = filter_input(INPUT_POST, 'last_name', FILTER_SANITIZE_STRING);
             $child_username = filter_input(INPUT_POST, 'child_username', FILTER_SANITIZE_STRING);
@@ -112,7 +198,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $birthday = filter_input(INPUT_POST, 'birthday', FILTER_SANITIZE_STRING);
             $avatar = filter_input(INPUT_POST, 'avatar', FILTER_SANITIZE_STRING);
             $gender = filter_input(INPUT_POST, 'child_gender', FILTER_SANITIZE_STRING);
-            // Handle upload
             $upload_path = '';
             if (isset($_FILES['avatar_upload']) && $_FILES['avatar_upload']['error'] == 0) {
                 $upload_dir = __DIR__ . '/uploads/avatars/';
@@ -123,24 +208,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $file_name = uniqid() . '_' . pathinfo($_FILES['avatar_upload']['name'], PATHINFO_FILENAME) . '.' . $file_ext;
                 $upload_path = 'uploads/avatars/' . $file_name;
                 if (move_uploaded_file($_FILES['avatar_upload']['tmp_name'], __DIR__ . '/' . $upload_path)) {
-                    // Resize image (GD library)
                     $image = imagecreatefromstring(file_get_contents(__DIR__ . '/' . $upload_path));
                     $resized = imagecreatetruecolor(100, 100);
                     imagecopyresampled($resized, $image, 0, 0, 0, 0, 100, 100, imagesx($image), imagesy($image));
                     imagejpeg($resized, __DIR__ . '/' . $upload_path, 90);
                     imagedestroy($image);
                     imagedestroy($resized);
-                    $avatar = $upload_path; // Use uploaded path
+                    $avatar = $upload_path;
                 } else {
                     $message = "Upload failed; using default avatar.";
                 }
             }
-            if (createChildProfile($_SESSION['user_id'], $first_name, $last_name, $child_username, $child_password, $birthday, $avatar, $gender)) {
-                $message = "Child added successfully! Username: $child_username, Password: $child_password (share securely).";
-                $data = getDashboardData($_SESSION['user_id']);
-            } else {
-                $message = "Failed to add child. Check for duplicate username.";
-            }
+            $message = createChildProfile($_SESSION['user_id'], $first_name, $last_name, $child_username, $child_password, $birthday, $avatar, $gender)
+                ? "Child added successfully! Username: $child_username, Password: $child_password (share securely)."
+                : "Failed to add child. Check for duplicate username.";
         }
     } elseif (isset($_POST['add_new_user'])) {
         if (!canAddEditFamilyMember($_SESSION['user_id'])) {
@@ -151,67 +232,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $username = filter_input(INPUT_POST, 'secondary_username', FILTER_SANITIZE_STRING);
             $password = filter_input(INPUT_POST, 'secondary_password', FILTER_SANITIZE_STRING);
             $role_type = filter_input(INPUT_POST, 'role_type', FILTER_SANITIZE_STRING);
-            
-            if ($role_type && in_array($role_type, ['secondary_parent', 'family_member', 'caregiver'])) {
-                if (addLinkedUser($_SESSION['user_id'], $username, $password, $first_name, $last_name, $role_type)) {
-                    $role_display = str_replace('_', ' ', ucwords($role_type));
-                    $message = "$role_display added successfully! Username: $username";
-                } else {
-                    $message = "Failed to add user. Check for duplicate username.";
-                }
+            if ($role_type && in_array($role_type, ['secondary_parent', 'family_member', 'caregiver'], true)) {
+                $message = addLinkedUser($main_parent_id, $username, $password, $first_name, $last_name, $role_type)
+                    ? ucfirst(str_replace('_', ' ', $role_type)) . " added successfully! Username: $username"
+                    : "Failed to add user. Check for duplicate username.";
             } else {
                 $message = "Invalid role type selected.";
             }
         }
-    } elseif (isset($_POST['add_new_user'])) {
-        $secondary_username   = filter_input(INPUT_POST, 'secondary_username', FILTER_SANITIZE_STRING);
-        $secondary_password   = filter_input(INPUT_POST, 'secondary_password', FILTER_SANITIZE_STRING);
-        $secondary_first_name = filter_input(INPUT_POST, 'secondary_first_name', FILTER_SANITIZE_STRING);
-        $secondary_last_name  = filter_input(INPUT_POST, 'secondary_last_name', FILTER_SANITIZE_STRING);
-        $role_type_sel        = filter_input(INPUT_POST, 'role_type', FILTER_SANITIZE_STRING);
-
-        if (addLinkedUser($main_parent_id, $secondary_username, $secondary_password, $secondary_first_name, $secondary_last_name, $role_type_sel)) {
-            $role_label = [
-                'secondary_parent' => 'Secondary parent',
-                'family_member' => 'Family member',
-                'caregiver' => 'Caregiver'
-            ][$role_type_sel] ?? 'User';
-            $message = "$role_label added successfully! Username: $secondary_username.";
-        } else {
-            $message = "Failed to add user. Check for duplicate username.";
-        }
-    } elseif (isset($_POST['delete_user']) && in_array($role_type, ['main_parent', 'secondary_parent'])) {
+    } elseif (isset($_POST['delete_user']) && in_array($role_type, ['main_parent', 'secondary_parent'], true)) {
         $delete_user_id = filter_input(INPUT_POST, 'delete_user_id', FILTER_VALIDATE_INT);
         if ($delete_user_id) {
             if ($delete_user_id == $main_parent_id) {
                 $message = "Cannot remove the main account owner.";
             } else {
-            // Try removing a linked adult first
-            $stmt = $db->prepare("DELETE FROM users 
-                                  WHERE id = :user_id AND id IN (
-                                      SELECT linked_user_id FROM family_links WHERE main_parent_id = :main_parent_id
-                                  )");
-            $stmt->execute([':user_id' => $delete_user_id, ':main_parent_id' => $main_parent_id]);
-
-            if ($stmt->rowCount() === 0) {
-                // If not an adult link, try deleting a child of this parent
-                $stmt2 = $db->prepare("DELETE FROM users 
-                                       WHERE id = :user_id AND id IN (
-                                           SELECT child_user_id FROM child_profiles WHERE parent_user_id = :main_parent_id
-                                       )");
-                $stmt2->execute([':user_id' => $delete_user_id, ':main_parent_id' => $main_parent_id]);
-                if ($stmt2->rowCount() > 0) {
-                    $message = "Child removed successfully.";
+                $stmt = $db->prepare("DELETE FROM users 
+                                      WHERE id = :user_id AND id IN (
+                                          SELECT linked_user_id FROM family_links WHERE main_parent_id = :main_parent_id
+                                      )");
+                $stmt->execute([':user_id' => $delete_user_id, ':main_parent_id' => $main_parent_id]);
+                if ($stmt->rowCount() === 0) {
+                    $stmt2 = $db->prepare("DELETE FROM users 
+                                           WHERE id = :user_id AND id IN (
+                                               SELECT child_user_id FROM child_profiles WHERE parent_user_id = :main_parent_id
+                                           )");
+                    $stmt2->execute([':user_id' => $delete_user_id, ':main_parent_id' => $main_parent_id]);
+                    $message = $stmt2->rowCount() > 0 ? "Child removed successfully." : "Failed to remove user.";
                 } else {
-                    $message = "Failed to remove user.";
+                    $message = "User removed successfully.";
                 }
-            } else {
-                $message = "User removed successfully.";
-            }
             }
         }
     }
 }
+
+$data = getDashboardData($_SESSION['user_id']);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -219,7 +274,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Parent Dashboard</title>
-    <link rel="stylesheet" href="css/main.css">
+    <link rel="stylesheet" href="css/main.css?v=3.10.15">
     <style>
         .dashboard { padding: 20px; max-width: 900px; margin: 0 auto; }
         .children-overview, .management-links, .active-rewards, .redeemed-rewards, .pending-approvals, .completed-goals, .manage-family { margin-top: 20px; }
@@ -240,18 +295,50 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         .points-progress-wrapper { display: flex; flex-direction: column; align-items: center; gap: 10px; flex: 1; }
         .points-progress-label { font-size: 0.9em; color: #555; text-align: center; }
         .points-progress-container { width: 70px; height: 160px; background: #e0e0e0; border-radius: 35px; display: flex; align-items: flex-end; justify-content: center; position: relative; overflow: hidden; }
-        .points-progress-fill { width: 100%; height: 90%; background: linear-gradient(180deg, #81c784, #4caf50); border-radius: 5px; transition: height 1.2s ease-out; }
+        .points-progress-fill { width: 100%; height: 0; background: linear-gradient(180deg, #81c784, #4caf50); border-radius: 5px; transition: height 1.2s ease-out; }
         .points-progress-target { position: absolute; top: 25px; left: 50%; transform: translateX(-50%); font-size: 1em; font-weight: 700; width: 100%; color: #fff; text-shadow: 0 2px 2px rgba(0,0,0,0.4); opacity: 0.9; }
         .child-info-actions { display: flex; flex-wrap: wrap; gap: 10px; }
         .child-info-actions form { margin: 0; flex-grow: 1; }
-         .child-info-actions a { flex-grow: 1; }
-         .child-info-actions form button{ width: 100%;}
+        .child-info-actions a { flex-grow: 1; }
+        .child-info-actions form button { width: 100%; }
+        .adjust-button { background: #ff9800 !important; color: #fff; display: block; gap: 4px; justify-items: center; font-weight: 700; }
+        .adjust-button .label { font-size: 0.95em; }
+        .adjust-button .icon { font-size: 1.1em; line-height: 1; }
+        .points-adjust-card { border: 1px dashed #c8e6c9; background: #fdfefb; padding: 10px 12px; border-radius: 6px; display: grid; gap: 8px; }
+        .points-adjust-card .button { width: 100%; }
+        .adjust-modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.55); display: none; align-items: center; justify-content: center; z-index: 3000; padding: 12px; }
+        .adjust-modal-backdrop.open { display: flex; }
+        .adjust-modal { background: #fff; border-radius: 10px; padding: 18px; max-width: 420px; width: min(420px, 100%); box-shadow: 0 14px 36px rgba(0,0,0,0.25); display: grid; gap: 12px; }
+        .adjust-modal header { display: flex; justify-content: space-between; align-items: center; }
+        .adjust-modal h3 { margin: 0; font-size: 1.1rem; }
+        .adjust-modal-close { background: transparent; border: none; font-size: 1.4rem; cursor: pointer; }
+        .adjust-control { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: center; }
+        .adjust-control button { width: 44px; height: 44px; font-size: 1.2rem; }
+        .adjust-control input[type="number"] { width: 100%; padding: 10px; font-size: 1rem; text-align: center; }
+        .adjust-control input[type="number"]::-webkit-outer-spin-button,
+        .adjust-control input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+        .adjust-control input[type="number"] { -moz-appearance: textfield; }
+        .adjust-history { background: #f9f9f9; border: 1px solid #e0e0e0; border-radius: 8px; padding: 10px; max-height: 180px; overflow-y: auto; }
+        .adjust-history h4 { margin: 0 0 8px; font-size: 0.95rem; }
+        .adjust-history ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
+        .adjust-history li { display: grid; gap: 2px; font-size: 0.9rem; }
+        .adjust-history .delta { font-weight: 700; }
+        .adjust-history .delta.positive { color: #2e7d32; }
+        .adjust-history .delta.negative { color: #c62828; }
+        .adjust-history .meta { color: #666; font-size: 0.85rem; }
         .button { padding: 10px 20px; margin: 5px; background-color: #4caf50; color: white; border: none; border-radius: 5px; cursor: pointer; text-decoration: none; display: inline-block; font-size: 16px; min-height: 44px; }
         .approve-button { background-color: #4caf50; }
         .reject-button { background-color: #f44336; }
         .form-group { margin-bottom: 15px; }
         .form-group label { display: block; margin-bottom: 5px; }
         .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 8px; }
+        .awaiting-label { font-style: italic; color: #bf360c; margin-bottom: 8px; }
+        .inline-form { margin-top: 6px; }
+        .inline-form .button { width: 100%; }
+        @media (min-width: 600px) {
+            .inline-form { display: inline-block; }
+            .inline-form .button { width: auto; }
+        }
         /* Manage Family Styles - Mobile Responsive, Autism-Friendly Wizard */
         .manage-family { background: #f9f9f9; border-radius: 8px; padding: 20px; }
         .family-form { display: none; } /* JS toggle for wizard */
@@ -272,6 +359,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         .overtime-table th, .overtime-table td { border: 1px solid #e0e0e0; padding: 8px; text-align: left; }
         .overtime-table th { background: #f0f4f8; font-weight: 600; }
         .overtime-empty { font-style: italic; color: #666; margin-top: 12px; }
+        .routine-log-link { background: none; border: none; color: #1565c0; cursor: pointer; padding: 0; font-weight: 700; text-decoration: underline; }
+        .routine-log-link:hover { color: #0d47a1; }
+        .overtime-accordion { display: grid; gap: 12px; margin-top: 12px; }
+        .overtime-date { border: 1px solid #e3e7eb; border-radius: 10px; overflow: hidden; background: #fff; box-shadow: 0 2px 6px rgba(0,0,0,0.05); }
+        .overtime-date > summary { padding: 12px 14px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; gap: 10px; font-weight: 700; background: #f5f8fb; list-style: none; }
+        .overtime-date > summary::-webkit-details-marker { display: none; }
+        .overtime-date-count { color: #607d8b; font-weight: 600; font-size: 0.92rem; }
+        .overtime-routine { border-top: 1px solid #eef1f4; }
+        .overtime-routine > summary { padding: 12px 16px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; gap: 10px; font-weight: 700; color: #0d47a1; list-style: none; }
+        .overtime-routine > summary::-webkit-details-marker { display: none; }
+        .overtime-routine-count { color: #455a64; font-size: 0.9rem; font-weight: 600; }
+        .overtime-card-list { display: grid; gap: 10px; padding: 0 14px 14px; }
+        .overtime-card-row { background: linear-gradient(145deg, #ffffff, #f7f9fb); border: 1px solid #e3e7eb; border-radius: 10px; padding: 12px; display: grid; gap: 6px; box-shadow: 0 2px 6px rgba(0,0,0,0.05); }
+        .ot-row-header { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+        .ot-task { font-weight: 700; color: #0d47a1; }
+        .ot-time { color: #546e7a; font-size: 0.9rem; }
+        .ot-meta { font-size: 0.92rem; color: #37474f; display: flex; gap: 10px; flex-wrap: wrap; }
+        .ot-meta strong { color: #455a64; }
+        .ot-overtime { color: #c62828; font-weight: 700; }
+        .routine-log-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.55); display: none; align-items: center; justify-content: center; z-index: 3000; padding: 16px; }
+        .routine-log-modal.active { display: flex; }
+        .routine-log-dialog { background: #fff; border-radius: 12px; max-width: 640px; width: min(640px, 100%); max-height: 80vh; overflow: hidden; box-shadow: 0 18px 36px rgba(0,0,0,0.25); display: grid; grid-template-rows: auto 1fr; }
+        .routine-log-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border-bottom: 1px solid #e0e0e0; }
+        .routine-log-title { margin: 0; font-size: 1.1rem; font-weight: 700; color: #0d47a1; }
+        .routine-log-close { border: none; background: transparent; font-size: 1.3rem; cursor: pointer; color: #455a64; }
+        .routine-log-body { padding: 14px 16px; overflow-y: auto; display: grid; gap: 10px; }
+        .routine-log-empty { color: #666; font-style: italic; }
+        .routine-log-item { border: 1px solid #e3e7eb; border-radius: 10px; padding: 10px; display: grid; gap: 6px; background: #f9fbfd; }
+        .routine-log-item .meta { color: #546e7a; font-size: 0.9rem; display: flex; flex-wrap: wrap; gap: 10px; }
+        .routine-log-item .overtime { color: #c62828; font-weight: 700; }
+        @media (max-width: 768px) {
+            .overtime-date > summary, .overtime-routine > summary { padding: 12px; }
+            .ot-row-header { flex-direction: column; align-items: flex-start; }
+        }
         @media (max-width: 768px) {
             .manage-family { padding: 10px; }
             .button { width: 100%; }
@@ -280,7 +401,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             .child-info-body { flex-direction: column; }
             .points-progress-container { width: 100%; height: 140px; }
         }
+        .parent-notifications { margin: 16px 0 24px; background: #f5f5f5; border: 1px solid #e0e0e0; border-radius: 10px; padding: 12px 14px; box-shadow: 0 2px 6px rgba(0,0,0,0.06); }
+        .parent-notifications.open .parent-notification-list { display: grid; }
+        .parent-notifications-header { display: flex; align-items: center; gap: 10px; cursor: pointer; }
+        .parent-notifications-title { margin: 0; color: #333; display: flex; align-items: center; gap: 8px; font-weight: 700; }
+        .parent-notification-icon { width: 32px; height: 32px; position: relative; display: inline-flex; align-items: center; justify-content: center; background: #fff; border-radius: 50%; border: 2px solid #c8e6c9; box-shadow: 0 2px 4px rgba(0,0,0,0.12); }
+        .parent-notification-icon svg { width: 18px; height: 18px; fill: #4caf50; }
+        .parent-notification-badge { position: absolute; top: -6px; right: -6px; background: #e53935; color: #fff; border-radius: 12px; padding: 2px 6px; font-size: 0.75rem; font-weight: 700; min-width: 22px; text-align: center; }
+        .parent-notification-list { list-style: none; padding: 0; margin: 12px 0; display: none; gap: 8px; }
+        .parent-notification-item { padding: 10px; background: #fff; border: 1px solid #e0e0e0; border-radius: 8px; display: grid; gap: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+        .parent-notification-meta { font-size: 0.9em; color: #666; }
+        .parent-notifications-footer { display: flex; justify-content: center; }
+        .parent-notifications-footer button { background: transparent; border: none; color: #1565c0; font-weight: 700; cursor: pointer; text-decoration: underline; }
     </style>
+    <script>
+        window.RoutineOvertimeByRoutine = <?php echo json_encode($overtimeLogsByRoutine, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP); ?>;
+    </script>
     <script>
         // JS for Manage Family Wizard (step-by-step)
         document.addEventListener('DOMContentLoaded', function() {
@@ -342,6 +478,164 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     });
                 }
             });
+
+            const parentNotifications = document.querySelector('[data-role="parent-notifications"]');
+            if (parentNotifications) {
+                const toggles = parentNotifications.querySelectorAll('[data-action="toggle-parent-notifications"]');
+                const toggle = () => parentNotifications.classList.toggle('open');
+                toggles.forEach(btn => btn.addEventListener('click', toggle));
+            }
+
+            const adjustModal = document.querySelector('[data-role="adjust-modal"]');
+            const adjustTitle = adjustModal ? adjustModal.querySelector('[data-role="adjust-title"]') : null;
+            const adjustChildIdInput = adjustModal ? adjustModal.querySelector('[data-role="adjust-child-id"]') : null;
+            const adjustHistoryList = adjustModal ? adjustModal.querySelector('[data-role="adjust-history-list"]') : null;
+            const pointsInput = adjustModal ? adjustModal.querySelector('#adjust_points_input') : null;
+            const reasonInput = adjustModal ? adjustModal.querySelector('#adjust_reason_input') : null;
+
+            const renderHistory = (history) => {
+                if (!adjustHistoryList) return;
+                adjustHistoryList.innerHTML = '';
+                if (!history || !history.length) {
+                    const li = document.createElement('li');
+                    li.textContent = 'No recent adjustments.';
+                    adjustHistoryList.appendChild(li);
+                    return;
+                }
+                history.forEach(item => {
+                    const li = document.createElement('li');
+                    const delta = document.createElement('span');
+                    delta.className = 'delta ' + (item.delta_points >= 0 ? 'positive' : 'negative');
+                    delta.textContent = (item.delta_points >= 0 ? '+' : '') + item.delta_points + ' pts';
+                    const reason = document.createElement('span');
+                    reason.textContent = item.reason || 'No reason';
+                    const meta = document.createElement('span');
+                    meta.className = 'meta';
+                    meta.textContent = item.created_at ? new Date(item.created_at).toLocaleString() : '';
+                    li.appendChild(delta);
+                    li.appendChild(reason);
+                    li.appendChild(meta);
+                    adjustHistoryList.appendChild(li);
+                });
+            };
+
+            document.querySelectorAll('[data-role="open-adjust-modal"]').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const childId = btn.dataset.childId || '';
+                    const childName = btn.dataset.childName || 'Child';
+                    const historyRaw = btn.dataset.history || '[]';
+                    let history = [];
+                    try { history = JSON.parse(historyRaw); } catch (e) { history = []; }
+                    if (adjustTitle) { adjustTitle.textContent = 'Adjust Points - ' + childName; }
+                    if (adjustChildIdInput) { adjustChildIdInput.value = childId; }
+                    if (pointsInput) { pointsInput.value = 1; }
+                    if (reasonInput) { reasonInput.value = ''; }
+                    renderHistory(history);
+                    if (adjustModal) { adjustModal.classList.add('open'); }
+                });
+            });
+
+            if (adjustModal) {
+                const closeButtons = adjustModal.querySelectorAll('[data-action="close-adjust"]');
+                closeButtons.forEach(btn => btn.addEventListener('click', () => adjustModal.classList.remove('open')));
+                adjustModal.addEventListener('click', (e) => {
+                    if (e.target === adjustModal) {
+                        adjustModal.classList.remove('open');
+                    }
+                });
+                const decBtn = adjustModal.querySelector('[data-action="decrement-points"]');
+                const incBtn = adjustModal.querySelector('[data-action="increment-points"]');
+                if (decBtn && pointsInput) {
+                    decBtn.addEventListener('click', () => {
+                        const current = parseInt(pointsInput.value || '0', 10) || 0;
+                        pointsInput.value = current - 1;
+                    });
+                }
+                if (incBtn && pointsInput) {
+                    incBtn.addEventListener('click', () => {
+                        const current = parseInt(pointsInput.value || '0', 10) || 0;
+                        pointsInput.value = current + 1;
+                    });
+                }
+            }
+
+            const routineLogModal = document.getElementById('routine-log-modal');
+            const routineLogTitle = routineLogModal ? routineLogModal.querySelector('[data-role="routine-log-title"]') : null;
+            const routineLogBody = routineLogModal ? routineLogModal.querySelector('[data-role="routine-log-body"]') : null;
+            const routineLogClose = routineLogModal ? routineLogModal.querySelector('[data-role="routine-log-close"]') : null;
+            const routineLogsByRoutine = window.RoutineOvertimeByRoutine || {};
+
+            const formatDuration = (seconds) => {
+                const safe = Math.max(0, Math.floor(Number(seconds) || 0));
+                const mins = Math.floor(safe / 60);
+                const secs = safe % 60;
+                return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+            };
+
+            const openRoutineLogModal = (routineId, routineTitle) => {
+                if (!routineLogModal || !routineLogBody || !routineLogTitle) return;
+                const key = String(routineId || routineTitle || '');
+                const group = routineLogsByRoutine[String(routineId)] || routineLogsByRoutine[key] || null;
+                const entries = group && Array.isArray(group.entries) ? group.entries : [];
+                routineLogTitle.textContent = routineTitle || (group ? group.title : 'Routine Overtime');
+                routineLogBody.innerHTML = '';
+                if (!entries.length) {
+                    const empty = document.createElement('div');
+                    empty.className = 'routine-log-empty';
+                    empty.textContent = 'No recent overtime events for this routine.';
+                    routineLogBody.appendChild(empty);
+                } else {
+                    entries.forEach(entry => {
+                        const item = document.createElement('div');
+                        item.className = 'routine-log-item';
+                        const when = entry.occurred_at ? new Date(entry.occurred_at) : null;
+                        const header = document.createElement('div');
+                        header.className = 'meta';
+                        header.textContent = when ? when.toLocaleString() : 'Date unavailable';
+                        const child = document.createElement('div');
+                        child.className = 'meta';
+                        child.textContent = `Child: ${entry.child_display_name || 'Unknown'}`;
+                        const task = document.createElement('div');
+                        task.className = 'meta';
+                        task.textContent = `Task: ${entry.task_title || 'Task'}`;
+                        const times = document.createElement('div');
+                        times.className = 'meta';
+                        times.textContent = `Scheduled: ${formatDuration(entry.scheduled_seconds)} · Actual: ${formatDuration(entry.actual_seconds)}`;
+                        const overtime = document.createElement('div');
+                        overtime.className = 'overtime';
+                        overtime.textContent = `Overtime: ${formatDuration(entry.overtime_seconds)}`;
+                        item.append(header, child, task, times, overtime);
+                        routineLogBody.appendChild(item);
+                    });
+                }
+                routineLogModal.classList.add('active');
+                routineLogModal.setAttribute('aria-hidden', 'false');
+            };
+
+            const closeRoutineLogModal = () => {
+                if (!routineLogModal) return;
+                routineLogModal.classList.remove('active');
+                routineLogModal.setAttribute('aria-hidden', 'true');
+            };
+
+            if (routineLogClose) {
+                routineLogClose.addEventListener('click', closeRoutineLogModal);
+            }
+            if (routineLogModal) {
+                routineLogModal.addEventListener('click', (event) => {
+                    if (event.target === routineLogModal) {
+                        closeRoutineLogModal();
+                    }
+                });
+            }
+
+            document.querySelectorAll('[data-routine-log-trigger]').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const routineId = btn.getAttribute('data-routine-id');
+                    const routineTitle = btn.getAttribute('data-routine-title');
+                    openRoutineLogModal(routineId, routineTitle);
+                });
+            });
         });
     </script>
 </head>
@@ -357,6 +651,54 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
    </header>
    <main class="dashboard">
       <?php if (isset($message)) echo "<p>$message</p>"; ?>
+      <?php
+        $parentNotifications = [];
+        if (!empty($data['pending_approvals'])) {
+            foreach ($data['pending_approvals'] as $pending) {
+                $parentNotifications[] = [
+                    'message' => 'Goal approval pending for ' . htmlspecialchars($pending['child_display_name'] ?? 'Child') . ': ' . htmlspecialchars($pending['title'] ?? 'Goal'),
+                    'link' => 'goal.php'
+                ];
+            }
+        }
+        if (!empty($data['redeemed_rewards'])) {
+            foreach ($data['redeemed_rewards'] as $redeemed) {
+                if (empty($redeemed['fulfilled_on'])) {
+                    $parentNotifications[] = [
+                        'message' => 'Reward fulfillment needed: ' . htmlspecialchars($redeemed['title'] ?? 'Reward'),
+                        'link' => 'dashboard_parent.php#rewards'
+                    ];
+                }
+            }
+        }
+        $parentNotificationCount = count($parentNotifications);
+      ?>
+      <section class="parent-notifications" data-role="parent-notifications">
+        <div class="parent-notifications-header" data-action="toggle-parent-notifications">
+            <div class="parent-notification-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" focusable="false"><path d="M12 24a2.5 2.5 0 0 0 2.45-2h-4.9A2.5 2.5 0 0 0 12 24Zm7.12-6.41-1.17-1.11V11a6 6 0 0 0-5-5.9V4a1 1 0 1 0-2 0v1.1A6 6 0 0 0 5.05 11v5.48l-1.17 1.11A1 1 0 0 0 4.6 19h14.8a1 1 0 0 0 .72-1.69Z"/></svg>
+                <span class="parent-notification-badge"><?php echo (int)$parentNotificationCount; ?></span>
+            </div>
+            <h2 class="parent-notifications-title">Notifications</h2>
+        </div>
+        <?php if ($parentNotificationCount): ?>
+            <ul class="parent-notification-list">
+                <?php foreach ($parentNotifications as $note): ?>
+                    <li class="parent-notification-item">
+                        <div><?php echo $note['message']; ?></div>
+                        <?php if (!empty($note['link'])): ?>
+                            <div class="parent-notification-meta"><a href="<?php echo htmlspecialchars($note['link']); ?>">View</a></div>
+                        <?php endif; ?>
+                    </li>
+                <?php endforeach; ?>
+            </ul>
+        <?php else: ?>
+            <p class="parent-notification-meta" style="margin: 12px 0;">No notifications right now.</p>
+        <?php endif; ?>
+        <div class="parent-notifications-footer">
+            <button type="button" data-action="toggle-parent-notifications">View Notifications</button>
+        </div>
+      </section>
       <div class="children-overview">
          <h2>Children Overview</h2>
          <?php if (isset($data['children']) && is_array($data['children']) && !empty($data['children'])): ?>
@@ -392,6 +734,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                               <div class="points-progress-fill"></div>
                               <span class="points-progress-target"><?php echo (int)($child['points_earned'] ?? 0); ?> pts</span>
                            </div>
+                           <?php if (in_array($role_type, ['main_parent', 'secondary_parent'], true)): ?>
+                                <button type="button"
+                                    class="button adjust-button"
+                                    data-role="open-adjust-modal"
+                                    data-child-id="<?php echo (int)$child['child_user_id']; ?>"
+                                    data-child-name="<?php echo htmlspecialchars($child['child_name']); ?>"
+                                    data-history='<?php echo htmlspecialchars(json_encode($child['point_adjustments'] ?? [], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT)); ?>'>
+                                    <span class="label">Adjust Points</span>
+                                    <span class="icon">+ / -</span>
+                                </button>
+                            <?php endif; ?>
                         </div>
                      </div>
                      <div class="child-info-actions">
@@ -702,7 +1055,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                       <tbody>
                          <?php foreach ($topRoutine as $routineRow): ?>
                              <tr>
-                                <td><?php echo htmlspecialchars($routineRow['routine_title']); ?></td>
+                                <td>
+                                    <button type="button"
+                                            class="routine-log-link"
+                                            data-routine-log-trigger
+                                            data-routine-id="<?php echo (int) $routineRow['routine_id']; ?>"
+                                            data-routine-title="<?php echo htmlspecialchars($routineRow['routine_title']); ?>">
+                                        <?php echo htmlspecialchars($routineRow['routine_title']); ?>
+                                    </button>
+                                </td>
                                 <td><?php echo (int) $routineRow['occurrences']; ?></td>
                                 <td><?php echo round(((int) $routineRow['total_overtime_seconds']) / 60, 1); ?></td>
                              </tr>
@@ -716,36 +1077,58 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
          </div>
          <div class="overtime-card" style="margin-top: 20px;">
             <h3>Most Recent Overtime Events</h3>
-            <?php if (!empty($routine_overtime_logs)): ?>
-                <table class="overtime-table">
-                   <thead>
-                      <tr>
-                         <th>When</th>
-                         <th>Child</th>
-                         <th>Routine</th>
-                         <th>Task</th>
-                         <th>Scheduled</th>
-                         <th>Actual</th>
-                         <th>Overtime</th>
-                      </tr>
-                   </thead>
-                   <tbody>
-                      <?php foreach ($routine_overtime_logs as $log): ?>
-                          <tr>
-                             <td><?php echo htmlspecialchars(date('m/d/Y h:i A', strtotime($log['occurred_at']))); ?></td>
-                             <td><?php echo htmlspecialchars($log['child_display_name']); ?></td>
-                             <td><?php echo htmlspecialchars($log['routine_title']); ?></td>
-                             <td><?php echo htmlspecialchars($log['task_title']); ?></td>
-                             <td><?php echo $formatDuration($log['scheduled_seconds']); ?></td>
-                             <td><?php echo $formatDuration($log['actual_seconds']); ?></td>
-                             <td><?php echo $formatDuration($log['overtime_seconds']); ?></td>
-                          </tr>
-                      <?php endforeach; ?>
-                   </tbody>
-                </table>
+            <?php if (!empty($overtimeLogGroups)): ?>
+                <div class="overtime-accordion">
+                    <?php $firstDate = true; ?>
+                    <?php foreach ($overtimeLogGroups as $dateGroup): ?>
+                        <details class="overtime-date" <?php echo $firstDate ? 'open' : ''; ?>>
+                            <summary>
+                                <span class="ot-date-label"><?php echo htmlspecialchars($dateGroup['label']); ?></span>
+                                <span class="overtime-date-count"><?php echo (int) $dateGroup['count']; ?> event<?php echo $dateGroup['count'] === 1 ? '' : 's'; ?></span>
+                            </summary>
+                            <div class="overtime-routine-list">
+                                <?php foreach ($dateGroup['routines'] as $routineGroup): ?>
+                                    <details class="overtime-routine" open>
+                                        <summary>
+                                            <span class="ot-routine-title"><?php echo htmlspecialchars($routineGroup['title']); ?></span>
+                                            <span class="overtime-routine-count"><?php echo count($routineGroup['entries']); ?> miss<?php echo count($routineGroup['entries']) === 1 ? '' : 'es'; ?></span>
+                                        </summary>
+                                        <div class="overtime-card-list">
+                                            <?php foreach ($routineGroup['entries'] as $entry): ?>
+                                                <?php $occurTs = strtotime($entry['occurred_at']); ?>
+                                                <div class="overtime-card-row">
+                                                    <div class="ot-row-header">
+                                                        <span class="ot-task"><?php echo htmlspecialchars($entry['task_title']); ?></span>
+                                                        <span class="ot-time"><?php echo $occurTs ? date('g:i A', $occurTs) : 'Time unavailable'; ?></span>
+                                                    </div>
+                                                    <div class="ot-meta"><strong>Child:</strong> <?php echo htmlspecialchars($entry['child_display_name']); ?></div>
+                                                    <div class="ot-meta">
+                                                        <strong>Scheduled:</strong> <?php echo $formatDuration($entry['scheduled_seconds']); ?>
+                                                        <strong>Actual:</strong> <?php echo $formatDuration($entry['actual_seconds']); ?>
+                                                    </div>
+                                                    <div class="ot-meta ot-overtime"><strong>Overtime:</strong> <?php echo $formatDuration($entry['overtime_seconds']); ?></div>
+                                                </div>
+                                            <?php endforeach; ?>
+                                        </div>
+                                    </details>
+                                <?php endforeach; ?>
+                            </div>
+                        </details>
+                        <?php $firstDate = false; ?>
+                    <?php endforeach; ?>
+                </div>
             <?php else: ?>
                 <p class="overtime-empty">No overtime events have been logged yet.</p>
             <?php endif; ?>
+         </div>
+         <div class="routine-log-modal" id="routine-log-modal" aria-hidden="true" role="dialog" aria-modal="true">
+            <div class="routine-log-dialog">
+                <div class="routine-log-header">
+                    <h4 class="routine-log-title" data-role="routine-log-title">Routine Overtime</h4>
+                    <button type="button" class="routine-log-close" data-role="routine-log-close" aria-label="Close">×</button>
+                </div>
+                <div class="routine-log-body" data-role="routine-log-body"></div>
+            </div>
          </div>
       </div>
       <div class="active-rewards">
@@ -763,15 +1146,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       </div>
       <div class="redeemed-rewards">
          <h2>Redeemed Rewards</h2>
-         <?php if (isset($data['redeemed_rewards']) && is_array($data['redeemed_rewards']) && !empty($data['redeemed_rewards'])): ?>
-               <?php foreach ($data['redeemed_rewards'] as $reward): ?>
-                  <div class="reward-item">
-                     <p>Reward: <?php echo htmlspecialchars($reward['title']); ?> (<?php echo htmlspecialchars($reward['point_cost']); ?> points)</p>
-                     <p>Description: <?php echo htmlspecialchars($reward['description']); ?></p>
-                     <p>Redeemed by: <?php echo htmlspecialchars($reward['child_username'] ?? 'Unknown'); ?></p>
-                     <p>Redeemed on: <?php echo !empty($reward['redeemed_on']) ? htmlspecialchars(date('m/d/Y h:i A', strtotime($reward['redeemed_on']))) : 'Date unavailable'; ?></p>
-                  </div>
-               <?php endforeach; ?>
+          <?php if (isset($data['redeemed_rewards']) && is_array($data['redeemed_rewards']) && !empty($data['redeemed_rewards'])): ?>
+                <?php foreach ($data['redeemed_rewards'] as $reward): ?>
+                   <div class="reward-item">
+                      <p>Reward: <?php echo htmlspecialchars($reward['title']); ?> (<?php echo htmlspecialchars($reward['point_cost']); ?> points)</p>
+                      <p>Description: <?php echo htmlspecialchars($reward['description']); ?></p>
+                      <p>Redeemed by: <?php echo htmlspecialchars($reward['child_username'] ?? 'Unknown'); ?></p>
+                      <p>Redeemed on: <?php echo !empty($reward['redeemed_on']) ? htmlspecialchars(date('m/d/Y h:i A', strtotime($reward['redeemed_on']))) : 'Date unavailable'; ?></p>
+                      <?php if (!empty($reward['fulfilled_on'])): ?>
+                          <p>Fulfilled on: <?php echo htmlspecialchars(date('m/d/Y h:i A', strtotime($reward['fulfilled_on']))); ?><?php if (!empty($reward['fulfilled_by_name'])): ?> by <?php echo htmlspecialchars($reward['fulfilled_by_name']); ?><?php endif; ?></p>
+                      <?php else: ?>
+                          <p class="awaiting-label">Awaiting fulfillment by parent.</p>
+                          <form method="POST" action="dashboard_parent.php" class="inline-form">
+                              <input type="hidden" name="reward_id" value="<?php echo (int) $reward['id']; ?>">
+                              <button type="submit" name="fulfill_reward" class="button approve-button">Mark Fulfilled</button>
+                          </form>
+                      <?php endif; ?>
+                   </div>
+                <?php endforeach; ?>
          <?php else: ?>
                <p>No rewards redeemed yet.</p>
          <?php endif; ?>
@@ -896,9 +1288,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                <?php endforeach; ?>
          <?php endif; ?>
       </div>
-   </main>
-   <footer>
-      <p>Child Task and Chores App - Ver 3.10.14</p>
+    </main>
+    <div class="adjust-modal-backdrop" data-role="adjust-modal">
+        <div class="adjust-modal">
+            <header>
+                <h3 data-role="adjust-title">Adjust Points</h3>
+                <button type="button" class="adjust-modal-close" data-action="close-adjust">&times;</button>
+            </header>
+            <form method="POST">
+                <div class="form-group">
+                    <label for="adjust_points_input">Points (positive or negative)</label>
+                    <div class="adjust-control">
+                        <button type="button" data-action="decrement-points">-</button>
+                        <input id="adjust_points_input" type="number" name="points_delta" step="1" value="1" required>
+                        <button type="button" data-action="increment-points">+</button>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="adjust_reason_input">Reason</label>
+                    <input id="adjust_reason_input" type="text" name="point_reason" maxlength="255" placeholder="e.g., Helped sibling, behavior reminder">
+                </div>
+                <input type="hidden" name="child_user_id" data-role="adjust-child-id">
+                <input type="hidden" name="adjust_child_points" value="1">
+                <div class="points-adjust-actions">
+                    <button type="submit" class="button approve-button">Apply</button>
+                </div>
+            </form>
+            <div class="adjust-history" data-role="adjust-history">
+                <h4>Recent adjustments</h4>
+                <ul data-role="adjust-history-list"></ul>
+            </div>
+        </div>
+    </div>
+    <footer>
+      <p>Child Task and Chores App - Ver 3.10.15</p>
    </footer>
 </body>
 </html>

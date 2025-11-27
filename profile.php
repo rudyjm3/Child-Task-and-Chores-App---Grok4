@@ -313,6 +313,11 @@ if ($display_name === '') {
     $display_name = $user['username'];
 }
 $child_display_name = $profile['child_name'] ?? $display_name;
+
+$bodyClasses = [];
+if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
+    $bodyClasses[] = 'child-theme';
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -320,7 +325,7 @@ $child_display_name = $profile['child_name'] ?? $display_name;
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Profile - Child Task and Chore App</title>
-    <link rel="stylesheet" href="css/main.css">
+    <link rel="stylesheet" href="css/main.css?v=3.10.15">
     <style>
         .profile { padding: 20px; max-width: 600px; margin: 0 auto; text-align: center; }
         .profile-form { background: #f5f5f5; padding: 20px; border-radius: 8px; }
@@ -404,7 +409,7 @@ $child_display_name = $profile['child_name'] ?? $display_name;
         });
     </script>
 </head>
-<body>
+<body<?php echo !empty($bodyClasses) ? ' class="' . implode(' ', $bodyClasses) . '"' : ''; ?>>
     <div class="profile">
         <h1>Profile</h1>
         <?php if (isset($message)) echo "<p>$message</p>"; ?>

@@ -42,7 +42,20 @@ function getFamilyRootId($user_id) {
     $stmt->execute([':id' => $user_id]);
     $main_parent_id = $stmt->fetchColumn();
 
-    return $main_parent_id ?: $user_id;
+    if ($main_parent_id) {
+        return (int) $main_parent_id;
+    }
+
+    if ($role === 'child') {
+        $childStmt = $db->prepare("SELECT parent_user_id FROM child_profiles WHERE child_user_id = :id LIMIT 1");
+        $childStmt->execute([':id' => $user_id]);
+        $parentId = $childStmt->fetchColumn();
+        if ($parentId) {
+            return (int) $parentId;
+        }
+    }
+
+    return $user_id;
 }
 
 // Retrieve parent title (mother/father) for a user if assigned
@@ -217,11 +230,12 @@ function createChildProfile($parent_user_id, $first_name, $last_name, $child_use
         $age = calculateAge($birthday);
 
         // Create child profile
+        $family_root_id = getFamilyRootId($parent_user_id);
         $stmt = $db->prepare("INSERT INTO child_profiles (child_user_id, parent_user_id, child_name, birthday, age, avatar) 
                              VALUES (:child_user_id, :parent_id, :child_name, :birthday, :age, :avatar)");
         if (!$stmt->execute([
             ':child_user_id' => $child_user_id,
-            ':parent_id' => $parent_user_id,
+            ':parent_id' => $family_root_id,
             ':child_name' => $first_name . ' ' . $last_name,
             ':birthday' => $birthday,
             ':age' => $age,
@@ -363,12 +377,28 @@ function getDashboardData($user_id) {
             }
         }
 
+        // Determine all parent IDs in this family (main + linked adults)
+        $family_parent_ids = [$main_parent_id];
+        $linkedParentStmt = $db->prepare("SELECT linked_user_id FROM family_links WHERE main_parent_id = :parent_id");
+        $linkedParentStmt->execute([':parent_id' => $main_parent_id]);
+        $linkedParents = $linkedParentStmt->fetchAll(PDO::FETCH_COLUMN) ?: [];
+        foreach ($linkedParents as $linkedId) {
+            $family_parent_ids[] = (int) $linkedId;
+        }
+        $family_parent_ids = array_values(array_unique(array_filter($family_parent_ids, static function ($value) {
+            return $value !== null && $value !== '';
+        })));
+        if (empty($family_parent_ids)) {
+            $family_parent_ids = [$main_parent_id];
+        }
+        $parentPlaceholders = implode(',', array_fill(0, count($family_parent_ids), '?'));
+
         // Children for this family
         $stmt = $db->prepare("SELECT cp.id, cp.child_user_id, COALESCE(CONCAT(u.first_name, ' ', u.last_name), u.name, u.username) AS display_name, cp.avatar, cp.birthday, cp.child_name
                                 FROM child_profiles cp
                                 JOIN users u ON cp.child_user_id = u.id
-                                WHERE cp.parent_user_id = :parent_id");
-        $stmt->execute([':parent_id' => $main_parent_id]);
+                                WHERE cp.parent_user_id IN ($parentPlaceholders)");
+        $stmt->execute($family_parent_ids);
         $data['children'] = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
         $childIds = array_column($data['children'], 'child_user_id');
@@ -422,6 +452,45 @@ function getDashboardData($user_id) {
             while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
                 $rewardsClaimed[(int)$row['child_user_id']] = (int)$row['rewards_claimed'];
             }
+
+            // Points adjustments history (latest 10 per child)
+            try {
+                $db->exec("
+                    CREATE TABLE IF NOT EXISTS child_point_adjustments (
+                        id INT AUTO_INCREMENT PRIMARY KEY,
+                        child_user_id INT NOT NULL,
+                        delta_points INT NOT NULL,
+                        reason VARCHAR(255) NOT NULL,
+                        created_by INT NOT NULL,
+                        created_at DATETIME NOT NULL,
+                        INDEX idx_child_created (child_user_id, created_at)
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+                ");
+                $adjStmt = $db->prepare("
+                    SELECT child_user_id, delta_points, reason, created_at
+                    FROM child_point_adjustments
+                    WHERE child_user_id IN ($placeholders)
+                    ORDER BY created_at DESC
+                ");
+                $adjStmt->execute($childIds);
+                $adjustmentsByChild = [];
+                while ($row = $adjStmt->fetch(PDO::FETCH_ASSOC)) {
+                    $cid = (int)$row['child_user_id'];
+                    if (!isset($adjustmentsByChild[$cid])) {
+                        $adjustmentsByChild[$cid] = [];
+                    }
+                    if (count($adjustmentsByChild[$cid]) < 10) {
+                        $adjustmentsByChild[$cid][] = [
+                            'delta_points' => (int)$row['delta_points'],
+                            'reason' => $row['reason'],
+                            'created_at' => $row['created_at']
+                        ];
+                    }
+                }
+            } catch (Exception $e) {
+                error_log("Failed to load point adjustments: " . $e->getMessage());
+                $adjustmentsByChild = [];
+            }
         }
 
         $maxChildPoints = max(100, $maxChildPoints);
@@ -437,6 +506,7 @@ function getDashboardData($user_id) {
             $child['goals_assigned'] = $childGoalStats['goal_count'];
             $child['goal_target_points'] = $childGoalStats['total_target_points'];
             $child['rewards_claimed'] = $rewardsClaimed[$childId] ?? 0;
+            $child['point_adjustments'] = $adjustmentsByChild[$childId] ?? [];
         }
         unset($child);
         $data['max_child_points'] = $maxChildPoints;
@@ -445,6 +515,37 @@ function getDashboardData($user_id) {
         $stmt = $db->prepare("SELECT id, title, description, point_cost, created_on FROM rewards WHERE parent_user_id = :parent_id AND status = 'available'");
         $stmt->execute([':parent_id' => $main_parent_id]);
         $data['active_rewards'] = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+        // Recently redeemed rewards so parents can review them
+        $stmt = $db->prepare("
+            SELECT 
+                r.id,
+                r.title,
+                r.description,
+                r.point_cost,
+                r.redeemed_on,
+                r.fulfilled_on,
+                COALESCE(
+                    NULLIF(TRIM(CONCAT(COALESCE(child.first_name, ''), ' ', COALESCE(child.last_name, ''))), ''),
+                    NULLIF(child.name, ''),
+                    child.username,
+                    'Unknown'
+                ) AS child_username,
+                COALESCE(
+                    NULLIF(TRIM(CONCAT(COALESCE(fulfiller.first_name, ''), ' ', COALESCE(fulfiller.last_name, ''))), ''),
+                    NULLIF(fulfiller.name, ''),
+                    fulfiller.username,
+                    'Unknown'
+                ) AS fulfilled_by_name
+            FROM rewards r
+            LEFT JOIN users child ON r.redeemed_by = child.id
+            LEFT JOIN users fulfiller ON r.fulfilled_by = fulfiller.id
+            WHERE r.parent_user_id = :parent_id AND r.status = 'redeemed'
+            ORDER BY COALESCE(r.redeemed_on, r.created_on) DESC
+            LIMIT 25
+        ");
+        $stmt->execute([':parent_id' => $main_parent_id]);
+        $data['redeemed_rewards'] = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
         // Pending approvals across this parent's children
         $stmt = $db->prepare("SELECT 
@@ -463,8 +564,8 @@ function getDashboardData($user_id) {
                               JOIN child_profiles cp ON g.child_user_id = cp.child_user_id
                               JOIN users u ON g.child_user_id = u.id
                               LEFT JOIN users creator ON g.created_by = creator.id
-                              WHERE cp.parent_user_id = :parent_id AND g.status = 'pending_approval'");
-        $stmt->execute([':parent_id' => $main_parent_id]);
+                              WHERE cp.parent_user_id IN ($parentPlaceholders) AND g.status = 'pending_approval'");
+        $stmt->execute($family_parent_ids);
         $data['pending_approvals'] = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
         // Sum total points across children
@@ -534,12 +635,17 @@ function getDashboardData($user_id) {
         $stmt->execute([':child_id' => $user_id]);
         $data['completed_goals'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-        $stmt = $db->prepare("SELECT r.id, r.title, r.description, r.point_cost, COALESCE(u.name, u.username) as child_username, r.redeemed_on 
+        $stmt = $db->prepare("SELECT r.id, r.title, r.description, r.point_cost, COALESCE(u.name, u.username) as child_username, r.redeemed_on, r.fulfilled_on
                      FROM rewards r 
                      LEFT JOIN users u ON r.redeemed_by = u.id 
                      WHERE r.redeemed_by = :child_id AND r.status = 'redeemed'");
         $stmt->execute([':child_id' => $user_id]);
         $data['redeemed_rewards'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        ensureChildNotificationsTable();
+        $notifStmt = $db->prepare("SELECT id, type, message, link_url, is_read, created_at FROM child_notifications WHERE child_user_id = :child_id ORDER BY is_read ASC, created_at DESC LIMIT 50");
+        $notifStmt->execute([':child_id' => $user_id]);
+        $data['notifications'] = $notifStmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
     return $data;
@@ -610,16 +716,50 @@ function completeTask($task_id, $child_id, $photo_proof = null) {
     return $stmt->execute([':photo_proof' => $photo_proof, ':id' => $task_id, ':child_id' => $child_id]);
 }
 
+function ensureChildNotificationsTable() {
+    global $db;
+    $db->exec("
+        CREATE TABLE IF NOT EXISTS child_notifications (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            child_user_id INT NOT NULL,
+            type VARCHAR(64) NOT NULL,
+            message VARCHAR(255) NOT NULL,
+            link_url VARCHAR(255) NULL,
+            is_read TINYINT(1) NOT NULL DEFAULT 0,
+            created_at DATETIME NOT NULL,
+            INDEX idx_child_read (child_user_id, is_read, created_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    ");
+}
+
+function addChildNotification($child_id, $type, $message, $link_url = null) {
+    global $db;
+    ensureChildNotificationsTable();
+    $stmt = $db->prepare("INSERT INTO child_notifications (child_user_id, type, message, link_url, created_at) VALUES (:child_id, :type, :message, :link_url, NOW())");
+    $stmt->execute([
+        ':child_id' => $child_id,
+        ':type' => substr((string)$type, 0, 64),
+        ':message' => substr((string)$message, 0, 255),
+        ':link_url' => $link_url ? substr((string)$link_url, 0, 255) : null
+    ]);
+}
+
 // Approve a task
 function approveTask($task_id) {
     global $db;
-    $stmt = $db->prepare("SELECT child_user_id, points FROM tasks WHERE id = :id AND status = 'completed'");
+    $stmt = $db->prepare("SELECT child_user_id, points, title FROM tasks WHERE id = :id AND status = 'completed'");
     $stmt->execute([':id' => $task_id]);
     $task = $stmt->fetch(PDO::FETCH_ASSOC);
     if ($task) {
         $stmt = $db->prepare("UPDATE tasks SET status = 'approved' WHERE id = :id");
         if ($stmt->execute([':id' => $task_id])) {
             updateChildPoints($task['child_user_id'], $task['points']);
+            addChildNotification(
+                (int)$task['child_user_id'],
+                'task_approved',
+                'Task approved: ' . ($task['title'] ?? 'Task'),
+                'task.php'
+            );
             return true;
         }
     }
@@ -671,6 +811,38 @@ function redeemReward($child_user_id, $reward_id) {
         $db->rollBack();
         return false;
     }
+}
+
+function fulfillReward($reward_id, $parent_user_id, $actor_user_id) {
+    global $db;
+    $stmt = $db->prepare("
+        UPDATE rewards
+        SET fulfilled_on = NOW(), fulfilled_by = :actor_id
+        WHERE id = :reward_id
+          AND parent_user_id = :parent_id
+          AND status = 'redeemed'
+          AND fulfilled_on IS NULL
+    ");
+    $stmt->execute([
+        ':actor_id' => $actor_user_id,
+        ':reward_id' => $reward_id,
+        ':parent_id' => $parent_user_id
+    ]);
+    $updated = $stmt->rowCount() > 0;
+    if ($updated) {
+        $fetch = $db->prepare("SELECT redeemed_by, title FROM rewards WHERE id = :reward_id");
+        $fetch->execute([':reward_id' => $reward_id]);
+        $row = $fetch->fetch(PDO::FETCH_ASSOC);
+        if ($row && !empty($row['redeemed_by'])) {
+            addChildNotification(
+                (int)$row['redeemed_by'],
+                'reward_fulfilled',
+                'Reward fulfilled: ' . ($row['title'] ?? 'Reward'),
+                'dashboard_child.php'
+            );
+        }
+    }
+    return $updated;
 }
 
 // Create goal
@@ -732,7 +904,7 @@ function approveGoal($goal_id, $parent_user_id) {
     try {
         $db->beginTransaction();
         
-        $stmt = $db->prepare("SELECT child_user_id, target_points 
+        $stmt = $db->prepare("SELECT child_user_id, target_points, title 
                              FROM goals 
                              WHERE id = :goal_id 
                              AND parent_user_id = :parent_id 
@@ -753,6 +925,12 @@ function approveGoal($goal_id, $parent_user_id) {
             
             // Award points to child
             updateChildPoints($goal['child_user_id'], $goal['target_points']);
+            addChildNotification(
+                (int)$goal['child_user_id'],
+                'goal_approved',
+                'Goal approved: ' . ($goal['title'] ?? 'Goal'),
+                'dashboard_child.php'
+            );
             
             $db->commit();
             return true;
@@ -768,26 +946,62 @@ function approveGoal($goal_id, $parent_user_id) {
 }
 
 // Add back rejectGoal function
-function rejectGoal($goal_id, $parent_user_id, $rejection_comment) {
+function rejectGoal($goal_id, $parent_user_id, $rejection_comment, &$error = null) {
     global $db;
-    $stmt = $db->prepare("UPDATE goals 
-                         SET status = 'rejected', 
-                             rejected_at = NOW(), 
-                             rejection_comment = :comment 
-                         WHERE id = :goal_id 
-                         AND parent_user_id = :parent_id 
-                         AND status = 'pending_approval'");
-    return $stmt->execute([
-        ':goal_id' => $goal_id,
-        ':parent_id' => $parent_user_id,
-        ':comment' => $rejection_comment
-    ]);
+    try {
+        $detail = $db->prepare("SELECT child_user_id, title FROM goals WHERE id = :goal_id AND parent_user_id = :parent_id AND status = 'pending_approval'");
+        $detail->execute([
+            ':goal_id' => $goal_id,
+            ':parent_id' => $parent_user_id
+        ]);
+        $goal = $detail->fetch(PDO::FETCH_ASSOC);
+        if (!$goal) {
+            $error = 'No pending approval goal found for this parent.';
+            return false; // No pending approval to reject
+        }
+
+        $stmt = $db->prepare("UPDATE goals 
+                             SET status = 'rejected', 
+                                 rejected_at = NOW(), 
+                                 rejection_comment = :comment 
+                             WHERE id = :goal_id 
+                             AND parent_user_id = :parent_id 
+                             AND status = 'pending_approval'");
+        $stmt->execute([
+            ':goal_id' => $goal_id,
+            ':parent_id' => $parent_user_id,
+            ':comment' => $rejection_comment
+        ]);
+        if ($stmt->rowCount() > 0) {
+            addChildNotification(
+                (int)$goal['child_user_id'],
+                'goal_rejected',
+                'Goal rejected: ' . ($goal['title'] ?? 'Goal'),
+                'dashboard_child.php'
+            );
+            return true;
+        }
+        $error = 'Goal could not be updated.';
+        return false;
+    } catch (Exception $e) {
+        $error = $e->getMessage();
+        error_log("Goal rejection failed: " . $e->getMessage());
+        return false;
+    }
 }
 
 // **[New] Routine Task Functions **
-function createRoutineTask($parent_user_id, $title, $description, $time_limit, $point_value, $category, $icon_url = null, $audio_url = null, $creator_user_id = null) {
+function createRoutineTask($parent_user_id, $title, $description, $time_limit, $point_value, $category, $minimum_seconds = null, $minimum_enabled = 0, $icon_url = null, $audio_url = null, $creator_user_id = null) {
     global $db;
-    $stmt = $db->prepare("INSERT INTO routine_tasks (parent_user_id, title, description, time_limit, point_value, category, icon_url, audio_url, created_by) VALUES (:parent_id, :title, :description, :time_limit, :point_value, :category, :icon_url, :audio_url, :created_by)");
+    if ($minimum_seconds !== null) {
+        $minimum_seconds = max(0, (int) $minimum_seconds);
+    }
+    $minimum_enabled = $minimum_enabled ? 1 : 0;
+    if ($minimum_seconds === null || $minimum_seconds === 0) {
+        $minimum_seconds = null;
+        $minimum_enabled = 0;
+    }
+    $stmt = $db->prepare("INSERT INTO routine_tasks (parent_user_id, title, description, time_limit, point_value, category, minimum_seconds, minimum_enabled, icon_url, audio_url, created_by) VALUES (:parent_id, :title, :description, :time_limit, :point_value, :category, :minimum_seconds, :minimum_enabled, :icon_url, :audio_url, :created_by)");
     return $stmt->execute([
         ':parent_id' => $parent_user_id,
         ':title' => $title,
@@ -795,6 +1009,8 @@ function createRoutineTask($parent_user_id, $title, $description, $time_limit, $
         ':time_limit' => $time_limit,
         ':point_value' => $point_value,
         ':category' => $category,
+        ':minimum_seconds' => $minimum_seconds,
+        ':minimum_enabled' => $minimum_enabled,
         ':icon_url' => $icon_url,
         ':audio_url' => $audio_url,
         ':created_by' => $creator_user_id ?? $parent_user_id
@@ -881,30 +1097,98 @@ function replaceRoutineTasks($routine_id, array $tasks) {
 
 function getRoutinePreferences($parent_user_id) {
     global $db;
-    $stmt = $db->prepare("SELECT adaptive_warnings_enabled, sub_timer_label FROM routine_preferences WHERE parent_user_id = :parent LIMIT 1");
+    $stmt = $db->prepare("SELECT timer_warnings_enabled, sub_timer_label, show_countdown, progress_style, sound_effects_enabled, background_music_enabled FROM routine_preferences WHERE parent_user_id = :parent LIMIT 1");
     $stmt->execute([':parent' => $parent_user_id]);
     $prefs = $stmt->fetch(PDO::FETCH_ASSOC);
     if (!$prefs) {
         return [
-            'adaptive_warnings_enabled' => 1,
-            'sub_timer_label' => 'hurry_goal'
+            'timer_warnings_enabled' => 1,
+            'sub_timer_label' => 'hurry_goal',
+            'show_countdown' => 1,
+            'progress_style' => 'bar',
+            'sound_effects_enabled' => 1,
+            'background_music_enabled' => 1,
+            '__from_db' => false,
         ];
     }
-    $prefs['adaptive_warnings_enabled'] = (int) $prefs['adaptive_warnings_enabled'];
+
+    $prefs['timer_warnings_enabled'] = (int) $prefs['timer_warnings_enabled'];
+
+    if (!isset($prefs['sub_timer_label']) || $prefs['sub_timer_label'] === '') {
+        $prefs['sub_timer_label'] = 'hurry_goal';
+    }
+
+    if (!array_key_exists('show_countdown', $prefs)) {
+        $prefs['show_countdown'] = 1;
+    }
+    $prefs['show_countdown'] = (int) $prefs['show_countdown'];
+
+    if (!isset($prefs['progress_style']) || !in_array($prefs['progress_style'], ['bar', 'circle', 'pie'], true)) {
+        $prefs['progress_style'] = 'bar';
+    }
+
+    if (!array_key_exists('sound_effects_enabled', $prefs)) {
+        $prefs['sound_effects_enabled'] = 1;
+    }
+    $prefs['sound_effects_enabled'] = (int) $prefs['sound_effects_enabled'];
+
+    if (!array_key_exists('background_music_enabled', $prefs)) {
+        $prefs['background_music_enabled'] = 1;
+    }
+    $prefs['background_music_enabled'] = (int) $prefs['background_music_enabled'];
+
+    $prefs['__from_db'] = true;
+
     return $prefs;
 }
 
-function saveRoutinePreferences($parent_user_id, $adaptive_warnings_enabled, $sub_timer_label) {
+function saveRoutinePreferences($parent_user_id, $timer_warnings_enabled, $sub_timer_label, $show_countdown, $progress_style = 'bar', $sound_effects_enabled = 1, $background_music_enabled = 1) {
     global $db;
-    $stmt = $db->prepare("INSERT INTO routine_preferences (parent_user_id, adaptive_warnings_enabled, sub_timer_label)
-                          VALUES (:parent_id, :adaptive, :label)
-                          ON DUPLICATE KEY UPDATE adaptive_warnings_enabled = VALUES(adaptive_warnings_enabled),
-                                                  sub_timer_label = VALUES(sub_timer_label)");
-    return $stmt->execute([
+    
+    // Validate label
+    $validLabels = [
+        'hurry_goal',
+        'adjusted_time',
+        'routine_target',
+        'quick_finish',
+        'new_limit'
+    ];
+    
+    if (!in_array($sub_timer_label, $validLabels)) {
+        error_log("Invalid timer label attempted: $sub_timer_label");
+        $sub_timer_label = 'hurry_goal'; // Fallback to default
+    }
+
+    if (!in_array($progress_style, ['bar', 'circle', 'pie'], true)) {
+        $progress_style = 'bar';
+    }
+    
+    $stmt = $db->prepare("INSERT INTO routine_preferences (parent_user_id, timer_warnings_enabled, sub_timer_label, show_countdown, progress_style, sound_effects_enabled, background_music_enabled)
+                          VALUES (:parent_id, :timer_enabled, :label, :countdown, :progress_style, :sfx_enabled, :music_enabled)
+                          ON DUPLICATE KEY UPDATE timer_warnings_enabled = VALUES(timer_warnings_enabled),
+                                                  sub_timer_label = VALUES(sub_timer_label),
+                                                  show_countdown = VALUES(show_countdown),
+                                                  progress_style = VALUES(progress_style),
+                                                  sound_effects_enabled = VALUES(sound_effects_enabled),
+                                                  background_music_enabled = VALUES(background_music_enabled)");
+    
+    $result = $stmt->execute([
         ':parent_id' => $parent_user_id,
-        ':adaptive' => $adaptive_warnings_enabled ? 1 : 0,
-        ':label' => $sub_timer_label
+        ':timer_enabled' => $timer_warnings_enabled ? 1 : 0,
+        ':label' => $sub_timer_label,
+        ':countdown' => $show_countdown ? 1 : 0,
+        ':progress_style' => $progress_style,
+        ':sfx_enabled' => $sound_effects_enabled ? 1 : 0,
+        ':music_enabled' => $background_music_enabled ? 1 : 0
     ]);
+    
+    if ($result) {
+        error_log("Routine preferences updated for parent $parent_user_id: timer_warnings=$timer_warnings_enabled, label=$sub_timer_label, show_countdown=$show_countdown, style=$progress_style, sfx=$sound_effects_enabled, music=$background_music_enabled");
+    } else {
+        error_log("Failed to update routine preferences for parent $parent_user_id");
+    }
+    
+    return $result;
 }
 
 function logRoutineOvertime($routine_id, $routine_task_id, $child_user_id, $scheduled_seconds, $actual_seconds, $overtime_seconds) {
@@ -1048,6 +1332,19 @@ function updateChildPoints($child_id, $points) {
     }
 }
 
+function getChildTotalPoints($child_id) {
+    global $db;
+    try {
+        $stmt = $db->prepare("SELECT total_points FROM child_points WHERE child_user_id = :child_id");
+        $stmt->execute([':child_id' => $child_id]);
+        $points = $stmt->fetchColumn();
+        return $points !== false ? (int)$points : 0;
+    } catch (Exception $e) {
+        error_log("Failed to fetch points for child $child_id: " . $e->getMessage());
+        return 0;
+    }
+}
+
 // **[Revised] Routine Functions (now use routine_task_id instead of task_id) **
 function createRoutine($parent_user_id, $child_user_id, $title, $start_time, $end_time, $recurrence, $bonus_points, $creator_user_id = null) {
     global $db;
@@ -1126,9 +1423,18 @@ function getRoutines($user_id) {
                     NULLIF(creator.name, ''),
                     creator.username,
                     'Unknown'
-                ) AS creator_display_name
+                ) AS creator_display_name,
+                COALESCE(
+                    NULLIF(TRIM(CONCAT(COALESCE(child.first_name, ''), ' ', COALESCE(child.last_name, ''))), ''),
+                    NULLIF(child.name, ''),
+                    child.username,
+                    'Unknown'
+                ) AS child_display_name,
+                cp.avatar AS child_avatar
             FROM routines r
             LEFT JOIN users creator ON r.created_by = creator.id
+            LEFT JOIN users child ON r.child_user_id = child.id
+            LEFT JOIN child_profiles cp ON cp.child_user_id = child.id
             WHERE r.parent_user_id = :parent_id
         ");
         $stmt->execute([':parent_id' => $parent_id]);
@@ -1141,9 +1447,18 @@ function getRoutines($user_id) {
                     NULLIF(creator.name, ''),
                     creator.username,
                     'Unknown'
-                ) AS creator_display_name
+                ) AS creator_display_name,
+                COALESCE(
+                    NULLIF(TRIM(CONCAT(COALESCE(child.first_name, ''), ' ', COALESCE(child.last_name, ''))), ''),
+                    NULLIF(child.name, ''),
+                    child.username,
+                    'Unknown'
+                ) AS child_display_name,
+                cp.avatar AS child_avatar
             FROM routines r
             LEFT JOIN users creator ON r.created_by = creator.id
+            LEFT JOIN users child ON r.child_user_id = child.id
+            LEFT JOIN child_profiles cp ON cp.child_user_id = child.id
             WHERE r.child_user_id = :child_id
         ");
         $stmt->execute([':child_id' => $user_id]);
@@ -1185,7 +1500,7 @@ function getRoutineWithTasks($routine_id) {
     return $routine;
 }
 
-function completeRoutine($routine_id, $child_id) {
+function completeRoutine($routine_id, $child_id, $grant_bonus = true) {
     global $db;
     try {
         $db->beginTransaction();
@@ -1197,19 +1512,17 @@ function completeRoutine($routine_id, $child_id) {
             return false;
         }
 
-        // Check if current time is within start-end
-        $current_time = new DateTime();
-        $start = new DateTime(date('Y-m-d') . ' ' . $routine['start_time']);
-        $end = new DateTime(date('Y-m-d') . ' ' . $routine['end_time']);
-        if ($end < $start) {
-            $end->modify('+1 day');
+        $bonus = 0;
+        if ($grant_bonus) {
+            $bonus = max(0, (int) $routine['bonus_points']);
         }
-        $bonus = ($current_time >= $start && $current_time <= $end) ? $routine['bonus_points'] : 0;
 
         // Award bonus to child's points
-        updateChildPoints($child_id, $bonus);
+        if ($bonus > 0) {
+            updateChildPoints($child_id, $bonus);
+        }
 
-        error_log("Routine $routine_id completed by child $child_id with bonus $bonus");
+        error_log("Routine $routine_id completed by child $child_id with bonus $bonus (grant flag " . ($grant_bonus ? 'true' : 'false') . ")");
 
         $db->commit();
         return $bonus;
@@ -1414,9 +1727,12 @@ try {
    created_on TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
    redeemed_by INT NULL,
    redeemed_on DATETIME NULL,
+   fulfilled_on DATETIME NULL,
+   fulfilled_by INT NULL,
    created_by INT NULL,
    FOREIGN KEY (parent_user_id) REFERENCES users(id) ON DELETE CASCADE,
    FOREIGN KEY (redeemed_by) REFERENCES users(id) ON DELETE SET NULL,
+   FOREIGN KEY (fulfilled_by) REFERENCES users(id) ON DELETE SET NULL,
    FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
    )";
    $db->exec($sql);
@@ -1425,6 +1741,8 @@ try {
    // Add created_by to existing rewards if not exists
    $db->exec("ALTER TABLE rewards ADD COLUMN IF NOT EXISTS created_by INT NULL");
    error_log("Added/verified created_by in rewards");
+   $db->exec("ALTER TABLE rewards ADD COLUMN IF NOT EXISTS fulfilled_on DATETIME NULL");
+   $db->exec("ALTER TABLE rewards ADD COLUMN IF NOT EXISTS fulfilled_by INT NULL");
 
    // Create goals table with corrected constraints
    $sql = "CREATE TABLE IF NOT EXISTS goals (
@@ -1540,8 +1858,12 @@ try {
     $sql = "CREATE TABLE IF NOT EXISTS routine_preferences (
         id INT AUTO_INCREMENT PRIMARY KEY,
         parent_user_id INT NOT NULL,
-        adaptive_warnings_enabled TINYINT(1) DEFAULT 1,
+        timer_warnings_enabled TINYINT(1) DEFAULT 1,
         sub_timer_label VARCHAR(50) DEFAULT 'hurry_goal',
+        show_countdown TINYINT(1) DEFAULT 1,
+        progress_style VARCHAR(12) DEFAULT 'bar',
+        sound_effects_enabled TINYINT(1) DEFAULT 1,
+        background_music_enabled TINYINT(1) DEFAULT 1,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         UNIQUE KEY uniq_parent (parent_user_id),
@@ -1549,6 +1871,22 @@ try {
     )";
     $db->exec($sql);
     error_log("Created/verified routine_preferences table successfully");
+    // Ensure progress_style column exists
+    try {
+        $db->exec("ALTER TABLE routine_preferences ADD COLUMN IF NOT EXISTS progress_style VARCHAR(12) DEFAULT 'bar'");
+    } catch (PDOException $e) {
+        // ignore if not supported; table already created with column above
+    }
+    try {
+        $db->exec("ALTER TABLE routine_preferences ADD COLUMN IF NOT EXISTS sound_effects_enabled TINYINT(1) DEFAULT 1");
+    } catch (PDOException $e) {
+        // ignore if not supported; table already created with column above
+    }
+    try {
+        $db->exec("ALTER TABLE routine_preferences ADD COLUMN IF NOT EXISTS background_music_enabled TINYINT(1) DEFAULT 1");
+    } catch (PDOException $e) {
+        // ignore if not supported; table already created with column above
+    }
 
     // Create routine_overtime_logs table if not exists
     $sql = "CREATE TABLE IF NOT EXISTS routine_overtime_logs (
@@ -1635,3 +1973,5 @@ $sql = "ALTER TABLE child_profiles
 $db->exec($sql);
 
 ?>
+
+

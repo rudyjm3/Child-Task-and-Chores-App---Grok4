@@ -80,6 +80,11 @@ if (!$welcome_role_label) {
         $welcome_role_label = ucfirst(str_replace('_', ' ', $fallback_role));
     }
 }
+
+$bodyClasses = [];
+if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
+    $bodyClasses[] = 'child-theme';
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -87,7 +92,7 @@ if (!$welcome_role_label) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Task Management</title>
-    <link rel="stylesheet" href="css/main.css">
+      <link rel="stylesheet" href="css/main.css?v=3.10.15">
     <style>
         .task-form, .task-list {
             padding: 20px;
@@ -414,7 +419,7 @@ if (!$welcome_role_label) {
         }
     </script>
 </head>
-<body>
+<body<?php echo !empty($bodyClasses) ? ' class="' . implode(' ', $bodyClasses) . '"' : ''; ?>>
     <header>
          <h1>Task Management</h1>
         <p>Welcome, <?php echo htmlspecialchars($_SESSION['name'] ?? $_SESSION['username'] ?? 'Unknown User'); ?>
@@ -586,7 +591,7 @@ if (!$welcome_role_label) {
         </div>
     </main>
     <footer>
-      <p>Child Task and Chore App - Ver 3.10.14</p>
-    </footer>
+      <p>Child Task and Chore App - Ver 3.10.15</p>
+   </footer>
 </body>
 </html>

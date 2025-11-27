@@ -1,7 +1,9 @@
 /* css/main.css - Global styles for the app
+   Version: 3.10.15
    Purpose: Ensure mobile/tablet/desktop compatibility and accessibility
    Notes: Builds on reset.css with media queries and high-contrast options */
 
+@import url('https://fonts.googleapis.com/css2?family=Sigmar+One&display=swap');
 @import url('reset.css');
 
 /* App-specific styles */
@@ -12,6 +14,37 @@ body {
   max-width: 1200px;
   margin: 0 auto;
   padding: 20px;
+}
+
+body.child-theme h1,
+body.child-theme h2,
+body.child-theme h3,
+body.child-theme h4,
+body.child-theme h5,
+body.child-theme h6,
+body.child-theme .button,
+body.child-theme button,
+body.child-theme input[type="submit"],
+body.child-theme .routine-primary-button,
+body.child-theme .routine-flow-close,
+body.child-theme .routine-flow-title,
+body.child-theme .routine-flow-next-inline .value,
+body.child-theme .points-progress-title,
+body.child-theme .points-progress-total,
+body.child-theme .points-progress-value,
+body.child-theme .points-extra,
+body.child-theme .status-summary strong,
+body.child-theme .summary-footer span,
+body.child-theme .summary-footer strong,
+body.child-theme .summary-bonus,
+body.child-theme .card-actions .button,
+body.child-theme .start-next-button,
+body.child-theme .routine-card header h3,
+body.child-theme .points-progress-wrap + .points-extra {
+  font-family: 'Sigmar One', cursive;
+  font-weight: 500;
+  letter-spacing: 0.03em;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
 }
 
 header,

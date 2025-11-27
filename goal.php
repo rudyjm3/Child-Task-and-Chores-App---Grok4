@@ -91,10 +91,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $message = "Failed to approve goal.";
                 }
             } else {
-                if (rejectGoal($goal_id, $family_root_id, $rejection_comment)) {
+                $rejectError = null;
+                if (rejectGoal($goal_id, $family_root_id, $rejection_comment, $rejectError)) {
                     $message = "Goal rejected.";
                 } else {
-                    $message = "Failed to reject goal.";
+                    $message = "Failed to reject goal." . ($rejectError ? " Reason: " . htmlspecialchars($rejectError) : "");
                 }
             }
         }
@@ -238,6 +239,11 @@ if (!$welcome_role_label) {
         $welcome_role_label = ucfirst(str_replace('_', ' ', $fallback_role));
     }
 }
+
+$bodyClasses = [];
+if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
+    $bodyClasses[] = 'child-theme';
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -245,7 +251,7 @@ if (!$welcome_role_label) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Goal Management</title>
-    <link rel="stylesheet" href="css/main.css">
+    <link rel="stylesheet" href="css/main.css?v=3.10.15">
     <style>
         .goal-form, .goal-list {
             padding: 20px;
@@ -314,7 +320,7 @@ if (!$welcome_role_label) {
         }
     </style>
 </head>
-<body>
+<body<?php echo !empty($bodyClasses) ? ' class="' . implode(' ', $bodyClasses) . '"' : ''; ?>>
     <header>
         <h1>Goal Management</h1>
         <p>Welcome, <?php echo htmlspecialchars($_SESSION['name'] ?? $_SESSION['username'] ?? 'Unknown User'); ?>
@@ -477,7 +483,7 @@ if (!$welcome_role_label) {
         </div>
     </main>
     <footer>
-        <p>Child Task and Chore App - Ver 3.10.14</p>
+        <p>Child Task and Chore App - Ver 3.10.15</p>
     </footer>
 </body>
 </html>
