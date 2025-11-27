@@ -60,7 +60,7 @@ if (!$welcome_role_label) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Edit Goal</title>
-    <link rel="stylesheet" href="css/main.css?v=3.10.15">
+    <link rel="stylesheet" href="css/main.css?v=3.10.16">
     <style>
         .goal-form {
             padding: 20px;
@@ -134,7 +134,7 @@ if (!$welcome_role_label) {
         </div>
     </main>
     <footer>
-        <p>Child Task and Chore App - Ver 3.10.15</p>
+        <p>Child Task and Chore App - Ver 3.10.16</p>
     </footer>
 </body>
 </html>
