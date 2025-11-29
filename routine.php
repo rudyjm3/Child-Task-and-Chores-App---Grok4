@@ -961,12 +961,15 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
         .flow-progress-track[data-style="circle"],
         .flow-progress-track[data-style="pie"] {
             --track-fill: #43d67e;
+            --min-ratio: 0;
             width: min(220px, 70vw);
             height: min(220px, 70vw);
             border-radius: 50%;
             margin: 0 auto;
             border-width: 0;
-            background: conic-gradient(var(--track-fill) calc(var(--progress-ratio, 0) * 1turn), rgba(255,255,255,0.18) 0);
+            background:
+                conic-gradient(var(--track-fill) calc(var(--progress-ratio, 0) * 1turn), rgba(255,255,255,0.18) 0),
+                conic-gradient(rgba(252,185,50,0.75) calc(var(--min-ratio, 0) * 1turn), transparent 0);
             box-shadow: 0 6px 16px rgba(0,0,0,0.2);
             transition: background 900ms ease, box-shadow 900ms ease;
         }
@@ -996,6 +999,20 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
         .flow-progress-track[data-style="circle"].critical,
         .flow-progress-track[data-style="pie"].critical {
             --track-fill: #ff7043;
+        }
+        .flow-progress-track[data-style="circle"] .flow-min-label,
+        .flow-progress-track[data-style="pie"] .flow-min-label {
+            position: absolute;
+            left: 50%;
+            bottom: 70px;
+            transform: translateX(-50%);
+            white-space: nowrap;
+            opacity: 1;
+            text-shadow: 0 3px 8px rgba(0,0,0,0.5);
+        }
+        .flow-progress-track[data-style="circle"] .flow-min-label.active,
+        .flow-progress-track[data-style="pie"] .flow-min-label.active {
+            opacity: 1;
         }
         .flow-warning { flex: 1; display: inline-flex; justify-content: center; align-items: center; min-height: 1.4em; font-size: 0.80rem; font-weight: 700; color: #ffe082; text-shadow: 0 2px 6px rgba(0,0,0,0.35); opacity: 0; transform: translateY(-4px); transition: opacity 200ms ease, transform 200ms ease, color 200ms ease; pointer-events: none; }
         .flow-warning.visible { opacity: 1; transform: translateY(0); }
@@ -2418,6 +2435,9 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                         this.minMarkerEl.classList.remove('active');
                         this.minLabelEl.textContent = '\u00A0';
                         this.minLabelEl.classList.remove('active', 'met');
+                        if (this.progressTrackEl && ['circle', 'pie'].includes(this.progressTrackEl.getAttribute('data-style') || '')) {
+                            this.progressTrackEl.style.setProperty('--min-ratio', 0);
+                        }
                         return;
                     }
                     const ratio = Math.min(1, minSeconds / Math.max(1, totalSeconds));
@@ -2426,6 +2446,9 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                     this.minLabelEl.textContent = `Minimum duration (${formatSeconds(minSeconds)})`;
                     this.minLabelEl.classList.add('active');
                     this.minLabelEl.classList.toggle('met', this.elapsedSeconds >= minSeconds);
+                    if (this.progressTrackEl && ['circle', 'pie'].includes(this.progressTrackEl.getAttribute('data-style') || '')) {
+                        this.progressTrackEl.style.setProperty('--min-ratio', ratio);
+                    }
                 }
 
                 updateMinimumProgressState() {
