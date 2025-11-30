@@ -643,9 +643,15 @@ function getDashboardData($user_id) {
         $data['redeemed_rewards'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
         ensureChildNotificationsTable();
-        $notifStmt = $db->prepare("SELECT id, type, message, link_url, is_read, created_at FROM child_notifications WHERE child_user_id = :child_id ORDER BY is_read ASC, created_at DESC LIMIT 50");
+        // Auto-purge deleted notifications older than 1 week (production window; future setting may extend this)
+        $db->prepare("DELETE FROM child_notifications WHERE child_user_id = :child_id AND deleted_at IS NOT NULL AND deleted_at <= (NOW() - INTERVAL 1 WEEK)")
+            ->execute([':child_id' => $user_id]);
+        $notifStmt = $db->prepare("SELECT id, type, message, link_url, is_read, created_at, deleted_at FROM child_notifications WHERE child_user_id = :child_id ORDER BY created_at DESC LIMIT 150");
         $notifStmt->execute([':child_id' => $user_id]);
-        $data['notifications'] = $notifStmt->fetchAll(PDO::FETCH_ASSOC);
+        $allNotes = $notifStmt->fetchAll(PDO::FETCH_ASSOC);
+        $data['notifications_new'] = array_values(array_filter($allNotes, static function ($n) { return empty($n['is_read']) && empty($n['deleted_at']); }));
+        $data['notifications_read'] = array_values(array_filter($allNotes, static function ($n) { return !empty($n['is_read']) && empty($n['deleted_at']); }));
+        $data['notifications_deleted'] = array_values(array_filter($allNotes, static function ($n) { return !empty($n['deleted_at']); }));
     }
 
     return $data;
@@ -727,9 +733,16 @@ function ensureChildNotificationsTable() {
             link_url VARCHAR(255) NULL,
             is_read TINYINT(1) NOT NULL DEFAULT 0,
             created_at DATETIME NOT NULL,
-            INDEX idx_child_read (child_user_id, is_read, created_at)
+            deleted_at DATETIME DEFAULT NULL,
+            INDEX idx_child_read (child_user_id, is_read, created_at),
+            INDEX idx_child_deleted (child_user_id, deleted_at)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     ");
+    try {
+        $db->exec("ALTER TABLE child_notifications ADD COLUMN deleted_at DATETIME DEFAULT NULL");
+    } catch (PDOException $e) {
+        // ignore if it already exists
+    }
 }
 
 function addChildNotification($child_id, $type, $message, $link_url = null) {

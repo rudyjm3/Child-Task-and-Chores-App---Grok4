@@ -41,9 +41,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $placeholders = implode(',', array_fill(0, count($ids), '?'));
             $params = $ids;
             $params[] = $_SESSION['user_id'];
-            $stmt = $db->prepare("UPDATE child_notifications SET is_read = 1 WHERE id IN ($placeholders) AND child_user_id = ?");
+            $stmt = $db->prepare("UPDATE child_notifications SET is_read = 1, deleted_at = NULL WHERE id IN ($placeholders) AND child_user_id = ?");
             $stmt->execute($params);
-            $message = "Notifications updated.";
+            $message = "Notifications marked as read.";
+            $data = getDashboardData($_SESSION['user_id']);
+        }
+    } elseif (isset($_POST['move_notifications_trash']) || isset($_POST['trash_single'])) {
+        $ids = array_map('intval', $_POST['notification_ids'] ?? []);
+        if (isset($_POST['trash_single'])) {
+            $ids[] = (int) $_POST['trash_single'];
+        }
+        $ids = array_values(array_filter($ids));
+        if (!empty($ids)) {
+            ensureChildNotificationsTable();
+            $placeholders = implode(',', array_fill(0, count($ids), '?'));
+            $params = $ids;
+            $params[] = $_SESSION['user_id'];
+            $stmt = $db->prepare("UPDATE child_notifications SET deleted_at = NOW() WHERE id IN ($placeholders) AND child_user_id = ?");
+            $stmt->execute($params);
+            $message = "Notifications moved to trash.";
+            $data = getDashboardData($_SESSION['user_id']);
+        }
+    } elseif (isset($_POST['delete_notifications_perm']) || isset($_POST['delete_single_perm'])) {
+        $ids = array_map('intval', $_POST['notification_ids'] ?? []);
+        if (isset($_POST['delete_single_perm'])) {
+            $ids[] = (int) $_POST['delete_single_perm'];
+        }
+        $ids = array_values(array_filter($ids));
+        if (!empty($ids)) {
+            ensureChildNotificationsTable();
+            $placeholders = implode(',', array_fill(0, count($ids), '?'));
+            $params = $ids;
+            $params[] = $_SESSION['user_id'];
+            $stmt = $db->prepare("DELETE FROM child_notifications WHERE id IN ($placeholders) AND child_user_id = ?");
+            $stmt->execute($params);
+            $message = "Notifications deleted.";
             $data = getDashboardData($_SESSION['user_id']);
         }
     } elseif (isset($_POST['redeem_reward'])) {
@@ -112,6 +144,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         .notifications.open .notification-empty { display: block; }
         .notifications-footer-toggle { display: flex; justify-content: center; margin-top: 8px; }
         .notifications-footer-toggle button { background: transparent; border: none; color: #ef6c00; font-weight: 700; cursor: pointer; text-decoration: underline; }
+        .notification-tabs { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 8px; margin-top: 10px; }
+        .tab-button { padding: 8px; border: 1px solid #ffd28a; background: #fff; border-radius: 8px; font-weight: 700; color: #ef6c00; cursor: pointer; }
+        .tab-button.active { background: #ffe0b2; }
+        .notification-panel { display: none; }
+        .notification-panel.active { display: block; }
+        .trash-button { border: none; background: transparent; cursor: pointer; font-size: 1.1rem; padding: 4px; color: #b71c1c; }
         @media (max-width: 768px) { .dashboard { padding: 10px; } .button { width: 100%; } }
     </style>
     <script>
@@ -164,6 +202,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 const toggleTargets = notifications.querySelectorAll('[data-action="toggle-notifications"]');
                 const toggle = () => notifications.classList.toggle('open');
                 toggleTargets.forEach(btn => btn.addEventListener('click', toggle));
+
+                const tabButtons = notifications.querySelectorAll('.tab-button');
+                const panels = notifications.querySelectorAll('.notification-panel');
+                tabButtons.forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        const target = btn.getAttribute('data-tab');
+                        tabButtons.forEach(b => b.classList.toggle('active', b === btn));
+                        panels.forEach(panel => {
+                            panel.classList.toggle('active', panel.getAttribute('data-tab-panel') === target);
+                        });
+                    });
+                });
             }
         });
     </script>
@@ -181,9 +231,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
          $progressPercent = isset($data['points_progress']) ? max(0, min(100, (int)$data['points_progress'])) : 0;
          $displayPoints = min(100, $childTotalPoints);
          $extraPoints = max(0, $childTotalPoints - 100);
-         $notifications = $data['notifications'] ?? [];
-         $notificationCount = is_array($notifications) ? count($notifications) : 0;
-         $unreadCount = is_array($notifications) ? count(array_filter($notifications, static function ($n) { return empty($n['is_read']); })) : 0;
+         $notificationsNew = $data['notifications_new'] ?? [];
+         $notificationsRead = $data['notifications_read'] ?? [];
+         $notificationsDeleted = $data['notifications_deleted'] ?? [];
+         $notificationCount = is_array($notificationsNew) ? count($notificationsNew) : 0;
       ?>
       <div class="progress">
          <span class="points-progress-title">Total Points</span>
@@ -200,15 +251,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
          <div class="notifications-header" data-action="toggle-notifications">
             <div class="notification-icon" aria-hidden="true">
                 <svg viewBox="0 0 24 24" focusable="false"><path d="M12 24a2.5 2.5 0 0 0 2.45-2h-4.9A2.5 2.5 0 0 0 12 24Zm7.12-6.41-1.17-1.11V11a6 6 0 0 0-5-5.9V4a1 1 0 1 0-2 0v1.1A6 6 0 0 0 5.05 11v5.48l-1.17 1.11A1 1 0 0 0 4.6 19h14.8a1 1 0 0 0 .72-1.69Z"/></svg>
-                <span class="notification-badge"><?php echo (int)($unreadCount ?: $notificationCount); ?></span>
+                <?php if ($notificationCount > 0): ?>
+                    <span class="notification-badge"><?php echo (int) $notificationCount; ?></span>
+                <?php endif; ?>
             </div>
             <h2>Notifications</h2>
          </div>
-         <form method="POST" action="dashboard_child.php">
-            <?php if (!empty($notifications)): ?>
+
+         <div class="notification-tabs" data-role="notification-tabs">
+            <button type="button" class="tab-button active" data-tab="new">New (<?php echo count($notificationsNew); ?>)</button>
+            <button type="button" class="tab-button" data-tab="read">Read (<?php echo count($notificationsRead); ?>)</button>
+            <button type="button" class="tab-button" data-tab="deleted">Deleted (<?php echo count($notificationsDeleted); ?>)</button>
+         </div>
+
+         <form method="POST" action="dashboard_child.php" data-tab-panel="new" class="notification-panel active">
+            <?php if (!empty($notificationsNew)): ?>
                <ul class="notification-list">
-                  <?php foreach ($notifications as $note): ?>
-                     <li class="notification-item <?php echo !empty($note['is_read']) ? '' : 'unread'; ?>">
+                  <?php foreach ($notificationsNew as $note): ?>
+                     <li class="notification-item unread">
                         <input type="checkbox" name="notification_ids[]" value="<?php echo (int)$note['id']; ?>" aria-label="Mark notification as read">
                         <div>
                            <div><?php echo htmlspecialchars($note['message']); ?></div>
@@ -225,9 +285,60 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                   <button type="submit" name="mark_notifications_read" class="button">Mark Selected as Read</button>
                </div>
             <?php else: ?>
-               <p class="notification-empty">No notifications yet. Keep going!</p>
+               <p class="notification-empty">No new notifications.</p>
             <?php endif; ?>
          </form>
+
+         <form method="POST" action="dashboard_child.php" data-tab-panel="read" class="notification-panel">
+            <?php if (!empty($notificationsRead)): ?>
+               <ul class="notification-list">
+                  <?php foreach ($notificationsRead as $note): ?>
+                     <li class="notification-item">
+                        <input type="checkbox" name="notification_ids[]" value="<?php echo (int)$note['id']; ?>" aria-label="Send to trash">
+                        <div>
+                           <div><?php echo htmlspecialchars($note['message']); ?></div>
+                           <div class="notification-meta">
+                              <?php echo htmlspecialchars(date('m/d/Y h:i A', strtotime($note['created_at']))); ?>
+                              <?php if (!empty($note['type'])): ?> · <?php echo htmlspecialchars(str_replace('_', ' ', $note['type'])); ?><?php endif; ?>
+                              <?php if (!empty($note['link_url'])): ?> · <a href="<?php echo htmlspecialchars($note['link_url']); ?>">View</a><?php endif; ?>
+                           </div>
+                        </div>
+                        <button type="submit" name="trash_single" value="<?php echo (int)$note['id']; ?>" class="trash-button" aria-label="Move to trash">🗑</button>
+                     </li>
+                  <?php endforeach; ?>
+               </ul>
+               <div class="notification-actions">
+                  <button type="submit" name="move_notifications_trash" class="button">Move Selected to Trash</button>
+               </div>
+            <?php else: ?>
+               <p class="notification-empty">No read notifications.</p>
+            <?php endif; ?>
+         </form>
+
+         <form method="POST" action="dashboard_child.php" data-tab-panel="deleted" class="notification-panel">
+            <?php if (!empty($notificationsDeleted)): ?>
+               <ul class="notification-list">
+                  <?php foreach ($notificationsDeleted as $note): ?>
+                     <li class="notification-item">
+                        <input type="checkbox" name="notification_ids[]" value="<?php echo (int)$note['id']; ?>" aria-label="Delete permanently">
+                        <div>
+                           <div><?php echo htmlspecialchars($note['message']); ?></div>
+                           <div class="notification-meta">
+                              Deleted: <?php echo htmlspecialchars(date('m/d/Y h:i A', strtotime($note['deleted_at']))); ?>
+                           </div>
+                        </div>
+                        <button type="submit" name="delete_single_perm" value="<?php echo (int)$note['id']; ?>" class="trash-button" aria-label="Delete permanently">🗑</button>
+                     </li>
+                  <?php endforeach; ?>
+               </ul>
+               <div class="notification-actions">
+                  <button type="submit" name="delete_notifications_perm" class="button">Delete Selected</button>
+               </div>
+            <?php else: ?>
+               <p class="notification-empty">Trash is empty.</p>
+            <?php endif; ?>
+         </form>
+
          <div class="notifications-footer-toggle">
             <button type="button" data-action="toggle-notifications">View Notifications</button>
          </div>
