@@ -677,7 +677,9 @@ $data = getDashboardData($_SESSION['user_id']);
         <div class="parent-notifications-header" data-action="toggle-parent-notifications">
             <div class="parent-notification-icon" aria-hidden="true">
                 <svg viewBox="0 0 24 24" focusable="false"><path d="M12 24a2.5 2.5 0 0 0 2.45-2h-4.9A2.5 2.5 0 0 0 12 24Zm7.12-6.41-1.17-1.11V11a6 6 0 0 0-5-5.9V4a1 1 0 1 0-2 0v1.1A6 6 0 0 0 5.05 11v5.48l-1.17 1.11A1 1 0 0 0 4.6 19h14.8a1 1 0 0 0 .72-1.69Z"/></svg>
-                <span class="parent-notification-badge"><?php echo (int)$parentNotificationCount; ?></span>
+                <?php if ($parentNotificationCount > 0): ?>
+                    <span class="parent-notification-badge"><?php echo (int)$parentNotificationCount; ?></span>
+                <?php endif; ?>
             </div>
             <h2 class="parent-notifications-title">Notifications</h2>
         </div>
