@@ -412,7 +412,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($isParentContext && isset($_POST['create_routine'])) {
-        $child_user_id = filter_input(INPUT_POST, 'child_user_id', FILTER_VALIDATE_INT);
+        $childIds = array_values(array_filter(array_map('intval', $_POST['child_user_ids'] ?? [])));
         $title = trim((string) filter_input(INPUT_POST, 'title', FILTER_SANITIZE_STRING));
         $start_time = filter_input(INPUT_POST, 'start_time', FILTER_SANITIZE_STRING);
         $end_time = filter_input(INPUT_POST, 'end_time', FILTER_SANITIZE_STRING);
@@ -424,8 +424,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $bonus_points = ($bonus_points !== false && $bonus_points >= 0) ? $bonus_points : 0;
 
         $errors = [];
-        if (!$child_user_id || !routineChildBelongsToFamily($child_user_id, $family_root_id)) {
-            $errors[] = 'Select a child from your family for this routine.';
+        if (empty($childIds)) {
+            $errors[] = 'Select at least one child for this routine.';
+        } else {
+            $childIds = array_values(array_filter($childIds, static function ($id) use ($family_root_id) {
+                return $id > 0 && routineChildBelongsToFamily($id, $family_root_id);
+            }));
+            if (empty($childIds)) {
+                $errors[] = 'Select a child from your family for this routine.';
+            }
         }
         if ($title === '') {
             $errors[] = 'Provide a title for the routine.';
@@ -446,10 +453,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             global $db;
             try {
                 $db->beginTransaction();
-                $routineId = createRoutine($family_root_id, $child_user_id, $title, $start_time, $end_time, $recurrence, $bonus_points, $_SESSION['user_id']);
-                replaceRoutineTasks($routineId, $normalizedTasks);
+                $createdCount = 0;
+                foreach ($childIds as $cid) {
+                    $routineId = createRoutine($family_root_id, $cid, $title, $start_time, $end_time, $recurrence, $bonus_points, $_SESSION['user_id']);
+                    replaceRoutineTasks($routineId, $normalizedTasks);
+                    $createdCount++;
+                }
                 $db->commit();
-                $messages[] = ['type' => 'success', 'text' => 'Routine created successfully.'];
+                $messages[] = ['type' => 'success', 'text' => $createdCount > 1 ? "Routine created for {$createdCount} children." : 'Routine created successfully.'];
                 $createRoutineState = ['tasks' => []];
             } catch (Exception $e) {
                 $db->rollBack();
@@ -767,9 +778,21 @@ if (getEffectiveRole($_SESSION['user_id']) === 'child') {
 $children = [];
 if ($isParentContext) {
     global $db;
-    $stmt = $db->prepare("SELECT child_user_id, child_name FROM child_profiles WHERE parent_user_id = :parent ORDER BY child_name ASC");
-    $stmt->execute([':parent' => $family_root_id]);
-    $children = $stmt->fetchAll(PDO::FETCH_ASSOC);
+$stmt = $db->prepare("
+    SELECT 
+        cp.child_user_id, 
+        cp.child_name, 
+        COALESCE(cp.avatar, 'images/default-avatar.png') AS child_avatar
+    FROM child_profiles cp
+    WHERE cp.parent_user_id = :parent
+    ORDER BY cp.child_name ASC
+");
+$stmt->execute([':parent' => $family_root_id]);
+$children = $stmt->fetchAll(PDO::FETCH_ASSOC);
+$selectedCreateChildIds = [];
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create_routine'])) {
+    $selectedCreateChildIds = array_values(array_filter(array_map('intval', $_POST['child_user_ids'] ?? [])));
+}
 }
 
 $welcome_role_label = getUserRoleLabel($_SESSION['user_id']);
@@ -910,6 +933,13 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
         .collapsible-card summary { list-style: none; }
         .collapsible-card summary::-webkit-details-marker,
         .collapsible-card summary::marker { display: none; }
+        .child-select-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 14px; }
+        .child-select-card { border: none; border-radius: 50%; padding: 0; background: transparent; display: grid; justify-items: center; gap: 8px; cursor: pointer; position: relative; }
+        .child-select-card input[type="checkbox"] { position: absolute; opacity: 0; width: 0; height: 0; pointer-events: none; }
+        .child-select-card img { width: 82px; height: 82px; border-radius: 50%; object-fit: cover; box-shadow: 0 2px 6px rgba(0,0,0,0.15); transition: box-shadow 150ms ease, transform 150ms ease; }
+        .child-select-card strong { text-align: center; transition: color 150ms ease, text-shadow 150ms ease; }
+        .child-select-card:has(input[type="checkbox"]:checked) img { box-shadow: 0 0 0 4px rgba(100,181,246,0.8), 0 0 14px rgba(100,181,246,0.8); transform: translateY(-2px); }
+        .child-select-card:has(input[type="checkbox"]:checked) strong { color: #0d47a1; text-shadow: 0 1px 8px rgba(100,181,246,0.8); }
         .collapse-toggle { background: #1e88e5; color: #fff; border: none; padding: 8px 14px; border-radius: 6px; cursor: pointer; font-weight: 600; display: inline-flex; align-items: center; gap: 8px; }
         .collapsible-card[open] .collapse-toggle { background: #1565c0; }
         .collapsible-content { margin-top: 12px; display: none; }
@@ -942,7 +972,7 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
         .parent-complete-note { font-size: 0.85rem; color: #546e7a; margin: 0; }
         .routine-flow-overlay { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(10, 24, 64, 0.72); z-index: 1200; opacity: 0; pointer-events: none; transition: opacity 250ms ease; }
         .routine-flow-overlay.active { opacity: 1; pointer-events: auto; }
-        .routine-flow-container { width: min(1040px, 95vw); max-height: 80vh; height: min(80vh, 860px); background: linear-gradient(155deg, #7bc4ff, #a077ff); border-radius: 26px; padding: clamp(20px, 4vh, 32px); box-shadow: 0 18px 48px rgba(0,0,0,0.25); color: #fff; display: flex; flex-direction: column; position: relative; overflow: hidden; }
+        .routine-flow-container { width: 95vw; height: 95vh; background: linear-gradient(155deg, #7bc4ff, #a077ff); border-radius: 26px; padding: clamp(20px, 4vh, 32px); box-shadow: 0 18px 48px rgba(0,0,0,0.25); color: #fff; display: flex; flex-direction: column; position: relative; overflow: hidden; }
         .routine-flow-overlay.status-active .routine-flow-container { background: linear-gradient(155deg, #7bc4ff, #a077ff); }
         body.routine-flow-locked { overflow: hidden; overscroll-behavior: contain; touch-action: none; }
         .routine-flow-header { display: flex; flex-direction: column; align-items: flex-start; gap: clamp(10px, 2vh, 14px); margin-bottom: clamp(16px, 3vh, 24px); }
@@ -1286,13 +1316,20 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                     <form method="POST" autocomplete="off">
                         <div class="form-grid">
                             <div class="form-group">
-                                <label for="child_user_id">Assign to Child</label>
-                                <select id="child_user_id" name="child_user_id" required>
-                                    <option value="">Select Child</option>
-                                    <?php foreach ($children as $child): ?>
-                                        <option value="<?php echo (int) $child['child_user_id']; ?>"><?php echo htmlspecialchars($child['child_name']); ?></option>
+                                <label>Assign to Child(ren)</label>
+                                <div class="child-select-grid">
+                                    <?php foreach ($children as $child): 
+                                        $cid = (int) $child['child_user_id'];
+                                        $checked = in_array($cid, $selectedCreateChildIds, true) ? 'checked' : '';
+                                        $avatar = !empty($child['child_avatar']) ? $child['child_avatar'] : 'images/default-avatar.png';
+                                    ?>
+                                        <label class="child-select-card">
+                                            <input type="checkbox" name="child_user_ids[]" value="<?php echo $cid; ?>" <?php echo $checked; ?>>
+                                            <img src="<?php echo htmlspecialchars($avatar); ?>" alt="<?php echo htmlspecialchars($child['child_name']); ?>">
+                                            <strong><?php echo htmlspecialchars($child['child_name']); ?></strong>
+                                        </label>
                                     <?php endforeach; ?>
-                                </select>
+                                </div>
                             </div>
                             <div class="form-group">
                                 <label for="title">Routine Title</label>
