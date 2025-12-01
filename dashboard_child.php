@@ -134,7 +134,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         .notification-badge { position: absolute; top: -6px; right: -6px; background: #d32f2f; color: #fff; border-radius: 12px; padding: 2px 6px; font-size: 0.75rem; font-weight: 700; min-width: 22px; text-align: center; }
         .notification-list { list-style: none; padding: 0; margin: 12px 0; display: none; gap: 10px; }
         .notifications.open .notification-list { display: grid; }
-        .notification-item { display: grid; grid-template-columns: auto 1fr; gap: 10px; align-items: flex-start; padding: 10px; border-radius: 8px; background: #fff; border: 1px solid #ffe0b2; }
+        .notification-item { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; padding: 10px; border-radius: 8px; background: #fff; border: 1px solid #ffe0b2; }
+        .notification-item input[type="checkbox"] { width: 19.8px; height: 19.8px; }
         .notification-item.unread { border-color: #ff9800; box-shadow: 0 1px 4px rgba(255,152,0,0.2); }
         .notification-meta { font-size: 0.85rem; color: #666; margin-top: 4px; }
         .notification-actions { display: none; justify-content: flex-end; margin-top: 10px; }

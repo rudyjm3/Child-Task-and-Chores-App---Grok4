@@ -262,6 +262,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $routineId = filter_input(INPUT_POST, 'routine_id', FILTER_VALIDATE_INT);
         $metricsRaw = $_POST['task_metrics'] ?? '[]';
         $metrics = json_decode($metricsRaw, true);
+        $flowStartTs = isset($_POST['flow_start_ts']) ? (int) $_POST['flow_start_ts'] : null;
+        $flowEndTs = isset($_POST['flow_end_ts']) ? (int) $_POST['flow_end_ts'] : null;
+        $overtimeCountInput = isset($_POST['overtime_count']) ? (int) $_POST['overtime_count'] : 0;
         if (!$routineId) {
             http_response_code(400);
             echo json_encode(['status' => 'error', 'message' => 'Missing routine ID.']);
@@ -329,6 +332,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $awards = [];
         $taskPointsAwarded = 0;
         $allWithinLimits = true;
+        $overtimeCount = 0;
 
         foreach ($taskLookup as $taskId => $taskRow) {
             $scheduledSeconds = max(0, (int) ($taskRow['time_limit'] ?? 0) * 60);
@@ -340,6 +344,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $awardedPoints = calculateRoutineTaskAwardPoints($pointValue, $scheduledSeconds, $actualSeconds);
             if ($scheduledSeconds > 0 && $actualSeconds > $scheduledSeconds) {
                 $allWithinLimits = false;
+                $overtimeCount++;
             }
             $taskPointsAwarded += $awardedPoints;
             $awards[] = [
@@ -354,6 +359,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         }
 
         $bonusPossible = max(0, (int) ($routine['bonus_points'] ?? 0));
+        $maxRoutinePoints = array_reduce($taskLookup, static function ($carry, $task) {
+            return $carry + max(0, (int) ($task['point_value'] ?? 0));
+        }, 0);
 
         if ($taskPointsAwarded > 0) {
             updateChildPoints($childId, $taskPointsAwarded);
@@ -364,6 +372,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $bonusAwarded = is_numeric($bonus) ? (int) $bonus : 0;
         $_SESSION['routine_awards'][$routineId] = true;
         $newTotal = getChildTotalPoints($childId);
+
+        if (!empty($routine['parent_user_id'])) {
+            $parentIdForNote = (int) $routine['parent_user_id'];
+            $serverEnd = time();
+            $durationMs = ($flowEndTs && $flowStartTs && $flowEndTs > $flowStartTs) ? ($flowEndTs - $flowStartTs) : null;
+            $serverStart = $durationMs !== null ? $serverEnd - (int) round($durationMs / 1000) : $serverEnd;
+            $startStr = date('m/d/Y h:i A', $serverStart);
+            $endStr = date('m/d/Y h:i A', $serverEnd);
+            $childName = $_SESSION['name'] ?? $_SESSION['username'] ?? 'Child';
+            $totalEarned = $taskPointsAwarded + $bonusAwarded;
+            $bonusNote = $bonusAwarded > 0 ? "Bonus earned: {$bonusAwarded}/{$bonusPossible}" : "Bonus not earned";
+            $message = sprintf(
+                'Routine done: %s by %s. %s to %s. Points %d/%d. %s. Overtime tasks: %d. Total earned: %d.',
+                substr((string) ($routine['title'] ?? 'Routine'), 0, 40),
+                substr((string) $childName, 0, 30),
+                $startStr,
+                $endStr,
+                $taskPointsAwarded,
+                $maxRoutinePoints,
+                $bonusNote,
+                max($overtimeCountInput, $overtimeCount),
+                $totalEarned
+            );
+            $link = 'dashboard_parent.php?overtime_routine=' . $routineId . '#overtime';
+            addParentNotification($parentIdForNote, 'routine_completed', $message, $link);
+        }
 
         echo json_encode([
             'status' => 'ok',
@@ -2226,6 +2260,7 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                     this.messageTimeout = null;
                     this.starAnimationTimers = [];
                     this.summaryPlayed = false;
+                    this.flowStartTs = null;
 
                     this.initializeTaskDurations();
                     this.resetWarningState();
@@ -3140,6 +3175,7 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                     this.childPoints = typeof page.childPoints === 'number' ? page.childPoints : this.childPoints;
                     this.showScene('task');
                     this.startTask(this.currentIndex);
+                    this.flowStartTs = Date.now();
                     if (this.summaryBonusTotalEl) {
                         this.summaryBonusTotalEl.textContent = '0';
                     }
@@ -3406,7 +3442,13 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                         actual_seconds: result.actual_seconds,
                         scheduled_seconds: result.scheduled_seconds
                     }));
+                    const overtimeCount = this.taskResults.filter(result => result.scheduled_seconds > 0 && result.actual_seconds > result.scheduled_seconds).length;
                     payload.append('task_metrics', JSON.stringify(metrics));
+                    if (typeof this.flowStartTs === 'number') {
+                        payload.append('flow_start_ts', String(this.flowStartTs));
+                    }
+                    payload.append('flow_end_ts', String(Date.now()));
+                    payload.append('overtime_count', String(overtimeCount));
                     fetch('routine.php', { method: 'POST', body: payload })
                         .then(response => response.json())
                         .then(data => {

@@ -757,6 +757,58 @@ function addChildNotification($child_id, $type, $message, $link_url = null) {
     ]);
 }
 
+function ensureParentNotificationsTable() {
+    global $db;
+    $db->exec("
+        CREATE TABLE IF NOT EXISTS parent_notifications (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            parent_user_id INT NOT NULL,
+            type VARCHAR(64) NOT NULL,
+            message VARCHAR(255) NOT NULL,
+            link_url VARCHAR(255) NULL,
+            is_read TINYINT(1) NOT NULL DEFAULT 0,
+            deleted_at DATETIME DEFAULT NULL,
+            created_at DATETIME NOT NULL,
+            INDEX idx_parent_read (parent_user_id, is_read, created_at),
+            INDEX idx_parent_deleted (parent_user_id, deleted_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    ");
+    try {
+        $db->exec("ALTER TABLE parent_notifications ADD COLUMN deleted_at DATETIME DEFAULT NULL");
+    } catch (PDOException $e) {
+        // ignore if exists
+    }
+}
+
+function addParentNotification($parent_user_id, $type, $message, $link_url = null) {
+    global $db;
+    ensureParentNotificationsTable();
+    $stmt = $db->prepare("INSERT INTO parent_notifications (parent_user_id, type, message, link_url, created_at) VALUES (:parent_id, :type, :message, :link_url, NOW())");
+    $stmt->execute([
+        ':parent_id' => $parent_user_id,
+        ':type' => substr((string)$type, 0, 64),
+        ':message' => substr((string)$message, 0, 255),
+        ':link_url' => $link_url ? substr((string)$link_url, 0, 255) : null
+    ]);
+}
+
+function getParentNotifications($parent_user_id) {
+    global $db;
+    ensureParentNotificationsTable();
+    // Purge deleted after 1 week
+    $db->prepare("DELETE FROM parent_notifications WHERE parent_user_id = :pid AND deleted_at IS NOT NULL AND deleted_at <= (NOW() - INTERVAL 1 WEEK)")
+        ->execute([':pid' => $parent_user_id]);
+
+    $stmt = $db->prepare("SELECT id, type, message, link_url, is_read, deleted_at, created_at FROM parent_notifications WHERE parent_user_id = :pid ORDER BY created_at DESC LIMIT 200");
+    $stmt->execute([':pid' => $parent_user_id]);
+    $all = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    return [
+        'new' => array_values(array_filter($all, static fn($n) => empty($n['is_read']) && empty($n['deleted_at']))),
+        'read' => array_values(array_filter($all, static fn($n) => !empty($n['is_read']) && empty($n['deleted_at']))),
+        'deleted' => array_values(array_filter($all, static fn($n) => !empty($n['deleted_at'])))
+    ];
+}
+
 // Approve a task
 function approveTask($task_id) {
     global $db;
