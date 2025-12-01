@@ -362,6 +362,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $maxRoutinePoints = array_reduce($taskLookup, static function ($carry, $task) {
             return $carry + max(0, (int) ($task['point_value'] ?? 0));
         }, 0);
+        $routineDurationSeconds = array_reduce($awards, static function ($carry, $entry) {
+            return $carry + max(0, (int) ($entry['actual_seconds'] ?? 0));
+        }, 0);
 
         if ($taskPointsAwarded > 0) {
             updateChildPoints($childId, $taskPointsAwarded);
@@ -375,20 +378,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
         if (!empty($routine['parent_user_id'])) {
             $parentIdForNote = (int) $routine['parent_user_id'];
-            $serverEnd = time();
-            $durationMs = ($flowEndTs && $flowStartTs && $flowEndTs > $flowStartTs) ? ($flowEndTs - $flowStartTs) : null;
-            $serverStart = $durationMs !== null ? $serverEnd - (int) round($durationMs / 1000) : $serverEnd;
-            $startStr = date('m/d/Y h:i A', $serverStart);
-            $endStr = date('m/d/Y h:i A', $serverEnd);
+            $endTsLocal = time();
             $childName = $_SESSION['name'] ?? $_SESSION['username'] ?? 'Child';
             $totalEarned = $taskPointsAwarded + $bonusAwarded;
             $bonusNote = $bonusAwarded > 0 ? "Bonus earned: {$bonusAwarded}/{$bonusPossible}" : "Bonus not earned";
             $message = sprintf(
-                'Routine done: %s by %s. %s to %s. Points %d/%d. %s. Overtime tasks: %d. Total earned: %d.',
-                substr((string) ($routine['title'] ?? 'Routine'), 0, 40),
+                '%s completed %s. Points %d/%d. %s. Overtime tasks: %d. Total earned: %d.',
                 substr((string) $childName, 0, 30),
-                $startStr,
-                $endStr,
+                substr((string) ($routine['title'] ?? 'Routine'), 0, 40),
                 $taskPointsAwarded,
                 $maxRoutinePoints,
                 $bonusNote,
