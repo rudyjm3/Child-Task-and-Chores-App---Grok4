@@ -381,7 +381,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $endTsLocal = time();
             $childName = $_SESSION['name'] ?? $_SESSION['username'] ?? 'Child';
             $totalEarned = $taskPointsAwarded + $bonusAwarded;
-            $bonusNote = $bonusAwarded > 0 ? "Bonus earned: {$bonusAwarded}/{$bonusPossible}" : "Bonus not earned";
+            $bonusNote = $bonusAwarded > 0
+                ? "Bonus {$bonusAwarded} unlocked"
+                : "Bonus {$bonusAwarded}/{$bonusPossible}. Bonus Criteria Not Met";
             $message = sprintf(
                 '%s completed %s. Points %d/%d. %s. Overtime tasks: %d. Total earned: %d.',
                 substr((string) $childName, 0, 30),
