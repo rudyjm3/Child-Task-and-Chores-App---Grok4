@@ -872,6 +872,26 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
         .role-badge { margin-left: 8px; padding: 2px 8px; border-radius: 999px; background: #4caf50; color: #fff; font-size: 0.82rem; }
         .routine-layout { max-width: 1080px; margin: 0 auto; padding: 0 16px 40px; }
         .routine-section { background: #fff; border-radius: 10px; box-shadow: 0 2px 6px rgba(0,0,0,0.08); padding: 20px; margin-bottom: 24px; }
+        /* .routine-section-header { background: linear-gradient(135deg, #333333ff, #5e6164ff); padding: 16px 20px; margin: -20px -20px 16px; border-radius: 10px 10px 0px 0px; color: #f5f7fa; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; box-shadow: 0 8px 20px rgba(0,0,0,0.18); } */
+        /* .routine-section-header {background: linear-gradient(90deg, #1c2c63 0%, #325d93 100%);
+  color: #f5f7fa;
+  padding: 16px 24px;
+  border-radius: 10px 10px 0 0;
+  font-size: 1.3rem;
+  letter-spacing: 0.4px;
+display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; box-shadow: 0 8px 20px rgba(0,0,0,0.18);} */
+.routine-section-header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; /*background: rgba(255, 255, 255, 0.6);*/ background: linear-gradient(90deg, #1c2c63 0%, #325d93 100%);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255,255,255,0.35);
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+  padding: 14px 22px;
+  font-size: 1.3rem;
+  letter-spacing: 0.4px;
+  font-weight: 500;
+  color: #27364b;
+margin-bottom: 20px;}
+        .routine-section-header h2 { margin: 0; color: #f5f7fa; font-size: 1.2rem; letter-spacing: 0.02em; }
         .routine-card-grid { display: grid; gap: 20px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
         @media (max-width: 768px) {
             .routine-card-grid { grid-template-columns: 1fr; }
@@ -879,6 +899,10 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
         .routine-section h2 { margin-top: 0; font-size: 1.5rem; }
         .form-grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
         .form-group { display: flex; flex-direction: column; gap: 6px; }
+        .child-select-group { grid-column: 1 / -1; display: grid; grid-template-columns: auto 1fr; gap: 12px; align-items: center; }
+        @media (max-width: 640px) {
+            .child-select-group { grid-template-columns: 1fr; }
+        }
         .form-group label { font-weight: 600; }
         .form-group input, .form-group select, .form-group textarea { padding: 8px; border: 1px solid #ccc; border-radius: 6px; font-size: 0.95rem; }
         .form-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 12px; }
@@ -895,7 +919,6 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
         .selected-task-item.error { border-color: #f44336; }
         .drag-handle { cursor: grab; font-size: 1.2rem; color: #9e9e9e; }
         .task-meta { font-size: 0.85rem; color: #616161; }
-        .routine-section-header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px;}
         .task-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.65); display: flex; align-items: center; justify-content: center; padding: 20px; z-index: 2000; opacity: 0; pointer-events: none; transition: opacity 200ms ease; }
         .task-modal-overlay.active { opacity: 1; pointer-events: auto; }
         .task-modal { background: #fff; border-radius: 14px; max-width: 520px; width: min(520px, 100%); max-height: 90vh; overflow-y: auto; padding: 28px; position: relative; box-shadow: 0 18px 36px rgba(0,0,0,0.25); }
@@ -935,7 +958,7 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
         .collapsible-card summary { list-style: none; }
         .collapsible-card summary::-webkit-details-marker,
         .collapsible-card summary::marker { display: none; }
-        .child-select-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 14px; }
+        .child-select-grid { /*display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 14px;*/ display: flex; gap: 15px;}
         .child-select-card { border: none; border-radius: 50%; padding: 0; background: transparent; display: grid; justify-items: center; gap: 8px; cursor: pointer; position: relative; }
         .child-select-card input[type="checkbox"] { position: absolute; opacity: 0; width: 0; height: 0; pointer-events: none; }
         .child-select-card img { width: 52px; height: 52px; border-radius: 50%; object-fit: cover; box-shadow: 0 2px 6px rgba(0,0,0,0.15); transition: box-shadow 150ms ease, transform 150ms ease; }
@@ -1143,7 +1166,7 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
         .toggle-sub { font-size: 0.8rem; color: #546e7a; }
         body.countdown-disabled .flow-countdown { display: none !important; }
         .library-grid { display: flex; flex-direction: column; gap: 20px; }
-        .library-card { width: 100%; background: #fff; border-radius: 16px; box-shadow: 0 6px 18px rgba(15,70,140,0.12); padding: 20px 22px; display: flex; flex-direction: column; gap: 16px; }
+        .library-card { width: 100%; background: #fff; border-radius: 10px 10px 0 0; box-shadow: 0 6px 18px rgba(15,70,140,0.12); padding: 20px 22px; display: flex; flex-direction: column; gap: 16px; }
         .library-card h3 { margin: 0; font-size: 1.4rem; color: #0d47a1; font-weight: 700; }
         .library-form .input-group { display: grid; gap: 6px; margin-bottom: 12px; }
         .library-form label { font-weight: 600; color: #37474f; }
@@ -1245,7 +1268,10 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
 
         <?php if ($isParentContext): ?>
             <section class="routine-section">
-                <h2>Routine Timer Preferences</h2>
+               <div class="routine-section-header">
+                  <h2>Routine Timer Preferences</h2>
+               </div>
+                
                 <form method="POST" class="form-grid" autocomplete="off">
                     <div class="toggle-control">
                         <label class="toggle-switch">
@@ -1311,13 +1337,16 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
             </section>
 
             <section class="routine-section">
-                <h2>Create Routine</h2>
+               <div class="routine-section-header">
+                  <h2>Create Routine</h2>
+               </div>
+                
                 <?php if (empty($children)): ?>
                     <p class="no-data">Add children to your family profile before creating routines.</p>
                 <?php else: ?>
                     <form method="POST" autocomplete="off">
                         <div class="form-grid">
-                            <div class="form-group">
+                            <div class="form-group child-select-group">
                                 <label>Assign to Child(ren)</label>
                                 <div class="child-select-grid">
                                     <?php foreach ($children as $child): 
@@ -1545,7 +1574,10 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
         <?php endif; ?>
 
         <section class="routine-section">
+         <div class="routine-section-header">
             <h2><?php echo ($isParentContext ? 'Family Routines' : 'My Routines'); ?></h2>
+         </div>
+            
             <?php if (empty($routines)): ?>
                 <p class="no-data">No routines available.</p>
             <?php else: ?>
