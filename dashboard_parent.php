@@ -150,9 +150,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $title = filter_input(INPUT_POST, 'reward_title', FILTER_SANITIZE_STRING);
         $description = filter_input(INPUT_POST, 'reward_description', FILTER_SANITIZE_STRING);
         $point_cost = filter_input(INPUT_POST, 'point_cost', FILTER_VALIDATE_INT);
-        $message = createReward($_SESSION['user_id'], $title, $description, $point_cost)
+        $message = createReward($main_parent_id, $title, $description, $point_cost)
             ? "Reward created successfully!"
             : "Failed to create reward.";
+    } elseif (isset($_POST['update_reward'])) {
+        $reward_id = filter_input(INPUT_POST, 'reward_id', FILTER_VALIDATE_INT);
+        $title = trim((string) filter_input(INPUT_POST, 'reward_title', FILTER_SANITIZE_STRING));
+        $description = trim((string) filter_input(INPUT_POST, 'reward_description', FILTER_SANITIZE_STRING));
+        $point_cost = filter_input(INPUT_POST, 'point_cost', FILTER_VALIDATE_INT);
+        if ($reward_id && $title !== '' && $point_cost !== false && $point_cost !== null && $point_cost > 0) {
+            $message = updateReward($main_parent_id, $reward_id, $title, $description, $point_cost)
+                ? "Reward updated."
+                : "Unable to update reward. It may have been redeemed or removed.";
+        } else {
+            $message = "Provide a title and point cost to update the reward.";
+        }
+    } elseif (isset($_POST['delete_reward'])) {
+        $reward_id = filter_input(INPUT_POST, 'reward_id', FILTER_VALIDATE_INT);
+        if ($reward_id) {
+            $message = deleteReward($main_parent_id, $reward_id)
+                ? "Reward deleted."
+                : "Unable to delete reward. Only available rewards can be removed.";
+        } else {
+            $message = "Invalid reward selected for deletion.";
+        }
     } elseif (isset($_POST['create_goal'])) {
         $child_user_id = filter_input(INPUT_POST, 'child_user_id', FILTER_VALIDATE_INT);
         $title = filter_input(INPUT_POST, 'goal_title', FILTER_SANITIZE_STRING);
@@ -375,6 +396,10 @@ $data = getDashboardData($_SESSION['user_id']);
         .button { padding: 10px 20px; margin: 5px; background-color: #4caf50; color: white; border: none; border-radius: 5px; cursor: pointer; text-decoration: none; display: inline-block; font-size: 16px; min-height: 44px; }
         .approve-button { background-color: #4caf50; }
         .reject-button { background-color: #f44336; }
+        .reward-edit-form { display: grid; gap: 10px; }
+        .reward-edit-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+        .reward-edit-actions .button { flex: 1 1 140px; text-align: center; }
+        .reward-delete { background-color: #d32f2f; }
         .form-group { margin-bottom: 15px; }
         .form-group label { display: block; margin-bottom: 5px; }
         .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 8px; }
@@ -1272,8 +1297,25 @@ $data = getDashboardData($_SESSION['user_id']);
          <?php if (isset($data['active_rewards']) && is_array($data['active_rewards']) && !empty($data['active_rewards'])): ?>
                <?php foreach ($data['active_rewards'] as $reward): ?>
                   <div class="reward-item">
-                     <p>Reward: <?php echo htmlspecialchars($reward['title']); ?> (<?php echo htmlspecialchars($reward['point_cost']); ?> points)</p>
-                     <p>Description: <?php echo htmlspecialchars($reward['description']); ?></p>
+                     <form method="POST" action="dashboard_parent.php" class="reward-edit-form">
+                        <input type="hidden" name="reward_id" value="<?php echo (int) $reward['id']; ?>">
+                        <div class="form-group">
+                           <label for="reward_title_<?php echo (int) $reward['id']; ?>">Title:</label>
+                           <input type="text" id="reward_title_<?php echo (int) $reward['id']; ?>" name="reward_title" value="<?php echo htmlspecialchars($reward['title']); ?>" required>
+                        </div>
+                        <div class="form-group">
+                           <label for="reward_description_<?php echo (int) $reward['id']; ?>">Description:</label>
+                           <textarea id="reward_description_<?php echo (int) $reward['id']; ?>" name="reward_description"><?php echo htmlspecialchars($reward['description'] ?? ''); ?></textarea>
+                        </div>
+                        <div class="form-group">
+                           <label for="reward_cost_<?php echo (int) $reward['id']; ?>">Point Cost:</label>
+                           <input type="number" id="reward_cost_<?php echo (int) $reward['id']; ?>" name="point_cost" min="1" value="<?php echo (int) $reward['point_cost']; ?>" required>
+                        </div>
+                        <div class="reward-edit-actions">
+                           <button type="submit" name="update_reward" class="button">Save Changes</button>
+                           <button type="submit" name="delete_reward" class="button reward-delete" onclick="return confirm('Delete this reward?');">Delete</button>
+                        </div>
+                     </form>
                   </div>
                <?php endforeach; ?>
          <?php else: ?>

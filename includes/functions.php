@@ -844,6 +844,41 @@ function createReward($parent_user_id, $title, $description, $point_cost) {
    ]);
 }
 
+// Update reward (only while available)
+function updateReward($parent_user_id, $reward_id, $title, $description, $point_cost) {
+    global $db;
+    $title = trim((string)$title);
+    $description = trim((string)$description);
+    $point_cost = max(1, (int)$point_cost);
+
+    $stmt = $db->prepare("UPDATE rewards
+                          SET title = :title,
+                              description = :description,
+                              point_cost = :point_cost
+                          WHERE id = :reward_id
+                            AND parent_user_id = :parent_id
+                            AND status = 'available'");
+    $stmt->execute([
+        ':title' => $title,
+        ':description' => $description,
+        ':point_cost' => $point_cost,
+        ':reward_id' => $reward_id,
+        ':parent_id' => $parent_user_id
+    ]);
+    return $stmt->rowCount() > 0;
+}
+
+// Delete reward (only while available)
+function deleteReward($parent_user_id, $reward_id) {
+    global $db;
+    $stmt = $db->prepare("DELETE FROM rewards WHERE id = :reward_id AND parent_user_id = :parent_id AND status = 'available'");
+    $stmt->execute([
+        ':reward_id' => $reward_id,
+        ':parent_id' => $parent_user_id
+    ]);
+    return $stmt->rowCount() > 0;
+}
+
 // Redeem reward
 function redeemReward($child_user_id, $reward_id) {
     global $db;
