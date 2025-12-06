@@ -251,6 +251,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     } elseif (isset($_POST['fulfill_reward'])) {
         $reward_id = filter_input(INPUT_POST, 'reward_id', FILTER_VALIDATE_INT);
+        if (!$reward_id && isset($_POST['fulfill_reward'])) {
+            $reward_id = filter_input(INPUT_POST, 'fulfill_reward', FILTER_VALIDATE_INT);
+        }
         $message = ($reward_id && fulfillReward($reward_id, $main_parent_id, $_SESSION['user_id']))
             ? "Reward fulfillment recorded."
             : "Unable to mark reward as fulfilled.";
@@ -400,6 +403,7 @@ $data = getDashboardData($_SESSION['user_id']);
         .reward-edit-actions { display: flex; flex-wrap: wrap; gap: 8px; }
         .reward-edit-actions .button { flex: 1 1 140px; text-align: center; }
         .reward-delete { background-color: #d32f2f; }
+        .reward-item.highlight { border: 2px solid #f9a825; box-shadow: 0 0 0 3px rgba(249,168,37,0.2); }
         .form-group { margin-bottom: 15px; }
         .form-group label { display: block; margin-bottom: 5px; }
         .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 8px; }
@@ -579,6 +583,14 @@ $data = getDashboardData($_SESSION['user_id']);
             }
 
             const params = new URLSearchParams(window.location.search);
+            const highlightReward = params.get('highlight_reward');
+            if (highlightReward) {
+                const rewardCard = document.getElementById('reward-' + highlightReward);
+                if (rewardCard) {
+                    rewardCard.classList.add('highlight');
+                    rewardCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+            }
             const overtimeRoutineParam = params.get('overtime_routine');
             if (overtimeRoutineParam) {
                 const target = document.querySelector(`.overtime-routine[data-routine-id="${overtimeRoutineParam}"]`);
@@ -709,7 +721,7 @@ $data = getDashboardData($_SESSION['user_id']);
                         task.textContent = `Task: ${entry.task_title || 'Task'}`;
                         const times = document.createElement('div');
                         times.className = 'meta';
-                        times.textContent = `Scheduled: ${formatDuration(entry.scheduled_seconds)} · Actual: ${formatDuration(entry.actual_seconds)}`;
+                        times.textContent = `Scheduled: ${formatDuration(entry.scheduled_seconds)} � Actual: ${formatDuration(entry.actual_seconds)}`;
                         const overtime = document.createElement('div');
                         overtime.className = 'overtime';
                         overtime.textContent = `Overtime: ${formatDuration(entry.overtime_seconds)}`;
@@ -792,9 +804,28 @@ $data = getDashboardData($_SESSION['user_id']);
                                 <div><?php echo htmlspecialchars($note['message']); ?></div>
                                 <div class="parent-notification-meta">
                                     <?php echo htmlspecialchars(date('m/d/Y h:i A', strtotime($note['created_at']))); ?>
-                                    <?php if (!empty($note['type'])): ?> · <?php echo htmlspecialchars(str_replace('_', ' ', $note['type'])); ?><?php endif; ?>
-                                    <?php if (!empty($note['link_url'])): ?> · <a href="<?php echo htmlspecialchars($note['link_url']); ?>">View</a><?php endif; ?>
+                                    <?php if (!empty($note['type'])): ?> | <?php echo htmlspecialchars(str_replace('_', ' ', $note['type'])); ?><?php endif; ?>
+                                    <?php
+                                        $rewardIdFromLink = null;
+                                        if (!empty($note['link_url'])) {
+                                            $urlParts = parse_url($note['link_url']);
+                                            if (!empty($urlParts['query'])) {
+                                                parse_str($urlParts['query'], $queryVars);
+                                                if (!empty($queryVars['highlight_reward'])) {
+                                                    $rewardIdFromLink = (int)$queryVars['highlight_reward'];
+                                                } elseif (!empty($queryVars['reward_id'])) {
+                                                    $rewardIdFromLink = (int)$queryVars['reward_id'];
+                                                }
+                                            }
+                                            echo ' | <a href="' . htmlspecialchars($note['link_url']) . '">View</a>';
+                                        }
+                                    ?>
                                 </div>
+                                <?php if ($note['type'] === 'reward_redeemed' && $rewardIdFromLink): ?>
+                                    <div class="inline-form" style="margin-top:6px;">
+                                        <button type="submit" name="fulfill_reward" value="<?php echo (int)$rewardIdFromLink; ?>" class="button approve-button">Fulfill</button>
+                                    </div>
+                                <?php endif; ?>
                             </div>
                         </li>
                     <?php endforeach; ?>
@@ -817,10 +848,29 @@ $data = getDashboardData($_SESSION['user_id']);
                                 <div><?php echo htmlspecialchars($note['message']); ?></div>
                                 <div class="parent-notification-meta">
                                     <?php echo htmlspecialchars(date('m/d/Y h:i A', strtotime($note['created_at']))); ?>
-                                    <?php if (!empty($note['link_url'])): ?> · <a href="<?php echo htmlspecialchars($note['link_url']); ?>">View</a><?php endif; ?>
+                                    <?php
+                                        $rewardIdFromLink = null;
+                                        if (!empty($note['link_url'])) {
+                                            $urlParts = parse_url($note['link_url']);
+                                            if (!empty($urlParts['query'])) {
+                                                parse_str($urlParts['query'], $queryVars);
+                                                if (!empty($queryVars['highlight_reward'])) {
+                                                    $rewardIdFromLink = (int)$queryVars['highlight_reward'];
+                                                } elseif (!empty($queryVars['reward_id'])) {
+                                                    $rewardIdFromLink = (int)$queryVars['reward_id'];
+                                                }
+                                            }
+                                            echo ' | <a href="' . htmlspecialchars($note['link_url']) . '">View</a>';
+                                        }
+                                    ?>
                                 </div>
+                                <?php if ($note['type'] === 'reward_redeemed' && $rewardIdFromLink): ?>
+                                    <div class="inline-form" style="margin-top:6px;">
+                                        <button type="submit" name="fulfill_reward" value="<?php echo (int)$rewardIdFromLink; ?>" class="button approve-button">Fulfill</button>
+                                    </div>
+                                <?php endif; ?>
                             </div>
-                            <button type="submit" name="trash_parent_single" value="<?php echo (int)$note['id']; ?>" class="parent-trash-button" aria-label="Move to trash">🗑</button>
+                            <button type="submit" name="trash_parent_single" value="<?php echo (int)$note['id']; ?>" class="parent-trash-button" aria-label="Move to trash">dY-`</button>
                         </li>
                     <?php endforeach; ?>
                 </ul>
@@ -844,7 +894,7 @@ $data = getDashboardData($_SESSION['user_id']);
                                     Deleted: <?php echo htmlspecialchars(date('m/d/Y h:i A', strtotime($note['deleted_at']))); ?>
                                 </div>
                             </div>
-                            <button type="submit" name="delete_parent_single_perm" value="<?php echo (int)$note['id']; ?>" class="parent-trash-button" aria-label="Delete permanently">🗑</button>
+                            <button type="submit" name="delete_parent_single_perm" value="<?php echo (int)$note['id']; ?>" class="parent-trash-button" aria-label="Delete permanently">dY-`</button>
                         </li>
                     <?php endforeach; ?>
                 </ul>
@@ -1101,6 +1151,7 @@ $data = getDashboardData($_SESSION['user_id']);
       <div class="management-links">
          <h2>Management Links</h2>
          <a href="task.php" class="button">Create Task</a>
+         <a href="rewards.php" class="button">Reward Library</a>
          <div>
                <h3>Create Reward</h3>
                <form method="POST" action="dashboard_parent.php">
@@ -1286,7 +1337,7 @@ $data = getDashboardData($_SESSION['user_id']);
             <div class="routine-log-dialog">
                 <div class="routine-log-header">
                     <h4 class="routine-log-title" data-role="routine-log-title">Routine Overtime</h4>
-                    <button type="button" class="routine-log-close" data-role="routine-log-close" aria-label="Close">×</button>
+                    <button type="button" class="routine-log-close" data-role="routine-log-close" aria-label="Close">�</button>
                 </div>
                 <div class="routine-log-body" data-role="routine-log-body"></div>
             </div>
@@ -1296,9 +1347,14 @@ $data = getDashboardData($_SESSION['user_id']);
          <h2>Active Rewards</h2>
          <?php if (isset($data['active_rewards']) && is_array($data['active_rewards']) && !empty($data['active_rewards'])): ?>
                <?php foreach ($data['active_rewards'] as $reward): ?>
-                  <div class="reward-item">
+                  <div class="reward-item" id="reward-<?php echo (int) $reward['id']; ?>">
                      <form method="POST" action="dashboard_parent.php" class="reward-edit-form">
                         <input type="hidden" name="reward_id" value="<?php echo (int) $reward['id']; ?>">
+                        <?php if (!empty($reward['child_name'])): ?>
+                           <p><strong>Assigned to:</strong> <?php echo htmlspecialchars($reward['child_name']); ?></p>
+                        <?php else: ?>
+                           <p><strong>Assigned to:</strong> All children</p>
+                        <?php endif; ?>
                         <div class="form-group">
                            <label for="reward_title_<?php echo (int) $reward['id']; ?>">Title:</label>
                            <input type="text" id="reward_title_<?php echo (int) $reward['id']; ?>" name="reward_title" value="<?php echo htmlspecialchars($reward['title']); ?>" required>
@@ -1503,3 +1559,17 @@ $data = getDashboardData($_SESSION['user_id']);
    </footer>
 </body>
 </html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+

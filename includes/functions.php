@@ -511,8 +511,24 @@ function getDashboardData($user_id) {
         unset($child);
         $data['max_child_points'] = $maxChildPoints;
 
-        // Active rewards for the family
-        $stmt = $db->prepare("SELECT id, title, description, point_cost, created_on FROM rewards WHERE parent_user_id = :parent_id AND status = 'available'");
+        // Active rewards for the family (include child scope if set)
+        $stmt = $db->prepare("SELECT 
+                                  r.id, 
+                                  r.title, 
+                                  r.description, 
+                                  r.point_cost, 
+                                  r.created_on,
+                                  r.child_user_id,
+                                  COALESCE(
+                                      NULLIF(TRIM(CONCAT(COALESCE(cu.first_name, ''), ' ', COALESCE(cu.last_name, ''))), ''),
+                                      NULLIF(cu.name, ''),
+                                      cu.username,
+                                      NULL
+                                  ) AS child_name
+                              FROM rewards r
+                              LEFT JOIN users cu ON r.child_user_id = cu.id
+                              WHERE r.parent_user_id = :parent_id AND r.status = 'available'
+                              ORDER BY r.created_on DESC");
         $stmt->execute([':parent_id' => $main_parent_id]);
         $data['active_rewards'] = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
@@ -589,8 +605,8 @@ function getDashboardData($user_id) {
         $parentStmt->execute([':child_id' => $user_id]);
         $parent_id = $parentStmt->fetchColumn();
         if ($parent_id) {
-            $stmt = $db->prepare("SELECT id, title, description, point_cost FROM rewards WHERE parent_user_id = :parent_id AND status = 'available'");
-            $stmt->execute([':parent_id' => $parent_id]);
+            $stmt = $db->prepare("SELECT id, title, description, point_cost FROM rewards WHERE parent_user_id = :parent_id AND status = 'available' AND (child_user_id IS NULL OR child_user_id = :child_id)");
+            $stmt->execute([':parent_id' => $parent_id, ':child_id' => $user_id]);
             $data['rewards'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
         }
 
@@ -831,12 +847,14 @@ function approveTask($task_id) {
     return false;
 }
 
-// Create reward
-function createReward($parent_user_id, $title, $description, $point_cost) {
+// Create reward (optionally scoped to a child or template)
+function createReward($parent_user_id, $title, $description, $point_cost, $child_user_id = null, $template_id = null) {
     global $db;
-   $stmt = $db->prepare("INSERT INTO rewards (parent_user_id, title, description, point_cost, created_by) VALUES (:parent_id, :title, :description, :point_cost, :created_by)");
+   $stmt = $db->prepare("INSERT INTO rewards (parent_user_id, child_user_id, template_id, title, description, point_cost, created_by) VALUES (:parent_id, :child_id, :template_id, :title, :description, :point_cost, :created_by)");
    return $stmt->execute([
       ':parent_id' => $parent_user_id,
+      ':child_id' => $child_user_id,
+      ':template_id' => $template_id,
       ':title' => $title,
       ':description' => $description,
       ':point_cost' => $point_cost,
@@ -879,14 +897,111 @@ function deleteReward($parent_user_id, $reward_id) {
     return $stmt->rowCount() > 0;
 }
 
+// Reward library helpers
+function createRewardTemplate($parent_user_id, $title, $description, $point_cost, $creator_user_id = null) {
+    global $db;
+    $stmt = $db->prepare("INSERT INTO reward_templates (parent_user_id, title, description, point_cost, created_by) VALUES (:parent_id, :title, :description, :point_cost, :created_by)");
+    return $stmt->execute([
+        ':parent_id' => $parent_user_id,
+        ':title' => trim((string)$title),
+        ':description' => trim((string)$description),
+        ':point_cost' => max(1, (int)$point_cost),
+        ':created_by' => $creator_user_id ?: $parent_user_id
+    ]);
+}
+
+function deleteRewardTemplate($parent_user_id, $template_id) {
+    global $db;
+    $stmt = $db->prepare("DELETE FROM reward_templates WHERE id = :template_id AND parent_user_id = :parent_id");
+    $stmt->execute([
+        ':template_id' => $template_id,
+        ':parent_id' => $parent_user_id
+    ]);
+    return $stmt->rowCount() > 0;
+}
+
+function updateRewardTemplate($parent_user_id, $template_id, $title, $description, $point_cost) {
+    global $db;
+    $title = trim((string)$title);
+    $description = trim((string)$description);
+    $point_cost = max(1, (int)$point_cost);
+    $stmt = $db->prepare("UPDATE reward_templates
+                          SET title = :title,
+                              description = :description,
+                              point_cost = :point_cost
+                          WHERE id = :template_id AND parent_user_id = :parent_id");
+    $stmt->execute([
+        ':title' => $title,
+        ':description' => $description,
+        ':point_cost' => $point_cost,
+        ':template_id' => $template_id,
+        ':parent_id' => $parent_user_id
+    ]);
+    return $stmt->rowCount() > 0;
+}
+
+function getRewardTemplates($parent_user_id) {
+    global $db;
+    $stmt = $db->prepare("SELECT id, title, description, point_cost, created_at FROM reward_templates WHERE parent_user_id = :parent_id ORDER BY created_at DESC");
+    $stmt->execute([':parent_id' => $parent_user_id]);
+    return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+}
+
+function assignTemplateToChildren($parent_user_id, $template_id, array $child_user_ids, $creator_user_id = null) {
+    global $db;
+    $child_user_ids = array_values(array_unique(array_filter(array_map('intval', $child_user_ids))));
+    if (empty($child_user_ids)) {
+        return 0;
+    }
+
+    $templateStmt = $db->prepare("SELECT title, description, point_cost FROM reward_templates WHERE id = :template_id AND parent_user_id = :parent_id");
+    $templateStmt->execute([
+        ':template_id' => $template_id,
+        ':parent_id' => $parent_user_id
+    ]);
+    $template = $templateStmt->fetch(PDO::FETCH_ASSOC);
+    if (!$template) {
+        return 0;
+    }
+
+    $inserted = 0;
+    foreach ($child_user_ids as $child_id) {
+        // Skip if an available reward from this template already exists for this child
+        $existing = $db->prepare("SELECT id FROM rewards WHERE parent_user_id = :parent_id AND child_user_id = :child_id AND template_id = :template_id AND status = 'available' LIMIT 1");
+        $existing->execute([
+            ':parent_id' => $parent_user_id,
+            ':child_id' => $child_id,
+            ':template_id' => $template_id
+        ]);
+        if ($existing->fetchColumn()) {
+            continue;
+        }
+
+        $created = createReward(
+            $parent_user_id,
+            $template['title'],
+            $template['description'],
+            $template['point_cost'],
+            $child_id,
+            $template_id
+        );
+        if ($created) {
+            $inserted++;
+        }
+    }
+    return $inserted;
+}
+
 // Redeem reward
 function redeemReward($child_user_id, $reward_id) {
     global $db;
+    $parent_id = getFamilyRootId($child_user_id);
     $db->beginTransaction();
     try {
-        $stmt = $db->prepare("SELECT point_cost FROM rewards WHERE id = :id AND status = 'available'");
-        $stmt->execute([':id' => $reward_id]);
-        $point_cost = $stmt->fetchColumn();
+        $stmt = $db->prepare("SELECT title, point_cost FROM rewards WHERE id = :id AND status = 'available' AND parent_user_id = :parent_id AND (child_user_id IS NULL OR child_user_id = :child_id)");
+        $stmt->execute([':id' => $reward_id, ':parent_id' => $parent_id, ':child_id' => $child_user_id]);
+        $rewardRow = $stmt->fetch(PDO::FETCH_ASSOC);
+        $point_cost = $rewardRow['point_cost'] ?? null;
         if (!$point_cost) {
             $db->rollBack();
             return false;
@@ -906,6 +1021,12 @@ function redeemReward($child_user_id, $reward_id) {
         $stmt->execute([':child_id' => $child_user_id, ':id' => $reward_id]);
 
         $db->commit();
+        // Notify parent
+        $childName = getDisplayName($child_user_id);
+        $title = $rewardRow['title'] ?? 'Reward';
+        $message = ($childName ?: 'Child') . " redeemed \"" . $title . "\" (" . (int)$point_cost . " pts).";
+        $link = "dashboard_parent.php?highlight_reward=" . (int)$reward_id . "#reward-" . (int)$reward_id;
+        addParentNotification($parent_id, 'reward_redeemed', $message, $link);
         return true;
     } catch (Exception $e) {
         $db->rollBack();
@@ -1816,10 +1937,27 @@ try {
    $db->exec("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS created_by INT NULL");
    error_log("Added/verified created_by in tasks");
 
+   // Create reward_templates table (library of reusable rewards)
+   $sql = "CREATE TABLE IF NOT EXISTS reward_templates (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      parent_user_id INT NOT NULL,
+      title VARCHAR(100) NOT NULL,
+      description TEXT,
+      point_cost INT NOT NULL,
+      created_by INT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (parent_user_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+   )";
+   $db->exec($sql);
+   error_log("Created/verified reward_templates table successfully");
+
    // Create rewards table if not exists (added created_by)
    $sql = "CREATE TABLE IF NOT EXISTS rewards (
    id INT AUTO_INCREMENT PRIMARY KEY,
    parent_user_id INT NOT NULL,
+   child_user_id INT NULL,
+   template_id INT NULL,
    title VARCHAR(100) NOT NULL,
    description TEXT,
    point_cost INT NOT NULL,
@@ -1831,6 +1969,8 @@ try {
    fulfilled_by INT NULL,
    created_by INT NULL,
    FOREIGN KEY (parent_user_id) REFERENCES users(id) ON DELETE CASCADE,
+   FOREIGN KEY (child_user_id) REFERENCES users(id) ON DELETE CASCADE,
+   FOREIGN KEY (template_id) REFERENCES reward_templates(id) ON DELETE SET NULL,
    FOREIGN KEY (redeemed_by) REFERENCES users(id) ON DELETE SET NULL,
    FOREIGN KEY (fulfilled_by) REFERENCES users(id) ON DELETE SET NULL,
    FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
@@ -1843,6 +1983,18 @@ try {
    error_log("Added/verified created_by in rewards");
    $db->exec("ALTER TABLE rewards ADD COLUMN IF NOT EXISTS fulfilled_on DATETIME NULL");
    $db->exec("ALTER TABLE rewards ADD COLUMN IF NOT EXISTS fulfilled_by INT NULL");
+   $db->exec("ALTER TABLE rewards ADD COLUMN IF NOT EXISTS child_user_id INT NULL");
+   $db->exec("ALTER TABLE rewards ADD COLUMN IF NOT EXISTS template_id INT NULL");
+   try {
+       $db->exec("ALTER TABLE rewards ADD CONSTRAINT fk_rewards_child_user FOREIGN KEY (child_user_id) REFERENCES users(id) ON DELETE CASCADE");
+   } catch (PDOException $e) {
+       error_log("Skipped adding child_user_id FK on rewards: " . $e->getMessage());
+   }
+   try {
+       $db->exec("ALTER TABLE rewards ADD CONSTRAINT fk_rewards_template FOREIGN KEY (template_id) REFERENCES reward_templates(id) ON DELETE SET NULL");
+   } catch (PDOException $e) {
+       error_log("Skipped adding template_id FK on rewards: " . $e->getMessage());
+   }
 
    // Create goals table with corrected constraints
    $sql = "CREATE TABLE IF NOT EXISTS goals (
