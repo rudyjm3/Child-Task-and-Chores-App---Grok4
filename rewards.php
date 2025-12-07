@@ -12,7 +12,7 @@ $main_parent_id = getFamilyRootId($_SESSION['user_id']);
 $messages = [];
 
 // Load children for this family
-$childStmt = $db->prepare("SELECT child_user_id, child_name FROM child_profiles WHERE parent_user_id = :parent_id ORDER BY child_name");
+$childStmt = $db->prepare("SELECT child_user_id, child_name, avatar FROM child_profiles WHERE parent_user_id = :parent_id ORDER BY child_name");
 $childStmt->execute([':parent_id' => $main_parent_id]);
 $children = $childStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
@@ -110,14 +110,24 @@ $recentRewards = $activeRewardStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
         .button.secondary { background: #1565c0; }
         .button.danger { background: #c62828; }
         .template-grid { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-start; }
-        .template-card { flex: 1 1 260px; border: 1px solid #e0e4ee; border-radius: 10px; padding: 14px; background: #fff; box-shadow: 0 2px 6px rgba(0,0,0,0.05); display: grid; gap: 10px; position: relative; max-width: 350px; }
+        .template-card { flex: 1 1 285px; border: 1px solid #e0e4ee; border-radius: 10px; padding: 14px; background: #fff; box-shadow: 0 2px 6px rgba(0,0,0,0.05); display: grid; gap: 10px; position: relative; max-width: 288px; }
         .template-actions { display: flex; gap: 8px; justify-content: flex-start; flex-wrap: wrap; align-items: center; }
         .template-actions .button { flex: 0 0 auto; text-align: center; }
         .badge { display: inline-block; background: #e3f2fd; color: #0d47a1; padding: 4px 8px; border-radius: 12px; font-size: 0.85em; }
         .message { background: #e8f5e9; color: #2e7d32; border: 1px solid #c8e6c9; padding: 10px 12px; border-radius: 6px; margin-bottom: 10px; }
         .recent-list { display: grid; gap: 8px; }
         .recent-item { border: 1px solid #eceff4; border-radius: 8px; padding: 10px; background: #fff; display: flex; justify-content: space-between; gap: 10px; }
-        .child-select { display: grid; gap: 6px; max-height: 180px; overflow-y: auto; padding: 8px; border: 1px solid #e0e4ee; border-radius: 8px; background: #fff; }
+        .child-select-group { display: grid; gap: 10px; }
+        .child-select-grid { display: flex; flex-wrap: wrap; gap: 12px; }
+        .child-select-card { border: none; border-radius: 50%; padding: 0; background: transparent; display: grid; justify-items: center; gap: 8px; cursor: pointer; position: relative; }
+        .child-select-card input[type="checkbox"] { position: absolute; opacity: 0; width: 0; height: 0; pointer-events: none; }
+        .child-select-card img { width: 52px; height: 52px; border-radius: 50%; object-fit: cover; box-shadow: 0 2px 6px rgba(0,0,0,0.15); transition: box-shadow 150ms ease, transform 150ms ease; }
+        .child-select-card strong { font-size: 13px; width: min-content; text-align: center; transition: color 150ms ease, text-shadow 150ms ease; }
+        .child-select-card:has(input[type="checkbox"]:checked) img { box-shadow: 0 0 0 4px rgba(100,181,246,0.8), 0 0 14px rgba(100,181,246,0.8); transform: translateY(-2px); }
+        .child-select-card:has(input[type="checkbox"]:checked) strong { color: #0d47a1; text-shadow: 0 1px 8px rgba(100,181,246,0.8); }
+        .assign-all { display: inline-flex; align-items: center; gap: 8px; margin-top: 8px; cursor: pointer; font-weight: 600; color: #0d47a1; }
+        .assign-all input { width: 18px; height: 18px; margin: 0; }
+        .assign-all.active { background: rgba(100,181,246,0.1); padding: 6px 10px; border-radius: 999px; box-shadow: 0 0 0 3px rgba(100,181,246,0.2); }
         .hidden { display: none !important; }
     </style>
 </head>
@@ -166,22 +176,26 @@ $recentRewards = $activeRewardStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
                             <?php endforeach; ?>
                         </select>
                     </div>
-                    <div class="form-group">
+                    <div class="form-group child-select-group">
                         <label>Choose Children</label>
-                        <div class="child-select">
+                        <div class="child-select-grid">
                             <?php if (!empty($children)): ?>
-                                <?php foreach ($children as $child): ?>
-                                    <label>
+                                <?php foreach ($children as $child): 
+                                    $avatar = !empty($child['avatar']) ? $child['avatar'] : 'images/default-avatar.png';
+                                ?>
+                                    <label class="child-select-card">
                                         <input type="checkbox" name="child_user_ids[]" value="<?php echo (int)$child['child_user_id']; ?>">
-                                        <?php echo htmlspecialchars($child['child_name']); ?>
+                                        <img src="<?php echo htmlspecialchars($avatar); ?>" alt="<?php echo htmlspecialchars($child['child_name']); ?>">
+                                        <strong><?php echo htmlspecialchars($child['child_name']); ?></strong>
                                     </label>
                                 <?php endforeach; ?>
                             <?php else: ?>
                                 <p>No children found.</p>
                             <?php endif; ?>
                         </div>
-                        <label style="display:block; margin-top:8px;">
-                            <input type="checkbox" name="assign_all_children" value="1"> Assign to all children
+                        <label class="assign-all">
+                            <input type="checkbox" name="assign_all_children" value="1">
+                            Assign to all children
                         </label>
                     </div>
                     <button type="submit" name="assign_template" class="button">Create Rewards</button>
