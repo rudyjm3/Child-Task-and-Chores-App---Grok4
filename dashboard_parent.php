@@ -50,17 +50,12 @@ $routine_overtime_logs = getRoutineOvertimeLogs($main_parent_id, 25);
 $routine_overtime_stats = getRoutineOvertimeStats($main_parent_id);
 $overtimeByChild = $routine_overtime_stats['by_child'] ?? [];
 $overtimeByRoutine = $routine_overtime_stats['by_routine'] ?? [];
-$parentNotices = getParentNotifications($main_parent_id);
-$parentNew = $parentNotices['new'] ?? [];
-$parentRead = $parentNotices['read'] ?? [];
-$parentDeleted = $parentNotices['deleted'] ?? [];
-$parentNotificationCount = count($parentNew);
 $overtimeLogGroups = [];
 $overtimeLogsByRoutine = [];
-if (!empty($routine_overtime_logs) && is_array($routine_overtime_logs)) {
-    foreach ($routine_overtime_logs as $log) {
-        $timestamp = strtotime($log['occurred_at']);
-        $dateKey = $timestamp ? date('Y-m-d', $timestamp) : 'unknown';
+        if (!empty($routine_overtime_logs) && is_array($routine_overtime_logs)) {
+            foreach ($routine_overtime_logs as $log) {
+                $timestamp = strtotime($log['occurred_at']);
+                $dateKey = $timestamp ? date('Y-m-d', $timestamp) : 'unknown';
         $dateLabel = $timestamp ? date('l, M j, Y', $timestamp) : 'Unknown date';
         if (!isset($overtimeLogGroups[$dateKey])) {
             $overtimeLogGroups[$dateKey] = [
@@ -148,7 +143,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt = $db->prepare("DELETE FROM parent_notifications WHERE id IN ($placeholders) AND parent_user_id = ?");
             $stmt->execute($params);
             $message = "Notifications deleted.";
-            $parentNotices = getParentNotifications($main_parent_id);
         }
     } elseif (isset($_POST['create_reward'])) {
         $title = filter_input(INPUT_POST, 'reward_title', FILTER_SANITIZE_STRING);
@@ -258,9 +252,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!$reward_id && isset($_POST['fulfill_reward'])) {
             $reward_id = filter_input(INPUT_POST, 'fulfill_reward', FILTER_VALIDATE_INT);
         }
+        $parent_notification_id = filter_input(INPUT_POST, 'parent_notification_id', FILTER_VALIDATE_INT);
         $message = ($reward_id && fulfillReward($reward_id, $main_parent_id, $_SESSION['user_id']))
             ? "Reward fulfillment recorded."
             : "Unable to mark reward as fulfilled.";
+        if ($message === "Reward fulfillment recorded." && $parent_notification_id) {
+            ensureParentNotificationsTable();
+            $mark = $db->prepare("UPDATE parent_notifications SET is_read = 1 WHERE id = :id AND parent_user_id = :pid");
+            $mark->execute([':id' => $parent_notification_id, ':pid' => $main_parent_id]);
+        }
     } elseif (isset($_POST['add_child'])) {
         if (!canAddEditChild($_SESSION['user_id'])) {
             $message = "You do not have permission to add children.";
@@ -340,6 +340,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
+$parentNotices = getParentNotifications($main_parent_id);
+$parentNew = $parentNotices['new'] ?? [];
+$parentRead = $parentNotices['read'] ?? [];
+$parentDeleted = $parentNotices['deleted'] ?? [];
+$parentNotificationCount = count($parentNew);
+$parentNotices = getParentNotifications($main_parent_id);
+$parentNew = $parentNotices['new'] ?? [];
+$parentRead = $parentNotices['read'] ?? [];
+$parentDeleted = $parentNotices['deleted'] ?? [];
+$parentNotificationCount = count($parentNew);
+$getRewardFulfillMeta = function($rewardId) use ($db) {
+    static $cache = [];
+    $rewardId = (int)$rewardId;
+    if ($rewardId <= 0) return null;
+    if (isset($cache[$rewardId])) return $cache[$rewardId];
+    $stmt = $db->prepare("SELECT fulfilled_on, fulfilled_by FROM rewards WHERE id = :id");
+    $stmt->execute([':id' => $rewardId]);
+    $cache[$rewardId] = $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
+    return $cache[$rewardId];
+};
 $data = getDashboardData($_SESSION['user_id']);
 ?>
 <!DOCTYPE html>
@@ -607,6 +627,14 @@ $data = getDashboardData($_SESSION['user_id']);
                     rewardCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 }
             }
+            const highlightRedeemed = params.get('highlight_redeemed');
+            if (highlightRedeemed) {
+                const redeemedCard = document.getElementById('redeemed-reward-' + highlightRedeemed);
+                if (redeemedCard) {
+                    redeemedCard.classList.add('highlight');
+                    redeemedCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+            }
             const overtimeRoutineParam = params.get('overtime_routine');
             if (overtimeRoutineParam) {
                 const target = document.querySelector(`.overtime-routine[data-routine-id="${overtimeRoutineParam}"]`);
@@ -815,30 +843,52 @@ $data = getDashboardData($_SESSION['user_id']);
                                     <div class="parent-notification-meta">
                                         <?php echo htmlspecialchars(date('m/d/Y h:i A', strtotime($note['created_at']))); ?>
                                         <?php if (!empty($note['type'])): ?> | <?php echo htmlspecialchars(str_replace('_', ' ', $note['type'])); ?><?php endif; ?>
-                                        <?php
-                                            $rewardIdFromLink = null;
-                                            if (!empty($note['link_url'])) {
-                                                $urlParts = parse_url($note['link_url']);
-                                                if (!empty($urlParts['query'])) {
-                                                    parse_str($urlParts['query'], $queryVars);
-                                                    if (!empty($queryVars['highlight_reward'])) {
-                                                        $rewardIdFromLink = (int)$queryVars['highlight_reward'];
-                                                    } elseif (!empty($queryVars['reward_id'])) {
-                                                        $rewardIdFromLink = (int)$queryVars['reward_id'];
-                                                    }
+                                    <?php
+                                        $rewardIdFromLink = null;
+                                        $viewLink = !empty($note['link_url']) ? $note['link_url'] : null;
+                                        if (!empty($note['link_url'])) {
+                                            $urlParts = parse_url($note['link_url']);
+                                            if (!empty($urlParts['query'])) {
+                                                parse_str($urlParts['query'], $queryVars);
+                                                if (!empty($queryVars['highlight_reward'])) {
+                                                    $rewardIdFromLink = (int)$queryVars['highlight_reward'];
+                                                } elseif (!empty($queryVars['reward_id'])) {
+                                                    $rewardIdFromLink = (int)$queryVars['reward_id'];
                                                 }
-                                                echo ' | <a href="' . htmlspecialchars($note['link_url']) . '">View</a>';
                                             }
-                                        ?>
-                                    </div>
-                                    <?php if ($note['type'] === 'reward_redeemed' && $rewardIdFromLink): ?>
+                                        }
+                                        if ($note['type'] === 'reward_redeemed' && $rewardIdFromLink) {
+                                            $viewLink = 'dashboard_parent.php?highlight_redeemed=' . (int)$rewardIdFromLink . '#redeemed-reward-' . (int)$rewardIdFromLink;
+                                        }
+                                        if ($viewLink) {
+                                            echo ' | <a href="' . htmlspecialchars($viewLink) . '">View</a>';
+                                        }
+                                        $fulfillMeta = $rewardIdFromLink ? $getRewardFulfillMeta($rewardIdFromLink) : null;
+                                    ?>
+                                </div>
+                                <?php if ($note['type'] === 'reward_redeemed' && $rewardIdFromLink): ?>
+                                    <?php if (!empty($fulfillMeta) && !empty($fulfillMeta['fulfilled_on'])): ?>
+                                        <div class="parent-notification-meta">
+                                            Fulfilled on: <?php echo htmlspecialchars(date('m/d/Y h:i A', strtotime($fulfillMeta['fulfilled_on']))); ?>
+                                            <?php if (!empty($fulfillMeta['fulfilled_by'])):
+                                                $fulfillNameStmt = $db->prepare("SELECT CONCAT(first_name, ' ', last_name) AS name, username FROM users WHERE id = :uid");
+                                                $fulfillNameStmt->execute([':uid' => (int)$fulfillMeta['fulfilled_by']]);
+                                                $fn = $fulfillNameStmt->fetch(PDO::FETCH_ASSOC);
+                                                $fulfillName = $fn && trim($fn['name']) !== '' ? $fn['name'] : ($fn['username'] ?? '');
+                                            ?>
+                                                by <?php echo htmlspecialchars($fulfillName); ?>
+                                            <?php endif; ?>
+                                        </div>
+                                    <?php else: ?>
                                         <div class="inline-form" style="margin-top:6px;">
+                                            <input type="hidden" name="parent_notification_id" value="<?php echo (int)$note['id']; ?>">
                                             <button type="submit" name="fulfill_reward" value="<?php echo (int)$rewardIdFromLink; ?>" class="button approve-button">Fulfill</button>
                                         </div>
                                     <?php endif; ?>
-                                </div>
-                            </li>
-                        <?php endforeach; ?>
+                                <?php endif; ?>
+                            </div>
+                        </li>
+                    <?php endforeach; ?>
                     </ul>
                     <div class="parent-notification-actions">
                         <button type="submit" name="mark_parent_notifications_read" class="button secondary">Mark Selected as Read</button>
@@ -860,6 +910,7 @@ $data = getDashboardData($_SESSION['user_id']);
                                         <?php echo htmlspecialchars(date('m/d/Y h:i A', strtotime($note['created_at']))); ?>
                                         <?php
                                             $rewardIdFromLink = null;
+                                            $viewLink = !empty($note['link_url']) ? $note['link_url'] : null;
                                             if (!empty($note['link_url'])) {
                                                 $urlParts = parse_url($note['link_url']);
                                                 if (!empty($urlParts['query'])) {
@@ -870,14 +921,35 @@ $data = getDashboardData($_SESSION['user_id']);
                                                         $rewardIdFromLink = (int)$queryVars['reward_id'];
                                                     }
                                                 }
-                                                echo ' | <a href="' . htmlspecialchars($note['link_url']) . '">View</a>';
                                             }
+                                            if ($note['type'] === 'reward_redeemed' && $rewardIdFromLink) {
+                                                $viewLink = 'dashboard_parent.php?highlight_redeemed=' . (int)$rewardIdFromLink . '#redeemed-reward-' . (int)$rewardIdFromLink;
+                                            }
+                                            if ($viewLink) {
+                                                echo ' | <a href="' . htmlspecialchars($viewLink) . '">View</a>';
+                                            }
+                                            $fulfillMeta = $rewardIdFromLink ? $getRewardFulfillMeta($rewardIdFromLink) : null;
                                         ?>
                                     </div>
                                     <?php if ($note['type'] === 'reward_redeemed' && $rewardIdFromLink): ?>
-                                        <div class="inline-form" style="margin-top:6px;">
-                                            <button type="submit" name="fulfill_reward" value="<?php echo (int)$rewardIdFromLink; ?>" class="button approve-button">Fulfill</button>
-                                        </div>
+                                        <?php if (!empty($fulfillMeta) && !empty($fulfillMeta['fulfilled_on'])): ?>
+                                            <div class="parent-notification-meta">
+                                                Fulfilled on: <?php echo htmlspecialchars(date('m/d/Y h:i A', strtotime($fulfillMeta['fulfilled_on']))); ?>
+                                                <?php if (!empty($fulfillMeta['fulfilled_by'])):
+                                                    $fulfillNameStmt = $db->prepare("SELECT CONCAT(first_name, ' ', last_name) AS name, username FROM users WHERE id = :uid");
+                                                    $fulfillNameStmt->execute([':uid' => (int)$fulfillMeta['fulfilled_by']]);
+                                                    $fn = $fulfillNameStmt->fetch(PDO::FETCH_ASSOC);
+                                                    $fulfillName = $fn && trim($fn['name']) !== '' ? $fn['name'] : ($fn['username'] ?? '');
+                                                ?>
+                                                    by <?php echo htmlspecialchars($fulfillName); ?>
+                                                <?php endif; ?>
+                                            </div>
+                                        <?php else: ?>
+                                            <div class="inline-form" style="margin-top:6px;">
+                                                <input type="hidden" name="parent_notification_id" value="<?php echo (int)$note['id']; ?>">
+                                                <button type="submit" name="fulfill_reward" value="<?php echo (int)$rewardIdFromLink; ?>" class="button approve-button">Fulfill</button>
+                                            </div>
+                                        <?php endif; ?>
                                     <?php endif; ?>
                                 </div>
                                 <button type="submit" name="trash_parent_single" value="<?php echo (int)$note['id']; ?>" class="parent-trash-button" aria-label="Move to trash"><i class="fa-solid fa-trash"></i></button>
@@ -919,12 +991,6 @@ $data = getDashboardData($_SESSION['user_id']);
       </div>
    </div><main class="dashboard">
       <?php if (isset($message)) echo "<p>$message</p>"; ?>
-      <?php
-        $parentNew = $parentNotices['new'] ?? [];
-        $parentRead = $parentNotices['read'] ?? [];
-        $parentDeleted = $parentNotices['deleted'] ?? [];
-        $parentNotificationCount = count($parentNew);
-      ?>
       
       <div class="children-overview">
          <h2>Children Overview</h2>
@@ -1398,7 +1464,7 @@ $data = getDashboardData($_SESSION['user_id']);
          <h2>Redeemed Rewards</h2>
           <?php if (isset($data['redeemed_rewards']) && is_array($data['redeemed_rewards']) && !empty($data['redeemed_rewards'])): ?>
                 <?php foreach ($data['redeemed_rewards'] as $reward): ?>
-                   <div class="reward-item">
+                   <div class="reward-item" id="redeemed-reward-<?php echo (int) $reward['id']; ?>">
                       <p>Reward: <?php echo htmlspecialchars($reward['title']); ?> (<?php echo htmlspecialchars($reward['point_cost']); ?> points)</p>
                       <p>Description: <?php echo htmlspecialchars($reward['description']); ?></p>
                       <p>Redeemed by: <?php echo htmlspecialchars($reward['child_username'] ?? 'Unknown'); ?></p>
