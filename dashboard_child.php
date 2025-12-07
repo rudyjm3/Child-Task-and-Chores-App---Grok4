@@ -498,7 +498,7 @@ $notificationCount = is_array($notificationsNew) ? count($notificationsNew) : 0;
       </div>
    </main>
    <footer>
-   <p>Child Task and Chore App - Ver 3.10.16</p>
+   <p>Child Task and Chore App - Ver 3.11.0</p>
 </footer>
 </body>
 </html>

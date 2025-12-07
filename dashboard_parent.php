@@ -1571,7 +1571,7 @@ $data = getDashboardData($_SESSION['user_id']);
         </div>
     </div>
     <footer>
-      <p>Child Task and Chores App - Ver 3.10.16</p>
+      <p>Child Task and Chores App - Ver 3.11.0</p>
    </footer>
 </body>
 </html>
