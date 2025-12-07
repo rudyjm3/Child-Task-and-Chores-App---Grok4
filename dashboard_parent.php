@@ -345,6 +345,7 @@ $data = getDashboardData($_SESSION['user_id']);
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Parent Dashboard</title>
     <link rel="stylesheet" href="css/main.css?v=3.10.16">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" integrity="Evv84Mr4kqVGRNSgIGL/F/aIDqQb7xQ2vcrdIwxfjThSH8CSR7PBEakCr51Ck+w+/U6swU2Im1vVX0SVk9ABhg==" crossorigin="anonymous" referrerpolicy="no-referrer">
     <style>
         .dashboard { padding: 20px; max-width: 900px; margin: 0 auto; }
         .children-overview, .management-links, .active-rewards, .redeemed-rewards, .pending-approvals, .completed-goals, .manage-family { margin-top: 20px; }
@@ -480,9 +481,9 @@ $data = getDashboardData($_SESSION['user_id']);
         .parent-notifications.open .parent-notification-list { display: grid; }
         .parent-notifications-header { display: flex; align-items: center; gap: 10px; cursor: pointer; }
         .parent-notifications-title { margin: 0; color: #333; display: flex; align-items: center; gap: 8px; font-weight: 700; }
-        .parent-notification-icon { width: 32px; height: 32px; position: relative; display: inline-flex; align-items: center; justify-content: center; background: #fff; border-radius: 50%; border: 2px solid #c8e6c9; box-shadow: 0 2px 4px rgba(0,0,0,0.12); }
-        .parent-notification-icon svg { width: 18px; height: 18px; fill: #4caf50; }
-        .parent-notification-badge { position: absolute; top: -6px; right: -6px; background: #e53935; color: #fff; border-radius: 12px; padding: 2px 6px; font-size: 0.75rem; font-weight: 700; min-width: 22px; text-align: center; }
+        .parent-notification-icon { width: 34px; height: 34px; position: relative; display: inline-flex; align-items: center; justify-content: center; background: #fff; border-radius: 50%; border: 2px solid #c8e6c9; box-shadow: 0 2px 4px rgba(0,0,0,0.12); flex-shrink: 0; margin-right: 6px; }
+        .parent-notification-icon i { font-size: 18px; color: #4caf50; line-height: 1; }
+        .parent-notification-badge { position: absolute; top: -6px; right: -8px; background: #e53935; color: #fff; border-radius: 12px; padding: 2px 6px; font-size: 0.75rem; font-weight: 700; min-width: 22px; text-align: center; }
         .parent-notification-list { list-style: none; padding: 0; margin: 12px 0; display: none; gap: 8px; }
         .parent-notification-item { padding: 10px; background: #fff; border: 1px solid #e0e0e0; border-radius: 8px; display: grid; gap: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
         .parent-notification-meta { font-size: 0.9em; color: #666; }
@@ -721,7 +722,7 @@ $data = getDashboardData($_SESSION['user_id']);
                         task.textContent = `Task: ${entry.task_title || 'Task'}`;
                         const times = document.createElement('div');
                         times.className = 'meta';
-                        times.textContent = `Scheduled: ${formatDuration(entry.scheduled_seconds)} · Actual: ${formatDuration(entry.actual_seconds)}`;
+                        times.textContent = `Scheduled: ${formatDuration(entry.scheduled_seconds)} ï¿½ Actual: ${formatDuration(entry.actual_seconds)}`;
                         const overtime = document.createElement('div');
                         overtime.className = 'overtime';
                         overtime.textContent = `Overtime: ${formatDuration(entry.overtime_seconds)}`;
@@ -780,8 +781,7 @@ $data = getDashboardData($_SESSION['user_id']);
       ?>
       <section class="parent-notifications" data-role="parent-notifications">
         <div class="parent-notifications-header" data-action="toggle-parent-notifications">
-            <div class="parent-notification-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" focusable="false"><path d="M12 24a2.5 2.5 0 0 0 2.45-2h-4.9A2.5 2.5 0 0 0 12 24Zm7.12-6.41-1.17-1.11V11a6 6 0 0 0-5-5.9V4a1 1 0 1 0-2 0v1.1A6 6 0 0 0 5.05 11v5.48l-1.17 1.11A1 1 0 0 0 4.6 19h14.8a1 1 0 0 0 .72-1.69Z"/></svg>
+            <div class="parent-notification-icon" aria-hidden="true"><i class="fa-solid fa-bell"></i>
                 <?php if ($parentNotificationCount > 0): ?>
                     <span class="parent-notification-badge"><?php echo (int)$parentNotificationCount; ?></span>
                 <?php endif; ?>
@@ -870,7 +870,7 @@ $data = getDashboardData($_SESSION['user_id']);
                                     </div>
                                 <?php endif; ?>
                             </div>
-                            <button type="submit" name="trash_parent_single" value="<?php echo (int)$note['id']; ?>" class="parent-trash-button" aria-label="Move to trash">dY-`</button>
+                            <button type="submit" name="trash_parent_single" value="<?php echo (int)$note['id']; ?>" class="parent-trash-button" aria-label="Move to trash"><i class="fa-solid fa-trash"></i></button>
                         </li>
                     <?php endforeach; ?>
                 </ul>
@@ -894,7 +894,7 @@ $data = getDashboardData($_SESSION['user_id']);
                                     Deleted: <?php echo htmlspecialchars(date('m/d/Y h:i A', strtotime($note['deleted_at']))); ?>
                                 </div>
                             </div>
-                            <button type="submit" name="delete_parent_single_perm" value="<?php echo (int)$note['id']; ?>" class="parent-trash-button" aria-label="Delete permanently">dY-`</button>
+                            <button type="submit" name="delete_parent_single_perm" value="<?php echo (int)$note['id']; ?>" class="parent-trash-button" aria-label="Delete permanently"><i class="fa-solid fa-trash"></i></button>
                         </li>
                     <?php endforeach; ?>
                 </ul>
@@ -1337,7 +1337,7 @@ $data = getDashboardData($_SESSION['user_id']);
             <div class="routine-log-dialog">
                 <div class="routine-log-header">
                     <h4 class="routine-log-title" data-role="routine-log-title">Routine Overtime</h4>
-                    <button type="button" class="routine-log-close" data-role="routine-log-close" aria-label="Close">×</button>
+                    <button type="button" class="routine-log-close" data-role="routine-log-close" aria-label="Close">ï¿½</button>
                 </div>
                 <div class="routine-log-body" data-role="routine-log-body"></div>
             </div>
@@ -1559,6 +1559,14 @@ $data = getDashboardData($_SESSION['user_id']);
    </footer>
 </body>
 </html>
+
+
+
+
+
+
+
+
 
 
 

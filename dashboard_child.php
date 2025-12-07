@@ -96,6 +96,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Child Dashboard</title>
    <link rel="stylesheet" href="css/main.css?v=3.10.16">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" integrity="Evv84Mr4kqVGRNSgIGL/F/aIDqQb7xQ2vcrdIwxfjThSH8CSR7PBEakCr51Ck+w+/U6swU2Im1vVX0SVk9ABhg==" crossorigin="anonymous" referrerpolicy="no-referrer">
     <style>
         .dashboard { padding: 20px; max-width: 720px; margin: 0 auto; text-align: center; }
         .progress { margin: 20px 0; display: grid; gap: 12px; text-align: left; color: #263238; }
@@ -130,7 +131,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         .notifications-header { display: flex; align-items: center; gap: 10px; cursor: pointer; }
         .notifications h2 { margin: 0; color: #ef6c00; display: flex; align-items: center; gap: 8px; }
         .notification-icon { width: 32px; height: 32px; position: relative; display: inline-flex; align-items: center; justify-content: center; background: #fff; border-radius: 50%; border: 2px solid #ffb74d; box-shadow: 0 2px 4px rgba(0,0,0,0.15); }
-        .notification-icon svg { width: 18px; height: 18px; fill: #ef6c00; }
+        .notification-icon i { font-size: 18px; color: #ef6c00; line-height: 1; }
         .notification-badge { position: absolute; top: -6px; right: -6px; background: #d32f2f; color: #fff; border-radius: 12px; padding: 2px 6px; font-size: 0.75rem; font-weight: 700; min-width: 22px; text-align: center; }
         .notification-list { list-style: none; padding: 0; margin: 12px 0; display: none; gap: 10px; }
         .notifications.open .notification-list { display: grid; }
@@ -250,8 +251,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       </div>
       <div class="notifications" data-role="notifications">
          <div class="notifications-header" data-action="toggle-notifications">
-            <div class="notification-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" focusable="false"><path d="M12 24a2.5 2.5 0 0 0 2.45-2h-4.9A2.5 2.5 0 0 0 12 24Zm7.12-6.41-1.17-1.11V11a6 6 0 0 0-5-5.9V4a1 1 0 1 0-2 0v1.1A6 6 0 0 0 5.05 11v5.48l-1.17 1.11A1 1 0 0 0 4.6 19h14.8a1 1 0 0 0 .72-1.69Z"/></svg>
+            <div class="notification-icon" aria-hidden="true"><i class="fa-solid fa-bell"></i>
                 <?php if ($notificationCount > 0): ?>
                     <span class="notification-badge"><?php echo (int) $notificationCount; ?></span>
                 <?php endif; ?>
@@ -304,7 +304,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                               <?php if (!empty($note['link_url'])): ?> · <a href="<?php echo htmlspecialchars($note['link_url']); ?>">View</a><?php endif; ?>
                            </div>
                         </div>
-                        <button type="submit" name="trash_single" value="<?php echo (int)$note['id']; ?>" class="trash-button" aria-label="Move to trash">🗑</button>
+                        <button type="submit" name="trash_single" value="<?php echo (int)$note['id']; ?>" class="trash-button" aria-label="Move to trash"><i class="fa-solid fa-trash"></i></button>
                      </li>
                   <?php endforeach; ?>
                </ul>
@@ -328,7 +328,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                               Deleted: <?php echo htmlspecialchars(date('m/d/Y h:i A', strtotime($note['deleted_at']))); ?>
                            </div>
                         </div>
-                        <button type="submit" name="delete_single_perm" value="<?php echo (int)$note['id']; ?>" class="trash-button" aria-label="Delete permanently">🗑</button>
+                        <button type="submit" name="delete_single_perm" value="<?php echo (int)$note['id']; ?>" class="trash-button" aria-label="Delete permanently"><i class="fa-solid fa-trash-can"></i></button>
                      </li>
                   <?php endforeach; ?>
                </ul>
@@ -502,3 +502,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 </footer>
 </body>
 </html>
+
+
+
+
+
+
+
+

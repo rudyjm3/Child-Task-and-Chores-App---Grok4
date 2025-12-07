@@ -96,6 +96,7 @@ $recentRewards = $activeRewardStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Reward Library</title>
     <link rel="stylesheet" href="css/main.css?v=3.10.16">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" integrity="Evv84Mr4kqVGRNSgIGL/F/aIDqQb7xQ2vcrdIwxfjThSH8CSR7PBEakCr51Ck+w+/U6swU2Im1vVX0SVk9ABhg==" crossorigin="anonymous" referrerpolicy="no-referrer">
     <style>
         body { font-family: Arial, sans-serif; background: #f5f7fb; }
         .page { max-width: 960px; margin: 20px auto; padding: 20px; background: #fff; border-radius: 10px; box-shadow: 0 6px 20px rgba(0,0,0,0.08); }
@@ -280,3 +281,7 @@ $recentRewards = $activeRewardStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
     })();
 </script>
 </html>
+
+
+
+

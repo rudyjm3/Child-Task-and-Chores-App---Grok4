@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // routine.php - Routine management (Phase 5 upgrade)
 // Provides parent routine builder with validation, timer warnings for children, and overtime tracking.
 
@@ -863,6 +863,7 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Routine Management</title>
     <link rel="stylesheet" href="css/main.css?v=3.10.16">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" integrity="Evv84Mr4kqVGRNSgIGL/F/aIDqQb7xQ2vcrdIwxfjThSH8CSR7PBEakCr51Ck+w+/U6swU2Im1vVX0SVk9ABhg==" crossorigin="anonymous" referrerpolicy="no-referrer">
     <style>
         .page-messages { max-width: 960px; margin: 0 auto 20px; }
         .page-alert { padding: 12px 16px; border-radius: 6px; margin-bottom: 12px; font-weight: 600; }
@@ -1658,7 +1659,7 @@ margin-bottom: 20px;}
                                             <?php endif; ?>
                                             <strong><?php echo htmlspecialchars($task['title']); ?></strong>
                                             <div class="task-meta">
-                                                <?php echo (int) $task['time_limit']; ?> min · <?php echo (int) ($task['point_value'] ?? $task['points'] ?? 0); ?> pts
+                                                <?php echo (int) $task['time_limit']; ?> min � <?php echo (int) ($task['point_value'] ?? $task['points'] ?? 0); ?> pts
                                                 <span class="status-pill status-<?php echo htmlspecialchars($taskStatus); ?> <?php echo htmlspecialchars($taskStatus); ?>">
                                                     <?php echo htmlspecialchars($taskStatus); ?>
                                                 </span>
@@ -1735,7 +1736,7 @@ margin-bottom: 20px;}
                                                 <div class="routine-action-row">
                                                     <button type="button" class="routine-flow-close" data-action="flow-exit">Stop</button>
                                                     <button type="button" class="audio-toggle" data-role="audio-toggle" aria-pressed="true" aria-label="Mute all routine sounds" title="Mute all routine sounds">
-                                                        <span aria-hidden="true" data-audio-icon>🔊</span>
+                                                        <span aria-hidden="true" data-audio-icon>??</span>
                                                     </button>
                                                     <button type="button" class="routine-primary-button" data-action="flow-complete-task">Next</button>
                                                 </div>
@@ -1754,7 +1755,7 @@ margin-bottom: 20px;}
                                                 <div class="routine-action-row">
                                                     <button type="button" class="routine-flow-close" data-action="flow-exit">Stop</button>
                                                     <button type="button" class="audio-toggle" data-role="audio-toggle" aria-pressed="true" aria-label="Mute all routine sounds" title="Mute all routine sounds">
-                                                        <span aria-hidden="true" data-audio-icon>🔊</span>
+                                                        <span aria-hidden="true" data-audio-icon>??</span>
                                                     </button>
                                                     <button type="button" class="routine-primary-button" data-action="flow-next-task">Next Task</button>
                                                 </div>
@@ -2586,7 +2587,7 @@ margin-bottom: 20px;}
                             btn.setAttribute('aria-pressed', audioOn ? 'true' : 'false');
                             const icon = btn.querySelector('[data-audio-icon]');
                             if (icon) {
-                                icon.textContent = audioOn ? '🔊' : '🔇';
+                                icon.textContent = audioOn ? '??' : '??';
                             }
                             const label = this.audioLocked
                                 ? 'Audio disabled by parent preferences'
@@ -3814,6 +3815,10 @@ margin-bottom: 20px;}
 </body>
 </html>
 <?php
+
+
+
+
 
 
 
