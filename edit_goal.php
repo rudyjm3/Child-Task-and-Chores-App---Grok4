@@ -3,7 +3,7 @@
 // Purpose: Allow parents to edit goal details
 // Inputs: POST for update, goal ID from GET
 // Outputs: Goal edit interface
-// Version: 3.4.6
+// Version: 3.11.0
 
 session_start();
 require_once __DIR__ . '/includes/functions.php';
@@ -60,7 +60,7 @@ if (!$welcome_role_label) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Edit Goal</title>
-    <link rel="stylesheet" href="css/main.css?v=3.10.16">
+    <link rel="stylesheet" href="css/main.css?v=3.11.0">
     <style>
         .goal-form {
             padding: 20px;

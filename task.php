@@ -3,7 +3,7 @@
 // Purpose: Allow parents to create tasks and children to view/complete them
 // Inputs: POST data for task creation, task ID for completion
 // Outputs: Task management interface
-// Version: 3.3.9
+// Version: 3.11.0
 
 session_start(); // Ensure session is started to load existing session
 
@@ -92,7 +92,7 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Task Management</title>
-      <link rel="stylesheet" href="css/main.css?v=3.10.16">
+      <link rel="stylesheet" href="css/main.css?v=3.11.0">
     <style>
         .task-form, .task-list {
             padding: 20px;

@@ -3,7 +3,7 @@
 // Purpose: Display parent dashboard with child overview and management links
 // Inputs: Session data
 // Outputs: Dashboard interface
-// Version: 3.5.2 (Fixed family list display for non-main parents by fetching correct main_parent_id; updated name display to use CONCAT(first_name, ' ', last_name))
+// Version: 3.11.0 (Notifications moved to header-triggered modal, Font Awesome icons, routine/reward updates)
 
 require_once __DIR__ . '/includes/functions.php';
 
@@ -51,6 +51,10 @@ $routine_overtime_stats = getRoutineOvertimeStats($main_parent_id);
 $overtimeByChild = $routine_overtime_stats['by_child'] ?? [];
 $overtimeByRoutine = $routine_overtime_stats['by_routine'] ?? [];
 $parentNotices = getParentNotifications($main_parent_id);
+$parentNew = $parentNotices['new'] ?? [];
+$parentRead = $parentNotices['read'] ?? [];
+$parentDeleted = $parentNotices['deleted'] ?? [];
+$parentNotificationCount = count($parentNew);
 $overtimeLogGroups = [];
 $overtimeLogsByRoutine = [];
 if (!empty($routine_overtime_logs) && is_array($routine_overtime_logs)) {
@@ -344,7 +348,7 @@ $data = getDashboardData($_SESSION['user_id']);
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Parent Dashboard</title>
-    <link rel="stylesheet" href="css/main.css?v=3.10.16">
+    <link rel="stylesheet" href="css/main.css?v=3.11.0">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" integrity="Evv84Mr4kqVGRNSgIGL/F/aIDqQb7xQ2vcrdIwxfjThSH8CSR7PBEakCr51Ck+w+/U6swU2Im1vVX0SVk9ABhg==" crossorigin="anonymous" referrerpolicy="no-referrer">
     <style>
         .dashboard { padding: 20px; max-width: 900px; margin: 0 auto; }
@@ -477,21 +481,21 @@ $data = getDashboardData($_SESSION['user_id']);
             .child-info-body { flex-direction: column; }
             .points-progress-container { width: 100%; height: 140px; }
         }
-        .parent-notifications { margin: 16px 0 24px; background: #f5f5f5; border: 1px solid #e0e0e0; border-radius: 10px; padding: 12px 14px; box-shadow: 0 2px 6px rgba(0,0,0,0.06); }
-        .parent-notifications.open .parent-notification-list { display: grid; }
-        .parent-notifications-header { display: flex; align-items: center; gap: 10px; cursor: pointer; }
-        .parent-notifications-title { margin: 0; color: #333; display: flex; align-items: center; gap: 8px; font-weight: 700; }
-        .parent-notification-icon { width: 34px; height: 34px; position: relative; display: inline-flex; align-items: center; justify-content: center; background: #fff; border-radius: 50%; border: 2px solid #c8e6c9; box-shadow: 0 2px 4px rgba(0,0,0,0.12); flex-shrink: 0; margin-right: 6px; }
-        .parent-notification-icon i { font-size: 18px; color: #4caf50; line-height: 1; }
+        /* Notifications Modal */
+        .parent-notification-trigger { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; background: #fff; border: 2px solid #c8e6c9; border-radius: 50%; box-shadow: 0 2px 4px rgba(0,0,0,0.12); cursor: pointer; margin-left: 12px; }
+        .parent-notification-trigger i { font-size: 18px; color: #4caf50; }
         .parent-notification-badge { position: absolute; top: -6px; right: -8px; background: #e53935; color: #fff; border-radius: 12px; padding: 2px 6px; font-size: 0.75rem; font-weight: 700; min-width: 22px; text-align: center; }
-        .parent-notification-list { list-style: none; padding: 0; margin: 12px 0; display: none; gap: 8px; }
-        .parent-notification-item { padding: 10px; background: #fff; border: 1px solid #e0e0e0; border-radius: 8px; display: grid; gap: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
-        .parent-notification-meta { font-size: 0.9em; color: #666; }
-        .parent-notifications-footer { display: flex; justify-content: center; }
-        .parent-notifications-footer button { background: transparent; border: none; color: #1565c0; font-weight: 700; cursor: pointer; text-decoration: underline; }
-        .parent-notification-tabs { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 8px; margin-top: 10px; }
+        .no-scroll { overflow: hidden; }
+        .parent-notifications-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: none; align-items: center; justify-content: center; z-index: 4000; padding: 14px; }
+        .parent-notifications-modal.open { display: flex; }
+        .parent-notifications-card { background: #fff; border-radius: 10px; max-width: 680px; width: min(680px, 100%); max-height: 80vh; overflow: hidden; box-shadow: 0 12px 32px rgba(0,0,0,0.25); display: grid; grid-template-rows: auto auto 1fr; }
+        .parent-notifications-card header { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid #e0e0e0; }
+        .parent-notifications-card h2 { margin: 0; font-size: 1.1rem; }
+        .parent-notifications-close { background: transparent; border: none; font-size: 1.3rem; cursor: pointer; color: #555; }
+        .parent-notification-tabs { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 8px; padding: 10px 14px 0 14px; }
         .parent-tab-button { padding: 8px; border: 1px solid #c8e6c9; background: #fff; border-radius: 8px; font-weight: 700; color: #1565c0; cursor: pointer; }
         .parent-tab-button.active { background: #e8f5e9; }
+        .parent-notification-body { padding: 0 14px 14px 14px; overflow-y: auto; }
         .parent-notification-panel { display: none; }
         .parent-notification-panel.active { display: block; }
         .parent-notification-list { list-style: none; padding: 0; margin: 12px 0; display: grid; gap: 8px; }
@@ -565,21 +569,32 @@ $data = getDashboardData($_SESSION['user_id']);
                 }
             });
 
-            const parentNotifications = document.querySelector('[data-role="parent-notifications"]');
-            if (parentNotifications) {
-                const toggles = parentNotifications.querySelectorAll('[data-action="toggle-parent-notifications"]');
-                const toggle = () => parentNotifications.classList.toggle('open');
-                toggles.forEach(btn => btn.addEventListener('click', toggle));
-                const tabButtons = parentNotifications.querySelectorAll('.parent-tab-button');
-                const panels = parentNotifications.querySelectorAll('.parent-notification-panel');
-                tabButtons.forEach(btn => {
-                    btn.addEventListener('click', () => {
-                        const target = btn.getAttribute('data-tab');
-                        tabButtons.forEach(b => b.classList.toggle('active', b === btn));
-                        panels.forEach(panel => {
-                            panel.classList.toggle('active', panel.getAttribute('data-tab-panel') === target);
-                        });
-                    });
+            const parentNotifyTrigger = document.querySelector('[data-parent-notify-trigger]');
+            const parentModal = document.querySelector('[data-parent-notifications-modal]');
+            const parentClose = parentModal ? parentModal.querySelector('[data-parent-notifications-close]') : null;
+            const parentTabButtons = parentModal ? parentModal.querySelectorAll('.parent-tab-button') : [];
+            const parentPanels = parentModal ? parentModal.querySelectorAll('.parent-notification-panel') : [];
+            const setParentTab = (target) => {
+                parentTabButtons.forEach(btn => btn.classList.toggle('active', btn.getAttribute('data-tab') === target));
+                parentPanels.forEach(panel => panel.classList.toggle('active', panel.getAttribute('data-tab-panel') === target));
+            };
+            const openParentModal = () => {
+                if (!parentModal) return;
+                parentModal.classList.add('open');
+                document.body.classList.add('no-scroll');
+            };
+            const closeParentModal = () => {
+                if (!parentModal) return;
+                parentModal.classList.remove('open');
+                document.body.classList.remove('no-scroll');
+            };
+            if (parentNotifyTrigger && parentModal) {
+                parentNotifyTrigger.addEventListener('click', openParentModal);
+                if (parentClose) parentClose.addEventListener('click', closeParentModal);
+                parentModal.addEventListener('click', (e) => { if (e.target === parentModal) closeParentModal(); });
+                document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeParentModal(); });
+                parentTabButtons.forEach(btn => {
+                    btn.addEventListener('click', () => setParentTab(btn.getAttribute('data-tab')));
                 });
             }
 
@@ -770,8 +785,139 @@ $data = getDashboardData($_SESSION['user_id']);
          <?php endif; ?>
       </p>
       <a href="goal.php">Goals</a> | <a href="task.php">Tasks</a> | <a href="routine.php">Routines</a> | <a href="profile.php?self=1">Profile</a> | <a href="logout.php">Logout</a>
+      <button type="button" class="parent-notification-trigger" data-parent-notify-trigger aria-label="Notifications">
+         <i class="fa-solid fa-bell"></i>
+         <?php if ($parentNotificationCount > 0): ?>
+            <span class="parent-notification-badge"><?php echo (int)$parentNotificationCount; ?></span>
+         <?php endif; ?>
+      </button>
    </header>
-   <main class="dashboard">
+      <div class="parent-notifications-modal" data-parent-notifications-modal>
+      <div class="parent-notifications-card">
+         <header>
+            <h2>Notifications</h2>
+            <button type="button" class="parent-notifications-close" aria-label="Close notifications" data-parent-notifications-close>&times;</button>
+         </header>
+         <div class="parent-notification-tabs" data-role="parent-notification-tabs">
+            <button type="button" class="parent-tab-button active" data-tab="new">New (<?php echo count($parentNew); ?>)</button>
+            <button type="button" class="parent-tab-button" data-tab="read">Read (<?php echo count($parentRead); ?>)</button>
+            <button type="button" class="parent-tab-button" data-tab="deleted">Deleted (<?php echo count($parentDeleted); ?>)</button>
+         </div>
+         <div class="parent-notification-body">
+            <form method="POST" action="dashboard_parent.php" data-tab-panel="new" class="parent-notification-panel active">
+                <?php if (!empty($parentNew)): ?>
+                    <ul class="parent-notification-list">
+                        <?php foreach ($parentNew as $note): ?>
+                            <li class="parent-notification-item">
+                                <input type="checkbox" name="parent_notification_ids[]" value="<?php echo (int)$note['id']; ?>" aria-label="Mark notification as read">
+                                <div>
+                                    <div><?php echo htmlspecialchars($note['message']); ?></div>
+                                    <div class="parent-notification-meta">
+                                        <?php echo htmlspecialchars(date('m/d/Y h:i A', strtotime($note['created_at']))); ?>
+                                        <?php if (!empty($note['type'])): ?> | <?php echo htmlspecialchars(str_replace('_', ' ', $note['type'])); ?><?php endif; ?>
+                                        <?php
+                                            $rewardIdFromLink = null;
+                                            if (!empty($note['link_url'])) {
+                                                $urlParts = parse_url($note['link_url']);
+                                                if (!empty($urlParts['query'])) {
+                                                    parse_str($urlParts['query'], $queryVars);
+                                                    if (!empty($queryVars['highlight_reward'])) {
+                                                        $rewardIdFromLink = (int)$queryVars['highlight_reward'];
+                                                    } elseif (!empty($queryVars['reward_id'])) {
+                                                        $rewardIdFromLink = (int)$queryVars['reward_id'];
+                                                    }
+                                                }
+                                                echo ' | <a href="' . htmlspecialchars($note['link_url']) . '">View</a>';
+                                            }
+                                        ?>
+                                    </div>
+                                    <?php if ($note['type'] === 'reward_redeemed' && $rewardIdFromLink): ?>
+                                        <div class="inline-form" style="margin-top:6px;">
+                                            <button type="submit" name="fulfill_reward" value="<?php echo (int)$rewardIdFromLink; ?>" class="button approve-button">Fulfill</button>
+                                        </div>
+                                    <?php endif; ?>
+                                </div>
+                            </li>
+                        <?php endforeach; ?>
+                    </ul>
+                    <div class="parent-notification-actions">
+                        <button type="submit" name="mark_parent_notifications_read" class="button secondary">Mark Selected as Read</button>
+                    </div>
+                <?php else: ?>
+                    <p class="parent-notification-meta" style="margin: 12px 0;">No new notifications.</p>
+                <?php endif; ?>
+            </form>
+
+            <form method="POST" action="dashboard_parent.php" data-tab-panel="read" class="parent-notification-panel">
+                <?php if (!empty($parentRead)): ?>
+                    <ul class="parent-notification-list">
+                        <?php foreach ($parentRead as $note): ?>
+                            <li class="parent-notification-item">
+                                <input type="checkbox" name="parent_notification_ids[]" value="<?php echo (int)$note['id']; ?>" aria-label="Move to trash">
+                                <div>
+                                    <div><?php echo htmlspecialchars($note['message']); ?></div>
+                                    <div class="parent-notification-meta">
+                                        <?php echo htmlspecialchars(date('m/d/Y h:i A', strtotime($note['created_at']))); ?>
+                                        <?php
+                                            $rewardIdFromLink = null;
+                                            if (!empty($note['link_url'])) {
+                                                $urlParts = parse_url($note['link_url']);
+                                                if (!empty($urlParts['query'])) {
+                                                    parse_str($urlParts['query'], $queryVars);
+                                                    if (!empty($queryVars['highlight_reward'])) {
+                                                        $rewardIdFromLink = (int)$queryVars['highlight_reward'];
+                                                    } elseif (!empty($queryVars['reward_id'])) {
+                                                        $rewardIdFromLink = (int)$queryVars['reward_id'];
+                                                    }
+                                                }
+                                                echo ' | <a href="' . htmlspecialchars($note['link_url']) . '">View</a>';
+                                            }
+                                        ?>
+                                    </div>
+                                    <?php if ($note['type'] === 'reward_redeemed' && $rewardIdFromLink): ?>
+                                        <div class="inline-form" style="margin-top:6px;">
+                                            <button type="submit" name="fulfill_reward" value="<?php echo (int)$rewardIdFromLink; ?>" class="button approve-button">Fulfill</button>
+                                        </div>
+                                    <?php endif; ?>
+                                </div>
+                                <button type="submit" name="trash_parent_single" value="<?php echo (int)$note['id']; ?>" class="parent-trash-button" aria-label="Move to trash"><i class="fa-solid fa-trash"></i></button>
+                            </li>
+                        <?php endforeach; ?>
+                    </ul>
+                    <div class="parent-notification-actions">
+                        <button type="submit" name="move_parent_notifications_trash" class="button danger">Move Selected to Trash</button>
+                    </div>
+                <?php else: ?>
+                    <p class="parent-notification-meta" style="margin: 12px 0;">No read notifications.</p>
+                <?php endif; ?>
+            </form>
+
+            <form method="POST" action="dashboard_parent.php" data-tab-panel="deleted" class="parent-notification-panel">
+                <?php if (!empty($parentDeleted)): ?>
+                    <ul class="parent-notification-list">
+                        <?php foreach ($parentDeleted as $note): ?>
+                            <li class="parent-notification-item">
+                                <input type="checkbox" name="parent_notification_ids[]" value="<?php echo (int)$note['id']; ?>" aria-label="Delete permanently">
+                                <div>
+                                    <div><?php echo htmlspecialchars($note['message']); ?></div>
+                                    <div class="parent-notification-meta">
+                                        Deleted: <?php echo htmlspecialchars(date('m/d/Y h:i A', strtotime($note['deleted_at']))); ?>
+                                    </div>
+                                </div>
+                                <button type="submit" name="delete_parent_single_perm" value="<?php echo (int)$note['id']; ?>" class="parent-trash-button" aria-label="Delete permanently"><i class="fa-solid fa-trash-can"></i></button>
+                            </li>
+                        <?php endforeach; ?>
+                    </ul>
+                    <div class="parent-notification-actions">
+                        <button type="submit" name="delete_parent_notifications_perm" class="button danger">Delete Selected</button>
+                    </div>
+                <?php else: ?>
+                    <p class="parent-notification-meta" style="margin: 12px 0;">Trash is empty.</p>
+                <?php endif; ?>
+            </form>
+         </div>
+      </div>
+   </div><main class="dashboard">
       <?php if (isset($message)) echo "<p>$message</p>"; ?>
       <?php
         $parentNew = $parentNotices['new'] ?? [];
@@ -779,137 +925,7 @@ $data = getDashboardData($_SESSION['user_id']);
         $parentDeleted = $parentNotices['deleted'] ?? [];
         $parentNotificationCount = count($parentNew);
       ?>
-      <section class="parent-notifications" data-role="parent-notifications">
-        <div class="parent-notifications-header" data-action="toggle-parent-notifications">
-            <div class="parent-notification-icon" aria-hidden="true"><i class="fa-solid fa-bell"></i>
-                <?php if ($parentNotificationCount > 0): ?>
-                    <span class="parent-notification-badge"><?php echo (int)$parentNotificationCount; ?></span>
-                <?php endif; ?>
-            </div>
-            <h2 class="parent-notifications-title">Notifications</h2>
-        </div>
-        <div class="parent-notification-tabs" data-role="parent-notification-tabs">
-            <button type="button" class="parent-tab-button active" data-tab="new">New (<?php echo count($parentNew); ?>)</button>
-            <button type="button" class="parent-tab-button" data-tab="read">Read (<?php echo count($parentRead); ?>)</button>
-            <button type="button" class="parent-tab-button" data-tab="deleted">Deleted (<?php echo count($parentDeleted); ?>)</button>
-        </div>
-
-        <form method="POST" action="dashboard_parent.php" data-tab-panel="new" class="parent-notification-panel active">
-            <?php if (!empty($parentNew)): ?>
-                <ul class="parent-notification-list">
-                    <?php foreach ($parentNew as $note): ?>
-                        <li class="parent-notification-item">
-                            <input type="checkbox" name="parent_notification_ids[]" value="<?php echo (int)$note['id']; ?>" aria-label="Mark notification as read">
-                            <div>
-                                <div><?php echo htmlspecialchars($note['message']); ?></div>
-                                <div class="parent-notification-meta">
-                                    <?php echo htmlspecialchars(date('m/d/Y h:i A', strtotime($note['created_at']))); ?>
-                                    <?php if (!empty($note['type'])): ?> | <?php echo htmlspecialchars(str_replace('_', ' ', $note['type'])); ?><?php endif; ?>
-                                    <?php
-                                        $rewardIdFromLink = null;
-                                        if (!empty($note['link_url'])) {
-                                            $urlParts = parse_url($note['link_url']);
-                                            if (!empty($urlParts['query'])) {
-                                                parse_str($urlParts['query'], $queryVars);
-                                                if (!empty($queryVars['highlight_reward'])) {
-                                                    $rewardIdFromLink = (int)$queryVars['highlight_reward'];
-                                                } elseif (!empty($queryVars['reward_id'])) {
-                                                    $rewardIdFromLink = (int)$queryVars['reward_id'];
-                                                }
-                                            }
-                                            echo ' | <a href="' . htmlspecialchars($note['link_url']) . '">View</a>';
-                                        }
-                                    ?>
-                                </div>
-                                <?php if ($note['type'] === 'reward_redeemed' && $rewardIdFromLink): ?>
-                                    <div class="inline-form" style="margin-top:6px;">
-                                        <button type="submit" name="fulfill_reward" value="<?php echo (int)$rewardIdFromLink; ?>" class="button approve-button">Fulfill</button>
-                                    </div>
-                                <?php endif; ?>
-                            </div>
-                        </li>
-                    <?php endforeach; ?>
-                </ul>
-                <div class="parent-notification-actions">
-                    <button type="submit" name="mark_parent_notifications_read" class="button secondary">Mark Selected as Read</button>
-                </div>
-            <?php else: ?>
-                <p class="parent-notification-meta" style="margin: 12px 0;">No new notifications.</p>
-            <?php endif; ?>
-        </form>
-
-        <form method="POST" action="dashboard_parent.php" data-tab-panel="read" class="parent-notification-panel">
-            <?php if (!empty($parentRead)): ?>
-                <ul class="parent-notification-list">
-                    <?php foreach ($parentRead as $note): ?>
-                        <li class="parent-notification-item">
-                            <input type="checkbox" name="parent_notification_ids[]" value="<?php echo (int)$note['id']; ?>" aria-label="Move to trash">
-                            <div>
-                                <div><?php echo htmlspecialchars($note['message']); ?></div>
-                                <div class="parent-notification-meta">
-                                    <?php echo htmlspecialchars(date('m/d/Y h:i A', strtotime($note['created_at']))); ?>
-                                    <?php
-                                        $rewardIdFromLink = null;
-                                        if (!empty($note['link_url'])) {
-                                            $urlParts = parse_url($note['link_url']);
-                                            if (!empty($urlParts['query'])) {
-                                                parse_str($urlParts['query'], $queryVars);
-                                                if (!empty($queryVars['highlight_reward'])) {
-                                                    $rewardIdFromLink = (int)$queryVars['highlight_reward'];
-                                                } elseif (!empty($queryVars['reward_id'])) {
-                                                    $rewardIdFromLink = (int)$queryVars['reward_id'];
-                                                }
-                                            }
-                                            echo ' | <a href="' . htmlspecialchars($note['link_url']) . '">View</a>';
-                                        }
-                                    ?>
-                                </div>
-                                <?php if ($note['type'] === 'reward_redeemed' && $rewardIdFromLink): ?>
-                                    <div class="inline-form" style="margin-top:6px;">
-                                        <button type="submit" name="fulfill_reward" value="<?php echo (int)$rewardIdFromLink; ?>" class="button approve-button">Fulfill</button>
-                                    </div>
-                                <?php endif; ?>
-                            </div>
-                            <button type="submit" name="trash_parent_single" value="<?php echo (int)$note['id']; ?>" class="parent-trash-button" aria-label="Move to trash"><i class="fa-solid fa-trash"></i></button>
-                        </li>
-                    <?php endforeach; ?>
-                </ul>
-                <div class="parent-notification-actions">
-                    <button type="submit" name="move_parent_notifications_trash" class="button danger">Move Selected to Trash</button>
-                </div>
-            <?php else: ?>
-                <p class="parent-notification-meta" style="margin: 12px 0;">No read notifications.</p>
-            <?php endif; ?>
-        </form>
-
-        <form method="POST" action="dashboard_parent.php" data-tab-panel="deleted" class="parent-notification-panel">
-            <?php if (!empty($parentDeleted)): ?>
-                <ul class="parent-notification-list">
-                    <?php foreach ($parentDeleted as $note): ?>
-                        <li class="parent-notification-item">
-                            <input type="checkbox" name="parent_notification_ids[]" value="<?php echo (int)$note['id']; ?>" aria-label="Delete permanently">
-                            <div>
-                                <div><?php echo htmlspecialchars($note['message']); ?></div>
-                                <div class="parent-notification-meta">
-                                    Deleted: <?php echo htmlspecialchars(date('m/d/Y h:i A', strtotime($note['deleted_at']))); ?>
-                                </div>
-                            </div>
-                            <button type="submit" name="delete_parent_single_perm" value="<?php echo (int)$note['id']; ?>" class="parent-trash-button" aria-label="Delete permanently"><i class="fa-solid fa-trash"></i></button>
-                        </li>
-                    <?php endforeach; ?>
-                </ul>
-                <div class="parent-notification-actions">
-                    <button type="submit" name="delete_parent_notifications_perm" class="button danger">Delete Selected</button>
-                </div>
-            <?php else: ?>
-                <p class="parent-notification-meta" style="margin: 12px 0;">Trash is empty.</p>
-            <?php endif; ?>
-        </form>
-
-        <div class="parent-notifications-footer">
-            <button type="button" data-action="toggle-parent-notifications">View Notifications</button>
-        </div>
-      </section>
+      
       <div class="children-overview">
          <h2>Children Overview</h2>
          <?php if (isset($data['children']) && is_array($data['children']) && !empty($data['children'])): ?>
@@ -1559,6 +1575,12 @@ $data = getDashboardData($_SESSION['user_id']);
    </footer>
 </body>
 </html>
+
+
+
+
+
+
 
 
 
