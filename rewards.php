@@ -109,10 +109,10 @@ $recentRewards = $activeRewardStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
         .button { padding: 10px 18px; background: #4caf50; color: #fff; border: none; border-radius: 6px; cursor: pointer; display: inline-block; text-decoration: none; font-weight: 700; }
         .button.secondary { background: #1565c0; }
         .button.danger { background: #c62828; }
-        .template-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
-        .template-card { border: 1px solid #e0e4ee; border-radius: 10px; padding: 14px; background: #fff; box-shadow: 0 2px 6px rgba(0,0,0,0.05); display: grid; gap: 10px; position: relative; }
-        .template-actions { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
-        .template-actions .button { flex: 1 1 120px; text-align: center; }
+        .template-grid { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-start; }
+        .template-card { flex: 1 1 260px; border: 1px solid #e0e4ee; border-radius: 10px; padding: 14px; background: #fff; box-shadow: 0 2px 6px rgba(0,0,0,0.05); display: grid; gap: 10px; position: relative; max-width: 350px; }
+        .template-actions { display: flex; gap: 8px; justify-content: flex-start; flex-wrap: wrap; align-items: center; }
+        .template-actions .button { flex: 0 0 auto; text-align: center; }
         .badge { display: inline-block; background: #e3f2fd; color: #0d47a1; padding: 4px 8px; border-radius: 12px; font-size: 0.85em; }
         .message { background: #e8f5e9; color: #2e7d32; border: 1px solid #c8e6c9; padding: 10px 12px; border-radius: 6px; margin-bottom: 10px; }
         .recent-list { display: grid; gap: 8px; }
