@@ -519,6 +519,8 @@ function getDashboardData($user_id) {
                                   r.point_cost, 
                                   r.created_on,
                                   r.child_user_id,
+                                  cu.first_name AS child_first_name,
+                                  cp.avatar AS child_avatar,
                                   COALESCE(
                                       NULLIF(TRIM(CONCAT(COALESCE(cu.first_name, ''), ' ', COALESCE(cu.last_name, ''))), ''),
                                       NULLIF(cu.name, ''),
@@ -527,6 +529,7 @@ function getDashboardData($user_id) {
                                   ) AS child_name
                               FROM rewards r
                               LEFT JOIN users cu ON r.child_user_id = cu.id
+                              LEFT JOIN child_profiles cp ON r.child_user_id = cp.child_user_id
                               WHERE r.parent_user_id = :parent_id AND r.status = 'available'
                               ORDER BY r.created_on DESC");
         $stmt->execute([':parent_id' => $main_parent_id]);
@@ -541,6 +544,7 @@ function getDashboardData($user_id) {
                 r.point_cost,
                 r.redeemed_on,
                 r.fulfilled_on,
+                r.redeemed_by AS child_user_id,
                 COALESCE(
                     NULLIF(TRIM(CONCAT(COALESCE(child.first_name, ''), ' ', COALESCE(child.last_name, ''))), ''),
                     NULLIF(child.name, ''),
