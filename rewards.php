@@ -189,7 +189,7 @@ foreach ($activeRewards as $reward) {
         body { font-family: Arial, sans-serif; background: #f5f7fb; }
         .page { max-width: 960px; margin: 20px auto; padding: 20px; background: #fff; border-radius: 10px; box-shadow: 0 6px 20px rgba(0,0,0,0.08); }
         h1, h2 { margin-top: 0; }
-        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-top: 20px;}
         .card { background: #fafbff; border: 1px solid #e4e7ef; border-radius: 8px; padding: 16px; box-shadow: 0 2px 6px rgba(0,0,0,0.04); }
         .form-group { margin-bottom: 12px; }
         .form-group label { display: block; margin-bottom: 6px; }
@@ -246,6 +246,13 @@ foreach ($activeRewards as $reward) {
         .modal-close { border: none; background: transparent; font-size: 20px; cursor: pointer; }
         #modal-body { overflow-y: auto; max-height: 70vh; }
         body.modal-open { overflow: hidden; }
+        .number-stepper { display: grid; grid-template-columns: auto 1fr auto; gap: 6px; align-items: center; }
+        .stepper-btn { border: 1px solid #e0e0e0; background: #f7f7f7; border-radius: 6px; padding: 8px 10px; cursor: pointer; color: #555; }
+        .stepper-btn:hover { background: #ededed; }
+        .stepper-input { width: 100%; }
+        input[type=number]::-webkit-outer-spin-button,
+        input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+        input[type=number] { -moz-appearance: textfield; }
     </style>
 </head>
 <body>
@@ -309,10 +316,14 @@ foreach ($activeRewards as $reward) {
                                                         <label for="reward_description_<?php echo (int)$reward['id']; ?>">Description</label>
                                                         <textarea id="reward_description_<?php echo (int)$reward['id']; ?>" name="reward_description"><?php echo htmlspecialchars($reward['description'] ?? ''); ?></textarea>
                                                     </div>
-                                                    <div class="form-group">
-                                                        <label for="reward_cost_<?php echo (int)$reward['id']; ?>">Point Cost</label>
-                                                        <input type="number" id="reward_cost_<?php echo (int)$reward['id']; ?>" name="point_cost" min="1" value="<?php echo (int)$reward['point_cost']; ?>" required>
-                                                    </div>
+                                            <div class="form-group">
+                                                <label for="reward_cost_<?php echo (int)$reward['id']; ?>">Point Cost</label>
+                                                <div class="number-stepper">
+                                                    <button type="button" class="stepper-btn" data-step="-1" aria-label="Decrease points"><i class="fa fa-minus"></i></button>
+                                                    <input class="stepper-input" type="number" id="reward_cost_<?php echo (int)$reward['id']; ?>" name="point_cost" min="1" value="<?php echo (int)$reward['point_cost']; ?>" required>
+                                                    <button type="button" class="stepper-btn" data-step="1" aria-label="Increase points"><i class="fa fa-plus"></i></button>
+                                                </div>
+                                            </div>
                                                     <div class="reward-edit-actions">
                                                         <button type="submit" name="update_reward" class="button">Save Changes</button>
                                                         <button type="button" class="button secondary" data-action="cancel-edit" data-reward-id="<?php echo (int)$reward['id']; ?>">Cancel</button>
@@ -384,7 +395,11 @@ foreach ($activeRewards as $reward) {
                     </div>
                     <div class="form-group">
                         <label for="template_point_cost">Point Cost</label>
-                        <input type="number" id="template_point_cost" name="template_point_cost" min="1" required>
+                        <div class="number-stepper">
+                            <button type="button" class="stepper-btn" data-step="-1" aria-label="Decrease points"><i class="fa fa-minus"></i></button>
+                            <input class="stepper-input" type="number" id="template_point_cost" name="template_point_cost" min="1" required>
+                            <button type="button" class="stepper-btn" data-step="1" aria-label="Increase points"><i class="fa fa-plus"></i></button>
+                        </div>
                     </div>
                     <button type="submit" name="create_template" class="button">Save Template</button>
                 </form>
@@ -471,7 +486,11 @@ foreach ($activeRewards as $reward) {
                                 </div>
                                 <div class="form-group">
                                     <label for="template_point_cost_<?php echo (int)$template['id']; ?>">Point Cost</label>
-                                    <input type="number" id="template_point_cost_<?php echo (int)$template['id']; ?>" name="template_point_cost" min="1" value="<?php echo (int)$template['point_cost']; ?>" required>
+                                    <div class="number-stepper">
+                                        <button type="button" class="stepper-btn" data-step="-1" aria-label="Decrease points"><i class="fa fa-minus"></i></button>
+                                        <input class="stepper-input" type="number" id="template_point_cost_<?php echo (int)$template['id']; ?>" name="template_point_cost" min="1" value="<?php echo (int)$template['point_cost']; ?>" required>
+                                        <button type="button" class="stepper-btn" data-step="1" aria-label="Increase points"><i class="fa fa-plus"></i></button>
+                                    </div>
                                 </div>
                                 <div class="reward-edit-actions">
                                     <button type="submit" name="update_template" class="button">Save Changes</button>
@@ -677,7 +696,23 @@ foreach ($activeRewards as $reward) {
             });
         }
 
+        function attachStepperListeners(scope) {
+            (scope || document).querySelectorAll('.stepper-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const step = parseInt(btn.getAttribute('data-step'), 10) || 1;
+                    const input = btn.closest('.number-stepper')?.querySelector('input[type="number"]');
+                    if (!input) return;
+                    const min = parseInt(input.getAttribute('min') || '0', 10);
+                    const current = parseInt(input.value || input.getAttribute('value') || '0', 10);
+                    const next = Math.max(min, current + step);
+                    input.value = next;
+                    input.dispatchEvent(new Event('input', { bubbles: true }));
+                });
+            });
+        }
+
         attachRewardListeners();
+        attachStepperListeners();
 
         document.querySelectorAll('[data-action="show-active-modal"]').forEach(btn => {
             btn.addEventListener('click', () => {
@@ -687,6 +722,7 @@ foreach ($activeRewards as $reward) {
                 if (list) {
                     openModal(`${name} - Active Rewards`, list);
                     attachRewardListeners(modalBody);
+                    attachStepperListeners(modalBody);
                 }
             });
         });
@@ -704,7 +740,3 @@ foreach ($activeRewards as $reward) {
     })();
 </script>
 </html>
-
-
-
-
