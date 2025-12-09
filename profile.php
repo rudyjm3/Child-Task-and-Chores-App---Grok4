@@ -329,9 +329,15 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
     <style>
         .profile { padding: 20px; max-width: 600px; margin: 0 auto; text-align: center; }
         .profile-form { background: #f5f5f5; padding: 20px; border-radius: 8px; }
+        .profile-form form { display: grid; gap: 14px; }
+        .profile-form .form-group { text-align: left; margin: 0; }
+        .profile-form input,
+        .profile-form select,
+        .profile-form textarea { padding: 10px; }
+        .profile-form button { margin-top: 6px; }
         .avatar-preview { width: 100px; height: 100px; border-radius: 50%; margin: 10px; }
         .button { padding: 10px 20px; background-color: #4caf50; color: white; border: none; border-radius: 5px; cursor: pointer; }
-        .avatar-options { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
+        .avatar-options { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-bottom: 15px;}
         .avatar-option { width: 60px; height: 60px; border-radius: 50%; cursor: pointer; border: 2px solid #ddd; }
         .avatar-option.selected { border-color: #4caf50; }
         .role-badge {
@@ -379,6 +385,7 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
             .avatar-option { width: 50px; height: 50px; } 
             .profile-form { padding: 15px; }
         }
+        .section-divider { border-top: 1px solid #e0e0e0; margin: 18px 0 10px; padding-top: 14px; }
     </style>
     <script>
         // JS for avatar selection
@@ -467,6 +474,7 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                     <button type="submit" name="update_child_profile" class="button">Update Profile</button>
                 </form>
                 <?php if ($role === 'child'): ?>
+                    <div class="section-divider"></div>
                     <h3>Change Password</h3>
                     <form method="POST" action="profile.php">
                         <input type="hidden" name="edit_user_id" value="<?php echo (int)$_SESSION['user_id']; ?>">
@@ -520,6 +528,7 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                     </div>
                     <button type="submit" name="update_parent_profile" class="button">Update Profile</button>
                 </form>
+                <div class="section-divider"></div>
                 <h3>Change Password</h3>
                 <form method="POST" action="profile.php">
                     <input type="hidden" name="edit_user_id" value="<?php echo (int)$user_id; ?>">
@@ -565,6 +574,7 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                     </div>
                     <button type="submit" name="update_parent_profile" class="button">Update Profile</button>
                 </form>
+                <div class="section-divider"></div>
                 <h3>Change Password</h3>
                 <form method="POST" action="profile.php">
                     <input type="hidden" name="edit_user_id" value="<?php echo (int)$user_id; ?>">

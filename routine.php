@@ -1,4 +1,4 @@
-<?php
+ï»¿<?php
 // routine.php - Routine management (Phase 5 upgrade)
 // Provides parent routine builder with validation, timer warnings for children, and overtime tracking.
 
@@ -1659,7 +1659,7 @@ margin-bottom: 20px;}
                                             <?php endif; ?>
                                             <strong><?php echo htmlspecialchars($task['title']); ?></strong>
                                             <div class="task-meta">
-                                                <?php echo (int) $task['time_limit']; ?> min · <?php echo (int) ($task['point_value'] ?? $task['points'] ?? 0); ?> pts
+                                                <?php echo (int) $task['time_limit']; ?> min - <?php echo (int) ($task['point_value'] ?? $task['points'] ?? 0); ?> pts
                                                 <span class="status-pill status-<?php echo htmlspecialchars($taskStatus); ?> <?php echo htmlspecialchars($taskStatus); ?>">
                                                     <?php echo htmlspecialchars($taskStatus); ?>
                                                 </span>

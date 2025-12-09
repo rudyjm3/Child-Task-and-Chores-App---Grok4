@@ -26,6 +26,10 @@ select {
   transition: border-color 150ms ease, box-shadow 150ms ease;
 }
 
+input[type="number"] {
+  text-align: center;
+}
+
 input:focus,
 textarea:focus,
 select:focus {
