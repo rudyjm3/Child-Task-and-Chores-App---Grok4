@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // routine.php - Routine management (Phase 5 upgrade)
 // Provides parent routine builder with validation, timer warnings for children, and overtime tracking.
 
@@ -862,7 +862,7 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Routine Management</title>
-    <link rel="stylesheet" href="css/main.css?v=3.11.0">
+    <link rel="stylesheet" href="css/main.css?v=3.12.2">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" integrity="Evv84Mr4kqVGRNSgIGL/F/aIDqQb7xQ2vcrdIwxfjThSH8CSR7PBEakCr51Ck+w+/U6swU2Im1vVX0SVk9ABhg==" crossorigin="anonymous" referrerpolicy="no-referrer">
     <style>
         .page-messages { max-width: 960px; margin: 0 auto 20px; }
@@ -881,18 +881,18 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
   font-size: 1.3rem;
   letter-spacing: 0.4px;
 display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; box-shadow: 0 8px 20px rgba(0,0,0,0.18);} */
-.routine-section-header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; /*background: rgba(255, 255, 255, 0.6);*/ background: linear-gradient(90deg, #1c2c63 0%, #325d93 100%);
+.routine-section-header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; /*background: rgba(255, 255, 255, 0.6); background: linear-gradient(90deg, #1c2c63 0%, #325d93 100%);
   backdrop-filter: blur(12px);
   border: 1px solid rgba(255,255,255,0.35);
   border-radius: 12px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.06); */
   padding: 14px 22px;
   font-size: 1.3rem;
   letter-spacing: 0.4px;
   font-weight: 500;
-  color: #27364b;
+  color: #5b5b5b;
 margin-bottom: 20px;}
-        .routine-section-header h2 { margin: 0; color: #f5f7fa; font-size: 1.2rem; letter-spacing: 0.02em; }
+        .routine-section-header h2 { margin: 0; /*color: #f5f7fa;*/ font-size: 1.2rem; letter-spacing: 0.02em; }
         .routine-card-grid { display: grid; gap: 20px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
         @media (max-width: 768px) {
             .routine-card-grid { grid-template-columns: 1fr; }
@@ -1864,7 +1864,7 @@ margin-bottom: 20px;}
         </section>
     </main>
     <footer>
-        <p>Child Task and Chore App - Ver 3.11.0</p>
+        <p>Child Task and Chore App - Ver 3.12.2</p>
     </footer>
     <script>
         window.RoutinePage = <?php echo json_encode($pageState, $jsonOptions); ?>;
