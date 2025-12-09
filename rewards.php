@@ -17,7 +17,36 @@ $childStmt->execute([':parent_id' => $main_parent_id]);
 $children = $childStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    if (isset($_POST['create_template'])) {
+    if (isset($_POST['update_reward'])) {
+        $reward_id = filter_input(INPUT_POST, 'reward_id', FILTER_VALIDATE_INT);
+        $title = trim((string)filter_input(INPUT_POST, 'reward_title', FILTER_SANITIZE_STRING));
+        $description = trim((string)filter_input(INPUT_POST, 'reward_description', FILTER_SANITIZE_STRING));
+        $point_cost = filter_input(INPUT_POST, 'point_cost', FILTER_VALIDATE_INT);
+        if ($reward_id && $title !== '' && $point_cost !== false && $point_cost !== null && $point_cost > 0) {
+            $messages[] = updateReward($main_parent_id, $reward_id, $title, $description, $point_cost)
+                ? "Reward updated."
+                : "Unable to update reward. It may have been redeemed or removed.";
+        } else {
+            $messages[] = "Provide a title and point cost to update the reward.";
+        }
+    } elseif (isset($_POST['delete_reward'])) {
+        $reward_id = filter_input(INPUT_POST, 'reward_id', FILTER_VALIDATE_INT);
+        if ($reward_id) {
+            $messages[] = deleteReward($main_parent_id, $reward_id)
+                ? "Reward deleted."
+                : "Unable to delete reward. Only available rewards can be removed.";
+        } else {
+            $messages[] = "Invalid reward selected for deletion.";
+        }
+    } elseif (isset($_POST['fulfill_reward'])) {
+        $reward_id = filter_input(INPUT_POST, 'reward_id', FILTER_VALIDATE_INT);
+        if (!$reward_id && isset($_POST['fulfill_reward'])) {
+            $reward_id = filter_input(INPUT_POST, 'fulfill_reward', FILTER_VALIDATE_INT);
+        }
+        $messages[] = ($reward_id && fulfillReward($reward_id, $main_parent_id, $_SESSION['user_id']))
+            ? "Reward fulfillment recorded."
+            : "Unable to mark reward as fulfilled.";
+    } elseif (isset($_POST['create_template'])) {
         $title = trim((string)filter_input(INPUT_POST, 'template_title', FILTER_SANITIZE_STRING));
         $description = trim((string)filter_input(INPUT_POST, 'template_description', FILTER_SANITIZE_STRING));
         $point_cost = filter_input(INPUT_POST, 'template_point_cost', FILTER_VALIDATE_INT);
@@ -88,6 +117,9 @@ $activeRewardStmt = $db->prepare("
 ");
 $activeRewardStmt->execute([':parent_id' => $main_parent_id]);
 $recentRewards = $activeRewardStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+$dashboardData = getDashboardData($_SESSION['user_id']);
+$activeRewards = $dashboardData['active_rewards'] ?? [];
+$redeemedRewards = $dashboardData['redeemed_rewards'] ?? [];
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -270,6 +302,67 @@ $recentRewards = $activeRewardStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
                 </div>
             <?php else: ?>
                 <p>No rewards available yet.</p>
+            <?php endif; ?>
+        </div>
+
+        <div class="card" style="margin-top:20px;">
+            <h2>Active Rewards</h2>
+            <?php if (!empty($activeRewards)): ?>
+                <?php foreach ($activeRewards as $reward): ?>
+                    <div class="reward-item" id="reward-<?php echo (int)$reward['id']; ?>">
+                        <form method="POST" action="rewards.php" class="reward-edit-form">
+                            <input type="hidden" name="reward_id" value="<?php echo (int)$reward['id']; ?>">
+                            <?php if (!empty($reward['child_name'])): ?>
+                                <p><strong>Assigned to:</strong> <?php echo htmlspecialchars($reward['child_name']); ?></p>
+                            <?php else: ?>
+                                <p><strong>Assigned to:</strong> All children</p>
+                            <?php endif; ?>
+                            <div class="form-group">
+                                <label for="reward_title_<?php echo (int)$reward['id']; ?>">Title:</label>
+                                <input type="text" id="reward_title_<?php echo (int)$reward['id']; ?>" name="reward_title" value="<?php echo htmlspecialchars($reward['title']); ?>" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="reward_description_<?php echo (int)$reward['id']; ?>">Description:</label>
+                                <textarea id="reward_description_<?php echo (int)$reward['id']; ?>" name="reward_description"><?php echo htmlspecialchars($reward['description'] ?? ''); ?></textarea>
+                            </div>
+                            <div class="form-group">
+                                <label for="reward_cost_<?php echo (int)$reward['id']; ?>">Point Cost:</label>
+                                <input type="number" id="reward_cost_<?php echo (int)$reward['id']; ?>" name="point_cost" min="1" value="<?php echo (int)$reward['point_cost']; ?>" required>
+                            </div>
+                            <div class="reward-edit-actions">
+                                <button type="submit" name="update_reward" class="button">Save Changes</button>
+                                <button type="submit" name="delete_reward" class="button danger" onclick="return confirm('Delete this reward?');">Delete</button>
+                            </div>
+                        </form>
+                    </div>
+                <?php endforeach; ?>
+            <?php else: ?>
+                <p>No rewards available.</p>
+            <?php endif; ?>
+        </div>
+
+        <div class="card" style="margin-top:20px;">
+            <h2>Redeemed Rewards</h2>
+            <?php if (!empty($redeemedRewards)): ?>
+                <?php foreach ($redeemedRewards as $reward): ?>
+                    <div class="reward-item" id="redeemed-reward-<?php echo (int)$reward['id']; ?>">
+                        <p>Reward: <?php echo htmlspecialchars($reward['title']); ?> (<?php echo htmlspecialchars($reward['point_cost']); ?> points)</p>
+                        <p>Description: <?php echo htmlspecialchars($reward['description']); ?></p>
+                        <p>Redeemed by: <?php echo htmlspecialchars($reward['child_username'] ?? 'Unknown'); ?></p>
+                        <p>Redeemed on: <?php echo !empty($reward['redeemed_on']) ? htmlspecialchars(date('m/d/Y h:i A', strtotime($reward['redeemed_on']))) : 'Date unavailable'; ?></p>
+                        <?php if (!empty($reward['fulfilled_on'])): ?>
+                            <p>Fulfilled on: <?php echo htmlspecialchars(date('m/d/Y h:i A', strtotime($reward['fulfilled_on']))); ?><?php if (!empty($reward['fulfilled_by_name'])): ?> by <?php echo htmlspecialchars($reward['fulfilled_by_name']); ?><?php endif; ?></p>
+                        <?php else: ?>
+                            <p class="awaiting-label">Awaiting fulfillment by parent.</p>
+                            <form method="POST" action="rewards.php" class="inline-form">
+                                <input type="hidden" name="reward_id" value="<?php echo (int)$reward['id']; ?>">
+                                <button type="submit" name="fulfill_reward" class="button secondary">Mark Fulfilled</button>
+                            </form>
+                        <?php endif; ?>
+                    </div>
+                <?php endforeach; ?>
+            <?php else: ?>
+                <p>No rewards redeemed yet.</p>
             <?php endif; ?>
         </div>
     </div>

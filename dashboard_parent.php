@@ -1235,24 +1235,6 @@ $data = getDashboardData($_SESSION['user_id']);
          <a href="task.php" class="button">Create Task</a>
          <a href="rewards.php" class="button">Reward Library</a>
          <div>
-               <h3>Create Reward</h3>
-               <form method="POST" action="dashboard_parent.php">
-                  <div class="form-group">
-                     <label for="reward_title">Title:</label>
-                     <input type="text" id="reward_title" name="reward_title" required>
-                  </div>
-                  <div class="form-group">
-                     <label for="reward_description">Description:</label>
-                     <textarea id="reward_description" name="reward_description"></textarea>
-                  </div>
-                  <div class="form-group">
-                     <label for="point_cost">Point Cost:</label>
-                     <input type="number" id="point_cost" name="point_cost" min="1" required>
-                  </div>
-                  <button type="submit" name="create_reward" class="button">Create Reward</button>
-               </form>
-         </div>
-         <div>
                <h3>Create Goal</h3>
                <form method="POST" action="dashboard_parent.php">
                   <div class="form-group">
@@ -1424,65 +1406,6 @@ $data = getDashboardData($_SESSION['user_id']);
                 <div class="routine-log-body" data-role="routine-log-body"></div>
             </div>
          </div>
-      </div>
-      <div class="active-rewards">
-         <h2>Active Rewards</h2>
-         <?php if (isset($data['active_rewards']) && is_array($data['active_rewards']) && !empty($data['active_rewards'])): ?>
-               <?php foreach ($data['active_rewards'] as $reward): ?>
-                  <div class="reward-item" id="reward-<?php echo (int) $reward['id']; ?>">
-                     <form method="POST" action="dashboard_parent.php" class="reward-edit-form">
-                        <input type="hidden" name="reward_id" value="<?php echo (int) $reward['id']; ?>">
-                        <?php if (!empty($reward['child_name'])): ?>
-                           <p><strong>Assigned to:</strong> <?php echo htmlspecialchars($reward['child_name']); ?></p>
-                        <?php else: ?>
-                           <p><strong>Assigned to:</strong> All children</p>
-                        <?php endif; ?>
-                        <div class="form-group">
-                           <label for="reward_title_<?php echo (int) $reward['id']; ?>">Title:</label>
-                           <input type="text" id="reward_title_<?php echo (int) $reward['id']; ?>" name="reward_title" value="<?php echo htmlspecialchars($reward['title']); ?>" required>
-                        </div>
-                        <div class="form-group">
-                           <label for="reward_description_<?php echo (int) $reward['id']; ?>">Description:</label>
-                           <textarea id="reward_description_<?php echo (int) $reward['id']; ?>" name="reward_description"><?php echo htmlspecialchars($reward['description'] ?? ''); ?></textarea>
-                        </div>
-                        <div class="form-group">
-                           <label for="reward_cost_<?php echo (int) $reward['id']; ?>">Point Cost:</label>
-                           <input type="number" id="reward_cost_<?php echo (int) $reward['id']; ?>" name="point_cost" min="1" value="<?php echo (int) $reward['point_cost']; ?>" required>
-                        </div>
-                        <div class="reward-edit-actions">
-                           <button type="submit" name="update_reward" class="button">Save Changes</button>
-                           <button type="submit" name="delete_reward" class="button reward-delete" onclick="return confirm('Delete this reward?');">Delete</button>
-                        </div>
-                     </form>
-                  </div>
-               <?php endforeach; ?>
-         <?php else: ?>
-               <p>No rewards available.</p>
-         <?php endif; ?>
-      </div>
-      <div class="redeemed-rewards">
-         <h2>Redeemed Rewards</h2>
-          <?php if (isset($data['redeemed_rewards']) && is_array($data['redeemed_rewards']) && !empty($data['redeemed_rewards'])): ?>
-                <?php foreach ($data['redeemed_rewards'] as $reward): ?>
-                   <div class="reward-item" id="redeemed-reward-<?php echo (int) $reward['id']; ?>">
-                      <p>Reward: <?php echo htmlspecialchars($reward['title']); ?> (<?php echo htmlspecialchars($reward['point_cost']); ?> points)</p>
-                      <p>Description: <?php echo htmlspecialchars($reward['description']); ?></p>
-                      <p>Redeemed by: <?php echo htmlspecialchars($reward['child_username'] ?? 'Unknown'); ?></p>
-                      <p>Redeemed on: <?php echo !empty($reward['redeemed_on']) ? htmlspecialchars(date('m/d/Y h:i A', strtotime($reward['redeemed_on']))) : 'Date unavailable'; ?></p>
-                      <?php if (!empty($reward['fulfilled_on'])): ?>
-                          <p>Fulfilled on: <?php echo htmlspecialchars(date('m/d/Y h:i A', strtotime($reward['fulfilled_on']))); ?><?php if (!empty($reward['fulfilled_by_name'])): ?> by <?php echo htmlspecialchars($reward['fulfilled_by_name']); ?><?php endif; ?></p>
-                      <?php else: ?>
-                          <p class="awaiting-label">Awaiting fulfillment by parent.</p>
-                          <form method="POST" action="dashboard_parent.php" class="inline-form">
-                              <input type="hidden" name="reward_id" value="<?php echo (int) $reward['id']; ?>">
-                              <button type="submit" name="fulfill_reward" class="button approve-button">Mark Fulfilled</button>
-                          </form>
-                      <?php endif; ?>
-                   </div>
-                <?php endforeach; ?>
-         <?php else: ?>
-               <p>No rewards redeemed yet.</p>
-         <?php endif; ?>
       </div>
       <div class="pending-approvals">
          <h2>Pending Goal Approvals</h2>
