@@ -505,30 +505,6 @@ foreach ($activeRewards as $reward) {
             <?php endif; ?>
         </div>
 
-        <div class="card" style="margin-top:20px;">
-            <h2>Redeemed Rewards</h2>
-            <?php if (!empty($redeemedRewards)): ?>
-                <?php foreach ($redeemedRewards as $reward): ?>
-                    <div class="reward-item" id="redeemed-reward-<?php echo (int)$reward['id']; ?>">
-                        <p>Reward: <?php echo htmlspecialchars($reward['title']); ?> (<?php echo htmlspecialchars($reward['point_cost']); ?> points)</p>
-                        <p>Description: <?php echo htmlspecialchars($reward['description']); ?></p>
-                        <p>Redeemed by: <?php echo htmlspecialchars($reward['child_username'] ?? 'Unknown'); ?></p>
-                        <p>Redeemed on: <?php echo !empty($reward['redeemed_on']) ? htmlspecialchars(date('m/d/Y h:i A', strtotime($reward['redeemed_on']))) : 'Date unavailable'; ?></p>
-                        <?php if (!empty($reward['fulfilled_on'])): ?>
-                            <p>Fulfilled on: <?php echo htmlspecialchars(date('m/d/Y h:i A', strtotime($reward['fulfilled_on']))); ?><?php if (!empty($reward['fulfilled_by_name'])): ?> by <?php echo htmlspecialchars($reward['fulfilled_by_name']); ?><?php endif; ?></p>
-                        <?php else: ?>
-                            <p class="awaiting-label">Awaiting fulfillment by parent.</p>
-                            <form method="POST" action="rewards.php" class="inline-form">
-                                <input type="hidden" name="reward_id" value="<?php echo (int)$reward['id']; ?>">
-                                <button type="submit" name="fulfill_reward" class="button secondary">Mark Fulfilled</button>
-                            </form>
-                        <?php endif; ?>
-                    </div>
-                <?php endforeach; ?>
-            <?php else: ?>
-                <p>No rewards redeemed yet.</p>
-            <?php endif; ?>
-        </div>
     </div>
 </body>
 <div class="modal-backdrop" id="modal-backdrop" aria-hidden="true">
