@@ -200,7 +200,10 @@ foreach ($activeRewards as $reward) {
         .template-grid { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-start; }
         .template-card { flex: 1 1 285px; border: 1px solid #e0e4ee; border-radius: 10px; padding: 14px; background: #fff; box-shadow: 0 2px 6px rgba(0,0,0,0.05); display: grid; gap: 10px; position: relative; max-width: 288px; }
         .template-actions { display: flex; gap: 8px; justify-content: flex-start; flex-wrap: wrap; align-items: center; }
-        .template-actions .button { flex: 0 0 auto; text-align: center; }
+        .template-icon-button { border: none; background: transparent; color: #9f9f9f; padding: 6px 8px; border-radius: 8px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+        .template-icon-button:hover { background: rgba(0,0,0,0.04); color: #7a7a7a; }
+        .template-icon-button.danger { color: #9f9f9f; }
+        .template-icon-button.danger:hover { background: rgba(0,0,0,0.04); color: #7a7a7a; }
         .badge { display: inline-block; background: #e3f2fd; color: #0d47a1; padding: 4px 8px; border-radius: 12px; font-size: 0.85em; }
         .message { background: #e8f5e9; color: #2e7d32; border: 1px solid #c8e6c9; padding: 10px 12px; border-radius: 6px; margin-bottom: 10px; }
         .recent-list { display: grid; gap: 8px; }
@@ -242,6 +245,7 @@ foreach ($activeRewards as $reward) {
         .modal header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
         .modal-close { border: none; background: transparent; font-size: 20px; cursor: pointer; }
         #modal-body { overflow-y: auto; max-height: 70vh; }
+        body.modal-open { overflow: hidden; }
     </style>
 </head>
 <body>
@@ -334,10 +338,14 @@ foreach ($activeRewards as $reward) {
                                 <?php endif; ?>
                             </div>
                             <div class="template-actions">
-                                <button type="button" class="button secondary" data-action="edit-template" data-template-id="<?php echo (int)$template['id']; ?>">Edit</button>
+                                <button type="button" class="template-icon-button" data-action="edit-template" data-template-id="<?php echo (int)$template['id']; ?>" aria-label="Edit template">
+                                    <i class="fa fa-pen"></i>
+                                </button>
                                 <form method="POST" action="rewards.php" onsubmit="return confirm('Delete this template?');" style="margin:0;">
                                     <input type="hidden" name="template_id" value="<?php echo (int)$template['id']; ?>">
-                                    <button type="submit" name="delete_template" class="button danger">Delete</button>
+                                    <button type="submit" name="delete_template" class="template-icon-button danger" aria-label="Delete template">
+                                        <i class="fa fa-trash"></i>
+                                    </button>
                                 </form>
                             </div>
                             <form method="POST" action="rewards.php" class="reward-edit-form hidden" data-template-form="<?php echo (int)$template['id']; ?>" style="display:grid; gap:10px; margin-top:8px;">
@@ -548,9 +556,15 @@ foreach ($activeRewards as $reward) {
         const modalBody = document.getElementById('modal-body');
         const modalTitle = document.getElementById('modal-title');
         const modalCloseBtn = document.querySelector('.modal-close');
+        let modalStack = [];
 
         function openModal(title, contentElement) {
             if (!modalBackdrop || !modalBody || !modalTitle) return;
+            if (!modalBackdrop.classList.contains('open')) {
+                modalStack = [];
+            } else {
+                modalStack.push({ title: modalTitle.textContent, content: modalBody.innerHTML });
+            }
             modalTitle.textContent = title;
             modalBody.innerHTML = '';
             const clone = contentElement.cloneNode(true);
@@ -560,22 +574,36 @@ foreach ($activeRewards as $reward) {
             modalBody.appendChild(clone);
             modalBackdrop.classList.add('open');
             modalBackdrop.setAttribute('aria-hidden', 'false');
+            document.body.classList.add('modal-open');
             const input = clone.querySelector('input, textarea, select');
             if (input) {
                 setTimeout(() => input.focus(), 50);
             }
+            attachRewardListeners(modalBody);
         }
 
         function closeModal() {
             if (!modalBackdrop) return;
+            if (modalStack.length > 0) {
+                const prev = modalStack.pop();
+                modalTitle.textContent = prev.title || '';
+                modalBody.innerHTML = prev.content || '';
+                attachRewardListeners(modalBody);
+                return;
+            }
             modalBackdrop.classList.remove('open');
             modalBackdrop.setAttribute('aria-hidden', 'true');
             modalBody.innerHTML = '';
-            activeFormOriginalParent = null;
-            activeFormPlaceholder = null;
+            modalStack = [];
+            document.body.classList.remove('modal-open');
         }
 
         function openConfirm(message, onConfirm) {
+            if (!modalBackdrop.classList.contains('open')) {
+                modalStack = [];
+            } else {
+                modalStack.push({ title: modalTitle.textContent, content: modalBody.innerHTML });
+            }
             modalTitle.textContent = 'Confirm';
             modalBody.innerHTML = '';
             const wrapper = document.createElement('div');
@@ -606,6 +634,7 @@ foreach ($activeRewards as $reward) {
             modalBody.appendChild(wrapper);
             modalBackdrop.classList.add('open');
             modalBackdrop.setAttribute('aria-hidden', 'false');
+            document.body.classList.add('modal-open');
         }
 
         if (modalCloseBtn) {
@@ -619,15 +648,33 @@ foreach ($activeRewards as $reward) {
             });
         }
 
+        // Event delegation safety: ensure cancel buttons always close modals on first click
+        document.addEventListener('click', (e) => {
+            const closeBtn = e.target.closest('.modal-close');
+            if (closeBtn) {
+                e.preventDefault();
+                e.stopPropagation();
+                if (typeof e.stopImmediatePropagation === 'function') {
+                    e.stopImmediatePropagation();
+                }
+                closeModal();
+            }
+        });
+
         function attachRewardListeners(scope) {
             const editButtons = (scope || document).querySelectorAll('[data-action="edit-reward"]');
             editButtons.forEach(btn => {
                 btn.addEventListener('click', () => {
                     const id = btn.getAttribute('data-reward-id');
                     if (!id) return;
-                    const form = document.querySelector(`[data-reward-form="${id}"]`);
+                    const form = (scope || document).querySelector(`[data-reward-form="${id}"]`);
                     if (!form) return;
-                    openModal('Edit Reward', form);
+                    // Hide any other edit forms in this scope
+                    (scope || document).querySelectorAll('[data-reward-form]').forEach(f => f.classList.add('hidden'));
+                    form.classList.remove('hidden');
+                    form.style.display = 'grid';
+                    const input = form.querySelector('input, textarea, select');
+                    if (input) input.focus();
                 });
             });
 
@@ -639,6 +686,17 @@ foreach ($activeRewards as $reward) {
                     const form = document.querySelector(`[data-reward-delete-form="${id}"]`);
                     if (!form) return;
                     openConfirm('Delete this reward?', () => form.submit());
+                });
+            });
+
+            const cancelButtons = (scope || document).querySelectorAll('[data-action="cancel-edit"]');
+            cancelButtons.forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    const form = btn.closest('[data-reward-form]');
+                    if (form) {
+                        form.classList.add('hidden');
+                    }
                 });
             });
         }
