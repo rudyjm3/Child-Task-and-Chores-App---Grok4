@@ -222,7 +222,7 @@ foreach ($activeRewards as $reward) {
         .hidden { display: none !important; }
         .assigned-child-pill { display: inline-flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 999px; background: #eef4ff; color: #0d47a1; font-weight: 700; box-shadow: 0 1px 4px rgba(0,0,0,0.08); margin: 8px 0; }
         .assigned-child-pill img { width: 42px; height: 42px; border-radius: 50%; object-fit: cover; box-shadow: 0 1px 6px rgba(0,0,0,0.12); }
-        .child-reward-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-top: 12px; justify-content: flex-start; justify-items: start; }
+        .child-reward-grid { display: flex; justify-content: flex-start; gap: 12px; flex-wrap: wrap; margin-top: 12px; }
         .child-reward-card { border: 1px solid #e0e4ee; border-radius: 12px; padding: 14px; background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.06); display: grid; gap: 12px; max-width: fit-content; }
         .child-header { display: flex; align-items: center; gap: 12px; }
         .child-header img { width: 64px; height: 64px; border-radius: 50%; object-fit: cover; box-shadow: 0 2px 8px rgba(0,0,0,0.15); }
@@ -233,10 +233,10 @@ foreach ($activeRewards as $reward) {
         .reward-card { gap: 8px; width: 100%; max-width: none; }
         .reward-card-header { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
         .reward-actions { display: inline-flex; gap: 8px; }
-        .icon-button { border: none; background: transparent; cursor: pointer; color: #1e3a8a; padding: 6px; border-radius: 6px; }
-        .icon-button:hover { background: #eef2ff; }
-        .icon-button.danger { color: #b91c1c; }
-        .icon-button.danger:hover { background: #fff1f2; }
+        .icon-button { border: none; background: transparent; cursor: pointer; color: #9f9f9f; padding: 6px 8px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; }
+        .icon-button:hover { background: rgba(0,0,0,0.04); color: #7a7a7a; }
+        .icon-button.danger { color: #9f9f9f; }
+        .icon-button.danger:hover { background: rgba(0,0,0,0.04); color: #7a7a7a; }
         .reward-card-body { color: #444; font-size: 0.95em; }
         .reward-edit-actions { display: flex; gap: 8px; align-items: center; }
         .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: none; align-items: center; justify-content: center; z-index: 999; padding: 16px; }
@@ -258,6 +258,117 @@ foreach ($activeRewards as $reward) {
         <?php foreach ($messages as $msg): ?>
             <div class="message"><?php echo htmlspecialchars($msg); ?></div>
         <?php endforeach; ?>
+
+        <div class="card" style="margin-top:20px;">
+            <h2>Reward Stats</h2>
+            <?php if (!empty($childRewards)): ?>
+                <div class="child-reward-grid">
+                    <?php foreach ($childRewards as $childCard): 
+                        $cid = (int)$childCard['child_user_id'];
+                        $activeCount = count($childCard['rewards']);
+                        $redeemedCount = $redeemedByChild[$cid] ?? 0;
+                    ?>
+                        <div class="child-reward-card">
+                            <div class="child-header">
+                                <img src="<?php echo htmlspecialchars($childCard['avatar']); ?>" alt="<?php echo htmlspecialchars($childCard['name']); ?>">
+                                <div>
+                                    <strong><?php echo htmlspecialchars($childCard['name']); ?></strong>
+                                    <div class="child-meta">
+                                        <button type="button" class="badge badge-link" data-action="show-active-modal" data-child-id="<?php echo $cid; ?>"><?php echo $activeCount; ?> active</button>
+                                        <button type="button" class="badge badge-link" data-action="show-redeemed-modal" data-child-id="<?php echo $cid; ?>"><?php echo $redeemedCount; ?> redeemed</button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="hidden" data-child-active-list="<?php echo $cid; ?>" style="width:100%;">
+                                <div class="reward-list" style="display:grid; gap:12px; width:100%;">
+                                    <?php if (!empty($childCard['rewards'])): ?>
+                                        <?php foreach ($childCard['rewards'] as $reward): ?>
+                                            <div class="template-card reward-card" data-reward-card="<?php echo (int)$reward['id']; ?>" style="width:100%;">
+                                                <div class="reward-card-header">
+                                                    <div>
+                                                        <strong><?php echo htmlspecialchars($reward['title']); ?></strong>
+                                                        <span class="badge"><?php echo (int)$reward['point_cost']; ?> pts</span>
+                                                    </div>
+                                                    <div class="reward-actions">
+                                                        <button type="button" class="icon-button" data-action="edit-reward" data-reward-id="<?php echo (int)$reward['id']; ?>" aria-label="Edit reward"><i class="fa fa-pen"></i></button>
+                                                        <button type="button" class="icon-button danger" data-action="delete-reward" data-reward-id="<?php echo (int)$reward['id']; ?>" aria-label="Delete reward"><i class="fa fa-trash"></i></button>
+                                                    </div>
+                                                </div>
+                                                <?php if (!empty($reward['description'])): ?>
+                                                    <div class="reward-card-body">
+                                                        <p><?php echo nl2br(htmlspecialchars($reward['description'])); ?></p>
+                                                    </div>
+                                                <?php endif; ?>
+                                                <form method="POST" action="rewards.php" class="reward-edit-form hidden" data-reward-form="<?php echo (int)$reward['id']; ?>" style="display:grid; gap:10px;">
+                                                    <input type="hidden" name="reward_id" value="<?php echo (int)$reward['id']; ?>">
+                                                    <div class="form-group">
+                                                        <label for="reward_title_<?php echo (int)$reward['id']; ?>">Title</label>
+                                                        <input type="text" id="reward_title_<?php echo (int)$reward['id']; ?>" name="reward_title" value="<?php echo htmlspecialchars($reward['title']); ?>" required>
+                                                    </div>
+                                                    <div class="form-group">
+                                                        <label for="reward_description_<?php echo (int)$reward['id']; ?>">Description</label>
+                                                        <textarea id="reward_description_<?php echo (int)$reward['id']; ?>" name="reward_description"><?php echo htmlspecialchars($reward['description'] ?? ''); ?></textarea>
+                                                    </div>
+                                                    <div class="form-group">
+                                                        <label for="reward_cost_<?php echo (int)$reward['id']; ?>">Point Cost</label>
+                                                        <input type="number" id="reward_cost_<?php echo (int)$reward['id']; ?>" name="point_cost" min="1" value="<?php echo (int)$reward['point_cost']; ?>" required>
+                                                    </div>
+                                                    <div class="reward-edit-actions">
+                                                        <button type="submit" name="update_reward" class="button">Save Changes</button>
+                                                        <button type="button" class="button secondary" data-action="cancel-edit" data-reward-id="<?php echo (int)$reward['id']; ?>">Cancel</button>
+                                                    </div>
+                                                </form>
+                                                <form method="POST" action="rewards.php" class="hidden" data-reward-delete-form="<?php echo (int)$reward['id']; ?>">
+                                                    <input type="hidden" name="reward_id" value="<?php echo (int)$reward['id']; ?>">
+                                                    <input type="hidden" name="delete_reward" value="1">
+                                                </form>
+                                            </div>
+                                        <?php endforeach; ?>
+                                    <?php else: ?>
+                                        <p>No active rewards for this child.</p>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
+                            <div class="hidden" data-child-redeemed-list="<?php echo $cid; ?>" style="width:100%;">
+                                <div class="reward-list" style="display:grid; gap:12px; width:100%;">
+                                    <?php if (!empty($redeemedRewardsByChild[$cid])): ?>
+                                        <?php foreach ($redeemedRewardsByChild[$cid] as $reward): ?>
+                                            <div class="template-card reward-card" style="width:100%;">
+                                                <div class="reward-card-header">
+                                                    <div>
+                                                        <strong><?php echo htmlspecialchars($reward['title']); ?></strong>
+                                                        <span class="badge"><?php echo (int)$reward['point_cost']; ?> pts</span>
+                                                    </div>
+                                                </div>
+                                                <div class="reward-card-body">
+                                                    <p>Redeemed on: <?php echo !empty($reward['redeemed_on']) ? htmlspecialchars(date('m/d/Y h:i A', strtotime($reward['redeemed_on']))) : 'Date unavailable'; ?></p>
+                                                    <?php if (!empty($reward['description'])): ?>
+                                                        <p><?php echo nl2br(htmlspecialchars($reward['description'])); ?></p>
+                                                    <?php endif; ?>
+                                                    <?php if (!empty($reward['fulfilled_on'])): ?>
+                                                        <p>Fulfilled on: <?php echo htmlspecialchars(date('m/d/Y h:i A', strtotime($reward['fulfilled_on']))); ?><?php if (!empty($reward['fulfilled_by_name'])): ?> by <?php echo htmlspecialchars($reward['fulfilled_by_name']); ?><?php endif; ?></p>
+                                                    <?php else: ?>
+                                                        <p class="awaiting-label">Awaiting fulfillment by parent.</p>
+                                                        <form method="POST" action="rewards.php" class="inline-form">
+                                                            <input type="hidden" name="reward_id" value="<?php echo (int)$reward['id']; ?>">
+                                                            <button type="submit" name="fulfill_reward" class="button approve-button">Mark Fulfilled</button>
+                                                        </form>
+                                                    <?php endif; ?>
+                                                </div>
+                                            </div>
+                                        <?php endforeach; ?>
+                                    <?php else: ?>
+                                        <p>No redeemed rewards for this child.</p>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+            <?php else: ?>
+                <p>No rewards available.</p>
+            <?php endif; ?>
+        </div>
 
         <div class="grid">
             <div class="card">
@@ -391,117 +502,6 @@ foreach ($activeRewards as $reward) {
                 </div>
             <?php else: ?>
                 <p>No rewards available yet.</p>
-            <?php endif; ?>
-        </div>
-
-        <div class="card" style="margin-top:20px;">
-            <h2>Active Rewards</h2>
-            <?php if (!empty($childRewards)): ?>
-                <div class="child-reward-grid">
-                    <?php foreach ($childRewards as $childCard): 
-                        $cid = (int)$childCard['child_user_id'];
-                        $activeCount = count($childCard['rewards']);
-                        $redeemedCount = $redeemedByChild[$cid] ?? 0;
-                    ?>
-                        <div class="child-reward-card">
-                            <div class="child-header">
-                                <img src="<?php echo htmlspecialchars($childCard['avatar']); ?>" alt="<?php echo htmlspecialchars($childCard['name']); ?>">
-                                <div>
-                                    <strong><?php echo htmlspecialchars($childCard['name']); ?></strong>
-                                    <div class="child-meta">
-                                        <button type="button" class="badge badge-link" data-action="show-active-modal" data-child-id="<?php echo $cid; ?>"><?php echo $activeCount; ?> active</button>
-                                        <button type="button" class="badge badge-link" data-action="show-redeemed-modal" data-child-id="<?php echo $cid; ?>"><?php echo $redeemedCount; ?> redeemed</button>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="hidden" data-child-active-list="<?php echo $cid; ?>" style="width:100%;">
-                                <div class="reward-list" style="display:grid; gap:12px; width:100%;">
-                                    <?php if (!empty($childCard['rewards'])): ?>
-                                        <?php foreach ($childCard['rewards'] as $reward): ?>
-                                            <div class="template-card reward-card" data-reward-card="<?php echo (int)$reward['id']; ?>" style="width:100%;">
-                                                <div class="reward-card-header">
-                                                    <div>
-                                                        <strong><?php echo htmlspecialchars($reward['title']); ?></strong>
-                                                        <span class="badge"><?php echo (int)$reward['point_cost']; ?> pts</span>
-                                                    </div>
-                                                    <div class="reward-actions">
-                                                        <button type="button" class="icon-button" data-action="edit-reward" data-reward-id="<?php echo (int)$reward['id']; ?>" aria-label="Edit reward"><i class="fa fa-pen"></i></button>
-                                                        <button type="button" class="icon-button danger" data-action="delete-reward" data-reward-id="<?php echo (int)$reward['id']; ?>" aria-label="Delete reward"><i class="fa fa-trash"></i></button>
-                                                    </div>
-                                                </div>
-                                                <?php if (!empty($reward['description'])): ?>
-                                                    <div class="reward-card-body">
-                                                        <p><?php echo nl2br(htmlspecialchars($reward['description'])); ?></p>
-                                                    </div>
-                                                <?php endif; ?>
-                                                <form method="POST" action="rewards.php" class="reward-edit-form hidden" data-reward-form="<?php echo (int)$reward['id']; ?>" style="display:grid; gap:10px;">
-                                                    <input type="hidden" name="reward_id" value="<?php echo (int)$reward['id']; ?>">
-                                                    <div class="form-group">
-                                                        <label for="reward_title_<?php echo (int)$reward['id']; ?>">Title</label>
-                                                        <input type="text" id="reward_title_<?php echo (int)$reward['id']; ?>" name="reward_title" value="<?php echo htmlspecialchars($reward['title']); ?>" required>
-                                                    </div>
-                                                    <div class="form-group">
-                                                        <label for="reward_description_<?php echo (int)$reward['id']; ?>">Description</label>
-                                                        <textarea id="reward_description_<?php echo (int)$reward['id']; ?>" name="reward_description"><?php echo htmlspecialchars($reward['description'] ?? ''); ?></textarea>
-                                                    </div>
-                                                    <div class="form-group">
-                                                        <label for="reward_cost_<?php echo (int)$reward['id']; ?>">Point Cost</label>
-                                                        <input type="number" id="reward_cost_<?php echo (int)$reward['id']; ?>" name="point_cost" min="1" value="<?php echo (int)$reward['point_cost']; ?>" required>
-                                                    </div>
-                                                    <div class="reward-edit-actions">
-                                                        <button type="submit" name="update_reward" class="button">Save Changes</button>
-                                                        <button type="button" class="button secondary" data-action="cancel-edit" data-reward-id="<?php echo (int)$reward['id']; ?>">Cancel</button>
-                                                    </div>
-                                                </form>
-                                                <form method="POST" action="rewards.php" class="hidden" data-reward-delete-form="<?php echo (int)$reward['id']; ?>">
-                                                    <input type="hidden" name="reward_id" value="<?php echo (int)$reward['id']; ?>">
-                                                    <input type="hidden" name="delete_reward" value="1">
-                                                </form>
-                                            </div>
-                                        <?php endforeach; ?>
-                                    <?php else: ?>
-                                        <p>No active rewards for this child.</p>
-                                    <?php endif; ?>
-                                </div>
-                            </div>
-                            <div class="hidden" data-child-redeemed-list="<?php echo $cid; ?>" style="width:100%;">
-                                <div class="reward-list" style="display:grid; gap:12px; width:100%;">
-                                    <?php if (!empty($redeemedRewardsByChild[$cid])): ?>
-                                        <?php foreach ($redeemedRewardsByChild[$cid] as $reward): ?>
-                                            <div class="template-card reward-card" style="width:100%;">
-                                                <div class="reward-card-header">
-                                                    <div>
-                                                        <strong><?php echo htmlspecialchars($reward['title']); ?></strong>
-                                                        <span class="badge"><?php echo (int)$reward['point_cost']; ?> pts</span>
-                                                    </div>
-                                                </div>
-                                                <div class="reward-card-body">
-                                                    <p>Redeemed on: <?php echo !empty($reward['redeemed_on']) ? htmlspecialchars(date('m/d/Y h:i A', strtotime($reward['redeemed_on']))) : 'Date unavailable'; ?></p>
-                                                    <?php if (!empty($reward['description'])): ?>
-                                                        <p><?php echo nl2br(htmlspecialchars($reward['description'])); ?></p>
-                                                    <?php endif; ?>
-                                                    <?php if (!empty($reward['fulfilled_on'])): ?>
-                                                        <p>Fulfilled on: <?php echo htmlspecialchars(date('m/d/Y h:i A', strtotime($reward['fulfilled_on']))); ?><?php if (!empty($reward['fulfilled_by_name'])): ?> by <?php echo htmlspecialchars($reward['fulfilled_by_name']); ?><?php endif; ?></p>
-                                                    <?php else: ?>
-                                                        <p class="awaiting-label">Awaiting fulfillment by parent.</p>
-                                                        <form method="POST" action="rewards.php" class="inline-form">
-                                                            <input type="hidden" name="reward_id" value="<?php echo (int)$reward['id']; ?>">
-                                                            <button type="submit" name="fulfill_reward" class="button approve-button">Mark Fulfilled</button>
-                                                        </form>
-                                                    <?php endif; ?>
-                                                </div>
-                                            </div>
-                                        <?php endforeach; ?>
-                                    <?php else: ?>
-                                        <p>No redeemed rewards for this child.</p>
-                                    <?php endif; ?>
-                                </div>
-                            </div>
-                        </div>
-                    <?php endforeach; ?>
-                </div>
-            <?php else: ?>
-                <p>No rewards available.</p>
             <?php endif; ?>
         </div>
 

@@ -361,6 +361,20 @@ $getRewardFulfillMeta = function($rewardId) use ($db) {
     return $cache[$rewardId];
 };
 $data = getDashboardData($_SESSION['user_id']);
+$activeRewardCounts = [];
+foreach (($data['active_rewards'] ?? []) as $ar) {
+    $cid = (int)($ar['child_user_id'] ?? 0);
+    if ($cid > 0) {
+        $activeRewardCounts[$cid] = ($activeRewardCounts[$cid] ?? 0) + 1;
+    }
+}
+$redeemedRewardCounts = [];
+foreach (($data['redeemed_rewards'] ?? []) as $rr) {
+    $cid = (int)($rr['child_user_id'] ?? 0);
+    if ($cid > 0) {
+        $redeemedRewardCounts[$cid] = ($redeemedRewardCounts[$cid] ?? 0) + 1;
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -387,6 +401,11 @@ $data = getDashboardData($_SESSION['user_id']);
         .child-info-stats .stat-label { display: block; font-size: 0.85em; color: #666; }
         .child-info-stats .stat-value { font-size: 1.4em; font-weight: 600; color: #2e7d32; }
         .child-info-stats .stat-subvalue { display: block; font-size: 0.85em; color: #888; margin-top: 2px; }
+        .child-reward-badges { display: flex; justify-content: center; gap: 12px; flex-wrap: wrap; margin-top: 4px; }
+        .child-reward-badge-link { text-decoration: none; display: grid; gap: 2px; align-items: center; justify-items: center; padding: 4px 6px; border-radius: 8px; min-width: 73.25px;}
+        .child-reward-badge-link:hover { text-decoration: none;}
+        .child-reward-badge-link .badge-count { font-size: 1.6em; font-weight: 700; color: #2e7d32; line-height: 1.1; }
+        .child-reward-badge-link .badge-label { font-size: 0.85em; color: #666; }
         .points-progress-wrapper { display: flex; flex-direction: column; align-items: center; gap: 10px; flex: 1; }
         .points-progress-label { font-size: 0.9em; color: #555; text-align: center; }
         .points-progress-container { width: 70px; height: 160px; background: #e0e0e0; border-radius: 35px; display: flex; align-items: flex-end; justify-content: center; position: relative; overflow: hidden; }
@@ -1017,8 +1036,21 @@ $data = getDashboardData($_SESSION['user_id']);
                               <span class="stat-subvalue">Target: <?php echo (int)($child['goal_target_points'] ?? 0); ?> pts</span>
                            </div>
                            <div class="stat">
-                              <span class="stat-label">Rewards Claimed</span>
-                              <span class="stat-value"><?php echo (int)($child['rewards_claimed'] ?? 0); ?></span>
+                              <span class="stat-label">Rewards</span>
+                              <?php
+                                 $childActiveRewards = $activeRewardCounts[$child['child_user_id']] ?? 0;
+                                 $childRedeemedRewards = $redeemedRewardCounts[$child['child_user_id']] ?? 0;
+                              ?>
+                              <div class="child-reward-badges">
+                                 <a class="child-reward-badge-link" href="rewards.php">
+                                    <span class="badge-count"><?php echo $childActiveRewards; ?></span>
+                                    <span class="badge-label">active</span>
+                                 </a>
+                                 <a class="child-reward-badge-link" href="rewards.php">
+                                    <span class="badge-count"><?php echo $childRedeemedRewards; ?></span>
+                                    <span class="badge-label">redeemed</span>
+                                 </a>
+                              </div>
                            </div>
                         </div>
                         <div class="points-progress-wrapper">
