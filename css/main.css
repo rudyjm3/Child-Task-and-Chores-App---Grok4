@@ -16,6 +16,24 @@ body {
   padding: 20px;
 }
 
+/* Global form controls */
+input,
+textarea,
+select {
+  border-radius: 8px;
+  border: 1px solid #9f9f9f;
+  background-color: #fff;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  outline: none;
+  border-color: #4caf50;
+  box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.15);
+}
+
 body.child-theme h1,
 body.child-theme h2,
 body.child-theme h3,

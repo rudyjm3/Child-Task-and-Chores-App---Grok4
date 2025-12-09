@@ -194,6 +194,8 @@ foreach ($activeRewards as $reward) {
         .form-group { margin-bottom: 12px; }
         .form-group label { display: block; margin-bottom: 6px; }
         .form-group input, .form-group textarea, .form-group select { width: 100%; padding: 8px; }
+        input, textarea, select { border-radius: 8px; border: 1px solid #9f9f9f; background-color: #fff; transition: border-color 150ms ease, box-shadow 150ms ease; }
+        input:focus, textarea:focus, select:focus { outline: none; border-color: #4caf50; box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.15); }
         .button { padding: 10px 18px; background: #4caf50; color: #fff; border: none; border-radius: 6px; cursor: pointer; display: inline-block; text-decoration: none; font-weight: 700; }
         .button.secondary { background: #1565c0; }
         .button.danger { background: #c62828; }
