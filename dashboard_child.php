@@ -313,7 +313,7 @@ $notificationCount = is_array($notificationsNew) ? count($notificationsNew) : 0;
                                  Deleted: <?php echo htmlspecialchars(date('m/d/Y h:i A', strtotime($note['deleted_at']))); ?>
                               </div>
                            </div>
-                           <button type="submit" name="delete_single_perm" value="<?php echo (int)$note['id']; ?>" class="trash-button" aria-label="Delete permanently"><i class="fa-solid fa-trash-can"></i></button>
+                           <button type="submit" name="delete_single_perm" value="<?php echo (int)$note['id']; ?>" class="trash-button" aria-label="Delete permanently"><i class="fa-solid fa-trash"></i></button>
                         </li>
                      <?php endforeach; ?>
                   </ul>

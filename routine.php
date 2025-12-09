@@ -1736,7 +1736,7 @@ margin-bottom: 20px;}
                                                 <div class="routine-action-row">
                                                     <button type="button" class="routine-flow-close" data-action="flow-exit">Stop</button>
                                                     <button type="button" class="audio-toggle" data-role="audio-toggle" aria-pressed="true" aria-label="Mute all routine sounds" title="Mute all routine sounds">
-                                                        <span aria-hidden="true" data-audio-icon>??</span>
+                                                    <span aria-hidden="true" data-audio-icon><i class="fa-solid fa-volume-high"></i></span>
                                                     </button>
                                                     <button type="button" class="routine-primary-button" data-action="flow-complete-task">Next</button>
                                                 </div>
@@ -1755,7 +1755,7 @@ margin-bottom: 20px;}
                                                 <div class="routine-action-row">
                                                     <button type="button" class="routine-flow-close" data-action="flow-exit">Stop</button>
                                                     <button type="button" class="audio-toggle" data-role="audio-toggle" aria-pressed="true" aria-label="Mute all routine sounds" title="Mute all routine sounds">
-                                                        <span aria-hidden="true" data-audio-icon>??</span>
+                                                    <span aria-hidden="true" data-audio-icon><i class="fa-solid fa-volume-high"></i></span>
                                                     </button>
                                                     <button type="button" class="routine-primary-button" data-action="flow-next-task">Next Task</button>
                                                 </div>
@@ -2587,7 +2587,9 @@ margin-bottom: 20px;}
                             btn.setAttribute('aria-pressed', audioOn ? 'true' : 'false');
                             const icon = btn.querySelector('[data-audio-icon]');
                             if (icon) {
-                                icon.textContent = audioOn ? '??' : '??';
+                                icon.innerHTML = audioOn
+                                    ? '<i class="fa-solid fa-volume-high"></i>'
+                                    : '<i class="fa-solid fa-volume-xmark"></i>';
                             }
                             const label = this.audioLocked
                                 ? 'Audio disabled by parent preferences'
