@@ -1530,7 +1530,7 @@ margin-bottom: 20px;}
                 </div>
                 <div class="task-modal-overlay" data-role="task-modal" aria-hidden="true">
                     <div class="task-modal" role="dialog" aria-modal="true" aria-labelledby="task-modal-title">
-                        <button type="button" class="task-modal-close" data-action="close-task-modal" aria-label="Close add routine task dialog">&times;</button>
+                        <button type="button" class="task-modal-close" data-action="close-task-modal" aria-label="Close add routine task dialog"><i class="fa-solid fa-xmark"></i></button>
                         <h3 id="task-modal-title">Create Routine Task</h3>
                         <form method="POST" class="library-form" autocomplete="off">
                             <div class="input-group">

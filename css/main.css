@@ -20,10 +20,11 @@ body {
 input,
 textarea,
 select {
-  border-radius: 8px;
+  border-radius: 6px;
   border: 1px solid #9f9f9f;
   background-color: #fff;
   transition: border-color 150ms ease, box-shadow 150ms ease;
+  padding: 8px;
 }
 
 input[type="number"] {
@@ -82,7 +83,7 @@ a {
 }
 
 a:hover {
-  text-decoration: underline;
+  text-decoration: none;
 }
 
 /* Mobile-friendly adjustments */

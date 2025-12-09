@@ -784,7 +784,7 @@ foreach (($data['redeemed_rewards'] ?? []) as $rr) {
                         task.textContent = `Task: ${entry.task_title || 'Task'}`;
                         const times = document.createElement('div');
                         times.className = 'meta';
-                        times.textContent = `Scheduled: ${formatDuration(entry.scheduled_seconds)} � Actual: ${formatDuration(entry.actual_seconds)}`;
+                        times.textContent = `Scheduled: ${formatDuration(entry.scheduled_seconds)} - Actual: ${formatDuration(entry.actual_seconds)}`;
                         const overtime = document.createElement('div');
                         overtime.className = 'overtime';
                         overtime.textContent = `Overtime: ${formatDuration(entry.overtime_seconds)}`;
@@ -843,7 +843,7 @@ foreach (($data['redeemed_rewards'] ?? []) as $rr) {
       <div class="parent-notifications-card">
          <header>
             <h2>Notifications</h2>
-            <button type="button" class="parent-notifications-close" aria-label="Close notifications" data-parent-notifications-close>&times;</button>
+            <button type="button" class="parent-notifications-close" aria-label="Close notifications" data-parent-notifications-close><i class="fa-solid fa-xmark"></i></button>
          </header>
          <div class="parent-notification-tabs" data-role="parent-notification-tabs">
             <button type="button" class="parent-tab-button active" data-tab="new">New (<?php echo count($parentNew); ?>)</button>
@@ -1433,7 +1433,7 @@ foreach (($data['redeemed_rewards'] ?? []) as $rr) {
             <div class="routine-log-dialog">
                 <div class="routine-log-header">
                     <h4 class="routine-log-title" data-role="routine-log-title">Routine Overtime</h4>
-                    <button type="button" class="routine-log-close" data-role="routine-log-close" aria-label="Close">�</button>
+                    <button type="button" class="routine-log-close" data-role="routine-log-close" aria-label="Close"><i class="fa-solid fa-xmark"></i></button>
                 </div>
                 <div class="routine-log-body" data-role="routine-log-body"></div>
             </div>
@@ -1564,7 +1564,7 @@ foreach (($data['redeemed_rewards'] ?? []) as $rr) {
         <div class="adjust-modal">
             <header>
                 <h3 data-role="adjust-title">Adjust Points</h3>
-                <button type="button" class="adjust-modal-close" data-action="close-adjust">&times;</button>
+                <button type="button" class="adjust-modal-close" data-action="close-adjust"><i class="fa-solid fa-xmark"></i></button>
             </header>
             <form method="POST">
                 <div class="form-group">
