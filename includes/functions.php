@@ -1126,8 +1126,11 @@ function requestGoalCompletion($goal_id, $child_user_id) {
 // Add back approveGoal function
 function approveGoal($goal_id, $parent_user_id) {
     global $db;
+    $managesTransaction = !$db->inTransaction();
     try {
-        $db->beginTransaction();
+        if ($managesTransaction) {
+            $db->beginTransaction();
+        }
         
         $stmt = $db->prepare("SELECT child_user_id, target_points, title 
                              FROM goals 
@@ -1157,14 +1160,20 @@ function approveGoal($goal_id, $parent_user_id) {
                 'dashboard_child.php'
             );
             
-            $db->commit();
+            if ($managesTransaction && $db->inTransaction()) {
+                $db->commit();
+            }
             return true;
         }
         
-        $db->rollBack();
+        if ($managesTransaction && $db->inTransaction()) {
+            $db->rollBack();
+        }
         return false;
     } catch (Exception $e) {
-        $db->rollBack();
+        if ($managesTransaction && $db->inTransaction()) {
+            $db->rollBack();
+        }
         error_log("Goal approval failed: " . $e->getMessage());
         return false;
     }

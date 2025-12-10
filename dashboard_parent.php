@@ -420,6 +420,7 @@ foreach (($data['redeemed_rewards'] ?? []) as $rr) {
         .adjust-button .icon { font-size: 1.1em; line-height: 1; }
         .points-adjust-card { border: 1px dashed #c8e6c9; background: #fdfefb; padding: 10px 12px; border-radius: 6px; display: grid; gap: 8px; }
         .points-adjust-card .button { width: 100%; }
+        body.modal-open { overflow: hidden; }
         .adjust-modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.55); display: none; align-items: center; justify-content: center; z-index: 3000; padding: 12px; }
         .adjust-modal-backdrop.open { display: flex; }
         .adjust-modal { background: #fff; border-radius: 10px; padding: 18px; max-width: 420px; width: min(420px, 100%); box-shadow: 0 14px 36px rgba(0,0,0,0.25); display: grid; gap: 12px; }
@@ -676,6 +677,10 @@ foreach (($data['redeemed_rewards'] ?? []) as $rr) {
             const adjustHistoryList = adjustModal ? adjustModal.querySelector('[data-role="adjust-history-list"]') : null;
             const pointsInput = adjustModal ? adjustModal.querySelector('#adjust_points_input') : null;
             const reasonInput = adjustModal ? adjustModal.querySelector('#adjust_reason_input') : null;
+            const setBodyScrollLocked = (locked) => {
+                if (!document.body) return;
+                document.body.classList.toggle('modal-open', !!locked);
+            };
 
             const renderHistory = (history) => {
                 if (!adjustHistoryList) return;
@@ -715,16 +720,23 @@ foreach (($data['redeemed_rewards'] ?? []) as $rr) {
                     if (pointsInput) { pointsInput.value = 1; }
                     if (reasonInput) { reasonInput.value = ''; }
                     renderHistory(history);
-                    if (adjustModal) { adjustModal.classList.add('open'); }
+                    if (adjustModal) {
+                        adjustModal.classList.add('open');
+                        setBodyScrollLocked(true);
+                    }
                 });
             });
 
             if (adjustModal) {
                 const closeButtons = adjustModal.querySelectorAll('[data-action="close-adjust"]');
-                closeButtons.forEach(btn => btn.addEventListener('click', () => adjustModal.classList.remove('open')));
+                closeButtons.forEach(btn => btn.addEventListener('click', () => {
+                    adjustModal.classList.remove('open');
+                    setBodyScrollLocked(false);
+                }));
                 adjustModal.addEventListener('click', (e) => {
                     if (e.target === adjustModal) {
                         adjustModal.classList.remove('open');
+                        setBodyScrollLocked(false);
                     }
                 });
                 const decBtn = adjustModal.querySelector('[data-action="decrement-points"]');

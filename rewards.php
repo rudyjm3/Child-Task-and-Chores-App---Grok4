@@ -191,6 +191,7 @@ foreach ($activeRewards as $reward) {
         h1, h2 { margin-top: 0; }
         .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-top: 20px;}
         .card { background: #fafbff; border: 1px solid #e4e7ef; border-radius: 8px; padding: 16px; box-shadow: 0 2px 6px rgba(0,0,0,0.04); }
+        .card-title-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 15px; }
         .form-group { margin-bottom: 12px; }
         .form-group label { display: block; margin-bottom: 6px; }
         .form-group input, .form-group textarea, .form-group select { width: 100%; padding: 8px; }
@@ -229,6 +230,7 @@ foreach ($activeRewards as $reward) {
         .child-header { display: flex; align-items: center; gap: 12px; }
         .child-header img { width: 64px; height: 64px; border-radius: 50%; object-fit: cover; box-shadow: 0 2px 8px rgba(0,0,0,0.15); }
         .child-meta { display: flex; gap: 10px; flex-wrap: wrap; font-weight: 700; color: #2c3e50; }
+        .reward-badge-title-header {font-size: 12px;width: 100%; color: #9f9f9f;}
         .child-meta .badge { background: #eef4ff; color: #0d47a1; cursor: pointer; border: none; }
         .child-meta .badge-link { border-radius: 12px; padding: 4px 8px; }
         .reward-list { width: 100%; }
@@ -239,6 +241,8 @@ foreach ($activeRewards as $reward) {
         .icon-button:hover { background: rgba(0,0,0,0.04); color: #7a7a7a; }
         .icon-button.danger { color: #9f9f9f; }
         .icon-button.danger:hover { background: rgba(0,0,0,0.04); color: #7a7a7a; }
+        .add-child-reward-btn { border: none; background: transparent; cursor: pointer; color: #1565c0; padding: 6px 10px; border-radius: 8px; display: inline-flex; align-items: center; gap: 8px; font-weight: 700; }
+        .add-child-reward-btn:hover { background: rgba(21,101,192,0.08); color: #0d47a1; }
         .reward-card-body { color: #444; font-size: 0.95em; }
         .reward-edit-actions { display: flex; gap: 8px; align-items: center; }
         .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: none; align-items: center; justify-content: center; z-index: 999; padding: 16px; }
@@ -260,7 +264,7 @@ foreach ($activeRewards as $reward) {
 <body>
     <div class="page">
         <div style="display:flex; justify-content: space-between; align-items:center; gap:12px;">
-            <h1>Reward Library</h1>
+            <h1>Rewards</h1>
             <a href="dashboard_parent.php" class="button secondary">Back to Dashboard</a>
         </div>
 
@@ -283,10 +287,15 @@ foreach ($activeRewards as $reward) {
                                 <div>
                                     <strong><?php echo htmlspecialchars($childCard['name']); ?></strong>
                                     <div class="child-meta">
+                                    <p class="reward-badge-title-header">Rewards Status</p> 
                                         <button type="button" class="badge badge-link" data-action="show-active-modal" data-child-id="<?php echo $cid; ?>"><?php echo $activeCount; ?> active</button>
                                         <button type="button" class="badge badge-link" data-action="show-redeemed-modal" data-child-id="<?php echo $cid; ?>"><?php echo $redeemedCount; ?> redeemed</button>
                                     </div>
                                 </div>
+                                <button type="button" class="add-child-reward-btn" data-action="open-assign-modal" data-child-id="<?php echo $cid; ?>" aria-label="Assign reward">
+                                    <i class="fa fa-plus"></i>
+                                    <span>Assign Reward</span>
+                                </button>
                             </div>
                             <div class="hidden" data-child-active-list="<?php echo $cid; ?>" style="width:100%;">
                                 <div class="reward-list" style="display:grid; gap:12px; width:100%;">
@@ -383,73 +392,14 @@ foreach ($activeRewards as $reward) {
             <?php endif; ?>
         </div>
 
-        <div class="grid">
-            <div class="card">
-                <h2>Create Template</h2>
-                <form method="POST" action="rewards.php">
-                    <div class="form-group">
-                        <label for="template_title">Title</label>
-                        <input type="text" id="template_title" name="template_title" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="template_description">Description</label>
-                        <textarea id="template_description" name="template_description"></textarea>
-                    </div>
-                    <div class="form-group">
-                        <label for="template_point_cost">Point Cost</label>
-                        <div class="number-stepper">
-                            <button type="button" class="stepper-btn" data-step="-1" aria-label="Decrease points"><i class="fa fa-minus"></i></button>
-                            <input class="stepper-input" type="number" id="template_point_cost" name="template_point_cost" min="1" required>
-                            <button type="button" class="stepper-btn" data-step="1" aria-label="Increase points"><i class="fa fa-plus"></i></button>
-                        </div>
-                    </div>
-                    <button type="submit" name="create_template" class="button">Save Template</button>
-                </form>
-            </div>
-
-            <div class="card">
-                <h2>Assign Template</h2>
-                <form method="POST" action="rewards.php">
-                    <div class="form-group">
-                        <label for="template_id">Template</label>
-                        <select id="template_id" name="template_id" required>
-                            <option value="">Select a template</option>
-                            <?php foreach ($templates as $template): ?>
-                                <option value="<?php echo (int)$template['id']; ?>">
-                                    <?php echo htmlspecialchars($template['title']); ?> (<?php echo (int)$template['point_cost']; ?> pts)
-                                </option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-                    <div class="form-group child-select-group">
-                        <label>Choose Children</label>
-                        <div class="child-select-grid">
-                            <?php if (!empty($children)): ?>
-                                <?php foreach ($children as $child): 
-                                    $avatar = !empty($child['avatar']) ? $child['avatar'] : 'images/default-avatar.png';
-                                ?>
-                                    <label class="child-select-card">
-                                        <input type="checkbox" name="child_user_ids[]" value="<?php echo (int)$child['child_user_id']; ?>">
-                                        <img src="<?php echo htmlspecialchars($avatar); ?>" alt="<?php echo htmlspecialchars($child['child_name']); ?>">
-                                        <strong><?php echo htmlspecialchars($child['child_name']); ?></strong>
-                                    </label>
-                                <?php endforeach; ?>
-                            <?php else: ?>
-                                <p>No children found.</p>
-                            <?php endif; ?>
-                        </div>
-                        <label class="assign-all">
-                            <input type="checkbox" name="assign_all_children" value="1">
-                            Assign to all children
-                        </label>
-                    </div>
-                    <button type="submit" name="assign_template" class="button">Create Rewards</button>
-                </form>
-            </div>
-        </div>
-
         <div class="card" style="margin-top:20px;">
-            <h2>Templates</h2>
+            <div class="card-title-row">
+                <h2>Rewards Library</h2>
+                <button type="button" class="button secondary" data-action="open-create-template-modal" aria-label="Create reward template">
+                    <i class="fa fa-plus"></i>
+                    <span style="margin-left:6px;">Create reward</span>
+                </button>
+            </div>
             <?php if (!empty($templates)): ?>
                 <div class="template-grid">
                     <?php foreach ($templates as $template): ?>
@@ -526,6 +476,67 @@ foreach ($activeRewards as $reward) {
             <?php endif; ?>
         </div>
 
+        <div class="hidden" id="assign-reward-modal-content">
+            <form method="POST" action="rewards.php" style="display:grid; gap:10px;">
+                <div class="form-group">
+                    <label for="assign_template_id">Template</label>
+                    <select id="assign_template_id" name="template_id" required>
+                        <option value="">Select a template</option>
+                        <?php foreach ($templates as $template): ?>
+                            <option value="<?php echo (int)$template['id']; ?>">
+                                <?php echo htmlspecialchars($template['title']); ?> (<?php echo (int)$template['point_cost']; ?> pts)
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="form-group child-select-group">
+                    <label>Choose Children</label>
+                    <div class="child-select-grid">
+                        <?php if (!empty($children)): ?>
+                            <?php foreach ($children as $child): 
+                                $avatar = !empty($child['avatar']) ? $child['avatar'] : 'images/default-avatar.png';
+                            ?>
+                                <label class="child-select-card">
+                                    <input type="checkbox" name="child_user_ids[]" value="<?php echo (int)$child['child_user_id']; ?>">
+                                    <img src="<?php echo htmlspecialchars($avatar); ?>" alt="<?php echo htmlspecialchars($child['child_name']); ?>">
+                                    <strong><?php echo htmlspecialchars($child['child_name']); ?></strong>
+                                </label>
+                            <?php endforeach; ?>
+                        <?php else: ?>
+                            <p>No children found.</p>
+                        <?php endif; ?>
+                    </div>
+                    <label class="assign-all">
+                        <input type="checkbox" name="assign_all_children" value="1">
+                        Assign to all children
+                    </label>
+                </div>
+                <button type="submit" name="assign_template" class="button">Assign Rewards</button>
+            </form>
+        </div>
+
+        <div class="hidden" id="create-template-modal-content">
+            <form method="POST" action="rewards.php" style="display:grid; gap:10px;">
+                <div class="form-group">
+                    <label for="template_title_modal">Title</label>
+                    <input type="text" id="template_title_modal" name="template_title" required>
+                </div>
+                <div class="form-group">
+                    <label for="template_description_modal">Description</label>
+                    <textarea id="template_description_modal" name="template_description"></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="template_point_cost_modal">Point Cost</label>
+                    <div class="number-stepper">
+                        <button type="button" class="stepper-btn" data-step="-1" aria-label="Decrease points"><i class="fa fa-minus"></i></button>
+                        <input class="stepper-input" type="number" id="template_point_cost_modal" name="template_point_cost" min="1" required>
+                        <button type="button" class="stepper-btn" data-step="1" aria-label="Increase points"><i class="fa fa-plus"></i></button>
+                    </div>
+                </div>
+                <button type="submit" name="create_template" class="button">Save Template</button>
+            </form>
+        </div>
+
     </div>
 </body>
 <div class="modal-backdrop" id="modal-backdrop" aria-hidden="true">
@@ -553,9 +564,12 @@ foreach ($activeRewards as $reward) {
         const modalBody = document.getElementById('modal-body');
         const modalTitle = document.getElementById('modal-title');
         const modalCloseBtn = document.querySelector('.modal-close');
+        const createTemplateButton = document.querySelector('[data-action="open-create-template-modal"]');
+        const createTemplateModalContent = document.getElementById('create-template-modal-content');
+        const assignRewardModalContent = document.getElementById('assign-reward-modal-content');
         let modalStack = [];
 
-        function openModal(title, contentElement) {
+        function openModal(title, contentElement, onMount) {
             if (!modalBackdrop || !modalBody || !modalTitle) return;
             if (!modalBackdrop.classList.contains('open')) {
                 modalStack = [];
@@ -569,6 +583,9 @@ foreach ($activeRewards as $reward) {
             clone.style.display = 'block';
             clone.style.width = '100%';
             modalBody.appendChild(clone);
+            if (typeof onMount === 'function') {
+                onMount(clone);
+            }
             modalBackdrop.classList.add('open');
             modalBackdrop.setAttribute('aria-hidden', 'false');
             document.body.classList.add('modal-open');
@@ -577,6 +594,7 @@ foreach ($activeRewards as $reward) {
                 setTimeout(() => input.focus(), 50);
             }
             attachRewardListeners(modalBody);
+            attachStepperListeners(modalBody);
         }
 
         function closeModal() {
@@ -644,6 +662,26 @@ foreach ($activeRewards as $reward) {
                 }
             });
         }
+
+        if (createTemplateButton && createTemplateModalContent) {
+            createTemplateButton.addEventListener('click', () => {
+                openModal('Create Reward', createTemplateModalContent);
+            });
+        }
+
+        document.querySelectorAll('[data-action="open-assign-modal"]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const childId = btn.getAttribute('data-child-id') || '';
+                openModal('Assign Reward', assignRewardModalContent, (clone) => {
+                    const assignAll = clone.querySelector('input[name="assign_all_children"]');
+                    if (assignAll) assignAll.checked = false;
+                    const childChecks = clone.querySelectorAll('input[name="child_user_ids[]"]');
+                    childChecks.forEach(cb => {
+                        cb.checked = childId !== '' && cb.value === childId;
+                    });
+                });
+            });
+        });
 
         // Event delegation safety: ensure cancel buttons always close modals on first click
         document.addEventListener('click', (e) => {
