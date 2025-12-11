@@ -395,13 +395,19 @@ foreach ($activeRewards as $reward) {
         <div class="card" style="margin-top:20px;">
             <div class="card-title-row">
                 <h2>Rewards Library</h2>
-                <button type="button" class="button secondary" data-action="open-create-template-modal" aria-label="Create reward template">
-                    <i class="fa fa-plus"></i>
-                    <span style="margin-left:6px;">Create reward</span>
-                </button>
+                <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+                    <button type="button" class="button secondary" data-action="toggle-template-grid" aria-expanded="true">
+                        <span data-template-toggle-label>Close Library</span>
+                        <i class="fa-solid fa-caret-up" data-template-toggle-icon></i>
+                    </button>
+                    <button type="button" class="button secondary" data-action="open-create-template-modal" aria-label="Create reward template">
+                        <i class="fa fa-plus"></i>
+                        <span style="margin-left:6px;">Create Reward</span>
+                    </button>
+                </div>
             </div>
             <?php if (!empty($templates)): ?>
-                <div class="template-grid">
+                <div class="template-grid" data-template-grid>
                     <?php foreach ($templates as $template): ?>
                         <div class="template-card" data-template-card="<?php echo (int)$template['id']; ?>">
                             <div>
@@ -456,10 +462,17 @@ foreach ($activeRewards as $reward) {
             <?php endif; ?>
         </div>
 
+        <?php $hasRecent = !empty($recentRewards); ?>
         <div class="card" style="margin-top:20px;">
-            <h2>Recently Created Rewards</h2>
-            <?php if (!empty($recentRewards)): ?>
-                <div class="recent-list">
+            <div class="card-title-row">
+                <h2>Recently Assigned Rewards</h2>
+                <button type="button" class="button secondary" data-action="toggle-recent-list" aria-expanded="<?php echo $hasRecent ? 'true' : 'false'; ?>" <?php if (!$hasRecent) echo 'disabled'; ?>>
+                    <span data-recent-toggle-label><?php echo $hasRecent ? 'Close' : 'View'; ?></span>
+                    <i class="fa-solid <?php echo $hasRecent ? 'fa-caret-up' : 'fa-caret-down'; ?>" data-recent-toggle-icon></i>
+                </button>
+            </div>
+            <?php if ($hasRecent): ?>
+                <div class="recent-list" data-recent-list>
                     <?php foreach ($recentRewards as $reward): ?>
                         <div class="recent-item">
                             <div>
@@ -479,9 +492,9 @@ foreach ($activeRewards as $reward) {
         <div class="hidden" id="assign-reward-modal-content">
             <form method="POST" action="rewards.php" style="display:grid; gap:10px;">
                 <div class="form-group">
-                    <label for="assign_template_id">Template</label>
+                    <label for="assign_template_id">Reward Template</label>
                     <select id="assign_template_id" name="template_id" required>
-                        <option value="">Select a template</option>
+                        <option value="">Select a reward template</option>
                         <?php foreach ($templates as $template): ?>
                             <option value="<?php echo (int)$template['id']; ?>">
                                 <?php echo htmlspecialchars($template['title']); ?> (<?php echo (int)$template['point_cost']; ?> pts)
@@ -511,7 +524,7 @@ foreach ($activeRewards as $reward) {
                         Assign to all children
                     </label>
                 </div>
-                <button type="submit" name="assign_template" class="button">Assign Rewards</button>
+                <button type="submit" name="assign_template" class="button">Assign Reward</button>
             </form>
         </div>
 
@@ -565,8 +578,12 @@ foreach ($activeRewards as $reward) {
         const modalTitle = document.getElementById('modal-title');
         const modalCloseBtn = document.querySelector('.modal-close');
         const createTemplateButton = document.querySelector('[data-action="open-create-template-modal"]');
+        const toggleTemplateButton = document.querySelector('[data-action="toggle-template-grid"]');
         const createTemplateModalContent = document.getElementById('create-template-modal-content');
         const assignRewardModalContent = document.getElementById('assign-reward-modal-content');
+        const templateGrid = document.querySelector('[data-template-grid]');
+        const toggleRecentButton = document.querySelector('[data-action="toggle-recent-list"]');
+        const recentList = document.querySelector('[data-recent-list]');
         let modalStack = [];
 
         function openModal(title, contentElement, onMount) {
@@ -667,6 +684,46 @@ foreach ($activeRewards as $reward) {
             createTemplateButton.addEventListener('click', () => {
                 openModal('Create Reward', createTemplateModalContent);
             });
+        }
+
+        if (toggleTemplateButton) {
+            if (!templateGrid) {
+                toggleTemplateButton.disabled = true;
+                toggleTemplateButton.innerHTML = 'No templates';
+            } else {
+                toggleTemplateButton.addEventListener('click', () => {
+                    const isHidden = templateGrid.classList.toggle('hidden');
+                    toggleTemplateButton.setAttribute('aria-expanded', (!isHidden).toString());
+                    const label = toggleTemplateButton.querySelector('[data-template-toggle-label]');
+                    const icon = toggleTemplateButton.querySelector('[data-template-toggle-icon]');
+                    if (label) {
+                        label.textContent = isHidden ? 'View Library' : 'Close Library';
+                    }
+                    if (icon) {
+                        icon.className = isHidden ? 'fa-solid fa-caret-down' : 'fa-solid fa-caret-up';
+                    }
+                });
+            }
+        }
+
+        if (toggleRecentButton) {
+            if (!recentList) {
+                toggleRecentButton.disabled = true;
+                toggleRecentButton.innerHTML = 'No recent rewards';
+            } else {
+                toggleRecentButton.addEventListener('click', () => {
+                    const isHidden = recentList.classList.toggle('hidden');
+                    toggleRecentButton.setAttribute('aria-expanded', (!isHidden).toString());
+                    const label = toggleRecentButton.querySelector('[data-recent-toggle-label]');
+                    const icon = toggleRecentButton.querySelector('[data-recent-toggle-icon]');
+                    if (label) {
+                        label.textContent = isHidden ? 'View' : 'Close';
+                    }
+                    if (icon) {
+                        icon.className = isHidden ? 'fa-solid fa-caret-down' : 'fa-solid fa-caret-up';
+                    }
+                });
+            }
         }
 
         document.querySelectorAll('[data-action="open-assign-modal"]').forEach(btn => {
