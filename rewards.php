@@ -229,7 +229,7 @@ foreach ($activeRewards as $reward) {
         .child-reward-card { border: 1px solid #e0e4ee; border-radius: 12px; padding: 14px; background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.06); display: grid; gap: 12px; max-width: fit-content; }
         .child-header { display: flex; align-items: center; gap: 12px; }
         .child-header img { width: 64px; height: 64px; border-radius: 50%; object-fit: cover; box-shadow: 0 2px 8px rgba(0,0,0,0.15); }
-        .child-meta { display: flex; gap: 10px; flex-wrap: wrap; font-weight: 700; color: #2c3e50; }
+        .child-meta { display: flex; gap: 10px; flex-wrap: wrap; width: 185px; font-weight: 700; color: #2c3e50; }
         .reward-badge-title-header {font-size: 12px;width: 100%; color: #9f9f9f;}
         .child-meta .badge { background: #eef4ff; color: #0d47a1; cursor: pointer; border: none; }
         .child-meta .badge-link { border-radius: 12px; padding: 4px 8px; }
@@ -259,6 +259,10 @@ foreach ($activeRewards as $reward) {
         input[type=number]::-webkit-outer-spin-button,
         input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
         input[type=number] { -moz-appearance: textfield; }
+        @media (max-width: 640px) {
+            .template-card { max-width: 100%; width: 100%; padding-right: 64px; }
+            .template-card .template-actions { position: absolute; top: 10px; right: 10px; justify-content: flex-end; }
+        }
     </style>
 </head>
 <body>
@@ -462,32 +466,44 @@ foreach ($activeRewards as $reward) {
             <?php endif; ?>
         </div>
 
-        <?php $hasRecent = !empty($recentRewards); ?>
-        <div class="card" style="margin-top:20px;">
-            <div class="card-title-row">
-                <h2>Recently Assigned Rewards</h2>
-                <button type="button" class="button secondary" data-action="toggle-recent-list" aria-expanded="<?php echo $hasRecent ? 'true' : 'false'; ?>" <?php if (!$hasRecent) echo 'disabled'; ?>>
-                    <span data-recent-toggle-label><?php echo $hasRecent ? 'Close' : 'View'; ?></span>
-                    <i class="fa-solid <?php echo $hasRecent ? 'fa-caret-up' : 'fa-caret-down'; ?>" data-recent-toggle-icon></i>
-                </button>
-            </div>
-            <?php if ($hasRecent): ?>
-                <div class="recent-list" data-recent-list>
-                    <?php foreach ($recentRewards as $reward): ?>
-                        <div class="recent-item">
-                            <div>
-                                <strong><?php echo htmlspecialchars($reward['title']); ?></strong>
-                                <span class="badge"><?php echo (int)$reward['point_cost']; ?> pts</span>
-                                <div style="font-size:0.9em; color:#555;">For: <?php echo htmlspecialchars($reward['child_name'] ?? 'All children'); ?></div>
-                            </div>
-                            <div style="font-size:0.9em; color:#666; text-align:right;"><?php echo htmlspecialchars(date('m/d/Y', strtotime($reward['created_on']))); ?></div>
-                        </div>
-                    <?php endforeach; ?>
+<?php 
+$recentLimit = 4;
+$recentTotal = !empty($recentRewards) ? count($recentRewards) : 0;
+$hasRecent = $recentTotal > 0;
+$hasRecentMore = $recentTotal > $recentLimit;
+?>
+<div class="card" style="margin-top:20px;">
+    <div class="card-title-row">
+        <h2>Recently Assigned Rewards</h2>
+        <button type="button" class="button secondary" data-action="toggle-recent-list" aria-expanded="<?php echo $hasRecent ? 'true' : 'false'; ?>" <?php if (!$hasRecent) echo 'disabled'; ?>>
+            <span data-recent-toggle-label><?php echo $hasRecent ? 'Close' : 'View'; ?></span>
+            <i class="fa-solid <?php echo $hasRecent ? 'fa-caret-up' : 'fa-caret-down'; ?>" data-recent-toggle-icon></i>
+        </button>
+    </div>
+    <?php if ($hasRecent): ?>
+        <div class="recent-list" data-recent-list>
+            <?php foreach ($recentRewards as $idx => $reward): 
+                $isExtra = $idx >= $recentLimit;
+            ?>
+                <div class="recent-item<?php echo $isExtra ? ' hidden' : ''; ?>" <?php if ($isExtra) echo 'data-recent-extra="1"'; ?>>
+                    <div>
+                        <strong><?php echo htmlspecialchars($reward['title']); ?></strong>
+                        <span class="badge"><?php echo (int)$reward['point_cost']; ?> pts</span>
+                        <div style="font-size:0.9em; color:#555;">For: <?php echo htmlspecialchars($reward['child_name'] ?? 'All children'); ?></div>
+                    </div>
+                    <div style="font-size:0.9em; color:#666; text-align:right;"><?php echo htmlspecialchars(date('m/d/Y', strtotime($reward['created_on']))); ?></div>
                 </div>
-            <?php else: ?>
-                <p>No rewards available yet.</p>
-            <?php endif; ?>
+            <?php endforeach; ?>
         </div>
+        <?php if ($hasRecentMore): ?>
+            <button type="button" class="button secondary" data-action="toggle-recent-more" aria-expanded="false" style="margin-top:10px;">
+                View more
+            </button>
+        <?php endif; ?>
+    <?php else: ?>
+        <p>No rewards available yet.</p>
+    <?php endif; ?>
+</div>
 
         <div class="hidden" id="assign-reward-modal-content">
             <form method="POST" action="rewards.php" style="display:grid; gap:10px;">
@@ -584,6 +600,8 @@ foreach ($activeRewards as $reward) {
         const templateGrid = document.querySelector('[data-template-grid]');
         const toggleRecentButton = document.querySelector('[data-action="toggle-recent-list"]');
         const recentList = document.querySelector('[data-recent-list]');
+        const toggleRecentMoreButton = document.querySelector('[data-action="toggle-recent-more"]');
+        const recentExtras = document.querySelectorAll('[data-recent-extra]');
         let modalStack = [];
 
         function openModal(title, contentElement, onMount) {
@@ -724,6 +742,16 @@ foreach ($activeRewards as $reward) {
                     }
                 });
             }
+        }
+
+        if (toggleRecentMoreButton) {
+            let expanded = false;
+            toggleRecentMoreButton.addEventListener('click', () => {
+                expanded = !expanded;
+                recentExtras.forEach(item => item.classList.toggle('hidden', !expanded));
+                toggleRecentMoreButton.setAttribute('aria-expanded', expanded.toString());
+                toggleRecentMoreButton.textContent = expanded ? 'View less' : 'View more';
+            });
         }
 
         document.querySelectorAll('[data-action="open-assign-modal"]').forEach(btn => {
