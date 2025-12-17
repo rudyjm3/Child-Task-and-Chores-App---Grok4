@@ -59,10 +59,10 @@ $edit_type = ($current_role_type === 'child') ? 'child' : 'adult';
 
 // Helper closures for validation
 $isChildOfParent = function($child_id) use ($db, $family_root_id) {
-    $stmt = $db->prepare("SELECT 1 FROM child_profiles WHERE parent_user_id = :parent_id AND child_user_id = :child_id LIMIT 1");
+    $stmt = $db->prepare("SELECT 1 FROM child_profiles WHERE parent_user_id = :parent_id AND child_user_id = :child_id AND deleted_at IS NULL LIMIT 1");
     $stmt->execute([':parent_id' => $family_root_id, ':child_id' => $child_id]);
     return (bool)$stmt->fetchColumn();
-};
+  };
 
 $isLinkedAdult = function($linked_id) use ($db, $family_root_id) {
     $stmt = $db->prepare("SELECT role_type FROM family_links WHERE main_parent_id = :parent_id AND linked_user_id = :linked_id LIMIT 1");
@@ -297,7 +297,7 @@ $stmt->execute([':id' => $user_id]);
 $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
 if ($role === 'child' || $edit_type === 'child') {
-    $profile_stmt = $db->prepare("SELECT * FROM child_profiles WHERE child_user_id = :id");
+    $profile_stmt = $db->prepare("SELECT * FROM child_profiles WHERE child_user_id = :id AND deleted_at IS NULL");
     $profile_stmt->execute([':id' => $user_id]);
     $profile = $profile_stmt->fetch(PDO::FETCH_ASSOC);
     if ($profile) {

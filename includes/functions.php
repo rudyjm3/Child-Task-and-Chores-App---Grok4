@@ -47,7 +47,7 @@ function getFamilyRootId($user_id) {
     }
 
     if ($role === 'child') {
-        $childStmt = $db->prepare("SELECT parent_user_id FROM child_profiles WHERE child_user_id = :id LIMIT 1");
+        $childStmt = $db->prepare("SELECT parent_user_id FROM child_profiles WHERE child_user_id = :id AND deleted_at IS NULL LIMIT 1");
         $childStmt->execute([':id' => $user_id]);
         $parentId = $childStmt->fetchColumn();
         if ($parentId) {
@@ -124,7 +124,8 @@ function calculateAge($birthday) {
 $db->exec("ALTER TABLE users 
     ADD COLUMN IF NOT EXISTS first_name VARCHAR(50) DEFAULT NULL,
     ADD COLUMN IF NOT EXISTS last_name VARCHAR(50) DEFAULT NULL,
-    ADD COLUMN IF NOT EXISTS parent_title ENUM('mother','father') DEFAULT NULL");
+    ADD COLUMN IF NOT EXISTS parent_title ENUM('mother','father') DEFAULT NULL,
+    ADD COLUMN IF NOT EXISTS deleted_at DATETIME DEFAULT NULL");
 
 // Register a new user (revised for first/last name and gender)
 function registerUser($username, $password, $role, $first_name = null, $last_name = null, $gender = null) {
@@ -145,7 +146,7 @@ function registerUser($username, $password, $role, $first_name = null, $last_nam
 // Login user
 function loginUser($username, $password) {
     global $db;
-    $stmt = $db->prepare("SELECT * FROM users WHERE username = :username");
+    $stmt = $db->prepare("SELECT * FROM users WHERE username = :username AND deleted_at IS NULL");
     $stmt->execute([':username' => $username]);
     $user = $stmt->fetch(PDO::FETCH_ASSOC);
     if ($user && password_verify($password, $user['password'])) {
@@ -208,6 +209,51 @@ function canAddEditFamilyMember($user_id) {
 // Revised: Create a child profile (now auto-creates child user and links, with name)
 function createChildProfile($parent_user_id, $first_name, $last_name, $child_username, $child_password, $birthday, $avatar, $gender) {
     global $db;
+    $family_root_id = getFamilyRootId($parent_user_id);
+    $fullName = trim(trim((string)$first_name) . ' ' . trim((string)$last_name));
+    $age = calculateAge($birthday);
+
+    // Check for soft-deleted child match (same parent, name, birthday) and restore instead of creating duplicate
+    if ($fullName !== '' && $birthday) {
+        $existing = findSoftDeletedChild($family_root_id, $fullName, $birthday);
+        if ($existing) {
+            $restored = restoreChildProfile($existing['child_user_id'], $family_root_id, [
+                'username' => $child_username,
+                'password' => $child_password,
+                'first_name' => $first_name,
+                'last_name' => $last_name,
+                'gender' => $gender,
+                'birthday' => $birthday,
+                'age' => $age,
+                'avatar' => $avatar
+            ]);
+            return $restored ? ['child_user_id' => $existing['child_user_id'], 'status' => 'restored'] : false;
+        }
+    }
+
+    // Check for soft-deleted child by username and restore
+    $existingByUsername = findSoftDeletedChildByUsername($family_root_id, $child_username);
+    if ($existingByUsername) {
+        $restored = restoreChildProfile($existingByUsername['child_user_id'], $family_root_id, [
+            'username' => $child_username,
+            'password' => $child_password,
+            'first_name' => $first_name,
+            'last_name' => $last_name,
+            'gender' => $gender,
+            'birthday' => $birthday,
+            'age' => $age,
+            'avatar' => $avatar
+        ]);
+        return $restored ? ['child_user_id' => $existingByUsername['child_user_id'], 'status' => 'restored'] : false;
+    }
+
+    // Ensure username not used by an active account
+    $usernameCheck = $db->prepare("SELECT id FROM users WHERE username = :username AND deleted_at IS NULL LIMIT 1");
+    $usernameCheck->execute([':username' => $child_username]);
+    if ($usernameCheck->fetchColumn()) {
+        return false;
+    }
+
     try {
         $db->beginTransaction();
         
@@ -227,10 +273,7 @@ function createChildProfile($parent_user_id, $first_name, $last_name, $child_use
         }
         $child_user_id = $db->lastInsertId();
 
-        $age = calculateAge($birthday);
-
         // Create child profile
-        $family_root_id = getFamilyRootId($parent_user_id);
         $stmt = $db->prepare("INSERT INTO child_profiles (child_user_id, parent_user_id, child_name, birthday, age, avatar) 
                              VALUES (:child_user_id, :parent_id, :child_name, :birthday, :age, :avatar)");
         if (!$stmt->execute([
@@ -246,10 +289,209 @@ function createChildProfile($parent_user_id, $first_name, $last_name, $child_use
         }
 
         $db->commit();
-        return $child_user_id;
+        return ['child_user_id' => $child_user_id, 'status' => 'created'];
     } catch (Exception $e) {
         $db->rollBack();
         error_log("Failed to create child profile: " . $e->getMessage());
+        return false;
+    }
+}
+
+// Locate a soft-deleted child profile by parent + name + birthday
+function findSoftDeletedChild($parent_user_id, $child_name, $birthday) {
+    global $db;
+    $stmt = $db->prepare("
+        SELECT child_user_id, deleted_at
+        FROM child_profiles
+        WHERE parent_user_id = :parent_id
+          AND deleted_at IS NOT NULL
+          AND LOWER(TRIM(child_name)) = LOWER(TRIM(:child_name))
+          AND DATE(birthday) = DATE(:birthday)
+        LIMIT 1
+    ");
+    $stmt->execute([
+        ':parent_id' => $parent_user_id,
+        ':child_name' => $child_name,
+        ':birthday' => $birthday
+    ]);
+    return $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
+}
+
+// Locate a soft-deleted child by username under a parent
+function findSoftDeletedChildByUsername($parent_user_id, $username) {
+    global $db;
+    $stmt = $db->prepare("
+        SELECT cp.child_user_id, cp.deleted_at
+        FROM child_profiles cp
+        JOIN users u ON cp.child_user_id = u.id
+        WHERE cp.parent_user_id = :parent_id
+          AND cp.deleted_at IS NOT NULL
+          AND u.username = :username
+        LIMIT 1
+    ");
+    $stmt->execute([
+        ':parent_id' => $parent_user_id,
+        ':username' => $username
+    ]);
+    return $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
+}
+
+// Soft-delete child profile (preserve data for restore)
+function softDeleteChild($parent_user_id, $child_user_id, $actor_user_id = null) {
+    global $db;
+    $managesTransaction = !$db->inTransaction();
+    try {
+        if ($managesTransaction) {
+            $db->beginTransaction();
+        }
+        $stmt = $db->prepare("
+            UPDATE child_profiles
+            SET deleted_at = NOW(), deleted_by = :actor
+            WHERE child_user_id = :child_id
+              AND parent_user_id = :parent_id
+              AND deleted_at IS NULL
+        ");
+        $stmt->execute([
+            ':child_id' => $child_user_id,
+            ':parent_id' => $parent_user_id,
+            ':actor' => $actor_user_id
+        ]);
+        if ($stmt->rowCount() === 0) {
+            if ($managesTransaction && $db->inTransaction()) {
+                $db->rollBack();
+            }
+            return false;
+        }
+
+        $db->prepare("UPDATE users SET deleted_at = NOW() WHERE id = :id")->execute([':id' => $child_user_id]);
+
+        if ($managesTransaction && $db->inTransaction()) {
+            $db->commit();
+        }
+        return true;
+    } catch (Exception $e) {
+        if ($managesTransaction && $db->inTransaction()) {
+            $db->rollBack();
+        }
+        error_log("Failed to soft delete child: " . $e->getMessage());
+        return false;
+    }
+}
+
+// Permanently delete a child and cascade data (irreversible)
+function hardDeleteChild($parent_user_id, $child_user_id) {
+    global $db;
+    try {
+        $db->beginTransaction();
+        // Ensure the target belongs to this parent
+        $check = $db->prepare("SELECT 1 FROM child_profiles WHERE child_user_id = :child_id AND parent_user_id = :parent_id LIMIT 1");
+        $check->execute([':child_id' => $child_user_id, ':parent_id' => $parent_user_id]);
+        if (!$check->fetchColumn()) {
+            $db->rollBack();
+            return false;
+        }
+        // Delete user will cascade child_points, child_profiles (FK)
+        $stmt = $db->prepare("DELETE FROM users WHERE id = :id");
+        $stmt->execute([':id' => $child_user_id]);
+        if ($stmt->rowCount() === 0) {
+            $db->rollBack();
+            return false;
+        }
+        $db->commit();
+        return true;
+    } catch (Exception $e) {
+        if ($db->inTransaction()) {
+            $db->rollBack();
+        }
+        error_log("Hard delete child failed: " . $e->getMessage());
+        return false;
+    }
+}
+
+// Restore a previously soft-deleted child and refresh credentials/profile
+function restoreChildProfile($child_user_id, $parent_user_id, array $updates = []) {
+    global $db;
+    $managesTransaction = !$db->inTransaction();
+    try {
+        if ($managesTransaction) {
+            $db->beginTransaction();
+        }
+        $check = $db->prepare("SELECT 1 FROM child_profiles WHERE child_user_id = :child_id AND parent_user_id = :parent_id AND deleted_at IS NOT NULL LIMIT 1");
+        $check->execute([':child_id' => $child_user_id, ':parent_id' => $parent_user_id]);
+        if (!$check->fetchColumn()) {
+            if ($managesTransaction && $db->inTransaction()) {
+                $db->rollBack();
+            }
+            return false;
+        }
+
+        $userParams = [
+            ':id' => $child_user_id,
+            ':first_name' => $updates['first_name'] ?? null,
+            ':last_name' => $updates['last_name'] ?? null,
+            ':gender' => $updates['gender'] ?? null,
+        ];
+        $setPassword = isset($updates['password']) && $updates['password'] !== '';
+        $setUsername = isset($updates['username']) && $updates['username'] !== '';
+        $sqlParts = [
+            "first_name = :first_name",
+            "last_name = :last_name",
+            "gender = :gender",
+            "deleted_at = NULL"
+        ];
+        if ($setPassword) {
+            $sqlParts[] = "password = :password";
+            $userParams[':password'] = password_hash($updates['password'], PASSWORD_DEFAULT);
+        }
+        if ($setUsername) {
+            // Prevent username collision with another active account
+            $dupeCheck = $db->prepare("SELECT id FROM users WHERE username = :username AND id != :id AND deleted_at IS NULL LIMIT 1");
+            $dupeCheck->execute([':username' => $updates['username'], ':id' => $child_user_id]);
+            if ($dupeCheck->fetchColumn()) {
+                if ($managesTransaction && $db->inTransaction()) {
+                    $db->rollBack();
+                }
+                return false;
+            }
+            $sqlParts[] = "username = :username";
+            $userParams[':username'] = $updates['username'];
+        }
+        $userSql = "UPDATE users SET " . implode(', ', $sqlParts) . " WHERE id = :id";
+        $db->prepare($userSql)->execute($userParams);
+
+        $profileSql = "
+            UPDATE child_profiles
+            SET deleted_at = NULL,
+                deleted_by = NULL,
+                child_name = :child_name,
+                birthday = :birthday,
+                age = :age,
+                avatar = COALESCE(NULLIF(:avatar, ''), avatar)
+            WHERE child_user_id = :child_id
+              AND parent_user_id = :parent_id
+        ";
+        $db->prepare($profileSql)->execute([
+            ':child_name' => trim(($updates['first_name'] ?? '') . ' ' . ($updates['last_name'] ?? '')),
+            ':birthday' => $updates['birthday'] ?? null,
+            ':age' => $updates['age'] ?? null,
+            ':avatar' => $updates['avatar'] ?? null,
+            ':child_id' => $child_user_id,
+            ':parent_id' => $parent_user_id
+        ]);
+
+        // Ensure child_points exists
+        $db->prepare("INSERT IGNORE INTO child_points (child_user_id, total_points) VALUES (:child_id, 0)")
+           ->execute([':child_id' => $child_user_id]);
+
+        if ($managesTransaction && $db->inTransaction()) {
+            $db->commit();
+        }
+        return true;
+    } catch (Exception $e) {
+        if ($managesTransaction && $db->inTransaction()) {
+            $db->rollBack();
+        }
+        error_log("Restore child failed: " . $e->getMessage());
         return false;
     }
 }
@@ -394,12 +636,14 @@ function getDashboardData($user_id) {
         $parentPlaceholders = implode(',', array_fill(0, count($family_parent_ids), '?'));
 
         // Children for this family
-        $stmt = $db->prepare("SELECT cp.id, cp.child_user_id, COALESCE(CONCAT(u.first_name, ' ', u.last_name), u.name, u.username) AS display_name, cp.avatar, cp.birthday, cp.child_name
-                                FROM child_profiles cp
-                                JOIN users u ON cp.child_user_id = u.id
-                                WHERE cp.parent_user_id IN ($parentPlaceholders)");
-        $stmt->execute($family_parent_ids);
-        $data['children'] = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+          $stmt = $db->prepare("SELECT cp.id, cp.child_user_id, COALESCE(CONCAT(u.first_name, ' ', u.last_name), u.name, u.username) AS display_name, cp.avatar, cp.birthday, cp.child_name
+                                 FROM child_profiles cp
+                                 JOIN users u ON cp.child_user_id = u.id
+                                 WHERE cp.parent_user_id IN ($parentPlaceholders)
+                                   AND cp.deleted_at IS NULL
+                                   AND u.deleted_at IS NULL");
+          $stmt->execute($family_parent_ids);
+          $data['children'] = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
         $childIds = array_column($data['children'], 'child_user_id');
         $taskCounts = [];
@@ -531,6 +775,8 @@ function getDashboardData($user_id) {
                               LEFT JOIN users cu ON r.child_user_id = cu.id
                               LEFT JOIN child_profiles cp ON r.child_user_id = cp.child_user_id
                               WHERE r.parent_user_id = :parent_id AND r.status = 'available'
+                                AND (cp.deleted_at IS NULL OR cp.child_user_id IS NULL)
+                                AND (cu.deleted_at IS NULL OR r.child_user_id IS NULL)
                               ORDER BY r.created_on DESC");
         $stmt->execute([':parent_id' => $main_parent_id]);
         $data['active_rewards'] = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
@@ -584,7 +830,9 @@ function getDashboardData($user_id) {
                               JOIN child_profiles cp ON g.child_user_id = cp.child_user_id
                               JOIN users u ON g.child_user_id = u.id
                               LEFT JOIN users creator ON g.created_by = creator.id
-                              WHERE cp.parent_user_id IN ($parentPlaceholders) AND g.status = 'pending_approval'");
+                              WHERE cp.parent_user_id IN ($parentPlaceholders) AND g.status = 'pending_approval'
+                                AND cp.deleted_at IS NULL
+                                AND u.deleted_at IS NULL");
         $stmt->execute($family_parent_ids);
         $data['pending_approvals'] = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
@@ -605,7 +853,7 @@ function getDashboardData($user_id) {
         $points_progress = ($data['remaining_points'] > 0 && $max_points > 0) ? min(100, round(($data['remaining_points'] / $max_points) * 100)) : 0;
         $data['points_progress'] = $points_progress;
 
-        $parentStmt = $db->prepare("SELECT parent_user_id FROM child_profiles WHERE child_user_id = :child_id LIMIT 1");
+        $parentStmt = $db->prepare("SELECT parent_user_id FROM child_profiles WHERE child_user_id = :child_id AND deleted_at IS NULL LIMIT 1");
         $parentStmt->execute([':child_id' => $user_id]);
         $parent_id = $parentStmt->fetchColumn();
         if ($parent_id) {
@@ -1921,6 +2169,15 @@ try {
    // Add child_name column column if not exists (for existing databases)
    $db->exec("ALTER TABLE child_profiles ADD COLUMN IF NOT EXISTS child_name VARCHAR(50) DEFAULT NULL");
    error_log("Added/verified child_name column in child_profiles");
+   // Add soft-delete tracking columns for children
+   $db->exec("ALTER TABLE child_profiles ADD COLUMN IF NOT EXISTS deleted_at DATETIME DEFAULT NULL");
+   $db->exec("ALTER TABLE child_profiles ADD COLUMN IF NOT EXISTS deleted_by INT DEFAULT NULL");
+   try {
+       $db->exec("CREATE INDEX IF NOT EXISTS idx_child_profiles_deleted ON child_profiles(parent_user_id, deleted_at)");
+   } catch (PDOException $e) {
+       // ignore if IF NOT EXISTS not supported
+   }
+   error_log("Added/verified soft-delete columns on child_profiles");
 
     // Create tasks table if not exists (added created_by)
    $sql = "CREATE TABLE IF NOT EXISTS tasks (
@@ -2238,5 +2495,3 @@ $sql = "ALTER TABLE child_profiles
 $db->exec($sql);
 
 ?>
-
-

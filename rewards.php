@@ -12,7 +12,7 @@ $main_parent_id = getFamilyRootId($_SESSION['user_id']);
 $messages = [];
 
 // Load children for this family
-$childStmt = $db->prepare("SELECT child_user_id, child_name, avatar FROM child_profiles WHERE parent_user_id = :parent_id ORDER BY child_name");
+$childStmt = $db->prepare("SELECT child_user_id, child_name, avatar FROM child_profiles WHERE parent_user_id = :parent_id AND deleted_at IS NULL ORDER BY child_name");
 $childStmt->execute([':parent_id' => $main_parent_id]);
 $children = $childStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
@@ -263,13 +263,26 @@ foreach ($activeRewards as $reward) {
             .template-card { max-width: 100%; width: 100%; padding-right: 64px; }
             .template-card .template-actions { position: absolute; top: 10px; right: 10px; justify-content: flex-end; }
         }
+            .nav-links { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px; }
+        .nav-button { display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; background: #eef4ff; border: 1px solid #d5def0; border-radius: 8px; color: #0d47a1; font-weight: 700; text-decoration: none; }
+        .nav-button:hover { background: #dce8ff; }
     </style>
 </head>
 <body>
     <div class="page">
-        <div style="display:flex; justify-content: space-between; align-items:center; gap:12px;">
-            <h1>Rewards</h1>
-            <a href="dashboard_parent.php" class="button secondary">Back to Dashboard</a>
+        <div style="display:flex; flex-direction:column; gap:8px;">
+            <div style="display:flex; justify-content: space-between; align-items:center; gap:12px;">
+                <h1>Rewards</h1>
+            </div>
+            <div class="nav-links">
+                <a class="nav-button" href="dashboard_parent.php">Dashboard</a>
+                <a class="nav-button" href="goal.php">Goals</a>
+                <a class="nav-button" href="task.php">Tasks</a>
+                <a class="nav-button" href="routine.php">Routines</a>
+                <a class="nav-button" href="rewards.php">Rewards</a>
+                <a class="nav-button" href="profile.php?self=1">Profile</a>
+                <a class="nav-button" href="logout.php">Logout</a>
+            </div>
         </div>
 
         <?php foreach ($messages as $msg): ?>

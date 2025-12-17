@@ -29,7 +29,7 @@ $editFieldOverrides = [];
 
 function routineChildBelongsToFamily(int $child_user_id, int $family_root_id): bool {
     global $db;
-    $stmt = $db->prepare("SELECT 1 FROM child_profiles WHERE child_user_id = :child_id AND parent_user_id = :parent_id LIMIT 1");
+    $stmt = $db->prepare("SELECT 1 FROM child_profiles WHERE child_user_id = :child_id AND parent_user_id = :parent_id AND deleted_at IS NULL LIMIT 1");
     $stmt->execute([':child_id' => $child_user_id, ':parent_id' => $family_root_id]);
     return (bool) $stmt->fetchColumn();
 }
@@ -786,7 +786,7 @@ $stmt = $db->prepare("
         cp.child_name, 
         COALESCE(cp.avatar, 'images/default-avatar.png') AS child_avatar
     FROM child_profiles cp
-    WHERE cp.parent_user_id = :parent
+    WHERE cp.parent_user_id = :parent AND cp.deleted_at IS NULL
     ORDER BY cp.child_name ASC
 ");
 $stmt->execute([':parent' => $family_root_id]);
@@ -1236,6 +1236,9 @@ margin-bottom: 20px;}
             .status-summary { font-size: 1rem; }
             .summary-footer strong { font-size: 1.3rem; }
         }
+        .nav-links { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px; }
+    .nav-button { display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; background: #eef4ff; border: 1px solid #d5def0; border-radius: 8px; color: #0d47a1; font-weight: 700; text-decoration: none; }
+    .nav-button:hover { background: #dce8ff; }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
 </head>
@@ -3817,8 +3820,6 @@ margin-bottom: 20px;}
 </body>
 </html>
 <?php
-
-
 
 
 

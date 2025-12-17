@@ -293,9 +293,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $message = "Upload failed; using default avatar.";
                 }
             }
-            $message = createChildProfile($_SESSION['user_id'], $first_name, $last_name, $child_username, $child_password, $birthday, $avatar, $gender)
-                ? "Child added successfully! Username: $child_username, Password: $child_password (share securely)."
-                : "Failed to add child. Check for duplicate username.";
+            $created = createChildProfile($_SESSION['user_id'], $first_name, $last_name, $child_username, $child_password, $birthday, $avatar, $gender);
+            if ($created && is_array($created)) {
+                if (($created['status'] ?? '') === 'restored') {
+                    $message = "Child restored with existing data. Username updated to $child_username. New password: $child_password (share securely).";
+                } else {
+                    $message = "Child added successfully! Username: $child_username, Password: $child_password (share securely).";
+                }
+            } else {
+                $message = "Failed to add child. Check for duplicate username.";
+            }
         }
     } elseif (isset($_POST['add_new_user'])) {
         if (!canAddEditFamilyMember($_SESSION['user_id'])) {
@@ -316,24 +323,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     } elseif (isset($_POST['delete_user']) && in_array($role_type, ['main_parent', 'secondary_parent'], true)) {
         $delete_user_id = filter_input(INPUT_POST, 'delete_user_id', FILTER_VALIDATE_INT);
+        $delete_mode = $_POST['delete_mode'] ?? 'soft';
         if ($delete_user_id) {
             if ($delete_user_id == $main_parent_id) {
                 $message = "Cannot remove the main account owner.";
             } else {
-                $stmt = $db->prepare("DELETE FROM users 
-                                      WHERE id = :user_id AND id IN (
-                                          SELECT linked_user_id FROM family_links WHERE main_parent_id = :main_parent_id
-                                      )");
-                $stmt->execute([':user_id' => $delete_user_id, ':main_parent_id' => $main_parent_id]);
-                if ($stmt->rowCount() === 0) {
-                    $stmt2 = $db->prepare("DELETE FROM users 
-                                           WHERE id = :user_id AND id IN (
-                                               SELECT child_user_id FROM child_profiles WHERE parent_user_id = :main_parent_id
-                                           )");
-                    $stmt2->execute([':user_id' => $delete_user_id, ':main_parent_id' => $main_parent_id]);
-                    $message = $stmt2->rowCount() > 0 ? "Child removed successfully." : "Failed to remove user.";
+                // Check if this user is a child of the family
+                $childCheck = $db->prepare("SELECT 1 FROM child_profiles WHERE child_user_id = :uid AND parent_user_id = :pid LIMIT 1");
+                $childCheck->execute([':uid' => $delete_user_id, ':pid' => $main_parent_id]);
+                if ($childCheck->fetchColumn()) {
+                    if ($delete_mode === 'hard') {
+                        $message = hardDeleteChild($main_parent_id, $delete_user_id)
+                            ? "Child permanently deleted."
+                            : "Failed to permanently delete child.";
+                    } else {
+                        $message = softDeleteChild($main_parent_id, $delete_user_id, $_SESSION['user_id'])
+                            ? "Child removed. Data retained for restore."
+                            : "Failed to remove child.";
+                    }
                 } else {
-                    $message = "User removed successfully.";
+                    // Remove linked adults / caregivers
+                    $stmt = $db->prepare("DELETE FROM users 
+                                          WHERE id = :user_id AND id IN (
+                                              SELECT linked_user_id FROM family_links WHERE main_parent_id = :main_parent_id
+                                          )");
+                    $stmt->execute([':user_id' => $delete_user_id, ':main_parent_id' => $main_parent_id]);
+                    $message = $stmt->rowCount() > 0 ? "User removed successfully." : "Failed to remove user.";
                 }
             }
         }
@@ -389,7 +404,7 @@ foreach (($data['redeemed_rewards'] ?? []) as $rr) {
         .children-overview, .management-links, .active-rewards, .redeemed-rewards, .pending-approvals, .completed-goals, .manage-family { margin-top: 20px; }
         .children-overview-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; }
         .child-info-card, .reward-item, .goal-item { background-color: #f5f5f5; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
-        .child-info-card { display: flex; flex-direction: column; gap: 16px; min-height: 100%; }
+        .child-info-card { display: flex; flex-direction: column; gap: 16px; min-height: 100%; max-width: fit-content; }
         .child-info-header { display: flex; align-items: center; gap: 16px; }
         .child-info-header img { width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 2px solid #ececec; }
         .child-info-header-details { display: flex; flex-direction: column; gap: 4px; }
@@ -543,6 +558,16 @@ foreach (($data['redeemed_rewards'] ?? []) as $rr) {
         .parent-notification-item input[type="checkbox"] { width: 19.8px; height: 19.8px; }
         .parent-notification-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 8px; }
         .parent-trash-button { border: none; background: transparent; cursor: pointer; font-size: 1.1rem; padding: 4px; color: #b71c1c; }
+        .nav-links { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px; }
+        .nav-button { display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; background: #eef4ff; border: 1px solid #d5def0; border-radius: 8px; color: #0d47a1; font-weight: 700; text-decoration: none; }
+        .nav-button:hover { background: #dce8ff; }
+        .child-remove-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: none; align-items: center; justify-content: center; z-index: 4000; padding: 16px; }
+        .child-remove-backdrop.open { display: flex; }
+        .child-remove-modal { background: #fff; border-radius: 12px; max-width: 420px; width: 100%; padding: 18px; box-shadow: 0 16px 38px rgba(0,0,0,0.25); display: grid; gap: 14px; }
+        .child-remove-modal header { display: flex; justify-content: space-between; align-items: center; }
+        .child-remove-modal .actions { display: grid; gap: 10px; }
+        .child-remove-modal .actions .button { width: 100%; }
+        .child-remove-modal .subtext { color: #555; font-size: 0.95rem; }
     </style>
     <script>
         window.RoutineOvertimeByRoutine = <?php echo json_encode($overtimeLogsByRoutine, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP); ?>;
@@ -832,6 +857,79 @@ foreach (($data['redeemed_rewards'] ?? []) as $rr) {
                     openRoutineLogModal(routineId, routineTitle);
                 });
             });
+
+            // Child removal: modal with soft-remove or hard-delete
+            const childRemoveModal = document.querySelector('[data-child-remove-modal]');
+            const childRemoveSoft = childRemoveModal ? childRemoveModal.querySelector('[data-action="child-remove-soft"]') : null;
+            const childRemoveHard = childRemoveModal ? childRemoveModal.querySelector('[data-action="child-remove-hard"]') : null;
+            const childRemoveCancelButtons = childRemoveModal ? childRemoveModal.querySelectorAll('[data-action="child-remove-cancel"]') : [];
+            let activeRemoveForm = null;
+
+            const closeChildRemoveModal = () => {
+                if (!childRemoveModal) return;
+                childRemoveModal.classList.remove('open');
+                childRemoveModal.setAttribute('aria-hidden', 'true');
+                document.body.classList.remove('modal-open');
+                activeRemoveForm = null;
+            };
+            const openChildRemoveModal = (form) => {
+                activeRemoveForm = form;
+                if (!childRemoveModal) return;
+                childRemoveModal.classList.add('open');
+                childRemoveModal.setAttribute('aria-hidden', 'false');
+                document.body.classList.add('modal-open');
+            };
+
+            document.querySelectorAll('[data-role="child-remove-form"]').forEach(form => {
+                const button = form.querySelector('[data-action="remove-child"]');
+                if (!button) return;
+                button.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    console.log('Open child remove modal for form child_id:', form.querySelector('input[name="delete_user_id"]')?.value || '');
+                    openChildRemoveModal(form);
+                });
+            });
+
+            if (childRemoveModal) {
+                childRemoveModal.addEventListener('click', (e) => {
+                    if (e.target === childRemoveModal) {
+                        closeChildRemoveModal();
+                    }
+                });
+            }
+
+            childRemoveCancelButtons.forEach(btn => btn.addEventListener('click', closeChildRemoveModal));
+
+            if (childRemoveSoft) {
+                childRemoveSoft.addEventListener('click', () => {
+                    const form = activeRemoveForm;
+                    if (!form) {
+                        console.warn('No active form for soft remove');
+                        closeChildRemoveModal();
+                        return;
+                    }
+                    const modeInput = form.querySelector('input[name="delete_mode"]');
+                    if (modeInput) modeInput.value = 'soft';
+                    console.log('Submitting soft remove for child_id:', form.querySelector('input[name="delete_user_id"]')?.value || '');
+                    closeChildRemoveModal();
+                    form.submit();
+                });
+            }
+            if (childRemoveHard) {
+                childRemoveHard.addEventListener('click', () => {
+                    const form = activeRemoveForm;
+                    if (!form) {
+                        console.warn('No active form for hard delete');
+                        closeChildRemoveModal();
+                        return;
+                    }
+                    const modeInput = form.querySelector('input[name="delete_mode"]');
+                    if (modeInput) modeInput.value = 'hard';
+                    console.log('Submitting hard delete for child_id:', form.querySelector('input[name="delete_user_id"]')?.value || '');
+                    closeChildRemoveModal();
+                    form.submit();
+                });
+            }
         });
     </script>
 </head>
@@ -843,13 +941,22 @@ foreach (($data['redeemed_rewards'] ?? []) as $rr) {
             <span class="role-badge">(<?php echo htmlspecialchars($welcome_role_label); ?>)</span>
          <?php endif; ?>
       </p>
-      <a href="goal.php">Goals</a> | <a href="task.php">Tasks</a> | <a href="routine.php">Routines</a> | <a href="profile.php?self=1">Profile</a> | <a href="logout.php">Logout</a>
-      <button type="button" class="parent-notification-trigger" data-parent-notify-trigger aria-label="Notifications">
-         <i class="fa-solid fa-bell"></i>
-         <?php if ($parentNotificationCount > 0): ?>
-            <span class="parent-notification-badge"><?php echo (int)$parentNotificationCount; ?></span>
-         <?php endif; ?>
-      </button>
+      <div class="nav-links">
+         <a class="nav-button" href="dashboard_parent.php">Dashboard</a>
+         <a class="nav-button" href="goal.php">Goals</a>
+         <a class="nav-button" href="task.php">Tasks</a>
+         <a class="nav-button" href="routine.php">Routines</a>
+         <a class="nav-button" href="rewards.php">Rewards</a>
+         <a class="nav-button" href="profile.php?self=1">Profile</a>
+         <a class="nav-button" href="logout.php">Logout</a>
+         <button type="button" class="parent-notification-trigger" data-parent-notify-trigger aria-label="Notifications">
+            <i class="fa-solid fa-bell"></i>
+            <?php if ($parentNotificationCount > 0): ?>
+               <span class="parent-notification-badge"><?php echo (int)$parentNotificationCount; ?></span>
+            <?php endif; ?>
+         </button>
+      </div>
+      
    </header>
       <div class="parent-notifications-modal" data-parent-notifications-modal>
       <div class="parent-notifications-card">
@@ -1089,9 +1196,11 @@ foreach (($data['redeemed_rewards'] ?? []) as $rr) {
                             <a href="profile.php?user_id=<?php echo $child['child_user_id']; ?>&type=child" class="button">Edit Child</a>
                         <?php endif; ?>
                         <?php if ($role_type === 'main_parent'): ?>
-                            <form method="POST">
+                            <form method="POST" data-role="child-remove-form">
                                 <input type="hidden" name="delete_user_id" value="<?php echo $child['child_user_id']; ?>">
-                                <button type="submit" name="delete_user" class="button delete-btn" onclick="return confirm('Remove this child and all their data?')">Remove</button>
+                                <input type="hidden" name="delete_mode" value="soft">
+                                <input type="hidden" name="delete_user" value="1">
+                                <button type="submit" class="button delete-btn" data-action="remove-child">Remove</button>
                             </form>
                         <?php endif; ?>
                      </div>
@@ -1287,7 +1396,7 @@ foreach (($data['redeemed_rewards'] ?? []) as $rr) {
                         <?php
                         $stmt = $db->prepare("SELECT cp.child_user_id, cp.child_name 
                                              FROM child_profiles cp 
-                                             WHERE cp.parent_user_id = :parent_id");
+                                             WHERE cp.parent_user_id = :parent_id AND cp.deleted_at IS NULL");
                         $stmt->execute([':parent_id' => $main_parent_id]);
                         $children = $stmt->fetchAll(PDO::FETCH_ASSOC);
                         foreach ($children as $child): ?>
@@ -1604,24 +1713,25 @@ foreach (($data['redeemed_rewards'] ?? []) as $rr) {
         </div>
     </div>
     <footer>
-      <p>Child Task and Chores App - Ver 3.12.2</p>
+     <p>Child Task and Chores App - Ver 3.12.2</p>
    </footer>
 </body>
+<div class="child-remove-backdrop" data-child-remove-modal aria-hidden="true">
+    <div class="child-remove-modal" role="dialog" aria-modal="true" aria-labelledby="child-remove-title">
+        <header>
+            <h3 id="child-remove-title">Remove Child</h3>
+            <button type="button" class="modal-close" data-action="child-remove-cancel" aria-label="Close"><i class="fa-solid fa-xmark"></i></button>
+        </header>
+        <p class="subtext">Choose whether to temporarily remove the child (data kept) or permanently delete all data.</p>
+        <div class="actions">
+            <button type="button" class="button" data-action="child-remove-soft">Remove (keep data)</button>
+            <button type="button" class="button danger" data-action="child-remove-hard">Delete permanently</button>
+            <button type="button" class="button secondary" data-action="child-remove-cancel">Cancel</button>
+        </div>
+    </div>
+</div>
+</body>
 </html>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 

@@ -138,6 +138,9 @@ $notificationCount = is_array($notificationsNew) ? count($notificationsNew) : 0;
         .notification-trigger { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; background: #fff; border: 2px solid #ffd28a; border-radius: 50%; box-shadow: 0 2px 4px rgba(0,0,0,0.12); cursor: pointer; margin-left: 12px; }
         .notification-trigger i { font-size: 18px; color: #ef6c00; }
         .notification-badge { position: absolute; top: -6px; right: -8px; background: #d32f2f; color: #fff; border-radius: 12px; padding: 2px 6px; font-size: 0.75rem; font-weight: 700; min-width: 22px; text-align: center; }
+        .nav-links { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px; }
+        .nav-button { display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; background: #eef4ff; border: 1px solid #d5def0; border-radius: 8px; color: #0d47a1; font-weight: 700; text-decoration: none; }
+        .nav-button:hover { background: #dce8ff; }
         .no-scroll { overflow: hidden; }
         .notifications-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: none; align-items: center; justify-content: center; z-index: 4000; padding: 14px; }
         .notifications-modal.open { display: flex; }
@@ -233,11 +236,19 @@ $notificationCount = is_array($notificationsNew) ? count($notificationsNew) : 0;
     </script>
 </head>
 <body class="child-theme">
-   <header>
-   <h1>Child Dashboard</h1>
-   <p>Hi, <?php echo htmlspecialchars($_SESSION['name']); ?>!</p>
-   <a href="goal.php">Goals</a> | <a href="task.php">Tasks</a> | <a href="routine.php">Routines</a> | <a href="profile.php?self=1">Profile</a> | <a href="logout.php">Logout</a> <button type="button" class="notification-trigger" data-child-notify-trigger aria-label="Notifications"><i class="fa-solid fa-bell"></i><?php if ($notificationCount > 0): ?><span class="notification-badge"><?php echo (int)$notificationCount; ?></span><?php endif; ?></button>
-   </header>
+    <header>
+     <h1>Child Dashboard</h1>
+     <p>Hi, <?php echo htmlspecialchars($_SESSION['name']); ?>!</p>
+     <div class="nav-links">
+        <a class="nav-button" href="dashboard_child.php">Dashboard</a>
+        <a class="nav-button" href="goal.php">Goals</a>
+        <a class="nav-button" href="task.php">Tasks</a>
+        <a class="nav-button" href="routine.php">Routines</a>
+        <a class="nav-button" href="profile.php?self=1">Profile</a>
+        <a class="nav-button" href="logout.php">Logout</a>
+        <button type="button" class="notification-trigger" data-child-notify-trigger aria-label="Notifications"><i class="fa-solid fa-bell"></i><?php if ($notificationCount > 0): ?><span class="notification-badge"><?php echo (int)$notificationCount; ?></span><?php endif; ?></button>
+     </div>
+    </header>
       <div class="notifications-modal" data-child-notifications-modal>
       <div class="notifications-card">
          <header>
@@ -502,8 +513,6 @@ $notificationCount = is_array($notificationsNew) ? count($notificationsNew) : 0;
 </footer>
 </body>
 </html>
-
-
 
 
 

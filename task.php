@@ -201,6 +201,9 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
             color: #ff5722;
             width: 100%;
         }
+        .nav-links { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px; }
+    .nav-button { display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; background: #eef4ff; border: 1px solid #d5def0; border-radius: 8px; color: #0d47a1; font-weight: 700; text-decoration: none; }
+    .nav-button:hover { background: #dce8ff; }
     </style>
     <script>
         const taskTimers = {};
@@ -421,17 +424,21 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
 </head>
 <body<?php echo !empty($bodyClasses) ? ' class="' . implode(' ', $bodyClasses) . '"' : ''; ?>>
     <header>
-         <h1>Task Management</h1>
+        <h1>Task Management</h1>
         <p>Welcome, <?php echo htmlspecialchars($_SESSION['name'] ?? $_SESSION['username'] ?? 'Unknown User'); ?>
             <?php if ($welcome_role_label): ?>
                 <span class="role-badge">(<?php echo htmlspecialchars($welcome_role_label); ?>)</span>
             <?php endif; ?>
         </p>
-         <a href="dashboard_<?php echo canCreateContent($_SESSION['user_id']) ? 'parent' : 'child'; ?>.php">Dashboard</a> | 
-         <a href="goal.php">Goals</a> | 
-         <a href="routine.php">Routines</a> |
-         <a href="profile.php?self=1">Profile</a> | 
-         <a href="logout.php">Logout</a>
+         <div class="nav-links">
+            <a class="nav-button" href="dashboard_<?php echo canCreateContent($_SESSION['user_id']) ? 'parent' : 'child'; ?>.php">Dashboard</a>
+            <a class="nav-button" href="goal.php">Goals</a>
+            <a class="nav-button" href="task.php">Tasks</a>
+            <a class="nav-button" href="routine.php">Routines</a>
+            <a class="nav-button" href="rewards.php">Rewards</a>
+            <a class="nav-button" href="profile.php?self=1">Profile</a>
+            <a class="nav-button" href="logout.php">Logout</a>
+         </div>
     </header>
     <main>
         <?php if (isset($message)) echo "<p>$message</p>"; ?>
@@ -444,7 +451,7 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                         <?php
                         $stmt = $db->prepare("SELECT cp.child_user_id, cp.child_name 
                                              FROM child_profiles cp 
-                                             WHERE cp.parent_user_id = :parent_id");
+                                             WHERE cp.parent_user_id = :parent_id AND cp.deleted_at IS NULL");
                         $stmt->execute([':parent_id' => $family_root_id]);
                         $children = $stmt->fetchAll(PDO::FETCH_ASSOC);
                         foreach ($children as $child): ?>
