@@ -342,7 +342,7 @@ foreach ($activeRewards as $reward) {
                                     <span>Assign Reward</span>
                                 </button>
                             </div>
-                            <div class="hidden" data-child-active-list="<?php echo $cid; ?>" style="width:100%;">
+                            <div class="hidden" data-child-active-list="<?php echo $cid; ?>" id="active-child-<?php echo $cid; ?>" style="width:100%;">
                                 <div class="reward-list" style="display:grid; gap:12px; width:100%;">
                                     <?php if (!empty($childCard['rewards'])): ?>
                                         <?php foreach ($childCard['rewards'] as $reward): ?>
@@ -396,7 +396,7 @@ foreach ($activeRewards as $reward) {
                                     <?php endif; ?>
                                 </div>
                             </div>
-                            <div class="hidden" data-child-redeemed-list="<?php echo $cid; ?>" style="width:100%;">
+                            <div class="hidden" data-child-redeemed-list="<?php echo $cid; ?>" id="redeemed-child-<?php echo $cid; ?>" style="width:100%;">
                                 <div class="reward-list" style="display:grid; gap:12px; width:100%;">
                                     <?php $fulfilledList = $fulfilledRewardsByChild[$cid] ?? []; ?>
                                     <?php if (!empty($fulfilledList)): ?>
@@ -430,7 +430,7 @@ foreach ($activeRewards as $reward) {
                                     <?php endif; ?>
                                 </div>
                             </div>
-                            <div class="hidden" data-child-pending-list="<?php echo $cid; ?>" style="width:100%;">
+                            <div class="hidden" data-child-pending-list="<?php echo $cid; ?>" id="pending-child-<?php echo $cid; ?>" style="width:100%;">
                                 <div class="reward-list" style="display:grid; gap:12px; width:100%;">
                                     <?php if (!empty($pendingRewardsByChild[$cid])): ?>
                                         <?php foreach ($pendingRewardsByChild[$cid] as $reward): ?>
@@ -944,6 +944,26 @@ $hasRecentMore = $recentTotal > $recentLimit;
                 }
             });
         });
+
+        // Open modal when arriving via anchor link for active/redeemed/pending
+        const hash = window.location.hash || '';
+        const openFromHash = (selector, title) => {
+            const list = document.querySelector(selector);
+            const headerName = list?.closest('.child-reward-card')?.querySelector('.child-header strong')?.textContent || title;
+            if (list) {
+                openModal(`${headerName} - ${title}`, list);
+            }
+        };
+        if (hash.startsWith('#pending-child-')) {
+            const cid = hash.replace('#pending-child-', '');
+            openFromHash(`[data-child-pending-list="${cid}"]`, 'Awaiting Fulfillment');
+        } else if (hash.startsWith('#active-child-')) {
+            const cid = hash.replace('#active-child-', '');
+            openFromHash(`[data-child-active-list="${cid}"]`, 'Active Rewards');
+        } else if (hash.startsWith('#redeemed-child-')) {
+            const cid = hash.replace('#redeemed-child-', '');
+            openFromHash(`[data-child-redeemed-list="${cid}"]`, 'Redeemed Rewards');
+        }
     })();
 </script>
 </html>

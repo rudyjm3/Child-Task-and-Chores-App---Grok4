@@ -384,10 +384,14 @@ foreach (($data['active_rewards'] ?? []) as $ar) {
     }
 }
 $redeemedRewardCounts = [];
+ $pendingRewardCounts = [];
 foreach (($data['redeemed_rewards'] ?? []) as $rr) {
     $cid = (int)($rr['child_user_id'] ?? 0);
     if ($cid > 0) {
         $redeemedRewardCounts[$cid] = ($redeemedRewardCounts[$cid] ?? 0) + 1;
+        if (empty($rr['fulfilled_on'])) {
+            $pendingRewardCounts[$cid] = ($pendingRewardCounts[$cid] ?? 0) + 1;
+        }
     }
 }
 ?>
@@ -411,18 +415,18 @@ foreach (($data['redeemed_rewards'] ?? []) as $rr) {
         .child-info-name { font-size: 1.15em; font-weight: 600; margin: 0; color: #333; }
         .child-info-meta { margin: 0; font-size: 0.9em; color: #666; }
         .child-info-body { display: flex; gap: 16px; align-items: flex-start; }
-        .child-info-stats { display: flex; flex-direction: column; gap: 12px; min-width: 160px; }
-        .child-info-stats .stat { }
-        .child-info-stats .stat-label { display: block; font-size: 0.85em; color: #666; }
+        .child-info-stats { display: flex; flex-direction: column; gap: 12px; max-width: 240px; min-width: 195px; }
+        /* .child-info-stats .stat { } */
+        .child-info-stats .stat-label { display: block; font-size: 0.85em; color: #666; font-weight: 600; }
         .child-info-stats .stat-value { font-size: 1.4em; font-weight: 600; color: #2e7d32; }
         .child-info-stats .stat-subvalue { display: block; font-size: 0.85em; color: #888; margin-top: 2px; }
-        .child-reward-badges { display: flex; justify-content: center; gap: 12px; flex-wrap: wrap; margin-top: 4px; }
+        .child-reward-badges { display: flex; justify-content: center; gap: 10px; flex-wrap: nowrap; margin-top: 4px; }
         .child-reward-badge-link { text-decoration: none; display: grid; gap: 2px; align-items: center; justify-items: center; padding: 4px 6px; border-radius: 8px; min-width: 73.25px;}
         .child-reward-badge-link:hover { text-decoration: none;}
         .child-reward-badge-link .badge-count { font-size: 1.6em; font-weight: 700; color: #2e7d32; line-height: 1.1; }
         .child-reward-badge-link .badge-label { font-size: 0.85em; color: #666; }
         .points-progress-wrapper { display: flex; flex-direction: column; align-items: center; gap: 10px; flex: 1; }
-        .points-progress-label { font-size: 0.9em; color: #555; text-align: center; }
+        .points-progress-label { font-size: 0.9em; font-weight: 600; color: #555; text-align: center; }
         .points-progress-container { width: 70px; height: 160px; background: #e0e0e0; border-radius: 35px; display: flex; align-items: flex-end; justify-content: center; position: relative; overflow: hidden; }
         .points-progress-fill { width: 100%; height: 0; background: linear-gradient(180deg, #81c784, #4caf50); border-radius: 5px; transition: height 1.2s ease-out; }
         .points-progress-target { position: absolute; top: 25px; left: 50%; transform: translateX(-50%); font-size: 1em; font-weight: 700; width: 100%; color: #fff; text-shadow: 0 2px 2px rgba(0,0,0,0.4); opacity: 0.9; }
@@ -430,8 +434,9 @@ foreach (($data['redeemed_rewards'] ?? []) as $rr) {
         .child-info-actions form { margin: 0; flex-grow: 1; }
         .child-info-actions a { flex-grow: 1; }
         .child-info-actions form button { width: 100%; }
-        .child-badge-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
-        .badge-pill { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 999px; background: #eef4ff; color: #0d47a1; font-weight: 700; border: 1px solid #d5def0; font-size: 0.9em; }
+        .child-badge-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 6px; }
+        .badge-pill { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 8px; background: transparent; color: #0d47a1; font-weight: 700; border: 1px solid #d5def0; font-size: 0.95em; text-decoration: none; }
+        .badge-pill:hover { background: #eef4ff; text-decoration: none; }
         .badge-pill i { font-size: 0.95em; }
         .adjust-button { background: #ff9800 !important; color: #fff; display: block; gap: 4px; justify-items: center; font-weight: 700; }
         .adjust-button .label { font-size: 0.95em; }
@@ -1164,26 +1169,27 @@ foreach (($data['redeemed_rewards'] ?? []) as $rr) {
                                  $childRedeemedRewards = $redeemedRewardCounts[$child['child_user_id']] ?? 0;
                               ?>
                               <div class="child-reward-badges">
-                                 <a class="child-reward-badge-link" href="rewards.php">
+                                 <a class="child-reward-badge-link" href="rewards.php#active-child-<?php echo (int)$child['child_user_id']; ?>">
                                     <span class="badge-count"><?php echo $childActiveRewards; ?></span>
                                     <span class="badge-label">active</span>
                                  </a>
-                                 <a class="child-reward-badge-link" href="rewards.php">
+                                 <a class="child-reward-badge-link" href="rewards.php#redeemed-child-<?php echo (int)$child['child_user_id']; ?>">
                                     <span class="badge-count"><?php echo $childRedeemedRewards; ?></span>
                                     <span class="badge-label">redeemed</span>
                                  </a>
+                                <?php
+                                    $pendingRewards = (int)($pendingRewardCounts[$child['child_user_id']] ?? 0);
+                                ?>
+                                <?php if ($pendingRewards > 0): ?>
+                                    <a class="child-reward-badge-link" href="rewards.php#pending-child-<?php echo (int)$child['child_user_id']; ?>">
+                                        <span class="badge-count"><?php echo $pendingRewards; ?></span>
+                                        <span class="badge-label">awaiting fulfillment</span>
+                                    </a>
+                                <?php endif; ?>
                               </div>
                            </div>
-                        </div>
-                        <div class="child-badge-row">
-                           <?php
-                              $pendingRewards = (int)($redeemedRewardCounts[$child['child_user_id']] ?? 0);
-                           ?>
-                           <?php if ($pendingRewards > 0): ?>
-                              <span class="badge-pill"><i class="fa-solid fa-gift"></i> Awaiting fulfillment: <?php echo $pendingRewards; ?></span>
-                           <?php endif; ?>
-                        </div>
-                        <div class="points-progress-wrapper">
+                   </div>
+                   <div class="points-progress-wrapper">
                            <div class="points-progress-label">Points Earned</div>
                            <div class="points-progress-container" data-progress="<?php echo (int)($child['points_progress_percent'] ?? 0); ?>" aria-label="Points progress for <?php echo htmlspecialchars($child['child_name']); ?>">
                               <div class="points-progress-fill"></div>
@@ -1196,7 +1202,7 @@ foreach (($data['redeemed_rewards'] ?? []) as $rr) {
                                     data-child-id="<?php echo (int)$child['child_user_id']; ?>"
                                     data-child-name="<?php echo htmlspecialchars($child['child_name']); ?>"
                                     data-history='<?php echo htmlspecialchars(json_encode($child['point_adjustments'] ?? [], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT)); ?>'>
-                                    <span class="label">Adjust Points</span>
+                                    <span class="label">Points</span>
                                     <span class="icon">+ / -</span>
                                 </button>
                             <?php endif; ?>
@@ -1743,12 +1749,6 @@ foreach (($data['redeemed_rewards'] ?? []) as $rr) {
 </div>
 </body>
 </html>
-
-
-
-
-
-
 
 
 
