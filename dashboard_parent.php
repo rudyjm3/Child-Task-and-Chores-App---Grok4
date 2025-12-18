@@ -425,11 +425,9 @@ foreach (($data['redeemed_rewards'] ?? []) as $rr) {
         .child-reward-badge-link:hover { text-decoration: none;}
         .child-reward-badge-link .badge-count { font-size: 1.6em; font-weight: 700; color: #2e7d32; line-height: 1.1; }
         .child-reward-badge-link .badge-label { font-size: 0.85em; color: #666; }
-        .points-progress-wrapper { display: flex; flex-direction: column; align-items: center; gap: 10px; flex: 1; }
+        .points-progress-wrapper { display: flex; flex-direction: column; align-items: center; gap: 6px; flex: 1; }
         .points-progress-label { font-size: 0.9em; font-weight: 600; color: #555; text-align: center; }
-        .points-progress-container { width: 70px; height: 160px; background: #e0e0e0; border-radius: 35px; display: flex; align-items: flex-end; justify-content: center; position: relative; overflow: hidden; }
-        .points-progress-fill { width: 100%; height: 0; background: linear-gradient(180deg, #81c784, #4caf50); border-radius: 5px; transition: height 1.2s ease-out; }
-        .points-progress-target { position: absolute; top: 25px; left: 50%; transform: translateX(-50%); font-size: 1em; font-weight: 700; width: 100%; color: #fff; text-shadow: 0 2px 2px rgba(0,0,0,0.4); opacity: 0.9; }
+        .points-number { font-size: 1.6em; font-weight: 700; color: #2e7d32; line-height: 1; }
         .child-info-actions { display: flex; flex-wrap: wrap; gap: 10px; }
         .child-info-actions form { margin: 0; flex-grow: 1; }
         .child-info-actions a { flex-grow: 1; }
@@ -566,7 +564,7 @@ foreach (($data['redeemed_rewards'] ?? []) as $rr) {
         .parent-notification-item input[type="checkbox"] { width: 19.8px; height: 19.8px; }
         .parent-notification-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 8px; }
         .parent-trash-button { border: none; background: transparent; cursor: pointer; font-size: 1.1rem; padding: 4px; color: #b71c1c; }
-        .nav-links { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px; }
+        .nav-links { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: center; margin-top: 8px; }
         .nav-button { display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; background: #eef4ff; border: 1px solid #d5def0; border-radius: 8px; color: #0d47a1; font-weight: 700; text-decoration: none; }
         .nav-button:hover { background: #dce8ff; }
         .child-remove-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: none; align-items: center; justify-content: center; z-index: 4000; padding: 16px; }
@@ -631,15 +629,24 @@ foreach (($data['redeemed_rewards'] ?? []) as $rr) {
                 }
             }
 
-            const verticalBars = document.querySelectorAll('.points-progress-container');
-            verticalBars.forEach(bar => {
-                const fill = bar.querySelector('.points-progress-fill');
-                const target = parseInt(bar.dataset.progress, 10) || 0;
-                if (fill) {
-                    requestAnimationFrame(() => {
-                        fill.style.height = `${Math.min(100, Math.max(0, target))}%`;
-                    });
-                }
+            // Animate points numbers
+            const pointEls = document.querySelectorAll('.points-number');
+            pointEls.forEach(el => {
+                const target = parseInt(el.dataset.points, 10) || 0;
+                let current = 0;
+                const duration = 800;
+                const start = performance.now();
+                const step = (now) => {
+                    const progress = Math.min(1, (now - start) / duration);
+                    current = Math.floor(progress * target);
+                    el.textContent = `${current} pts`;
+                    if (progress < 1) {
+                        requestAnimationFrame(step);
+                    } else {
+                        el.textContent = `${target} pts`;
+                    }
+                };
+                requestAnimationFrame(step);
             });
 
             const parentNotifyTrigger = document.querySelector('[data-parent-notify-trigger]');
@@ -1191,10 +1198,7 @@ foreach (($data['redeemed_rewards'] ?? []) as $rr) {
                    </div>
                    <div class="points-progress-wrapper">
                            <div class="points-progress-label">Points Earned</div>
-                           <div class="points-progress-container" data-progress="<?php echo (int)($child['points_progress_percent'] ?? 0); ?>" aria-label="Points progress for <?php echo htmlspecialchars($child['child_name']); ?>">
-                              <div class="points-progress-fill"></div>
-                              <span class="points-progress-target"><?php echo (int)($child['points_earned'] ?? 0); ?> pts</span>
-                           </div>
+                           <div class="points-number" data-points="<?php echo (int)($child['points_earned'] ?? 0); ?>">0</div>
                            <?php if (in_array($role_type, ['main_parent', 'secondary_parent'], true)): ?>
                                 <button type="button"
                                     class="button adjust-button"
@@ -1749,8 +1753,4 @@ foreach (($data['redeemed_rewards'] ?? []) as $rr) {
 </div>
 </body>
 </html>
-
-
-
-
 

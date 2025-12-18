@@ -1236,9 +1236,9 @@ margin-bottom: 20px;}
             .status-summary { font-size: 1rem; }
             .summary-footer strong { font-size: 1.3rem; }
         }
-        .nav-links { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px; }
-    .nav-button { display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; background: #eef4ff; border: 1px solid #d5def0; border-radius: 8px; color: #0d47a1; font-weight: 700; text-decoration: none; }
-    .nav-button:hover { background: #dce8ff; }
+        .nav-links { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: center; margin-top: 8px; }
+        .nav-button { display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; background: #eef4ff; border: 1px solid #d5def0; border-radius: 8px; color: #0d47a1; font-weight: 700; text-decoration: none; }
+        .nav-button:hover { background: #dce8ff; }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
 </head>
@@ -1251,13 +1251,15 @@ margin-bottom: 20px;}
                 <span class="role-badge"><?php echo htmlspecialchars($welcome_role_label); ?></span>
             <?php endif; ?>
         </p>
-        <nav>
-            <a href="dashboard_<?php echo htmlspecialchars($_SESSION['role']); ?>.php">Dashboard</a> |
-            <a href="goal.php">Goals</a> |
-            <a href="task.php">Tasks</a> |
-            <a href="profile.php?self=1">Profile</a> |
-            <a href="logout.php">Logout</a>
-        </nav>
+        <div class="nav-links">
+            <a class="nav-button" href="dashboard_<?php echo htmlspecialchars($_SESSION['role']); ?>.php">Dashboard</a>
+            <a class="nav-button" href="goal.php">Goals</a>
+            <a class="nav-button" href="task.php">Tasks</a>
+            <a class="nav-button" href="routine.php">Routines</a>
+            <a class="nav-button" href="rewards.php">Rewards</a>
+            <a class="nav-button" href="profile.php?self=1">Profile</a>
+            <a class="nav-button" href="logout.php">Logout</a>
+        </div>
     </header>
     <main class="routine-layout">
         <?php if (!empty($messages)): ?>

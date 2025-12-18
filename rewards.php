@@ -283,7 +283,7 @@ foreach ($activeRewards as $reward) {
             .template-card { max-width: 100%; width: 100%; padding-right: 64px; }
             .template-card .template-actions { position: absolute; top: 10px; right: 10px; justify-content: flex-end; }
         }
-            .nav-links { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px; }
+        .nav-links { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: center; margin-top: 8px; }
         .nav-button { display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; background: #eef4ff; border: 1px solid #d5def0; border-radius: 8px; color: #0d47a1; font-weight: 700; text-decoration: none; }
         .nav-button:hover { background: #dce8ff; }
     </style>

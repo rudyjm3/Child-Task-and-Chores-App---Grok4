@@ -201,7 +201,7 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
             color: #ff5722;
             width: 100%;
         }
-        .nav-links { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px; }
+    .nav-links { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: center; margin-top: 8px; }
     .nav-button { display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; background: #eef4ff; border: 1px solid #d5def0; border-radius: 8px; color: #0d47a1; font-weight: 700; text-decoration: none; }
     .nav-button:hover { background: #dce8ff; }
     </style>
