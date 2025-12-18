@@ -430,6 +430,9 @@ foreach (($data['redeemed_rewards'] ?? []) as $rr) {
         .child-info-actions form { margin: 0; flex-grow: 1; }
         .child-info-actions a { flex-grow: 1; }
         .child-info-actions form button { width: 100%; }
+        .child-badge-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+        .badge-pill { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 999px; background: #eef4ff; color: #0d47a1; font-weight: 700; border: 1px solid #d5def0; font-size: 0.9em; }
+        .badge-pill i { font-size: 0.95em; }
         .adjust-button { background: #ff9800 !important; color: #fff; display: block; gap: 4px; justify-items: center; font-weight: 700; }
         .adjust-button .label { font-size: 0.95em; }
         .adjust-button .icon { font-size: 1.1em; line-height: 1; }
@@ -1172,6 +1175,14 @@ foreach (($data['redeemed_rewards'] ?? []) as $rr) {
                               </div>
                            </div>
                         </div>
+                        <div class="child-badge-row">
+                           <?php
+                              $pendingRewards = (int)($redeemedRewardCounts[$child['child_user_id']] ?? 0);
+                           ?>
+                           <?php if ($pendingRewards > 0): ?>
+                              <span class="badge-pill"><i class="fa-solid fa-gift"></i> Awaiting fulfillment: <?php echo $pendingRewards; ?></span>
+                           <?php endif; ?>
+                        </div>
                         <div class="points-progress-wrapper">
                            <div class="points-progress-label">Points Earned</div>
                            <div class="points-progress-container" data-progress="<?php echo (int)($child['points_progress_percent'] ?? 0); ?>" aria-label="Points progress for <?php echo htmlspecialchars($child['child_name']); ?>">
@@ -1732,9 +1743,6 @@ foreach (($data['redeemed_rewards'] ?? []) as $rr) {
 </div>
 </body>
 </html>
-
-
-
 
 
 
