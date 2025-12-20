@@ -1360,10 +1360,15 @@ margin-bottom: 20px;}
                                         $checked = in_array($cid, $selectedCreateChildIds, true) ? 'checked' : '';
                                         $avatar = !empty($child['child_avatar']) ? $child['child_avatar'] : 'images/default-avatar.png';
                                     ?>
+                                        <?php
+                                            $childName = trim((string) ($child['child_name'] ?? ''));
+                                            $childParts = $childName === '' ? [] : preg_split('/\s+/', $childName);
+                                            $childFirst = $childParts[0] ?? $childName;
+                                        ?>
                                         <label class="child-select-card">
                                             <input type="checkbox" name="child_user_ids[]" value="<?php echo $cid; ?>" <?php echo $checked; ?>>
                                             <img src="<?php echo htmlspecialchars($avatar); ?>" alt="<?php echo htmlspecialchars($child['child_name']); ?>">
-                                            <strong><?php echo htmlspecialchars($child['child_name']); ?></strong>
+                                            <strong><?php echo htmlspecialchars($childFirst); ?></strong>
                                         </label>
                                     <?php endforeach; ?>
                                 </div>

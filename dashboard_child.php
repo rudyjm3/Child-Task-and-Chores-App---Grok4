@@ -463,27 +463,48 @@ $notificationCount = is_array($notificationsNew) ? count($notificationsNew) : 0;
             $scheduleByDay[$dateKey] = [];
             $weekCursor->modify('+1 day');
          }
-         $taskWeekStmt = $db->prepare("SELECT title, points, due_date FROM tasks WHERE child_user_id = :child_id AND due_date IS NOT NULL AND DATE(due_date) BETWEEN :start AND :end ORDER BY due_date");
+         $taskWeekStmt = $db->prepare("SELECT title, points, due_date, end_date, recurrence, recurrence_days FROM tasks WHERE child_user_id = :child_id AND due_date IS NOT NULL AND DATE(due_date) <= :end ORDER BY due_date");
          $taskWeekStmt->execute([
             ':child_id' => $_SESSION['user_id'],
-            ':start' => $weekStart->format('Y-m-d'),
             ':end' => $weekEnd->format('Y-m-d')
          ]);
          foreach ($taskWeekStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
             $dueDate = $row['due_date'];
-            $dateKey = date('Y-m-d', strtotime($dueDate));
-            if (!isset($scheduleByDay[$dateKey])) {
-               continue;
-            }
+            $startDateKey = date('Y-m-d', strtotime($dueDate));
+            $endDateKey = !empty($row['end_date']) ? $row['end_date'] : null;
             $timeSort = date('H:i', strtotime($dueDate));
-            $scheduleByDay[$dateKey][] = [
-               'title' => $row['title'],
-               'type' => 'Task',
-               'points' => (int)($row['points'] ?? 0),
-               'time' => $timeSort,
-               'time_label' => date('g:i A', strtotime($dueDate)),
-               'icon' => 'fa-solid fa-list-check'
-            ];
+            $timeLabel = date('g:i A', strtotime($dueDate));
+            $repeat = $row['recurrence'] ?? '';
+            $repeatDays = array_filter(array_map('trim', explode(',', (string)($row['recurrence_days'] ?? ''))));
+            foreach ($weekDates as $day) {
+               $dateKey = $day['date'];
+               if ($dateKey < $startDateKey) {
+                  continue;
+               }
+               if ($endDateKey && $dateKey > $endDateKey) {
+                  continue;
+               }
+               if ($repeat === 'daily') {
+                  // include every day on/after start date
+               } elseif ($repeat === 'weekly') {
+                  $dayName = date('D', strtotime($dateKey));
+                  if (!in_array($dayName, $repeatDays, true)) {
+                     continue;
+                  }
+               } else {
+                  if ($dateKey !== $startDateKey) {
+                     continue;
+                  }
+               }
+               $scheduleByDay[$dateKey][] = [
+                  'title' => $row['title'],
+                  'type' => 'Task',
+                  'points' => (int)($row['points'] ?? 0),
+                  'time' => $timeSort,
+                  'time_label' => $timeLabel,
+                  'icon' => 'fa-solid fa-list-check'
+               ];
+            }
          }
          foreach ($routines as $routine) {
             $recurrence = $routine['recurrence'] ?? '';
@@ -521,16 +542,6 @@ $notificationCount = is_array($notificationsNew) ? count($notificationsNew) : 0;
                'type' => 'Task',
                'title' => $row['title'],
                'points' => (int)($row['points'] ?? 0),
-               'date' => $row['completed_at']
-            ];
-         }
-         $goalHistoryStmt = $db->prepare("SELECT title, target_points, completed_at FROM goals WHERE child_user_id = :child_id AND status = 'completed' AND completed_at IS NOT NULL");
-         $goalHistoryStmt->execute([':child_id' => $_SESSION['user_id']]);
-         foreach ($goalHistoryStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
-            $historyItems[] = [
-               'type' => 'Goal',
-               'title' => $row['title'],
-               'points' => (int)($row['target_points'] ?? 0),
                'date' => $row['completed_at']
             ];
          }

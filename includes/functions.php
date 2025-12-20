@@ -675,15 +675,14 @@ function getDashboardData($user_id) {
             }
 
             // Active/pending goals per child
-            $stmt = $db->prepare("SELECT child_user_id, COUNT(*) AS goal_count, COALESCE(SUM(target_points), 0) AS total_target_points
-                                  FROM goals
-                                  WHERE child_user_id IN ($placeholders) AND status IN ('active', 'pending_approval')
-                                  GROUP BY child_user_id");
+            $stmt = $db->prepare("SELECT child_user_id, COUNT(*) AS goal_count
+                                    FROM goals
+                                    WHERE child_user_id IN ($placeholders) AND status IN ('active', 'pending_approval')
+                                    GROUP BY child_user_id");
             $stmt->execute($childIds);
             while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
                 $goalStats[(int)$row['child_user_id']] = [
-                    'goal_count' => (int)$row['goal_count'],
-                    'total_target_points' => (int)$row['total_target_points']
+                    'goal_count' => (int)$row['goal_count']
                 ];
             }
 
@@ -746,9 +745,8 @@ function getDashboardData($user_id) {
             $childPoints = $pointsMap[$childId] ?? 0;
             $child['points_earned'] = $childPoints;
             $child['points_progress_percent'] = $maxChildPoints > 0 ? min(100, (int)round(($childPoints / $maxChildPoints) * 100)) : 0;
-            $childGoalStats = $goalStats[$childId] ?? ['goal_count' => 0, 'total_target_points' => 0];
+            $childGoalStats = $goalStats[$childId] ?? ['goal_count' => 0];
             $child['goals_assigned'] = $childGoalStats['goal_count'];
-            $child['goal_target_points'] = $childGoalStats['total_target_points'];
             $child['rewards_claimed'] = $rewardsClaimed[$childId] ?? 0;
             $child['point_adjustments'] = $adjustmentsByChild[$childId] ?? [];
         }
@@ -817,7 +815,6 @@ function getDashboardData($user_id) {
         $stmt = $db->prepare("SELECT 
                                 g.id, 
                                 g.title, 
-                                g.target_points, 
                                 g.requested_at, 
                                 COALESCE(CONCAT(u.first_name, ' ', u.last_name), u.name, u.username) AS child_username,
                                 COALESCE(
@@ -865,7 +862,6 @@ function getDashboardData($user_id) {
         $stmt = $db->prepare("SELECT 
                                 g.id, 
                                 g.title, 
-                                g.target_points, 
                                 g.start_date, 
                                 g.end_date, 
                                 r.title AS reward_title,
@@ -885,7 +881,6 @@ function getDashboardData($user_id) {
         $stmt = $db->prepare("SELECT 
                                 g.id, 
                                 g.title, 
-                                g.target_points, 
                                 g.start_date, 
                                 g.end_date, 
                                 g.completed_at, 
@@ -926,19 +921,22 @@ function getDashboardData($user_id) {
 }
 
 // Create a new task
-function createTask($parent_user_id, $child_user_id, $title, $description, $due_date, $points, $recurrence, $category, $timing_mode, $creator_user_id = null) {
+function createTask($parent_user_id, $child_user_id, $title, $description, $due_date, $end_date, $points, $recurrence, $recurrence_days, $category, $timing_mode, $timer_minutes = null, $creator_user_id = null) {
     global $db;
-    $stmt = $db->prepare("INSERT INTO tasks (parent_user_id, child_user_id, title, description, due_date, points, recurrence, category, timing_mode, created_by) VALUES (:parent_id, :child_id, :title, :description, :due_date, :points, :recurrence, :category, :timing_mode, :created_by)");
+    $stmt = $db->prepare("INSERT INTO tasks (parent_user_id, child_user_id, title, description, due_date, end_date, points, recurrence, recurrence_days, category, timing_mode, timer_minutes, created_by) VALUES (:parent_id, :child_id, :title, :description, :due_date, :end_date, :points, :recurrence, :recurrence_days, :category, :timing_mode, :timer_minutes, :created_by)");
     return $stmt->execute([
         ':parent_id' => $parent_user_id,
         ':child_id' => $child_user_id,
         ':title' => $title,
         ':description' => $description,
         ':due_date' => $due_date,
+        ':end_date' => $end_date,
         ':points' => $points,
         ':recurrence' => $recurrence,
+        ':recurrence_days' => $recurrence_days,
         ':category' => $category,
         ':timing_mode' => $timing_mode,
+        ':timer_minutes' => $timer_minutes,
         ':created_by' => $creator_user_id ?? $parent_user_id
     ]);
 }
@@ -1319,14 +1317,14 @@ function fulfillReward($reward_id, $parent_user_id, $actor_user_id) {
 }
 
 // Create goal
-function createGoal($parent_user_id, $child_user_id, $title, $target_points, $start_date, $end_date, $reward_id = null, $creator_user_id = null) {
+function createGoal($parent_user_id, $child_user_id, $title, $start_date, $end_date, $reward_id = null, $creator_user_id = null) {
     global $db;
     $stmt = $db->prepare("INSERT INTO goals (parent_user_id, child_user_id, title, target_points, start_date, end_date, reward_id, created_by) VALUES (:parent_id, :child_id, :title, :target_points, :start_date, :end_date, :reward_id, :created_by)");
     return $stmt->execute([
         ':parent_id' => $parent_user_id,
         ':child_id' => $child_user_id,
         ':title' => $title,
-        ':target_points' => $target_points,
+        ':target_points' => 0,
         ':start_date' => $start_date,
         ':end_date' => $end_date,
         ':reward_id' => $reward_id,
@@ -1335,11 +1333,11 @@ function createGoal($parent_user_id, $child_user_id, $title, $target_points, $st
 }
 
 // Keep existing updateGoal function (for editing goal details)
-function updateGoal($goal_id, $parent_user_id, $title, $target_points, $start_date, $end_date, $reward_id = null) {
+function updateGoal($goal_id, $parent_user_id, $title, $start_date, $end_date, $reward_id = null) {
     global $db;
     $stmt = $db->prepare("UPDATE goals 
                          SET title = :title, 
-                             target_points = :target_points, 
+                             target_points = 0, 
                              start_date = :start_date, 
                              end_date = :end_date, 
                              reward_id = :reward_id 
@@ -1349,7 +1347,6 @@ function updateGoal($goal_id, $parent_user_id, $title, $target_points, $start_da
         ':goal_id' => $goal_id,
         ':parent_id' => $parent_user_id,
         ':title' => $title,
-        ':target_points' => $target_points,
         ':start_date' => $start_date,
         ':end_date' => $end_date,
         ':reward_id' => $reward_id
@@ -1380,11 +1377,11 @@ function approveGoal($goal_id, $parent_user_id) {
             $db->beginTransaction();
         }
         
-        $stmt = $db->prepare("SELECT child_user_id, target_points, title 
-                             FROM goals 
-                             WHERE id = :goal_id 
-                             AND parent_user_id = :parent_id 
-                             AND status = 'pending_approval'");
+        $stmt = $db->prepare("SELECT child_user_id, title 
+                               FROM goals 
+                               WHERE id = :goal_id 
+                               AND parent_user_id = :parent_id 
+                               AND status = 'pending_approval'");
         $stmt->execute([
             ':goal_id' => $goal_id,
             ':parent_id' => $parent_user_id
@@ -1399,8 +1396,6 @@ function approveGoal($goal_id, $parent_user_id) {
                                 WHERE id = :goal_id");
             $stmt->execute([':goal_id' => $goal_id]);
             
-            // Award points to child
-            updateChildPoints($goal['child_user_id'], $goal['target_points']);
             addChildNotification(
                 (int)$goal['child_user_id'],
                 'goal_approved',
@@ -1738,7 +1733,7 @@ function completeGoal($child_user_id, $goal_id) {
     $db->beginTransaction();
     try {
         // Check if the goal exists and is active for the child
-        $stmt = $db->prepare("SELECT target_points FROM goals WHERE id = :goal_id AND child_user_id = :child_id AND status = 'active'");
+        $stmt = $db->prepare("SELECT id FROM goals WHERE id = :goal_id AND child_user_id = :child_id AND status = 'active'");
         $stmt->execute([':goal_id' => $goal_id, ':child_id' => $child_user_id]);
         $goal = $stmt->fetch(PDO::FETCH_ASSOC);
         if (!$goal) {
@@ -1750,11 +1745,8 @@ function completeGoal($child_user_id, $goal_id) {
         $stmt = $db->prepare("UPDATE goals SET status = 'completed', completed_at = NOW() WHERE id = :goal_id");
         $stmt->execute([':goal_id' => $goal_id]);
 
-        // Award points
-        $target_points = $goal['target_points'];
-        updateChildPoints($child_user_id, $target_points);
         $db->commit();
-        return $target_points;
+        return true;
     } catch (Exception $e) {
         $db->rollBack();
         error_log("Goal completion failed: " . $e->getMessage());
@@ -2181,21 +2173,24 @@ try {
 
     // Create tasks table if not exists (added created_by)
    $sql = "CREATE TABLE IF NOT EXISTS tasks (
-      id INT AUTO_INCREMENT PRIMARY KEY,
-      parent_user_id INT NOT NULL,
-      child_user_id INT NOT NULL,
-      title VARCHAR(100) NOT NULL,
-      description TEXT,
-      due_date DATETIME,
-      points INT,
-      recurrence ENUM('daily', 'weekly', '') DEFAULT '',
-      category ENUM('hygiene', 'homework', 'household') DEFAULT 'household',
-      timing_mode ENUM('timer', 'suggested', 'no_limit') DEFAULT 'no_limit',
-      status ENUM('pending', 'completed', 'approved') DEFAULT 'pending',
-      photo_proof VARCHAR(255),
-      completed_at DATETIME,
-      created_by INT NULL,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+       id INT AUTO_INCREMENT PRIMARY KEY,
+       parent_user_id INT NOT NULL,
+       child_user_id INT NOT NULL,
+       title VARCHAR(100) NOT NULL,
+       description TEXT,
+       due_date DATETIME,
+       points INT,
+       recurrence ENUM('daily', 'weekly', '') DEFAULT '',
+       category ENUM('hygiene', 'homework', 'household') DEFAULT 'household',
+       timing_mode ENUM('timer', 'suggested', 'no_limit') DEFAULT 'no_limit',
+       timer_minutes INT DEFAULT NULL,
+       recurrence_days VARCHAR(32) DEFAULT NULL,
+       end_date DATE DEFAULT NULL,
+       status ENUM('pending', 'completed', 'approved') DEFAULT 'pending',
+       photo_proof VARCHAR(255),
+       completed_at DATETIME,
+       created_by INT NULL,
+       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (parent_user_id) REFERENCES users(id) ON DELETE CASCADE,
       FOREIGN KEY (child_user_id) REFERENCES users(id) ON DELETE CASCADE,
       FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
@@ -2206,6 +2201,12 @@ try {
    // Add created_by to existing tasks if not exists
    $db->exec("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS created_by INT NULL");
    error_log("Added/verified created_by in tasks");
+   $db->exec("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS timer_minutes INT NULL");
+   error_log("Added/verified timer_minutes in tasks");
+   $db->exec("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS recurrence_days VARCHAR(32) NULL");
+   error_log("Added/verified recurrence_days in tasks");
+   $db->exec("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS end_date DATE NULL");
+   error_log("Added/verified end_date in tasks");
 
    // Create reward_templates table (library of reusable rewards)
    $sql = "CREATE TABLE IF NOT EXISTS reward_templates (
@@ -2272,7 +2273,7 @@ try {
     parent_user_id INT NOT NULL,
     child_user_id INT NOT NULL,
     title VARCHAR(100) NOT NULL,
-    target_points INT NOT NULL,
+    target_points INT NOT NULL DEFAULT 0,
     start_date DATETIME,
     end_date DATETIME,
     status ENUM('active', 'pending_approval', 'completed', 'rejected') DEFAULT 'active',

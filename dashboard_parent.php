@@ -175,11 +175,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif (isset($_POST['create_goal'])) {
         $child_user_id = filter_input(INPUT_POST, 'child_user_id', FILTER_VALIDATE_INT);
         $title = filter_input(INPUT_POST, 'goal_title', FILTER_SANITIZE_STRING);
-        $target_points = filter_input(INPUT_POST, 'target_points', FILTER_VALIDATE_INT);
         $start_date = filter_input(INPUT_POST, 'start_date', FILTER_SANITIZE_STRING);
         $end_date = filter_input(INPUT_POST, 'end_date', FILTER_SANITIZE_STRING);
         $reward_id = filter_input(INPUT_POST, 'reward_id', FILTER_VALIDATE_INT, FILTER_NULL_ON_FAILURE);
-        $message = createGoal($main_parent_id, $child_user_id, $title, $target_points, $start_date, $end_date, $reward_id, $_SESSION['user_id'])
+        $message = createGoal($main_parent_id, $child_user_id, $title, $start_date, $end_date, $reward_id, $_SESSION['user_id'])
             ? "Goal created successfully!"
             : "Failed to create goal. Check date range or reward ID.";
     } elseif (isset($_POST['adjust_child_points'])) {
@@ -229,13 +228,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $action = isset($_POST['approve_goal']) ? 'approve' : 'reject';
         $comment = filter_input(INPUT_POST, 'rejection_comment', FILTER_SANITIZE_STRING);
         if ($action === 'approve') {
-            // Fetch points for message only
-            $pointsStmt = $db->prepare("SELECT target_points FROM goals WHERE id = :goal_id AND parent_user_id = :parent_id");
-            $pointsStmt->execute([':goal_id' => $goal_id, ':parent_id' => $main_parent_id]);
-            $points_value = $pointsStmt->fetchColumn();
             $approved = approveGoal($goal_id, $main_parent_id);
             if ($approved) {
-                $message = "Goal approved!" . ($points_value !== false ? " Child earned " . (int)$points_value . " points." : "");
+                $message = "Goal approved!";
             } else {
                 $message = "Failed to approve goal.";
             }
@@ -394,6 +389,17 @@ foreach (($data['redeemed_rewards'] ?? []) as $rr) {
         }
     }
 }
+$todayDate = date('Y-m-d');
+$weekStart = new DateTime('monday this week');
+$weekStart->setTime(0, 0, 0);
+$weekEnd = new DateTime('sunday this week');
+$weekEnd->setTime(23, 59, 59);
+$weekDates = [];
+$weekCursor = clone $weekStart;
+for ($i = 0; $i < 7; $i++) {
+    $weekDates[] = $weekCursor->format('Y-m-d');
+    $weekCursor->modify('+1 day');
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -406,32 +412,37 @@ foreach (($data['redeemed_rewards'] ?? []) as $rr) {
     <style>
         .dashboard { padding: 20px; max-width: 900px; margin: 0 auto; }
         .children-overview, .management-links, .active-rewards, .redeemed-rewards, .pending-approvals, .completed-goals, .manage-family { margin-top: 20px; }
-        .children-overview-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; }
+        .children-overview-grid { display: grid; grid-template-columns: 1fr; gap: 20px; }
         .child-info-card, .reward-item, .goal-item { background-color: #f5f5f5; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
-        .child-info-card { display: flex; flex-direction: column; gap: 16px; min-height: 100%; max-width: fit-content; }
-        .child-info-header { display: flex; align-items: center; gap: 16px; }
-        .child-info-header img { width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 2px solid #ececec; }
+        .child-info-card { width: 100%; display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 20px; align-items: start; min-height: 100%; background-color: #fff; margin: 20px 0;}
+        .child-info-header { display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; }
+        .child-info-header img { width: 72px; height: 72px; border-radius: 50%; object-fit: cover; border: 2px solid #ececec; }
         .child-info-header-details { display: flex; flex-direction: column; gap: 4px; }
         .child-info-name { font-size: 1.15em; font-weight: 600; margin: 0; color: #333; }
         .child-info-meta { margin: 0; font-size: 0.9em; color: #666; }
-        .child-info-body { display: flex; gap: 16px; align-items: flex-start; }
-        .child-info-stats { display: flex; flex-direction: column; gap: 12px; max-width: 240px; min-width: 195px; }
+        .child-info-actions { display: flex; gap: 8px;     justify-content: center;
+    align-items: center; }
+        .child-action-icon { width: 36px; height: 36px; border-radius: 50%; border: 1px solid #d5def0; background: #f5f5f5; color: #616161; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+        .child-action-icon.danger { color: #c62828; }
+        .child-info-content { display: contents; }
+        .child-info-body { display: grid; gap: 12px; }
+        .child-stats-grid { display: grid; gap: 12px; }
+        .child-stats-row { display: grid; grid-template-columns: repeat(2, minmax(140px, 1fr)); gap: 12px; }
+        .child-stats-block { display: grid; gap: 6px; }
         /* .child-info-stats .stat { } */
         .child-info-stats .stat-label { display: block; font-size: 0.85em; color: #666; font-weight: 600; }
         .child-info-stats .stat-value { font-size: 1.4em; font-weight: 600; color: #2e7d32; }
-        .child-info-stats .stat-subvalue { display: block; font-size: 0.85em; color: #888; margin-top: 2px; }
         .child-reward-badges { display: flex; justify-content: center; gap: 10px; flex-wrap: nowrap; margin-top: 4px; }
+        .stat-link { color: inherit; text-decoration: none; }
+        .stat-link:hover { text-decoration: underline; }
         .child-reward-badge-link { text-decoration: none; display: grid; gap: 2px; align-items: center; justify-items: center; padding: 4px 6px; border-radius: 8px; min-width: 73.25px;}
         .child-reward-badge-link:hover { text-decoration: none;}
-        .child-reward-badge-link .badge-count { font-size: 1.6em; font-weight: 700; color: #2e7d32; line-height: 1.1; }
+        .badge-count { font-size: 1.6em; font-weight: 700; color: #2e7d32; line-height: 1.1; }
         .child-reward-badge-link .badge-label { font-size: 0.85em; color: #666; }
         .points-progress-wrapper { display: flex; flex-direction: column; align-items: center; gap: 6px; flex: 1; }
         .points-progress-label { font-size: 0.9em; font-weight: 600; color: #555; text-align: center; }
         .points-number { font-size: 1.6em; font-weight: 700; color: #2e7d32; line-height: 1; }
-        .child-info-actions { display: flex; flex-wrap: wrap; gap: 10px; }
-        .child-info-actions form { margin: 0; flex-grow: 1; }
-        .child-info-actions a { flex-grow: 1; }
-        .child-info-actions form button { width: 100%; }
+        .child-info-actions form { margin: 0; }
         .child-badge-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 6px; }
         .badge-pill { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 8px; background: transparent; color: #0d47a1; font-weight: 700; border: 1px solid #d5def0; font-size: 0.95em; text-decoration: none; }
         .badge-pill:hover { background: #eef4ff; text-decoration: none; }
@@ -441,6 +452,26 @@ foreach (($data['redeemed_rewards'] ?? []) as $rr) {
         .adjust-button .icon { font-size: 1.1em; line-height: 1; }
         .points-adjust-card { border: 1px dashed #c8e6c9; background: #fdfefb; padding: 10px 12px; border-radius: 6px; display: grid; gap: 8px; }
         .points-adjust-card .button { width: 100%; }
+        .child-schedule-card { border: 1px solid #e0e0e0; background: #fff; border-radius: 10px; padding: 12px; display: grid; gap: 10px; }
+        .child-schedule-today { display: grid; gap: 4px; text-align: left; }
+        .child-schedule-date { font-weight: 700; color: #37474f; }
+        .child-schedule-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
+        .child-schedule-item { display: flex; align-items: center; justify-content: space-between; gap: 10px; background: #f9f9f9; border-radius: 8px; padding: 8px 10px; }
+        .child-schedule-main { display: flex; align-items: center; gap: 8px; }
+        .child-schedule-title { font-weight: 600; color: #3e2723; }
+        .child-schedule-time { color: #6d4c41; font-size: 0.9rem; }
+        .child-schedule-points { font-weight: 700; color: #2e7d32; white-space: nowrap; }
+        .view-week-button { justify-self: start; padding: 6px 12px; font-size: 0.9rem; background: #eef4ff; border: 1px solid #d5def0; color: #0d47a1; border-radius: 8px; cursor: pointer; }
+        .week-modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.55); display: none; align-items: center; justify-content: center; z-index: 3200; padding: 14px; }
+        .week-modal-backdrop.open { display: flex; }
+        .week-modal { background: #fff; border-radius: 12px; max-width: 620px; width: min(620px, 100%); max-height: 80vh; overflow: hidden; box-shadow: 0 14px 36px rgba(0,0,0,0.25); display: grid; grid-template-rows: auto 1fr; }
+        .week-modal header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid #e0e0e0; }
+        .week-modal h3 { margin: 0; font-size: 1.1rem; }
+        .week-modal-close { background: transparent; border: none; font-size: 1.3rem; cursor: pointer; color: #555; }
+        .week-modal-body { padding: 12px 16px 16px; overflow-y: auto; text-align: left; }
+        .week-day-group { margin-bottom: 12px; }
+        .week-day-title { font-weight: 700; color: #37474f; margin-bottom: 6px; }
+        .week-day-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
         body.modal-open { overflow: hidden; }
         .adjust-modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.55); display: none; align-items: center; justify-content: center; z-index: 3000; padding: 12px; }
         .adjust-modal-backdrop.open { display: flex; }
@@ -537,7 +568,7 @@ foreach (($data['redeemed_rewards'] ?? []) as $rr) {
         @media (max-width: 768px) {
             .manage-family { padding: 10px; }
             .button { width: 100%; }
-            .child-info-header { flex-direction: column; align-items: flex-start; }
+            .child-info-card { grid-template-columns: 1fr; }
             .child-info-header img { width: 56px; height: 56px; }
             .child-info-body { flex-direction: column; }
             .points-progress-container { width: 100%; height: 140px; }
@@ -709,6 +740,70 @@ foreach (($data['redeemed_rewards'] ?? []) as $rr) {
                         overtimeSection.scrollIntoView({ behavior: 'smooth' });
                     }
                 }
+            }
+
+            const weekModal = document.querySelector('[data-week-modal]');
+            const weekModalBody = weekModal ? weekModal.querySelector('[data-week-modal-body]') : null;
+            const weekModalTitle = weekModal ? weekModal.querySelector('#week-modal-title') : null;
+            const weekModalClose = weekModal ? weekModal.querySelector('[data-week-modal-close]') : null;
+            const openWeekModal = (btn) => {
+                if (!weekModal || !weekModalBody) return;
+                const childName = btn.getAttribute('data-child-name') || 'Child';
+                const scheduleRaw = btn.getAttribute('data-week-schedule') || '{}';
+                let schedule = {};
+                try {
+                    schedule = JSON.parse(scheduleRaw);
+                } catch (e) {
+                    schedule = {};
+                }
+                if (weekModalTitle) {
+                    weekModalTitle.textContent = childName + ' - Week Schedule';
+                }
+                const dates = Object.keys(schedule).sort();
+                if (!dates.length) {
+                    weekModalBody.innerHTML = '<p>No tasks or routines this week.</p>';
+                } else {
+                    weekModalBody.innerHTML = dates.map((dateKey) => {
+                        const items = schedule[dateKey] || [];
+                        if (!items.length) {
+                            return '';
+                        }
+                        const label = new Date(dateKey + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+                        const itemsHtml = items.map((item) => {
+                            return '<li class="child-schedule-item">' +
+                                '<div class="child-schedule-main">' +
+                                '<i class="' + item.icon + '"></i>' +
+                                '<div>' +
+                                '<div class="child-schedule-title">' + item.title + '</div>' +
+                                '<div class="child-schedule-time">' + item.time_label + '</div>' +
+                                '</div>' +
+                                '</div>' +
+                                '<div class="child-schedule-points">' + item.points + ' pts</div>' +
+                                '</li>';
+                        }).join('');
+                        return '<div class="week-day-group">' +
+                            '<div class="week-day-title">' + label + '</div>' +
+                            '<ul class="week-day-list">' + itemsHtml + '</ul>' +
+                            '</div>';
+                    }).join('') || '<p>No tasks or routines this week.</p>';
+                }
+                weekModal.classList.add('open');
+                document.body.classList.add('modal-open');
+            };
+            document.querySelectorAll('[data-week-view]').forEach((btn) => {
+                btn.addEventListener('click', () => openWeekModal(btn));
+            });
+            if (weekModal && weekModalClose) {
+                weekModalClose.addEventListener('click', () => {
+                    weekModal.classList.remove('open');
+                    document.body.classList.remove('modal-open');
+                });
+                weekModal.addEventListener('click', (e) => {
+                    if (e.target === weekModal) {
+                        weekModal.classList.remove('open');
+                        document.body.classList.remove('modal-open');
+                    }
+                });
             }
 
             const adjustModal = document.querySelector('[data-role="adjust-modal"]');
@@ -1150,81 +1245,200 @@ foreach (($data['redeemed_rewards'] ?? []) as $rr) {
          <?php if (isset($data['children']) && is_array($data['children']) && !empty($data['children'])): ?>
                <div class="children-overview-grid">
                <?php foreach ($data['children'] as $child): ?>
-                  <div class="child-info-card">
-                     <div class="child-info-header">
-                        <img src="<?php echo htmlspecialchars($child['avatar'] ?? 'default-avatar.png'); ?>" alt="Avatar for <?php echo htmlspecialchars($child['child_name']); ?>">
-                        <div class="child-info-header-details">
-                           <p class="child-info-name"><?php echo htmlspecialchars($child['child_name']); ?></p>
-                           <p class="child-info-meta">Age: <?php echo htmlspecialchars($child['age'] ?? 'N/A'); ?></p>
-                        </div>
-                     </div>
-                     <div class="child-info-body">
-                        <div class="child-info-stats">
-                           <div class="stat">
-                              <span class="stat-label">Tasks Assigned</span>
-                              <span class="stat-value"><?php echo (int)($child['task_count'] ?? 0); ?></span>
-                           </div>
-                           <div class="stat">
-                              <span class="stat-label">Goals</span>
-                              <span class="stat-value"><?php echo (int)($child['goals_assigned'] ?? 0); ?></span>
-                              <span class="stat-subvalue">Target: <?php echo (int)($child['goal_target_points'] ?? 0); ?> pts</span>
-                           </div>
-                           <div class="stat">
-                              <span class="stat-label">Rewards</span>
-                              <?php
-                                 $childActiveRewards = $activeRewardCounts[$child['child_user_id']] ?? 0;
-                                 $childRedeemedRewards = $redeemedRewardCounts[$child['child_user_id']] ?? 0;
-                              ?>
-                              <div class="child-reward-badges">
-                                 <a class="child-reward-badge-link" href="rewards.php#active-child-<?php echo (int)$child['child_user_id']; ?>">
-                                    <span class="badge-count"><?php echo $childActiveRewards; ?></span>
-                                    <span class="badge-label">active</span>
-                                 </a>
-                                 <a class="child-reward-badge-link" href="rewards.php#redeemed-child-<?php echo (int)$child['child_user_id']; ?>">
-                                    <span class="badge-count"><?php echo $childRedeemedRewards; ?></span>
-                                    <span class="badge-label">redeemed</span>
-                                 </a>
-                                <?php
-                                    $pendingRewards = (int)($pendingRewardCounts[$child['child_user_id']] ?? 0);
-                                ?>
-                                <?php if ($pendingRewards > 0): ?>
-                                    <a class="child-reward-badge-link" href="rewards.php#pending-child-<?php echo (int)$child['child_user_id']; ?>">
-                                        <span class="badge-count"><?php echo $pendingRewards; ?></span>
-                                        <span class="badge-label">awaiting fulfillment</span>
-                                    </a>
-                                <?php endif; ?>
-                              </div>
-                           </div>
+                  <?php
+                     $childId = (int) ($child['child_user_id'] ?? 0);
+                     $weekSchedule = [];
+                     foreach ($weekDates as $dateKey) {
+                        $weekSchedule[$dateKey] = [];
+                     }
+                     $taskStmt = $db->prepare("SELECT title, points, due_date, end_date, recurrence, recurrence_days FROM tasks WHERE child_user_id = :child_id AND due_date IS NOT NULL AND DATE(due_date) <= :end");
+                     $taskStmt->execute([
+                        ':child_id' => $childId,
+                        ':end' => $weekEnd->format('Y-m-d')
+                     ]);
+                     foreach ($taskStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                        $dueDate = $row['due_date'];
+                        $startDateKey = date('Y-m-d', strtotime($dueDate));
+                        $endDateKey = !empty($row['end_date']) ? $row['end_date'] : null;
+                        $timeSort = date('H:i', strtotime($dueDate));
+                        $timeLabel = date('g:i A', strtotime($dueDate));
+                        $repeat = $row['recurrence'] ?? '';
+                        $repeatDays = array_filter(array_map('trim', explode(',', (string)($row['recurrence_days'] ?? ''))));
+                        foreach ($weekDates as $dateKey) {
+                           if ($dateKey < $startDateKey) {
+                              continue;
+                           }
+                           if ($endDateKey && $dateKey > $endDateKey) {
+                              continue;
+                           }
+                           if ($repeat === 'daily') {
+                              // include every day on/after start date
+                           } elseif ($repeat === 'weekly') {
+                              $dayName = date('D', strtotime($dateKey));
+                              if (!in_array($dayName, $repeatDays, true)) {
+                                 continue;
+                              }
+                           } else {
+                              if ($dateKey !== $startDateKey) {
+                                 continue;
+                              }
+                           }
+                           $weekSchedule[$dateKey][] = [
+                              'title' => $row['title'],
+                              'type' => 'Task',
+                              'points' => (int) ($row['points'] ?? 0),
+                              'time' => $timeSort,
+                              'time_label' => $timeLabel,
+                              'icon' => 'fa-solid fa-list-check'
+                           ];
+                        }
+                     }
+                     $childRoutines = getRoutines($childId);
+                     foreach ($childRoutines as $routine) {
+                        $recurrence = $routine['recurrence'] ?? '';
+                        $routineWeekday = !empty($routine['created_at']) ? (int) date('N', strtotime($routine['created_at'])) : null;
+                        $routinePointsTotal = 0;
+                        foreach (($routine['tasks'] ?? []) as $task) {
+                           $routinePointsTotal += (int) ($task['point_value'] ?? 0);
+                        }
+                        $totalPoints = $routinePointsTotal + (int) ($routine['bonus_points'] ?? 0);
+                        $timeSort = !empty($routine['start_time']) ? date('H:i', strtotime($routine['start_time'])) : '99:99';
+                        $timeLabel = !empty($routine['start_time']) ? date('g:i A', strtotime($routine['start_time'])) : 'Anytime';
+                        foreach ($weekDates as $dateKey) {
+                           if ($recurrence === 'weekly' && $routineWeekday) {
+                              $dayWeek = (int) date('N', strtotime($dateKey));
+                              if ($dayWeek !== $routineWeekday) {
+                                 continue;
+                              }
+                           }
+                           $weekSchedule[$dateKey][] = [
+                              'title' => $routine['title'],
+                              'type' => 'Routine',
+                              'points' => $totalPoints,
+                              'time' => $timeSort,
+                              'time_label' => $timeLabel,
+                              'icon' => 'fa-solid fa-repeat'
+                           ];
+                        }
+                     }
+                     foreach ($weekSchedule as &$items) {
+                        usort($items, static function ($a, $b) {
+                           return ($a['time'] ?? '99:99') <=> ($b['time'] ?? '99:99');
+                        });
+                     }
+                     unset($items);
+                     $todayItems = $weekSchedule[$todayDate] ?? [];
+                     $weekScheduleJson = htmlspecialchars(json_encode($weekSchedule, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT), ENT_QUOTES);
+                  ?>
+                   <div class="child-info-card">
+                      <div class="child-info-header">
+                         <img src="<?php echo htmlspecialchars($child['avatar'] ?? 'default-avatar.png'); ?>" alt="Avatar for <?php echo htmlspecialchars($child['child_name']); ?>">
+                         <div class="child-info-header-details">
+                            <p class="child-info-name"><?php echo htmlspecialchars($child['child_name']); ?></p>
+                            <p class="child-info-meta">Age: <?php echo htmlspecialchars($child['age'] ?? 'N/A'); ?></p>
+                            <div class="child-info-actions">
+                               <?php if (in_array($role_type, ['main_parent', 'secondary_parent'])): ?>
+                                   <a href="profile.php?user_id=<?php echo $child['child_user_id']; ?>&type=child" class="child-action-icon" aria-label="Edit Child"><i class="fa-solid fa-pen"></i></a>
+                               <?php endif; ?>
+                               <?php if ($role_type === 'main_parent'): ?>
+                                   <form method="POST" data-role="child-remove-form">
+                                       <input type="hidden" name="delete_user_id" value="<?php echo $child['child_user_id']; ?>">
+                                       <input type="hidden" name="delete_mode" value="soft">
+                                       <input type="hidden" name="delete_user" value="1">
+                                       <button type="submit" class="child-action-icon danger" data-action="remove-child" aria-label="Remove Child"><i class="fa-solid fa-trash"></i></button>
+                                   </form>
+                               <?php endif; ?>
+                            </div>
+                         </div>
+                      </div>
+                      <div class="points-progress-wrapper">
+                          <div class="points-progress-label">Points Earned</div>
+                          <div class="points-number" data-points="<?php echo (int)($child['points_earned'] ?? 0); ?>">0</div>
+                          <?php if (in_array($role_type, ['main_parent', 'secondary_parent'], true)): ?>
+                              <button type="button"
+                                  class="button adjust-button"
+                                  data-role="open-adjust-modal"
+                                  data-child-id="<?php echo (int)$child['child_user_id']; ?>"
+                                  data-child-name="<?php echo htmlspecialchars($child['child_name']); ?>"
+                                  data-history='<?php echo htmlspecialchars(json_encode($child['point_adjustments'] ?? [], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT)); ?>'>
+                                  <span class="label">Points</span>
+                                  <span class="icon">+ / -</span>
+                              </button>
+                          <?php endif; ?>
+                      </div>
+                      <div class="child-info-content">
+                      <div class="child-info-body">
+                         <div class="child-stats-grid">
+                            <div class="child-stats-row">
+                                 <div class="child-stats-block stat">
+                                    <span class="stat-label">Tasks Assigned</span>
+                                    <span class="stat-value"><a class="stat-link badge-count" href="task.php"><?php echo (int)($child['task_count'] ?? 0); ?></a></span>
+                                 </div>
+                                   <div class="child-stats-block stat">
+                                      <span class="stat-label">Goals</span>
+                                      <span class="stat-value"><a class="stat-link badge-count" href="goal.php"><?php echo (int)($child['goals_assigned'] ?? 0); ?></a></span>
+                                   </div>
+                            </div>
+                            <div class="child-stats-block stat">
+                               <span class="stat-label">Rewards</span>
+                               <?php
+                                  $childActiveRewards = $activeRewardCounts[$child['child_user_id']] ?? 0;
+                                  $childRedeemedRewards = $redeemedRewardCounts[$child['child_user_id']] ?? 0;
+                               ?>
+                               <div class="child-reward-badges">
+                                  <a class="child-reward-badge-link" href="rewards.php#active-child-<?php echo (int)$child['child_user_id']; ?>">
+                                     <span class="badge-count"><?php echo $childActiveRewards; ?></span>
+                                     <span class="badge-label">active</span>
+                                  </a>
+                                  <a class="child-reward-badge-link" href="rewards.php#redeemed-child-<?php echo (int)$child['child_user_id']; ?>">
+                                     <span class="badge-count"><?php echo $childRedeemedRewards; ?></span>
+                                     <span class="badge-label">redeemed</span>
+                                  </a>
+                                 <?php
+                                     $pendingRewards = (int)($pendingRewardCounts[$child['child_user_id']] ?? 0);
+                                 ?>
+                                 <?php if ($pendingRewards > 0): ?>
+                                     <a class="child-reward-badge-link" href="rewards.php#pending-child-<?php echo (int)$child['child_user_id']; ?>">
+                                         <span class="badge-count"><?php echo $pendingRewards; ?></span>
+                                         <span class="badge-label">awaiting fulfillment</span>
+                                     </a>
+                                 <?php endif; ?>
+                               </div>
+                            </div>
+                         </div>
+                    </div>
+                    <div class="child-schedule-card">
+                      <div class="child-schedule-today">
+                         <div class="child-schedule-date">Today: <?php echo htmlspecialchars(date('D, M j', strtotime($todayDate))); ?></div>
+                         <?php if (!empty($todayItems)): ?>
+                            <ul class="child-schedule-list">
+                               <?php foreach ($todayItems as $item): ?>
+                                  <li class="child-schedule-item">
+                                     <div class="child-schedule-main">
+                                        <i class="<?php echo htmlspecialchars($item['icon']); ?>"></i>
+                                        <div>
+                                           <div class="child-schedule-title"><?php echo htmlspecialchars($item['title']); ?></div>
+                                           <div class="child-schedule-time"><?php echo htmlspecialchars($item['time_label']); ?></div>
+                                        </div>
+                                     </div>
+                                     <div class="child-schedule-points"><?php echo (int)$item['points']; ?> pts</div>
+                                  </li>
+                               <?php endforeach; ?>
+                            </ul>
+                         <?php else: ?>
+                            <div class="child-schedule-time">No tasks or routines today.</div>
+                         <?php endif; ?>
+                      </div>
+                      <button type="button"
+                              class="view-week-button"
+                              data-week-view
+                              data-child-name="<?php echo htmlspecialchars($child['child_name'], ENT_QUOTES); ?>"
+                              data-week-schedule="<?php echo $weekScheduleJson; ?>">
+                          View Week
+                      </button>
                    </div>
-                   <div class="points-progress-wrapper">
-                           <div class="points-progress-label">Points Earned</div>
-                           <div class="points-number" data-points="<?php echo (int)($child['points_earned'] ?? 0); ?>">0</div>
-                           <?php if (in_array($role_type, ['main_parent', 'secondary_parent'], true)): ?>
-                                <button type="button"
-                                    class="button adjust-button"
-                                    data-role="open-adjust-modal"
-                                    data-child-id="<?php echo (int)$child['child_user_id']; ?>"
-                                    data-child-name="<?php echo htmlspecialchars($child['child_name']); ?>"
-                                    data-history='<?php echo htmlspecialchars(json_encode($child['point_adjustments'] ?? [], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT)); ?>'>
-                                    <span class="label">Points</span>
-                                    <span class="icon">+ / -</span>
-                                </button>
-                            <?php endif; ?>
-                        </div>
-                     </div>
-                     <div class="child-info-actions">
-                        <?php if (in_array($role_type, ['main_parent', 'secondary_parent'])): ?>
-                            <a href="profile.php?user_id=<?php echo $child['child_user_id']; ?>&type=child" class="button">Edit Child</a>
-                        <?php endif; ?>
-                        <?php if ($role_type === 'main_parent'): ?>
-                            <form method="POST" data-role="child-remove-form">
-                                <input type="hidden" name="delete_user_id" value="<?php echo $child['child_user_id']; ?>">
-                                <input type="hidden" name="delete_mode" value="soft">
-                                <input type="hidden" name="delete_user" value="1">
-                                <button type="submit" class="button delete-btn" data-action="remove-child">Remove</button>
-                            </form>
-                        <?php endif; ?>
-                     </div>
+                      </div>
+                      </div>
                   </div>
                <?php endforeach; ?>
                </div>
@@ -1431,11 +1645,7 @@ foreach (($data['redeemed_rewards'] ?? []) as $rr) {
                      <label for="goal_title">Title:</label>
                      <input type="text" id="goal_title" name="goal_title" required>
                   </div>
-                  <div class="form-group">
-                     <label for="target_points">Target Points:</label>
-                     <input type="number" id="target_points" name="target_points" min="1" required>
-                  </div>
-                  <div class="form-group">
+                    <div class="form-group">
                      <label for="start_date">Start Date:</label>
                      <input type="datetime-local" id="start_date" name="start_date">
                   </div>
@@ -1585,9 +1795,9 @@ foreach (($data['redeemed_rewards'] ?? []) as $rr) {
          <h2>Pending Goal Approvals</h2>
          <?php if (isset($data['pending_approvals']) && is_array($data['pending_approvals']) && !empty($data['pending_approvals'])): ?>
               <?php foreach ($data['pending_approvals'] as $approval): ?>
-                 <div class="goal-item">
-                    <p>Goal: <?php echo htmlspecialchars($approval['title']); ?> (Target: <?php echo htmlspecialchars($approval['target_points']); ?> points)</p>
-                    <p>Child: <?php echo htmlspecialchars($approval['child_username']); ?></p>
+                   <div class="goal-item">
+                     <p>Goal: <?php echo htmlspecialchars($approval['title']); ?></p>
+                     <p>Child: <?php echo htmlspecialchars($approval['child_username']); ?></p>
                     <?php if (!empty($approval['creator_display_name'])): ?>
                         <p>Created by: <?php echo htmlspecialchars($approval['creator_display_name']); ?></p>
                     <?php endif; ?>
@@ -1613,11 +1823,10 @@ foreach (($data['redeemed_rewards'] ?? []) as $rr) {
          $all_completed_goals = [];
          $parent_id = $_SESSION['user_id'];
          $stmt = $db->prepare("SELECT 
-                              g.id, 
-                              g.title, 
-                              g.target_points, 
-                              g.start_date, 
-                              g.end_date, 
+                                g.id, 
+                                g.title, 
+                                g.start_date, 
+                                g.end_date, 
                               g.completed_at, 
                               u.username as child_username,
                               COALESCE(
@@ -1635,9 +1844,9 @@ foreach (($data['redeemed_rewards'] ?? []) as $rr) {
          ?>
          <?php if (!empty($all_completed_goals)): ?>
               <?php foreach ($all_completed_goals as $goal): ?>
-                 <div class="goal-item">
-                    <p>Goal: <?php echo htmlspecialchars($goal['title']); ?> (Target: <?php echo htmlspecialchars($goal['target_points']); ?> points)</p>
-                    <p>Child: <?php echo htmlspecialchars($goal['child_username']); ?></p>
+                   <div class="goal-item">
+                     <p>Goal: <?php echo htmlspecialchars($goal['title']); ?></p>
+                     <p>Child: <?php echo htmlspecialchars($goal['child_username']); ?></p>
                     <?php if (!empty($goal['creator_display_name'])): ?>
                         <p>Created by: <?php echo htmlspecialchars($goal['creator_display_name']); ?></p>
                     <?php endif; ?>
@@ -1653,11 +1862,10 @@ foreach (($data['redeemed_rewards'] ?? []) as $rr) {
          <h2>Rejected Goals</h2>
          <?php
          $stmt = $db->prepare("SELECT 
-                              g.id, 
-                              g.title, 
-                              g.target_points, 
-                              g.start_date, 
-                              g.end_date, 
+                                g.id, 
+                                g.title, 
+                                g.start_date, 
+                                g.end_date, 
                               g.rejected_at, 
                               g.rejection_comment, 
                               u.username as child_username, 
@@ -1686,9 +1894,9 @@ foreach (($data['redeemed_rewards'] ?? []) as $rr) {
                <p>No rejected goals.</p>
          <?php else: ?>
               <?php foreach ($rejected_goals as $goal): ?>
-                 <div class="goal-item">
-                    <p>Goal: <?php echo htmlspecialchars($goal['title']); ?> (Target: <?php echo htmlspecialchars($goal['target_points']); ?> points)</p>
-                    <p>Child: <?php echo htmlspecialchars($goal['child_username']); ?></p>
+                   <div class="goal-item">
+                     <p>Goal: <?php echo htmlspecialchars($goal['title']); ?></p>
+                     <p>Child: <?php echo htmlspecialchars($goal['child_username']); ?></p>
                     <?php if (!empty($goal['creator_display_name'])): ?>
                         <p>Created by: <?php echo htmlspecialchars($goal['creator_display_name']); ?></p>
                     <?php endif; ?>
@@ -1731,6 +1939,15 @@ foreach (($data['redeemed_rewards'] ?? []) as $rr) {
                 <h4>Recent adjustments</h4>
                 <ul data-role="adjust-history-list"></ul>
             </div>
+        </div>
+    </div>
+    <div class="week-modal-backdrop" data-week-modal>
+        <div class="week-modal" role="dialog" aria-modal="true" aria-labelledby="week-modal-title">
+            <header>
+                <h3 id="week-modal-title">Week Schedule</h3>
+                <button type="button" class="week-modal-close" data-week-modal-close aria-label="Close"><i class="fa-solid fa-xmark"></i></button>
+            </header>
+            <div class="week-modal-body" data-week-modal-body></div>
         </div>
     </div>
     <footer>

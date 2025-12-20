@@ -20,7 +20,7 @@ if (!$goal_id) {
 }
 
 // Fetch goal details
-$stmt = $db->prepare("SELECT g.title, g.target_points, g.start_date, g.end_date, g.reward_id, g.child_user_id 
+$stmt = $db->prepare("SELECT g.title, g.start_date, g.end_date, g.reward_id, g.child_user_id 
                      FROM goals g 
                      WHERE g.id = :goal_id AND g.parent_user_id = :parent_id");
 $stmt->execute([':goal_id' => $goal_id, ':parent_id' => $_SESSION['user_id']]);
@@ -30,14 +30,13 @@ if (!$goal) {
     exit;
 }
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $title = filter_input(INPUT_POST, 'title', FILTER_SANITIZE_STRING);
-    $target_points = filter_input(INPUT_POST, 'target_points', FILTER_VALIDATE_INT);
-    $start_date = filter_input(INPUT_POST, 'start_date', FILTER_SANITIZE_STRING);
-    $end_date = filter_input(INPUT_POST, 'end_date', FILTER_SANITIZE_STRING);
-    $reward_id = filter_input(INPUT_POST, 'reward_id', FILTER_VALIDATE_INT, FILTER_NULL_ON_FAILURE);
+    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+        $title = filter_input(INPUT_POST, 'title', FILTER_SANITIZE_STRING);
+        $start_date = filter_input(INPUT_POST, 'start_date', FILTER_SANITIZE_STRING);
+        $end_date = filter_input(INPUT_POST, 'end_date', FILTER_SANITIZE_STRING);
+        $reward_id = filter_input(INPUT_POST, 'reward_id', FILTER_VALIDATE_INT, FILTER_NULL_ON_FAILURE);
 
-    if (updateGoal($goal_id, $_SESSION['user_id'], $title, $target_points, $start_date, $end_date, $reward_id)) {
+    if (updateGoal($goal_id, $_SESSION['user_id'], $title, $start_date, $end_date, $reward_id)) {
         $message = "Goal updated successfully!";
         header("Location: goal.php?message=" . urlencode($message));
         exit;
@@ -112,8 +111,6 @@ if (!$welcome_role_label) {
             <form method="POST" action="edit_goal.php?id=<?php echo $goal_id; ?>">
                 <label for="title">Title:</label>
                 <input type="text" id="title" name="title" value="<?php echo htmlspecialchars($goal['title']); ?>" required>
-                <label for="target_points">Target Points:</label>
-                <input type="number" id="target_points" name="target_points" min="1" value="<?php echo htmlspecialchars($goal['target_points']); ?>" required>
                 <label for="start_date">Start Date/Time:</label>
                 <input type="datetime-local" id="start_date" name="start_date" value="<?php echo date('Y-m-d\TH:i', strtotime($goal['start_date'])); ?>" required>
                 <label for="end_date">End Date/Time:</label>

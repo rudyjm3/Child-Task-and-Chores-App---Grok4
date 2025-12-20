@@ -24,12 +24,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['create_goal']) && isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
         $child_user_id = filter_input(INPUT_POST, 'child_user_id', FILTER_VALIDATE_INT);
         $title = filter_input(INPUT_POST, 'title', FILTER_SANITIZE_STRING);
-        $target_points = filter_input(INPUT_POST, 'target_points', FILTER_VALIDATE_INT);
         $start_date = filter_input(INPUT_POST, 'start_date', FILTER_SANITIZE_STRING);
         $end_date = filter_input(INPUT_POST, 'end_date', FILTER_SANITIZE_STRING);
         $reward_id = filter_input(INPUT_POST, 'reward_id', FILTER_VALIDATE_INT, FILTER_NULL_ON_FAILURE);
 
-        if (createGoal($family_root_id, $child_user_id, $title, $target_points, $start_date, $end_date, $reward_id, $_SESSION['user_id'])) {
+        if (createGoal($family_root_id, $child_user_id, $title, $start_date, $end_date, $reward_id, $_SESSION['user_id'])) {
             $message = "Goal created successfully!";
         } else {
             $message = "Failed to create goal.";
@@ -37,12 +36,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif (isset($_POST['update_goal']) && isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
         $goal_id = filter_input(INPUT_POST, 'goal_id', FILTER_VALIDATE_INT);
         $title = filter_input(INPUT_POST, 'title', FILTER_SANITIZE_STRING);
-        $target_points = filter_input(INPUT_POST, 'target_points', FILTER_VALIDATE_INT);
         $start_date = filter_input(INPUT_POST, 'start_date', FILTER_SANITIZE_STRING);
         $end_date = filter_input(INPUT_POST, 'end_date', FILTER_SANITIZE_STRING);
         $reward_id = filter_input(INPUT_POST, 'reward_id', FILTER_VALIDATE_INT, FILTER_NULL_ON_FAILURE);
 
-        if (updateGoal($goal_id, $family_root_id, $title, $target_points, $start_date, $end_date, $reward_id)) {
+        if (updateGoal($goal_id, $family_root_id, $title, $start_date, $end_date, $reward_id)) {
             $message = "Goal updated successfully!";
         } else {
             $message = "Failed to update goal.";
@@ -77,16 +75,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $message = "Access denied.";
         } else {
             if ($action === 'approve') {
-                $pointsStmt = $db->prepare("SELECT target_points FROM goals WHERE id = :goal_id AND parent_user_id = :parent_id");
-                $pointsStmt->execute([':goal_id' => $goal_id, ':parent_id' => $family_root_id]);
-                $points_value = $pointsStmt->fetchColumn();
-
                 if (approveGoal($goal_id, $family_root_id)) {
-                    if ($points_value !== false) {
-                        $message = "Goal approved! Child earned " . (int)$points_value . " points.";
-                    } else {
-                        $message = "Goal approved!";
-                    }
+                    $message = "Goal approved!";
                 } else {
                     $message = "Failed to approve goal.";
                 }
@@ -108,7 +98,6 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
     $stmt = $db->prepare("SELECT 
                              g.id, 
                              g.title, 
-                             g.target_points, 
                              g.start_date, 
                              g.end_date, 
                              g.status, 
@@ -140,7 +129,6 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
     $stmt = $db->prepare("SELECT 
                              g.id, 
                              g.title, 
-                             g.target_points, 
                              g.start_date, 
                              g.end_date, 
                              g.status, 
@@ -187,7 +175,6 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
     $stmt = $db->prepare("SELECT 
                              g.id, 
                              g.title, 
-                             g.target_points, 
                              g.start_date, 
                              g.end_date, 
                              g.status, 
@@ -363,8 +350,6 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                     </select>
                     <label for="title">Title:</label>
                     <input type="text" id="title" name="title" required>
-                    <label for="target_points">Target Points:</label>
-                    <input type="number" id="target_points" name="target_points" min="1" required>
                     <label for="start_date">Start Date/Time:</label>
                     <input type="datetime-local" id="start_date" name="start_date" required>
                     <label for="end_date">End Date/Time:</label>
@@ -396,7 +381,6 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                     <?php foreach ($active_goals as $goal): ?>
                         <div class="goal-card">
                             <p>Title: <?php echo htmlspecialchars($goal['title']); ?></p>
-                            <p>Target Points: <?php echo htmlspecialchars($goal['target_points']); ?></p>
                             <p>Period: <?php echo htmlspecialchars($goal['start_date_formatted']); ?> to <?php echo htmlspecialchars($goal['end_date_formatted']); ?></p>
                             <p>Reward: <?php echo htmlspecialchars($goal['reward_title'] ?? 'None'); ?></p>
                             <?php if (!empty($goal['creator_display_name'])): ?>
@@ -439,7 +423,6 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                     <?php foreach ($completed_goals as $goal): ?>
                         <div class="goal-card">
                             <p>Title: <?php echo htmlspecialchars($goal['title']); ?></p>
-                            <p>Target Points: <?php echo htmlspecialchars($goal['target_points']); ?></p>
                             <p>Period: <?php echo htmlspecialchars($goal['start_date_formatted']); ?> to <?php echo htmlspecialchars($goal['end_date_formatted']); ?></p>
                             <p>Reward: <?php echo htmlspecialchars($goal['reward_title'] ?? 'None'); ?></p>
                             <p>Status: Completed</p>
@@ -459,7 +442,6 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                     <?php foreach ($rejected_goals as $goal): ?>
                         <div class="goal-card rejected-card">
                             <p>Title: <?php echo htmlspecialchars($goal['title']); ?></p>
-                            <p>Target Points: <?php echo htmlspecialchars($goal['target_points']); ?></p>
                             <p>Period: <?php echo htmlspecialchars($goal['start_date_formatted']); ?> to <?php echo htmlspecialchars($goal['end_date_formatted']); ?></p>
                             <p>Reward: <?php echo htmlspecialchars($goal['reward_title'] ?? 'None'); ?></p>
                             <?php if (!empty($goal['creator_display_name'])): ?>
