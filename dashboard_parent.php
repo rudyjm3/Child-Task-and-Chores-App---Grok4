@@ -1622,49 +1622,6 @@ for ($i = 0; $i < 7; $i++) {
          <h2>Management Links</h2>
          <a href="task.php" class="button">Create Task</a>
          <a href="rewards.php" class="button">Reward Library</a>
-         <div>
-               <h3>Create Goal</h3>
-               <form method="POST" action="dashboard_parent.php">
-                  <div class="form-group">
-                     <label for="child_user_id">Child:</label>
-                     <select id="child_user_id" name="child_user_id" required>
-                        <?php
-                        $stmt = $db->prepare("SELECT cp.child_user_id, cp.child_name 
-                                             FROM child_profiles cp 
-                                             WHERE cp.parent_user_id = :parent_id AND cp.deleted_at IS NULL");
-                        $stmt->execute([':parent_id' => $main_parent_id]);
-                        $children = $stmt->fetchAll(PDO::FETCH_ASSOC);
-                        foreach ($children as $child): ?>
-                            <option value="<?php echo $child['child_user_id']; ?>">
-                                <?php echo htmlspecialchars($child['child_name']); ?>
-                            </option>
-                        <?php endforeach; ?>
-                     </select>
-                  </div>
-                  <div class="form-group">
-                     <label for="goal_title">Title:</label>
-                     <input type="text" id="goal_title" name="goal_title" required>
-                  </div>
-                    <div class="form-group">
-                     <label for="start_date">Start Date:</label>
-                     <input type="datetime-local" id="start_date" name="start_date">
-                  </div>
-                  <div class="form-group">
-                     <label for="end_date">End Date:</label>
-                     <input type="datetime-local" id="end_date" name="end_date">
-                  </div>
-                  <div class="form-group">
-                     <label for="reward_id">Reward (optional):</label>
-                     <select id="reward_id" name="reward_id">
-                        <option value="">None</option>
-                        <?php foreach ($data['active_rewards'] as $reward): ?>
-                            <option value="<?php echo $reward['id']; ?>"><?php echo htmlspecialchars($reward['title']); ?></option>
-                        <?php endforeach; ?>
-                     </select>
-                  </div>
-                  <button type="submit" name="create_goal" class="button">Create Goal</button>
-               </form>
-         </div>
       </div>
       <div class="routine-management">
          <h2>Routine Management</h2>
