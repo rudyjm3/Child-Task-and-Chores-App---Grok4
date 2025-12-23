@@ -381,6 +381,8 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
         .week-grid { display: grid; grid-template-columns: repeat(7, minmax(140px, 1fr)); gap: 6px; background: #f5f7fb; padding: 6px 8px 10px; min-width: 980px; }
         .week-column { background: #fff; border: 1px solid #d5def0; border-radius: 10px; padding: 8px; display: flex; flex-direction: column; gap: 8px; min-height: 140px; }
         .week-column-tasks { display: grid; gap: 8px; }
+        .calendar-section { display: grid; gap: 6px; }
+        .calendar-section-title { font-weight: 700; color: #37474f; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.04em; }
         .calendar-task-item { border: 1px solid #ffd28a; background: #fff7e6; border-radius: 10px; padding: 8px; text-align: left; cursor: pointer; display: grid; gap: 4px; font-size: 0.9rem; }
         .calendar-task-item:hover { background: #ffe9c6; }
         .child-theme .calendar-task-item { font-family: inherit; }
@@ -413,6 +415,7 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
         .task-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: none; align-items: center; justify-content: center; z-index: 4000; padding: 14px; }
         .task-modal.open { display: flex; }
         .task-modal-card { background: #fff; border-radius: 12px; max-width: 760px; width: min(760px, 100%); max-height: 85vh; overflow: hidden; box-shadow: 0 12px 32px rgba(0,0,0,0.25); display: grid; grid-template-rows: auto 1fr; }
+        .no-scroll { overflow: hidden; }
         .task-modal-card header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid #e0e0e0; }
         .task-modal-card h2 { margin: 0; font-size: 1.1rem; }
         .task-modal-close { background: transparent; border: none; font-size: 1.3rem; cursor: pointer; color: #555; }
@@ -1054,49 +1057,69 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                         empty.textContent = 'No tasks';
                         list.appendChild(empty);
                     } else {
-                        items.forEach(({ task, timeInfo }) => {
-                            const item = document.createElement('button');
-                            item.type = 'button';
-                            item.className = 'calendar-task-item';
-                            item.dataset.taskId = task.id;
-                            const title = document.createElement('span');
-                            title.className = 'calendar-task-title';
-                            title.textContent = task.title || 'Task';
-                            const isCompleted = isTaskCompleted(task);
-                            const isOverdue = !isCompleted && isTaskOverdue(task, dateKey);
-                            let badge = null;
-                            if (isCompleted) {
-                                badge = document.createElement('span');
-                                badge.className = 'calendar-task-badge completed';
-                                const icon = document.createElement('i');
-                                icon.className = 'fa-solid fa-check';
-                                badge.appendChild(icon);
-                                badge.appendChild(document.createTextNode(' Done'));
-                            } else if (isOverdue) {
-                                badge = document.createElement('span');
-                                badge.className = 'calendar-task-badge overdue';
-                                badge.textContent = 'Overdue';
-                            }
-                            const points = document.createElement('span');
-                            points.className = 'calendar-task-meta';
-                            points.textContent = `${task.points || 0} pts`;
-                            const meta = document.createElement('span');
-                            meta.className = 'calendar-task-meta';
-                            meta.textContent = timeInfo.label;
-                            item.appendChild(title);
-                            if (badge) {
-                                item.appendChild(badge);
-                            }
-                            item.appendChild(points);
-                            item.appendChild(meta);
-                            if (task.child_name) {
-                                const child = document.createElement('span');
-                                child.className = 'calendar-task-child';
-                                child.textContent = task.child_name;
-                                item.appendChild(child);
-                            }
-                            item.addEventListener('click', () => openPreview(task.id));
-                            list.appendChild(item);
+                        const sections = [
+                            { key: 'anytime', label: 'Due Today' },
+                            { key: 'morning', label: 'Morning' },
+                            { key: 'afternoon', label: 'Afternoon' },
+                            { key: 'evening', label: 'Evening' }
+                        ];
+
+                        sections.forEach((section) => {
+                            const sectionItems = items.filter(({ task }) => (task.time_of_day || 'anytime') === section.key);
+                            if (!sectionItems.length) return;
+                            const sectionWrap = document.createElement('div');
+                            sectionWrap.className = 'calendar-section';
+                            const sectionTitle = document.createElement('div');
+                            sectionTitle.className = 'calendar-section-title';
+                            sectionTitle.textContent = section.label;
+                            sectionWrap.appendChild(sectionTitle);
+
+                            sectionItems.forEach(({ task, timeInfo }) => {
+                                const item = document.createElement('button');
+                                item.type = 'button';
+                                item.className = 'calendar-task-item';
+                                item.dataset.taskId = task.id;
+                                const title = document.createElement('span');
+                                title.className = 'calendar-task-title';
+                                title.textContent = task.title || 'Task';
+                                const isCompleted = isTaskCompleted(task);
+                                const isOverdue = !isCompleted && isTaskOverdue(task, dateKey);
+                                let badge = null;
+                                if (isCompleted) {
+                                    badge = document.createElement('span');
+                                    badge.className = 'calendar-task-badge completed';
+                                    const icon = document.createElement('i');
+                                    icon.className = 'fa-solid fa-check';
+                                    badge.appendChild(icon);
+                                    badge.appendChild(document.createTextNode(' Done'));
+                                } else if (isOverdue) {
+                                    badge = document.createElement('span');
+                                    badge.className = 'calendar-task-badge overdue';
+                                    badge.textContent = 'Overdue';
+                                }
+                                const points = document.createElement('span');
+                                points.className = 'calendar-task-meta';
+                                points.textContent = `${task.points || 0} pts`;
+                                const meta = document.createElement('span');
+                                meta.className = 'calendar-task-meta';
+                                meta.textContent = timeInfo.label;
+                                item.appendChild(title);
+                                if (badge) {
+                                    item.appendChild(badge);
+                                }
+                                item.appendChild(points);
+                                item.appendChild(meta);
+                                if (task.child_name) {
+                                    const child = document.createElement('span');
+                                    child.className = 'calendar-task-child';
+                                    child.textContent = task.child_name;
+                                    item.appendChild(child);
+                                }
+                                item.addEventListener('click', () => openPreview(task.id));
+                                sectionWrap.appendChild(item);
+                            });
+
+                            list.appendChild(sectionWrap);
                         });
                     }
 
