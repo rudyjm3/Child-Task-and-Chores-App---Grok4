@@ -242,6 +242,7 @@ foreach ($tasks as $task) {
         'category' => $task['category'] ?? '',
         'timing_mode' => $task['timing_mode'] ?? '',
         'timer_minutes' => (int) ($task['timer_minutes'] ?? 0),
+        'status' => $task['status'] ?? '',
         'child_user_id' => (int) ($task['child_user_id'] ?? 0),
         'child_name' => $task['child_display_name'] ?? '',
         'creator_name' => $task['creator_display_name'] ?? ''
@@ -375,13 +376,17 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
         .week-day-name { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; }
         .week-day-num { font-size: 1rem; }
         .week-days-header { background: #f5f7fb; padding: 8px; min-width: 980px; }
-        .week-days-header .week-day { background: #fff; border: 1px solid #d5def0; border-radius: 10px; padding: 6px 0; display: grid; gap: 2px; justify-items: center; font-weight: 700; color: #37474f; }
+        .week-days-header .week-day { background: #fff; border: 1px solid #d5def0; border-radius: 10px; padding: 6px 0; display: grid; gap: 2px; justify-items: center; font-weight: 700; color: #37474f; font-family: 'Sigmar One', 'Sigma One', cursive; }
         .week-days-header .week-day.is-today { background: #ffe0b2; border-color: #ffd28a; color: #ef6c00; }
         .week-grid { display: grid; grid-template-columns: repeat(7, minmax(140px, 1fr)); gap: 6px; background: #f5f7fb; padding: 6px 8px 10px; min-width: 980px; }
         .week-column { background: #fff; border: 1px solid #d5def0; border-radius: 10px; padding: 8px; display: flex; flex-direction: column; gap: 8px; min-height: 140px; }
         .week-column-tasks { display: grid; gap: 8px; }
         .calendar-task-item { border: 1px solid #ffd28a; background: #fff7e6; border-radius: 10px; padding: 8px; text-align: left; cursor: pointer; display: grid; gap: 4px; font-size: 0.9rem; }
         .calendar-task-item:hover { background: #ffe9c6; }
+        .child-theme .calendar-task-item { font-family: inherit; }
+        .calendar-task-badge { display: inline-flex; align-items: center; justify-content: center; gap: 4px; width: fit-content; padding: 2px 8px; border-radius: 999px; font-size: 0.7rem; font-weight: 700; letter-spacing: 0.02em; text-transform: uppercase; }
+        .calendar-task-badge.overdue { background: #d9534f; color: #fff; }
+        .calendar-task-badge.completed { background: #2e7d32; color: #fff; }
         .calendar-task-title { font-weight: 700; color: #3e2723; }
         .calendar-task-meta { color: #6d4c41; font-size: 0.85rem; }
         .calendar-task-child { font-size: 0.8rem; color: #455a64; font-weight: 600; }
@@ -1057,10 +1062,32 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                             const title = document.createElement('span');
                             title.className = 'calendar-task-title';
                             title.textContent = task.title || 'Task';
+                            const isCompleted = isTaskCompleted(task);
+                            const isOverdue = !isCompleted && isTaskOverdue(task, dateKey);
+                            let badge = null;
+                            if (isCompleted) {
+                                badge = document.createElement('span');
+                                badge.className = 'calendar-task-badge completed';
+                                const icon = document.createElement('i');
+                                icon.className = 'fa-solid fa-check';
+                                badge.appendChild(icon);
+                                badge.appendChild(document.createTextNode(' Done'));
+                            } else if (isOverdue) {
+                                badge = document.createElement('span');
+                                badge.className = 'calendar-task-badge overdue';
+                                badge.textContent = 'Overdue';
+                            }
+                            const points = document.createElement('span');
+                            points.className = 'calendar-task-meta';
+                            points.textContent = `${task.points || 0} pts`;
                             const meta = document.createElement('span');
                             meta.className = 'calendar-task-meta';
                             meta.textContent = timeInfo.label;
                             item.appendChild(title);
+                            if (badge) {
+                                item.appendChild(badge);
+                            }
+                            item.appendChild(points);
                             item.appendChild(meta);
                             if (task.child_name) {
                                 const child = document.createElement('span');
@@ -1181,6 +1208,34 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                 return days.includes(dayShort);
             }
             return dateKey === startKey;
+        }
+
+        function isTaskCompleted(task) {
+            if (!task) return false;
+            return task.status === 'completed' || task.status === 'approved';
+        }
+
+        function isTaskOverdue(task, dateKey) {
+            if (!task || task.status !== 'pending' || !dateKey) return false;
+            const stamp = getInstanceDueTimestamp(task, dateKey);
+            if (!stamp) return false;
+            return stamp < Date.now();
+        }
+
+        function getInstanceDueTimestamp(task, dateKey) {
+            if (!task || !dateKey) return null;
+            const parts = dateKey.split('-').map((value) => parseInt(value, 10));
+            if (parts.length !== 3 || parts.some((value) => Number.isNaN(value))) return null;
+            let hours = 23;
+            let minutes = 59;
+            let seconds = 59;
+            const timeParts = getTimeParts(task.due_date);
+            if (timeParts && task.time_of_day !== 'anytime') {
+                hours = timeParts.hours;
+                minutes = timeParts.minutes;
+                seconds = 0;
+            }
+            return new Date(parts[0], parts[1] - 1, parts[2], hours, minutes, seconds).getTime();
         }
 
         function buildTaskPreviewCard(task) {
