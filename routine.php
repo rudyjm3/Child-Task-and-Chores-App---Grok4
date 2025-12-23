@@ -420,10 +420,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $end_time = filter_input(INPUT_POST, 'end_time', FILTER_SANITIZE_STRING);
         $recurrence = filter_input(INPUT_POST, 'recurrence', FILTER_SANITIZE_STRING);
         $bonus_points = filter_input(INPUT_POST, 'bonus_points', FILTER_VALIDATE_INT);
+        $time_of_day_input = filter_input(INPUT_POST, 'time_of_day', FILTER_SANITIZE_STRING);
+        $time_of_day = in_array($time_of_day_input, ['anytime', 'morning', 'afternoon', 'evening'], true) ? $time_of_day_input : 'anytime';
+        $routine_date = filter_input(INPUT_POST, 'routine_date', FILTER_SANITIZE_STRING);
+        $recurrence_days = null;
         $structureRaw = $_POST['routine_structure'] ?? '';
 
         $recurrence = in_array($recurrence, ['daily', 'weekly'], true) ? $recurrence : '';
         $bonus_points = ($bonus_points !== false && $bonus_points >= 0) ? $bonus_points : 0;
+        if ($recurrence === 'weekly') {
+            $days = $_POST['recurrence_days'] ?? [];
+            $days = array_values(array_filter(array_map('trim', (array) $days)));
+            $recurrence_days = !empty($days) ? implode(',', $days) : null;
+        }
+        if ($recurrence !== '') {
+            $routine_date = null;
+        }
 
         $errors = [];
         if (empty($childIds)) {
@@ -457,7 +469,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $db->beginTransaction();
                 $createdCount = 0;
                 foreach ($childIds as $cid) {
-                    $routineId = createRoutine($family_root_id, $cid, $title, $start_time, $end_time, $recurrence, $bonus_points, $_SESSION['user_id']);
+                    $routineId = createRoutine($family_root_id, $cid, $title, $start_time, $end_time, $recurrence, $bonus_points, $time_of_day, $recurrence_days, $routine_date, $_SESSION['user_id']);
                     replaceRoutineTasks($routineId, $normalizedTasks);
                     $createdCount++;
                 }
@@ -483,10 +495,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $end_time = filter_input(INPUT_POST, 'end_time', FILTER_SANITIZE_STRING);
         $recurrence = filter_input(INPUT_POST, 'recurrence', FILTER_SANITIZE_STRING);
         $bonus_points = filter_input(INPUT_POST, 'bonus_points', FILTER_VALIDATE_INT);
+        $time_of_day_input = filter_input(INPUT_POST, 'time_of_day', FILTER_SANITIZE_STRING);
+        $time_of_day = in_array($time_of_day_input, ['anytime', 'morning', 'afternoon', 'evening'], true) ? $time_of_day_input : 'anytime';
+        $routine_date = filter_input(INPUT_POST, 'routine_date', FILTER_SANITIZE_STRING);
+        $recurrence_days = null;
         $structureRaw = $_POST['routine_structure'] ?? '';
 
         $recurrence = in_array($recurrence, ['daily', 'weekly'], true) ? $recurrence : '';
         $bonus_points = ($bonus_points !== false && $bonus_points >= 0) ? $bonus_points : 0;
+        if ($recurrence === 'weekly') {
+            $days = $_POST['recurrence_days'] ?? [];
+            $days = array_values(array_filter(array_map('trim', (array) $days)));
+            $recurrence_days = !empty($days) ? implode(',', $days) : null;
+        }
+        if ($recurrence !== '') {
+            $routine_date = null;
+        }
 
         $errors = [];
         if (!$routine_id || !routineBelongsToParent($routine_id, $family_root_id)) {
@@ -510,7 +534,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             global $db;
             try {
                 $db->beginTransaction();
-                updateRoutine($routine_id, $title, $start_time, $end_time, $recurrence, $bonus_points, $family_root_id);
+                updateRoutine($routine_id, $title, $start_time, $end_time, $recurrence, $bonus_points, $time_of_day, $recurrence_days, $routine_date, $family_root_id);
                 replaceRoutineTasks($routine_id, $normalizedTasks);
                 $db->commit();
                 $messages[] = ['type' => 'success', 'text' => 'Routine updated successfully.'];
@@ -525,7 +549,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'start_time' => $start_time,
                     'end_time' => $end_time,
                     'bonus_points' => $bonus_points,
-                    'recurrence' => $recurrence
+                    'recurrence' => $recurrence,
+                    'time_of_day' => $time_of_day,
+                    'recurrence_days' => $recurrence_days,
+                    'routine_date' => $routine_date
                 ];
             }
         } else {
@@ -538,7 +565,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'start_time' => $start_time,
                     'end_time' => $end_time,
                     'bonus_points' => $bonus_points,
-                    'recurrence' => $recurrence
+                    'recurrence' => $recurrence,
+                    'time_of_day' => $time_of_day,
+                    'recurrence_days' => $recurrence_days,
+                    'routine_date' => $routine_date
                 ];
             }
         }
@@ -907,6 +937,13 @@ margin-bottom: 20px;}
         .form-group label { font-weight: 600; }
         .form-group input, .form-group select, .form-group textarea { padding: 8px; border: 1px solid #ccc; border-radius: 6px; font-size: 0.95rem; }
         .form-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 12px; }
+        .repeat-days { display: none; }
+        .repeat-days-label { font-weight: 600; padding: 10px 0 4px; }
+        .repeat-days-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+        .repeat-day { position: relative; cursor: pointer; }
+        .repeat-day input { position: absolute; opacity: 0; width: 0; height: 0; }
+        .repeat-day span { width: 36px; height: 36px; border-radius: 50%; background: #ededed; color: #8e8e8e; display: inline-flex; align-items: center; justify-content: center; font-weight: 600; font-size: 0.85rem; transition: background 150ms ease, color 150ms ease; }
+        .repeat-day input:checked + span { background: #46a0f4; color: #f9f9f9; }
         .button { padding: 10px 18px; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 0.95rem; background: #4caf50; color: #fff; height: max-content; }
         .button.secondary { background: #607d8b; }
         .start-next-button { background: #1e88e5; }
@@ -1377,6 +1414,16 @@ margin-bottom: 20px;}
                                 <label for="title">Routine Title</label>
                                 <input type="text" id="title" name="title" required <?php echo $createFormHasErrors ? 'value="' . htmlspecialchars($_POST['title'] ?? '', ENT_QUOTES) . '"' : ''; ?>>
                             </div>
+                            <?php $createTimeOfDay = $createFormHasErrors ? ($_POST['time_of_day'] ?? 'anytime') : 'anytime'; ?>
+                            <div class="form-group">
+                                <label for="time_of_day">Time of Day</label>
+                                <select id="time_of_day" name="time_of_day">
+                                    <option value="anytime" <?php echo $createTimeOfDay === 'anytime' ? 'selected' : ''; ?>>Anytime</option>
+                                    <option value="morning" <?php echo $createTimeOfDay === 'morning' ? 'selected' : ''; ?>>Morning</option>
+                                    <option value="afternoon" <?php echo $createTimeOfDay === 'afternoon' ? 'selected' : ''; ?>>Afternoon</option>
+                                    <option value="evening" <?php echo $createTimeOfDay === 'evening' ? 'selected' : ''; ?>>Evening</option>
+                                </select>
+                            </div>
                             <div class="form-group">
                                 <label for="start_time">Start Time</label>
                                 <input type="time" id="start_time" name="start_time" required <?php echo $createFormHasErrors ? 'value="' . htmlspecialchars($_POST['start_time'] ?? '', ENT_QUOTES) . '"' : ''; ?>>
@@ -1390,12 +1437,35 @@ margin-bottom: 20px;}
                                 <input type="number" id="bonus_points" name="bonus_points" min="0" value="<?php echo (int) ($_POST['bonus_points'] ?? 0); ?>">
                             </div>
                             <div class="form-group">
-                                <label for="recurrence">Recurrence</label>
+                                <label for="recurrence">Repeat</label>
                                 <select id="recurrence" name="recurrence">
-                                    <option value="">None</option>
-                                    <option value="daily" <?php echo (($_POST['recurrence'] ?? '') === 'daily') ? 'selected' : ''; ?>>Daily</option>
-                                    <option value="weekly" <?php echo (($_POST['recurrence'] ?? '') === 'weekly') ? 'selected' : ''; ?>>Weekly</option>
+                                    <option value="" <?php echo empty($_POST['recurrence'] ?? '') ? 'selected' : ''; ?>>Once</option>
+                                    <option value="daily" <?php echo (($_POST['recurrence'] ?? '') === 'daily') ? 'selected' : ''; ?>>Every Day</option>
+                                    <option value="weekly" <?php echo (($_POST['recurrence'] ?? '') === 'weekly') ? 'selected' : ''; ?>>Specific Days</option>
                                 </select>
+                                <?php
+                                    $createRepeatDays = $createFormHasErrors ? ($_POST['recurrence_days'] ?? []) : [];
+                                    $createRepeatDays = array_values(array_filter(array_map('trim', (array) $createRepeatDays)));
+                                ?>
+                                <div class="repeat-days" data-create-recurrence-days>
+                                    <div class="repeat-days-label">Specific Days</div>
+                                    <div class="repeat-days-grid">
+                                        <label class="repeat-day"><input type="checkbox" name="recurrence_days[]" value="Sun" <?php echo in_array('Sun', $createRepeatDays, true) ? 'checked' : ''; ?>><span>Sun</span></label>
+                                        <label class="repeat-day"><input type="checkbox" name="recurrence_days[]" value="Mon" <?php echo in_array('Mon', $createRepeatDays, true) ? 'checked' : ''; ?>><span>Mon</span></label>
+                                        <label class="repeat-day"><input type="checkbox" name="recurrence_days[]" value="Tue" <?php echo in_array('Tue', $createRepeatDays, true) ? 'checked' : ''; ?>><span>Tue</span></label>
+                                        <label class="repeat-day"><input type="checkbox" name="recurrence_days[]" value="Wed" <?php echo in_array('Wed', $createRepeatDays, true) ? 'checked' : ''; ?>><span>Wed</span></label>
+                                        <label class="repeat-day"><input type="checkbox" name="recurrence_days[]" value="Thu" <?php echo in_array('Thu', $createRepeatDays, true) ? 'checked' : ''; ?>><span>Thu</span></label>
+                                        <label class="repeat-day"><input type="checkbox" name="recurrence_days[]" value="Fri" <?php echo in_array('Fri', $createRepeatDays, true) ? 'checked' : ''; ?>><span>Fri</span></label>
+                                        <label class="repeat-day"><input type="checkbox" name="recurrence_days[]" value="Sat" <?php echo in_array('Sat', $createRepeatDays, true) ? 'checked' : ''; ?>><span>Sat</span></label>
+                                    </div>
+                                </div>
+                            </div>
+                            <?php
+                                $createRoutineDate = $createFormHasErrors ? ($_POST['routine_date'] ?? '') : date('Y-m-d');
+                            ?>
+                            <div class="form-group" data-create-routine-date>
+                                <label for="routine_date">Date</label>
+                                <input type="date" id="routine_date" name="routine_date" value="<?php echo htmlspecialchars($createRoutineDate, ENT_QUOTES); ?>">
                             </div>
                         </div>
                         <div class="routine-builder" data-builder-id="create" data-start-input="#start_time" data-end-input="#end_time">
@@ -1810,6 +1880,13 @@ margin-bottom: 20px;}
                                         $endValue = htmlspecialchars(substr($endRaw, 0, 5), ENT_QUOTES);
                                         $bonusValue = (int) ($override['bonus_points'] ?? $routine['bonus_points']);
                                         $recurrenceValue = $override['recurrence'] ?? $routine['recurrence'];
+                                        $timeOfDayValue = $override['time_of_day'] ?? ($routine['time_of_day'] ?? 'anytime');
+                                        $recurrenceDaysRaw = $override['recurrence_days'] ?? ($routine['recurrence_days'] ?? '');
+                                        $recurrenceDays = array_values(array_filter(array_map('trim', explode(',', (string) $recurrenceDaysRaw))));
+                                        $routineDateValue = $override['routine_date'] ?? ($routine['routine_date'] ?? '');
+                                        if ($routineDateValue === '' && !empty($routine['created_at'])) {
+                                            $routineDateValue = date('Y-m-d', strtotime($routine['created_at']));
+                                        }
                                     ?>
                                     <form method="POST" autocomplete="off">
                                         <input type="hidden" name="routine_id" value="<?php echo (int) $routine['id']; ?>">
@@ -1817,6 +1894,15 @@ margin-bottom: 20px;}
                                             <div class="form-group">
                                                 <label>Title</label>
                                                 <input type="text" name="title" value="<?php echo $titleValue; ?>" required>
+                                            </div>
+                                            <div class="form-group">
+                                                <label>Time of Day</label>
+                                                <select name="time_of_day">
+                                                    <option value="anytime" <?php echo $timeOfDayValue === 'anytime' ? 'selected' : ''; ?>>Anytime</option>
+                                                    <option value="morning" <?php echo $timeOfDayValue === 'morning' ? 'selected' : ''; ?>>Morning</option>
+                                                    <option value="afternoon" <?php echo $timeOfDayValue === 'afternoon' ? 'selected' : ''; ?>>Afternoon</option>
+                                                    <option value="evening" <?php echo $timeOfDayValue === 'evening' ? 'selected' : ''; ?>>Evening</option>
+                                                </select>
                                             </div>
                                             <div class="form-group">
                                                 <label>Start Time</label>
@@ -1831,12 +1917,28 @@ margin-bottom: 20px;}
                                                 <input type="number" name="bonus_points" min="0" value="<?php echo $bonusValue; ?>">
                                             </div>
                                             <div class="form-group">
-                                                <label>Recurrence</label>
+                                                <label>Repeat</label>
                                                 <select name="recurrence">
-                                                    <option value="" <?php echo empty($recurrenceValue) ? 'selected' : ''; ?>>None</option>
-                                                    <option value="daily" <?php echo ($recurrenceValue === 'daily') ? 'selected' : ''; ?>>Daily</option>
-                                                    <option value="weekly" <?php echo ($recurrenceValue === 'weekly') ? 'selected' : ''; ?>>Weekly</option>
+                                                    <option value="" <?php echo empty($recurrenceValue) ? 'selected' : ''; ?>>Once</option>
+                                                    <option value="daily" <?php echo ($recurrenceValue === 'daily') ? 'selected' : ''; ?>>Every Day</option>
+                                                    <option value="weekly" <?php echo ($recurrenceValue === 'weekly') ? 'selected' : ''; ?>>Specific Days</option>
                                                 </select>
+                                                <div class="repeat-days" data-recurrence-days-wrapper>
+                                                    <div class="repeat-days-label">Specific Days</div>
+                                                    <div class="repeat-days-grid">
+                                                        <label class="repeat-day"><input type="checkbox" name="recurrence_days[]" value="Sun" <?php echo in_array('Sun', $recurrenceDays, true) ? 'checked' : ''; ?>><span>Sun</span></label>
+                                                        <label class="repeat-day"><input type="checkbox" name="recurrence_days[]" value="Mon" <?php echo in_array('Mon', $recurrenceDays, true) ? 'checked' : ''; ?>><span>Mon</span></label>
+                                                        <label class="repeat-day"><input type="checkbox" name="recurrence_days[]" value="Tue" <?php echo in_array('Tue', $recurrenceDays, true) ? 'checked' : ''; ?>><span>Tue</span></label>
+                                                        <label class="repeat-day"><input type="checkbox" name="recurrence_days[]" value="Wed" <?php echo in_array('Wed', $recurrenceDays, true) ? 'checked' : ''; ?>><span>Wed</span></label>
+                                                        <label class="repeat-day"><input type="checkbox" name="recurrence_days[]" value="Thu" <?php echo in_array('Thu', $recurrenceDays, true) ? 'checked' : ''; ?>><span>Thu</span></label>
+                                                        <label class="repeat-day"><input type="checkbox" name="recurrence_days[]" value="Fri" <?php echo in_array('Fri', $recurrenceDays, true) ? 'checked' : ''; ?>><span>Fri</span></label>
+                                                        <label class="repeat-day"><input type="checkbox" name="recurrence_days[]" value="Sat" <?php echo in_array('Sat', $recurrenceDays, true) ? 'checked' : ''; ?>><span>Sat</span></label>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="form-group" data-routine-date-wrapper>
+                                                <label>Date</label>
+                                                <input type="date" name="routine_date" value="<?php echo htmlspecialchars($routineDateValue, ENT_QUOTES); ?>">
                                             </div>
                                         </div>
                                         <div class="routine-builder" data-builder-id="edit-<?php echo (int) $routine['id']; ?>" data-start-input="input[name='start_time']" data-end-input="input[name='end_time']">
@@ -3805,6 +3907,42 @@ margin-bottom: 20px;}
                 });
                 details.addEventListener('toggle', sync);
                 sync();
+            });
+
+            const updateRepeatDays = (selectEl, wrapper) => {
+                if (!selectEl || !wrapper) return;
+                const show = selectEl.value === 'weekly';
+                wrapper.style.display = show ? 'block' : 'none';
+            };
+            const updateRoutineDateVisibility = (selectEl, wrapper) => {
+                if (!selectEl || !wrapper) return;
+                const show = selectEl.value === '';
+                wrapper.style.display = show ? 'block' : 'none';
+            };
+            const createRepeat = document.querySelector('#recurrence');
+            const createRepeatDays = document.querySelector('[data-create-recurrence-days]');
+            const createRoutineDate = document.querySelector('[data-create-routine-date]');
+            if (createRepeat && createRepeatDays) {
+                updateRepeatDays(createRepeat, createRepeatDays);
+                createRepeat.addEventListener('change', () => updateRepeatDays(createRepeat, createRepeatDays));
+            }
+            if (createRepeat && createRoutineDate) {
+                updateRoutineDateVisibility(createRepeat, createRoutineDate);
+                createRepeat.addEventListener('change', () => updateRoutineDateVisibility(createRepeat, createRoutineDate));
+            }
+            document.querySelectorAll('[data-recurrence-days-wrapper]').forEach(wrapper => {
+                const form = wrapper.closest('form');
+                const selectEl = form ? form.querySelector('select[name="recurrence"]') : null;
+                if (!selectEl) return;
+                updateRepeatDays(selectEl, wrapper);
+                selectEl.addEventListener('change', () => updateRepeatDays(selectEl, wrapper));
+            });
+            document.querySelectorAll('[data-routine-date-wrapper]').forEach(wrapper => {
+                const form = wrapper.closest('form');
+                const selectEl = form ? form.querySelector('select[name="recurrence"]') : null;
+                if (!selectEl) return;
+                updateRoutineDateVisibility(selectEl, wrapper);
+                selectEl.addEventListener('change', () => updateRoutineDateVisibility(selectEl, wrapper));
             });
 
             const params = new URLSearchParams(window.location.search);

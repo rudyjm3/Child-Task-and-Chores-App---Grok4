@@ -456,6 +456,9 @@ for ($i = 0; $i < 7; $i++) {
         .child-schedule-today { display: grid; gap: 4px; text-align: left; }
         .child-schedule-date { font-weight: 700; color: #37474f; }
         .child-schedule-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
+        .child-schedule-section { display: grid; gap: 6px; }
+        .child-schedule-section-title { font-weight: 700; color: #37474f; font-size: 0.95rem; }
+        .child-schedule-section-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
         .child-schedule-item { display: flex; align-items: center; justify-content: space-between; gap: 10px; background: #f9f9f9; border-radius: 8px; padding: 8px 10px; }
         .child-schedule-main { display: flex; align-items: center; gap: 8px; }
         .child-schedule-title { font-weight: 600; color: #3e2723; }
@@ -470,7 +473,7 @@ for ($i = 0; $i < 7; $i++) {
         .week-modal-close { background: transparent; border: none; font-size: 1.3rem; cursor: pointer; color: #555; }
         .week-modal-body { padding: 12px 16px 16px; overflow-y: auto; text-align: left; }
         .week-day-group { margin-bottom: 12px; }
-        .week-day-title { font-weight: 700; color: #37474f; margin-bottom: 6px; }
+        .week-day-title { font-weight: 700; color: #f9f9f9; margin-bottom: 6px; padding: 6px 10px; border-radius: 8px; background: linear-gradient(135deg, #5a98e2, #84b3ed); }
         .week-day-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
         body.modal-open { overflow: hidden; }
         .adjust-modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.55); display: none; align-items: center; justify-content: center; z-index: 3000; padding: 12px; }
@@ -769,7 +772,13 @@ for ($i = 0; $i < 7; $i++) {
                             return '';
                         }
                         const label = new Date(dateKey + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
-                        const itemsHtml = items.map((item) => {
+                        const sections = [
+                            { key: 'anytime', label: 'Due Today' },
+                            { key: 'morning', label: 'Morning' },
+                            { key: 'afternoon', label: 'Afternoon' },
+                            { key: 'evening', label: 'Evening' }
+                        ];
+                        const buildItem = (item) => {
                             return '<li class="child-schedule-item">' +
                                 '<div class="child-schedule-main">' +
                                 '<i class="' + item.icon + '"></i>' +
@@ -780,10 +789,23 @@ for ($i = 0; $i < 7; $i++) {
                                 '</div>' +
                                 '<div class="child-schedule-points">' + item.points + ' pts</div>' +
                                 '</li>';
+                        };
+                        const sectionsHtml = sections.map((section) => {
+                            const sectionItems = items.filter((item) => item.time_of_day === section.key);
+                            if (!sectionItems.length) {
+                                return '';
+                            }
+                            return '<div class="child-schedule-section">' +
+                                '<div class="child-schedule-section-title">' + section.label + '</div>' +
+                                '<ul class="child-schedule-section-list">' + sectionItems.map(buildItem).join('') + '</ul>' +
+                                '</div>';
                         }).join('');
+                        if (!sectionsHtml) {
+                            return '';
+                        }
                         return '<div class="week-day-group">' +
                             '<div class="week-day-title">' + label + '</div>' +
-                            '<ul class="week-day-list">' + itemsHtml + '</ul>' +
+                            sectionsHtml +
                             '</div>';
                     }).join('') || '<p>No tasks or routines this week.</p>';
                 }
@@ -1251,17 +1273,22 @@ for ($i = 0; $i < 7; $i++) {
                      foreach ($weekDates as $dateKey) {
                         $weekSchedule[$dateKey] = [];
                      }
-                     $taskStmt = $db->prepare("SELECT title, points, due_date, end_date, recurrence, recurrence_days FROM tasks WHERE child_user_id = :child_id AND due_date IS NOT NULL AND DATE(due_date) <= :end");
+                     $taskStmt = $db->prepare("SELECT title, points, due_date, end_date, recurrence, recurrence_days, time_of_day FROM tasks WHERE child_user_id = :child_id AND due_date IS NOT NULL AND DATE(due_date) <= :end");
                      $taskStmt->execute([
                         ':child_id' => $childId,
                         ':end' => $weekEnd->format('Y-m-d')
                      ]);
                      foreach ($taskStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                        $timeOfDay = $row['time_of_day'] ?? 'anytime';
                         $dueDate = $row['due_date'];
                         $startDateKey = date('Y-m-d', strtotime($dueDate));
                         $endDateKey = !empty($row['end_date']) ? $row['end_date'] : null;
                         $timeSort = date('H:i', strtotime($dueDate));
                         $timeLabel = date('g:i A', strtotime($dueDate));
+                        if ($timeOfDay === 'anytime') {
+                           $timeSort = '99:99';
+                           $timeLabel = 'Anytime';
+                        }
                         $repeat = $row['recurrence'] ?? '';
                         $repeatDays = array_filter(array_map('trim', explode(',', (string)($row['recurrence_days'] ?? ''))));
                         foreach ($weekDates as $dateKey) {
@@ -1289,14 +1316,18 @@ for ($i = 0; $i < 7; $i++) {
                               'points' => (int) ($row['points'] ?? 0),
                               'time' => $timeSort,
                               'time_label' => $timeLabel,
+                              'time_of_day' => $timeOfDay,
                               'icon' => 'fa-solid fa-list-check'
                            ];
                         }
                      }
                      $childRoutines = getRoutines($childId);
                      foreach ($childRoutines as $routine) {
+                        $timeOfDay = $routine['time_of_day'] ?? 'anytime';
                         $recurrence = $routine['recurrence'] ?? '';
                         $routineWeekday = !empty($routine['created_at']) ? (int) date('N', strtotime($routine['created_at'])) : null;
+                        $routineDays = array_values(array_filter(array_map('trim', explode(',', (string) ($routine['recurrence_days'] ?? '')))));
+                        $routineDateKey = !empty($routine['routine_date']) ? $routine['routine_date'] : (!empty($routine['created_at']) ? date('Y-m-d', strtotime($routine['created_at'])) : null);
                         $routinePointsTotal = 0;
                         foreach (($routine['tasks'] ?? []) as $task) {
                            $routinePointsTotal += (int) ($task['point_value'] ?? 0);
@@ -1304,10 +1335,27 @@ for ($i = 0; $i < 7; $i++) {
                         $totalPoints = $routinePointsTotal + (int) ($routine['bonus_points'] ?? 0);
                         $timeSort = !empty($routine['start_time']) ? date('H:i', strtotime($routine['start_time'])) : '99:99';
                         $timeLabel = !empty($routine['start_time']) ? date('g:i A', strtotime($routine['start_time'])) : 'Anytime';
+                        if ($timeOfDay === 'anytime') {
+                           $timeSort = '99:99';
+                           $timeLabel = 'Anytime';
+                        }
                         foreach ($weekDates as $dateKey) {
-                           if ($recurrence === 'weekly' && $routineWeekday) {
-                              $dayWeek = (int) date('N', strtotime($dateKey));
-                              if ($dayWeek !== $routineWeekday) {
+                           if ($recurrence === 'daily') {
+                              // include every day
+                           } elseif ($recurrence === 'weekly') {
+                              if (!empty($routineDays)) {
+                                 $dayName = date('D', strtotime($dateKey));
+                                 if (!in_array($dayName, $routineDays, true)) {
+                                    continue;
+                                 }
+                              } elseif ($routineWeekday) {
+                                 $dayWeek = (int) date('N', strtotime($dateKey));
+                                 if ($dayWeek !== $routineWeekday) {
+                                    continue;
+                                 }
+                              }
+                           } else {
+                              if (!$routineDateKey || $dateKey !== $routineDateKey) {
                                  continue;
                               }
                            }
@@ -1317,6 +1365,7 @@ for ($i = 0; $i < 7; $i++) {
                               'points' => $totalPoints,
                               'time' => $timeSort,
                               'time_label' => $timeLabel,
+                              'time_of_day' => $timeOfDay,
                               'icon' => 'fa-solid fa-repeat'
                            ];
                         }
@@ -1410,21 +1459,50 @@ for ($i = 0; $i < 7; $i++) {
                     <div class="child-schedule-card">
                       <div class="child-schedule-today">
                          <div class="child-schedule-date">Today: <?php echo htmlspecialchars(date('D, M j', strtotime($todayDate))); ?></div>
-                         <?php if (!empty($todayItems)): ?>
-                            <ul class="child-schedule-list">
-                               <?php foreach ($todayItems as $item): ?>
-                                  <li class="child-schedule-item">
-                                     <div class="child-schedule-main">
-                                        <i class="<?php echo htmlspecialchars($item['icon']); ?>"></i>
-                                        <div>
-                                           <div class="child-schedule-title"><?php echo htmlspecialchars($item['title']); ?></div>
-                                           <div class="child-schedule-time"><?php echo htmlspecialchars($item['time_label']); ?></div>
-                                        </div>
-                                     </div>
-                                     <div class="child-schedule-points"><?php echo (int)$item['points']; ?> pts</div>
-                                  </li>
-                               <?php endforeach; ?>
-                            </ul>
+                         <?php
+                            $sections = [
+                               'anytime' => 'Due Today',
+                               'morning' => 'Morning',
+                               'afternoon' => 'Afternoon',
+                               'evening' => 'Evening'
+                            ];
+                            $sectionedToday = ['anytime' => [], 'morning' => [], 'afternoon' => [], 'evening' => []];
+                            foreach ($todayItems as $item) {
+                               $key = $item['time_of_day'] ?? '';
+                               if (isset($sectionedToday[$key])) {
+                                  $sectionedToday[$key][] = $item;
+                               }
+                            }
+                            $hasSchedule = false;
+                            foreach ($sectionedToday as $sectionItems) {
+                               if (!empty($sectionItems)) {
+                                  $hasSchedule = true;
+                                  break;
+                               }
+                            }
+                         ?>
+                         <?php if ($hasSchedule): ?>
+                            <?php foreach ($sections as $key => $label): ?>
+                               <?php if (!empty($sectionedToday[$key])): ?>
+                                  <div class="child-schedule-section">
+                                     <div class="child-schedule-section-title"><?php echo $label; ?></div>
+                                     <ul class="child-schedule-section-list">
+                                        <?php foreach ($sectionedToday[$key] as $item): ?>
+                                           <li class="child-schedule-item">
+                                              <div class="child-schedule-main">
+                                                 <i class="<?php echo htmlspecialchars($item['icon']); ?>"></i>
+                                                 <div>
+                                                    <div class="child-schedule-title"><?php echo htmlspecialchars($item['title']); ?></div>
+                                                    <div class="child-schedule-time"><?php echo htmlspecialchars($item['time_label']); ?></div>
+                                                 </div>
+                                              </div>
+                                              <div class="child-schedule-points"><?php echo (int)$item['points']; ?> pts</div>
+                                           </li>
+                                        <?php endforeach; ?>
+                                     </ul>
+                                  </div>
+                               <?php endif; ?>
+                            <?php endforeach; ?>
                          <?php else: ?>
                             <div class="child-schedule-time">No tasks or routines today.</div>
                          <?php endif; ?>

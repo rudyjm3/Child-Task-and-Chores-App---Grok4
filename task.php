@@ -50,6 +50,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $days = array_values(array_filter(array_map('trim', (array) $days)));
             $recurrence_days = !empty($days) ? implode(',', $days) : null;
         }
+        $time_of_day_input = filter_input(INPUT_POST, 'time_of_day', FILTER_SANITIZE_STRING);
+        $time_of_day = in_array($time_of_day_input, ['anytime', 'morning', 'afternoon', 'evening'], true) ? $time_of_day_input : 'anytime';
         $category = filter_input(INPUT_POST, 'category', FILTER_SANITIZE_STRING);
         $timing_mode = filter_input(INPUT_POST, 'timing_mode', FILTER_SANITIZE_STRING);
         $timer_minutes = filter_input(INPUT_POST, 'timer_minutes', FILTER_VALIDATE_INT);
@@ -60,7 +62,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!empty($child_ids) && canCreateContent($_SESSION['user_id'])) {
             $allOk = true;
             foreach ($child_ids as $child_user_id) {
-                $ok = createTask($family_root_id, $child_user_id, $title, $description, $due_date, $end_date, $points, $recurrence, $recurrence_days, $category, $timing_mode, $timer_minutes, $_SESSION['user_id']);
+                $ok = createTask($family_root_id, $child_user_id, $title, $description, $due_date, $end_date, $points, $recurrence, $recurrence_days, $category, $timing_mode, $timer_minutes, $time_of_day, $_SESSION['user_id']);
                 if (!$ok) {
                     $allOk = false;
                 }
@@ -95,6 +97,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $days = array_values(array_filter(array_map('trim', (array) $days)));
             $recurrence_days = !empty($days) ? implode(',', $days) : null;
         }
+        $time_of_day_input = filter_input(INPUT_POST, 'time_of_day', FILTER_SANITIZE_STRING);
+        $time_of_day = in_array($time_of_day_input, ['anytime', 'morning', 'afternoon', 'evening'], true) ? $time_of_day_input : 'anytime';
         $category = filter_input(INPUT_POST, 'category', FILTER_SANITIZE_STRING);
         $timing_mode = filter_input(INPUT_POST, 'timing_mode', FILTER_SANITIZE_STRING);
         $timer_minutes = filter_input(INPUT_POST, 'timer_minutes', FILTER_VALIDATE_INT);
@@ -115,7 +119,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                       recurrence_days = :recurrence_days,
                                       category = :category,
                                       timing_mode = :timing_mode,
-                                      timer_minutes = :timer_minutes
+                                      timer_minutes = :timer_minutes,
+                                      time_of_day = :time_of_day
                                   WHERE id = :id AND parent_user_id = :parent_id AND status = 'pending'");
             $ok = $stmt->execute([
                 ':child_id' => $primary_child_id,
@@ -129,12 +134,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ':category' => $category,
                 ':timing_mode' => $timing_mode,
                 ':timer_minutes' => $timer_minutes,
+                ':time_of_day' => $time_of_day,
                 ':id' => $task_id,
                 ':parent_id' => $family_root_id
             ]);
             $allOk = $ok;
             foreach (array_slice($child_ids, 1) as $child_id) {
-                $cloneOk = createTask($family_root_id, $child_id, $title, $description, $due_date, $end_date, $points, $recurrence, $recurrence_days, $category, $timing_mode, $timer_minutes, $_SESSION['user_id']);
+                $cloneOk = createTask($family_root_id, $child_id, $title, $description, $due_date, $end_date, $points, $recurrence, $recurrence_days, $category, $timing_mode, $timer_minutes, $time_of_day, $_SESSION['user_id']);
                 if (!$cloneOk) {
                     $allOk = false;
                 }
@@ -243,6 +249,14 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
         .form-group label { font-weight: 600; }
         .form-group input, .form-group select, .form-group textarea { padding: 8px; border: 1px solid #ccc; border-radius: 6px; font-size: 0.95rem; }
         .form-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 12px; }
+        .repeat-group { grid-column: 1 / -1; }
+        .repeat-days { display: none; }
+        .repeat-days-label { font-weight: 600; padding: 15px 0; }
+        .repeat-days-grid { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
+        .repeat-day { position: relative; cursor: pointer; }
+        .repeat-day input { position: absolute; opacity: 0; width: 0; height: 0; }
+        .repeat-day span { width: 36px; height: 36px; border-radius: 50%; background: #ededed; color: #8e8e8e; display: inline-flex; align-items: center; justify-content: center; font-weight: 600; font-size: 0.85rem; transition: background 150ms ease, color 150ms ease; }
+        .repeat-day input:checked + span { background: #46a0f4; color: #f9f9f9; }
         .child-select-grid { display: flex; flex-wrap: wrap; gap: 14px; }
         .child-select-card { border: none; border-radius: 50%; padding: 0; background: transparent; display: grid; justify-items: center; gap: 8px; cursor: pointer; position: relative; }
         .child-select-card input[type="checkbox"] { position: absolute; opacity: 0; width: 0; height: 0; pointer-events: none; }
@@ -445,9 +459,29 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
             const show = selectEl.value === 'weekly';
             wrapper.style.display = show ? 'block' : 'none';
         };
+        const updateDueTimeVisibility = (wrapper, selectEl) => {
+            if (!wrapper || !selectEl) return;
+            const show = selectEl.value !== 'anytime';
+            wrapper.style.display = show ? 'block' : 'none';
+            if (!show) {
+                const input = wrapper.querySelector('input[type="time"]');
+                if (input) {
+                    input.value = '';
+                }
+            }
+        };
         const updateEndDate = (wrapper, toggle) => {
             if (!wrapper || !toggle) return;
             wrapper.style.display = toggle.checked ? 'block' : 'none';
+        };
+        const updateEndToggleVisibility = (toggleField, toggle, endWrapper, selectEl) => {
+            if (!toggleField || !toggle || !selectEl) return;
+            const showToggle = selectEl.value !== '';
+            toggleField.style.display = showToggle ? 'flex' : 'none';
+            if (!showToggle) {
+                toggle.checked = false;
+                updateEndDate(endWrapper, toggle);
+            }
         };
         const openModal = (data) => {
             if (!modal || !modalForm) return;
@@ -463,6 +497,7 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
             modalForm.querySelector('[name="end_date_enabled"]').checked = !!data.endDate;
             modalForm.querySelector('[name="points"]').value = data.points;
             modalForm.querySelector('[name="recurrence"]').value = data.recurrence || '';
+            modalForm.querySelector('[name="time_of_day"]').value = data.timeOfDay || 'anytime';
             modalForm.querySelector('[name="category"]').value = data.category || 'household';
             modalForm.querySelector('[name="timing_mode"]').value = data.timingMode || 'no_limit';
             modalForm.querySelector('[name="timer_minutes"]').value = data.timerMinutes || '';
@@ -477,6 +512,10 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
             updateEndDate(
                 modalForm.querySelector('[data-end-date-wrapper]'),
                 modalForm.querySelector('[name="end_date_enabled"]')
+            );
+            updateDueTimeVisibility(
+                modalForm.querySelector('[data-due-time-wrapper]'),
+                modalForm.querySelector('[name="time_of_day"]')
             );
             const days = (data.recurrenceDays || '').split(',').filter(Boolean);
             modalForm.querySelectorAll('[name="recurrence_days[]"]').forEach((box) => {
@@ -519,6 +558,7 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                         category: btn.dataset.category,
                         timingMode: btn.dataset.timingMode,
                         timerMinutes: btn.dataset.timerMinutes,
+                        timeOfDay: btn.dataset.timeOfDay,
                         recurrenceDays: btn.dataset.recurrenceDays
                     });
                 });
@@ -536,6 +576,9 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
         const createForm = document.querySelector('form[action="task.php"]');
         const createEndToggle = document.querySelector('[data-end-date-toggle]');
         const createEndWrapper = document.querySelector('[data-create-end-date]');
+        const createEndToggleField = document.querySelector('[data-create-end-toggle]');
+        const createTimeOfDay = document.querySelector('#time_of_day');
+        const createDueTimeWrapper = createForm ? createForm.querySelector('[data-due-time-wrapper]') : null;
         if (createTimingSelect && createTimerWrapper) {
             updateTimerField(createTimerWrapper, createTimingSelect);
             createTimingSelect.addEventListener('change', () => updateTimerField(createTimerWrapper, createTimingSelect));
@@ -543,6 +586,14 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
         if (createRepeatSelect && createRepeatWrapper) {
             updateRepeatDays(createRepeatWrapper, createRepeatSelect);
             createRepeatSelect.addEventListener('change', () => updateRepeatDays(createRepeatWrapper, createRepeatSelect));
+        }
+        if (createTimeOfDay && createDueTimeWrapper) {
+            updateDueTimeVisibility(createDueTimeWrapper, createTimeOfDay);
+            createTimeOfDay.addEventListener('change', () => updateDueTimeVisibility(createDueTimeWrapper, createTimeOfDay));
+        }
+        if (createRepeatSelect && createEndToggleField && createEndToggle) {
+            updateEndToggleVisibility(createEndToggleField, createEndToggle, createEndWrapper, createRepeatSelect);
+            createRepeatSelect.addEventListener('change', () => updateEndToggleVisibility(createEndToggleField, createEndToggle, createEndWrapper, createRepeatSelect));
         }
         if (createEndToggle && createEndWrapper) {
             updateEndDate(createEndWrapper, createEndToggle);
@@ -572,6 +623,11 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
             const modalEndWrapper = modalForm.querySelector('[data-end-date-wrapper]');
             if (modalEndToggle && modalEndWrapper) {
                 modalEndToggle.addEventListener('change', () => updateEndDate(modalEndWrapper, modalEndToggle));
+            }
+            const modalTimeOfDay = modalForm.querySelector('[name="time_of_day"]');
+            const modalDueTimeWrapper = modalForm.querySelector('[data-due-time-wrapper]');
+            if (modalTimeOfDay && modalDueTimeWrapper) {
+                modalTimeOfDay.addEventListener('change', () => updateDueTimeVisibility(modalDueTimeWrapper, modalTimeOfDay));
             }
             modalForm.addEventListener('submit', (e) => {
                 const checked = modalForm.querySelectorAll('input[name="child_user_ids[]"]:checked');
@@ -796,13 +852,15 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                     <h2>Create Task</h2>
                 </div>
                 <form method="POST" action="task.php" enctype="multipart/form-data">
+                    <?php $autoSelectChildId = count($children) === 1 ? (int) $children[0]['child_user_id'] : null; ?>
+                    <input type="hidden" name="start_date" value="<?php echo date('Y-m-d'); ?>">
                     <div class="form-grid">
                         <div class="form-group">
                             <label>Child</label>
                             <div class="child-select-grid">
                                 <?php foreach ($children as $index => $child): ?>
                                     <label class="child-select-card">
-                                        <input type="checkbox" name="child_user_ids[]" value="<?php echo (int) $child['child_user_id']; ?>">
+                                        <input type="checkbox" name="child_user_ids[]" value="<?php echo (int) $child['child_user_id']; ?>"<?php echo $autoSelectChildId === (int) $child['child_user_id'] ? ' checked' : ''; ?>>
                                         <img src="<?php echo htmlspecialchars($child['avatar']); ?>" alt="<?php echo htmlspecialchars($child['first_name'] ?? $child['child_name']); ?>">
                                         <span><?php echo htmlspecialchars($child['first_name'] ?? $child['child_name']); ?></span>
                                     </label>
@@ -821,31 +879,36 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                             <label for="points">Points</label>
                             <input type="number" id="points" name="points" min="1" required>
                         </div>
-                        <div class="form-group">
+                        <div class="form-group repeat-group">
                             <label for="recurrence">Repeat</label>
                             <select id="recurrence" name="recurrence">
                                 <option value="">Once</option>
                                 <option value="daily">Every Day</option>
                                 <option value="weekly">Specific Days</option>
                             </select>
-                        </div>
-                        <div class="form-group" data-create-recurrence-days>
-                            <label>Specific Days</label>
-                            <div>
-                                <label><input type="checkbox" name="recurrence_days[]" value="Sun"> Sun</label>
-                                <label><input type="checkbox" name="recurrence_days[]" value="Mon"> Mon</label>
-                                <label><input type="checkbox" name="recurrence_days[]" value="Tue"> Tue</label>
-                                <label><input type="checkbox" name="recurrence_days[]" value="Wed"> Wed</label>
-                                <label><input type="checkbox" name="recurrence_days[]" value="Thu"> Thu</label>
-                                <label><input type="checkbox" name="recurrence_days[]" value="Fri"> Fri</label>
-                                <label><input type="checkbox" name="recurrence_days[]" value="Sat"> Sat</label>
+                            <div class="repeat-days" data-create-recurrence-days>
+                                <div class="repeat-days-label">Specific Days</div>
+                                <div class="repeat-days-grid">
+                                    <label class="repeat-day"><input type="checkbox" name="recurrence_days[]" value="Sun"><span>Sun</span></label>
+                                    <label class="repeat-day"><input type="checkbox" name="recurrence_days[]" value="Mon"><span>Mon</span></label>
+                                    <label class="repeat-day"><input type="checkbox" name="recurrence_days[]" value="Tue"><span>Tue</span></label>
+                                    <label class="repeat-day"><input type="checkbox" name="recurrence_days[]" value="Wed"><span>Wed</span></label>
+                                    <label class="repeat-day"><input type="checkbox" name="recurrence_days[]" value="Thu"><span>Thu</span></label>
+                                    <label class="repeat-day"><input type="checkbox" name="recurrence_days[]" value="Fri"><span>Fri</span></label>
+                                    <label class="repeat-day"><input type="checkbox" name="recurrence_days[]" value="Sat"><span>Sat</span></label>
+                                </div>
                             </div>
                         </div>
                         <div class="form-group">
-                            <label for="start_date">Start Date</label>
-                            <input type="date" id="start_date" name="start_date" value="<?php echo date('Y-m-d'); ?>">
+                            <label for="time_of_day">Time of Day</label>
+                            <select id="time_of_day" name="time_of_day">
+                                <option value="anytime" selected>Anytime</option>
+                                <option value="morning">Morning</option>
+                                <option value="afternoon">Afternoon</option>
+                                <option value="evening">Evening</option>
+                            </select>
                         </div>
-                        <div class="form-group toggle-field">
+                        <div class="form-group toggle-field" data-create-end-toggle>
                             <span class="toggle-label">End Date</span>
                             <label class="toggle-row">
                                 <span class="toggle-switch">
@@ -858,7 +921,7 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                             <label for="end_date">End Date</label>
                             <input type="date" id="end_date" name="end_date" value="">
                         </div>
-                        <div class="form-group">
+                        <div class="form-group" data-due-time-wrapper>
                             <label for="due_time">Time Due By</label>
                             <input type="time" id="due_time" name="due_time">
                         </div>
@@ -910,8 +973,23 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                                 <div class="task-pill"><?php echo (int)$task['points']; ?> pts</div>
                             </div>
                             <div class="task-meta">
+                                <?php
+                                    $timeOfDay = $task['time_of_day'] ?? 'anytime';
+                                    $isOnce = empty($task['recurrence']);
+                                    if ($isOnce) {
+                                        $dueDisplay = $task['due_date_formatted'];
+                                    } elseif ($timeOfDay === 'anytime') {
+                                        $dueDisplay = 'Anytime';
+                                    } else {
+                                        $timeText = !empty($task['due_date']) ? date('g:i A', strtotime($task['due_date'])) : '';
+                                        if ($timeText === '12:00 AM') {
+                                            $timeText = '';
+                                        }
+                                        $dueDisplay = $timeText !== '' ? $timeText : ucfirst($timeOfDay);
+                                    }
+                                ?>
                                 <div class="task-meta-row">
-                                    <span><span class="task-meta-label">Due:</span> <?php echo htmlspecialchars($task['due_date_formatted']); ?><?php if ($due_time < $current_time) { echo '<span class="overdue-label">Overdue!</span>'; } ?></span>
+                                    <span><span class="task-meta-label">Due:</span> <?php echo htmlspecialchars($dueDisplay); ?><?php if ($due_time < $current_time) { echo '<span class="overdue-label">Overdue!</span>'; } ?></span>
                                 </div>
                                 <div class="task-meta-row">
                                     <span><span class="task-meta-label">Category:</span> <?php echo htmlspecialchars($task['category']); ?></span>
@@ -980,6 +1058,7 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                                             data-due-time="<?php echo htmlspecialchars($dueTimeValue, ENT_QUOTES); ?>"
                                             data-end-date="<?php echo !empty($task['end_date']) ? htmlspecialchars($task['end_date'], ENT_QUOTES) : ''; ?>"
                                             data-points="<?php echo (int)$task['points']; ?>"
+                                            data-time-of-day="<?php echo htmlspecialchars($task['time_of_day'] ?? 'anytime', ENT_QUOTES); ?>"
                                             data-recurrence="<?php echo htmlspecialchars($repeatValue, ENT_QUOTES); ?>"
                                             data-recurrence-days="<?php echo htmlspecialchars($task['recurrence_days'] ?? '', ENT_QUOTES); ?>"
                                             data-category="<?php echo htmlspecialchars($task['category'] ?? '', ENT_QUOTES); ?>"
@@ -1016,9 +1095,24 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                                 <div class="task-card-title"><?php echo htmlspecialchars($task['title']); ?></div>
                                 <div class="task-pill"><?php echo (int)$task['points']; ?> pts</div>
                             </div>
+                            <?php
+                                $timeOfDay = $task['time_of_day'] ?? 'anytime';
+                                $isOnce = empty($task['recurrence']);
+                                if ($isOnce) {
+                                    $dueDisplay = $task['due_date_formatted'];
+                                } elseif ($timeOfDay === 'anytime') {
+                                    $dueDisplay = 'Anytime';
+                                } else {
+                                    $timeText = !empty($task['due_date']) ? date('g:i A', strtotime($task['due_date'])) : '';
+                                    if ($timeText === '12:00 AM') {
+                                        $timeText = '';
+                                    }
+                                    $dueDisplay = $timeText !== '' ? $timeText : ucfirst($timeOfDay);
+                                }
+                            ?>
                             <div class="task-meta">
                                 <div class="task-meta-row">
-                                    <span><span class="task-meta-label">Due:</span> <?php echo htmlspecialchars($task['due_date_formatted']); ?></span>
+                                    <span><span class="task-meta-label">Due:</span> <?php echo htmlspecialchars($dueDisplay); ?></span>
                                 </div>
                                 <div class="task-meta-row">
                                     <span><span class="task-meta-label">Category:</span> <?php echo htmlspecialchars($task['category']); ?></span>
@@ -1072,9 +1166,24 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                                 <div class="task-card-title"><?php echo htmlspecialchars($task['title']); ?></div>
                                 <div class="task-pill"><?php echo (int)$task['points']; ?> pts</div>
                             </div>
+                            <?php
+                                $timeOfDay = $task['time_of_day'] ?? 'anytime';
+                                $isOnce = empty($task['recurrence']);
+                                if ($isOnce) {
+                                    $dueDisplay = $task['due_date_formatted'];
+                                } elseif ($timeOfDay === 'anytime') {
+                                    $dueDisplay = 'Anytime';
+                                } else {
+                                    $timeText = !empty($task['due_date']) ? date('g:i A', strtotime($task['due_date'])) : '';
+                                    if ($timeText === '12:00 AM') {
+                                        $timeText = '';
+                                    }
+                                    $dueDisplay = $timeText !== '' ? $timeText : ucfirst($timeOfDay);
+                                }
+                            ?>
                             <div class="task-meta">
                                 <div class="task-meta-row">
-                                    <span><span class="task-meta-label">Due:</span> <?php echo htmlspecialchars($task['due_date_formatted']); ?></span>
+                                    <span><span class="task-meta-label">Due:</span> <?php echo htmlspecialchars($dueDisplay); ?></span>
                                 </div>
                                 <div class="task-meta-row">
                                     <span><span class="task-meta-label">Category:</span> <?php echo htmlspecialchars($task['category']); ?></span>
@@ -1118,6 +1227,7 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                     <div class="task-modal-body">
                         <form method="POST" action="task.php" data-task-edit-form>
                             <input type="hidden" name="task_id" value="">
+                            <input type="hidden" name="start_date" value="">
                             <div class="form-grid">
                                 <div class="form-group">
                                     <label>Child</label>
@@ -1152,20 +1262,25 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                                     </select>
                                 </div>
                                 <div class="form-group" data-recurrence-days-wrapper>
-                                    <label>Specific Days</label>
-                                    <div>
-                                        <label><input type="checkbox" name="recurrence_days[]" value="Sun"> Sun</label>
-                                        <label><input type="checkbox" name="recurrence_days[]" value="Mon"> Mon</label>
-                                        <label><input type="checkbox" name="recurrence_days[]" value="Tue"> Tue</label>
-                                        <label><input type="checkbox" name="recurrence_days[]" value="Wed"> Wed</label>
-                                        <label><input type="checkbox" name="recurrence_days[]" value="Thu"> Thu</label>
-                                        <label><input type="checkbox" name="recurrence_days[]" value="Fri"> Fri</label>
-                                        <label><input type="checkbox" name="recurrence_days[]" value="Sat"> Sat</label>
+                                    <div class="repeat-days-label">Specific Days</div>
+                                    <div class="repeat-days-grid">
+                                        <label class="repeat-day"><input type="checkbox" name="recurrence_days[]" value="Sun"><span>Sun</span></label>
+                                        <label class="repeat-day"><input type="checkbox" name="recurrence_days[]" value="Mon"><span>Mon</span></label>
+                                        <label class="repeat-day"><input type="checkbox" name="recurrence_days[]" value="Tue"><span>Tue</span></label>
+                                        <label class="repeat-day"><input type="checkbox" name="recurrence_days[]" value="Wed"><span>Wed</span></label>
+                                        <label class="repeat-day"><input type="checkbox" name="recurrence_days[]" value="Thu"><span>Thu</span></label>
+                                        <label class="repeat-day"><input type="checkbox" name="recurrence_days[]" value="Fri"><span>Fri</span></label>
+                                        <label class="repeat-day"><input type="checkbox" name="recurrence_days[]" value="Sat"><span>Sat</span></label>
                                     </div>
                                 </div>
                                 <div class="form-group">
-                                    <label>Start Date</label>
-                                    <input type="date" name="start_date" value="">
+                                    <label>Time of Day</label>
+                                    <select name="time_of_day">
+                                        <option value="anytime">Anytime</option>
+                                        <option value="morning">Morning</option>
+                                        <option value="afternoon">Afternoon</option>
+                                        <option value="evening">Evening</option>
+                                    </select>
                                 </div>
                                 <div class="form-group toggle-field">
                                     <span class="toggle-label">End Date</span>
@@ -1180,7 +1295,7 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                                     <label>End Date</label>
                                     <input type="date" name="end_date" value="">
                                 </div>
-                                <div class="form-group">
+                                <div class="form-group" data-due-time-wrapper>
                                     <label>Time Due By</label>
                                     <input type="time" name="due_time" value="">
                                 </div>

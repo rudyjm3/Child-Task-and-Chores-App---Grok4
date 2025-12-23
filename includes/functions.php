@@ -921,9 +921,9 @@ function getDashboardData($user_id) {
 }
 
 // Create a new task
-function createTask($parent_user_id, $child_user_id, $title, $description, $due_date, $end_date, $points, $recurrence, $recurrence_days, $category, $timing_mode, $timer_minutes = null, $creator_user_id = null) {
+function createTask($parent_user_id, $child_user_id, $title, $description, $due_date, $end_date, $points, $recurrence, $recurrence_days, $category, $timing_mode, $timer_minutes = null, $time_of_day = 'anytime', $creator_user_id = null) {
     global $db;
-    $stmt = $db->prepare("INSERT INTO tasks (parent_user_id, child_user_id, title, description, due_date, end_date, points, recurrence, recurrence_days, category, timing_mode, timer_minutes, created_by) VALUES (:parent_id, :child_id, :title, :description, :due_date, :end_date, :points, :recurrence, :recurrence_days, :category, :timing_mode, :timer_minutes, :created_by)");
+    $stmt = $db->prepare("INSERT INTO tasks (parent_user_id, child_user_id, title, description, due_date, end_date, points, recurrence, recurrence_days, category, timing_mode, timer_minutes, time_of_day, created_by) VALUES (:parent_id, :child_id, :title, :description, :due_date, :end_date, :points, :recurrence, :recurrence_days, :category, :timing_mode, :timer_minutes, :time_of_day, :created_by)");
     return $stmt->execute([
         ':parent_id' => $parent_user_id,
         ':child_id' => $child_user_id,
@@ -937,6 +937,7 @@ function createTask($parent_user_id, $child_user_id, $title, $description, $due_
         ':category' => $category,
         ':timing_mode' => $timing_mode,
         ':timer_minutes' => $timer_minutes,
+        ':time_of_day' => $time_of_day,
         ':created_by' => $creator_user_id ?? $parent_user_id
     ]);
 }
@@ -1820,9 +1821,9 @@ function getChildTotalPoints($child_id) {
 }
 
 // **[Revised] Routine Functions (now use routine_task_id instead of task_id) **
-function createRoutine($parent_user_id, $child_user_id, $title, $start_time, $end_time, $recurrence, $bonus_points, $creator_user_id = null) {
+function createRoutine($parent_user_id, $child_user_id, $title, $start_time, $end_time, $recurrence, $bonus_points, $time_of_day = 'anytime', $recurrence_days = null, $routine_date = null, $creator_user_id = null) {
     global $db;
-    $stmt = $db->prepare("INSERT INTO routines (parent_user_id, child_user_id, title, start_time, end_time, recurrence, bonus_points, created_by) VALUES (:parent_id, :child_id, :title, :start_time, :end_time, :recurrence, :bonus_points, :created_by)");
+    $stmt = $db->prepare("INSERT INTO routines (parent_user_id, child_user_id, title, start_time, end_time, recurrence, bonus_points, time_of_day, recurrence_days, routine_date, created_by) VALUES (:parent_id, :child_id, :title, :start_time, :end_time, :recurrence, :bonus_points, :time_of_day, :recurrence_days, :routine_date, :created_by)");
     $stmt->execute([
         ':parent_id' => $parent_user_id,
         ':child_id' => $child_user_id,
@@ -1831,20 +1832,26 @@ function createRoutine($parent_user_id, $child_user_id, $title, $start_time, $en
         ':end_time' => $end_time,
         ':recurrence' => $recurrence,
         ':bonus_points' => $bonus_points,
+        ':time_of_day' => $time_of_day,
+        ':recurrence_days' => $recurrence_days,
+        ':routine_date' => $routine_date,
         ':created_by' => $creator_user_id ?? $parent_user_id
     ]);
     return $db->lastInsertId();
 }
 
-function updateRoutine($routine_id, $title, $start_time, $end_time, $recurrence, $bonus_points, $parent_user_id) {
+function updateRoutine($routine_id, $title, $start_time, $end_time, $recurrence, $bonus_points, $time_of_day, $recurrence_days, $routine_date, $parent_user_id) {
     global $db;
-    $stmt = $db->prepare("UPDATE routines SET title = :title, start_time = :start_time, end_time = :end_time, recurrence = :recurrence, bonus_points = :bonus_points WHERE id = :id AND parent_user_id = :parent_id");
+    $stmt = $db->prepare("UPDATE routines SET title = :title, start_time = :start_time, end_time = :end_time, recurrence = :recurrence, bonus_points = :bonus_points, time_of_day = :time_of_day, recurrence_days = :recurrence_days, routine_date = :routine_date WHERE id = :id AND parent_user_id = :parent_id");
     return $stmt->execute([
         ':title' => $title,
         ':start_time' => $start_time,
         ':end_time' => $end_time,
         ':recurrence' => $recurrence,
         ':bonus_points' => $bonus_points,
+        ':time_of_day' => $time_of_day,
+        ':recurrence_days' => $recurrence_days,
+        ':routine_date' => $routine_date,
         ':id' => $routine_id,
         ':parent_id' => $parent_user_id
     ]);
@@ -2184,6 +2191,7 @@ try {
        category ENUM('hygiene', 'homework', 'household') DEFAULT 'household',
        timing_mode ENUM('timer', 'suggested', 'no_limit') DEFAULT 'no_limit',
        timer_minutes INT DEFAULT NULL,
+       time_of_day ENUM('anytime', 'morning', 'afternoon', 'evening') DEFAULT 'anytime',
        recurrence_days VARCHAR(32) DEFAULT NULL,
        end_date DATE DEFAULT NULL,
        status ENUM('pending', 'completed', 'approved') DEFAULT 'pending',
@@ -2203,6 +2211,8 @@ try {
    error_log("Added/verified created_by in tasks");
    $db->exec("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS timer_minutes INT NULL");
    error_log("Added/verified timer_minutes in tasks");
+   $db->exec("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS time_of_day ENUM('anytime','morning','afternoon','evening') DEFAULT 'anytime'");
+   error_log("Added/verified time_of_day in tasks");
    $db->exec("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS recurrence_days VARCHAR(32) NULL");
    error_log("Added/verified recurrence_days in tasks");
    $db->exec("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS end_date DATE NULL");
@@ -2306,6 +2316,9 @@ try {
     end_time TIME,
     recurrence ENUM('daily', 'weekly', '') DEFAULT '',
     bonus_points INT DEFAULT 0,
+    time_of_day ENUM('anytime', 'morning', 'afternoon', 'evening') DEFAULT 'anytime',
+    recurrence_days VARCHAR(32) DEFAULT NULL,
+    routine_date DATE DEFAULT NULL,
     created_by INT NULL,  /* Changed from NOT NULL to NULL */
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (parent_user_id) REFERENCES users(id) ON DELETE CASCADE,
@@ -2318,6 +2331,12 @@ try {
    // Add created_by to existing routines if not exists
    $db->exec("ALTER TABLE routines ADD COLUMN IF NOT EXISTS created_by INT NULL");
    error_log("Added/verified created_by in routines");
+   $db->exec("ALTER TABLE routines ADD COLUMN IF NOT EXISTS time_of_day ENUM('anytime','morning','afternoon','evening') DEFAULT 'anytime'");
+   error_log("Added/verified time_of_day in routines");
+   $db->exec("ALTER TABLE routines ADD COLUMN IF NOT EXISTS recurrence_days VARCHAR(32) NULL");
+   error_log("Added/verified recurrence_days in routines");
+   $db->exec("ALTER TABLE routines ADD COLUMN IF NOT EXISTS routine_date DATE NULL");
+   error_log("Added/verified routine_date in routines");
 
     // Create routine_tasks table if not exists
     $sql = "CREATE TABLE IF NOT EXISTS routine_tasks (

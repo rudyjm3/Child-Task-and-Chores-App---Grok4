@@ -124,6 +124,9 @@ $notificationCount = is_array($notificationsNew) ? count($notificationsNew) : 0;
         .week-day-name { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; }
         .week-day-num { font-size: 1rem; }
         .week-schedule { margin-top: 10px; display: grid; gap: 8px; }
+        .week-section { display: grid; gap: 6px; }
+        .week-section-title { font-weight: 700; color: #37474f; font-size: 0.95rem; }
+        .week-section-list { display: grid; gap: 8px; }
         .week-item { display: flex; align-items: center; justify-content: space-between; gap: 10px; background: #fff7e6; border: 1px solid #ffd28a; border-radius: 10px; padding: 8px 10px; }
         .week-item-main { display: flex; align-items: center; gap: 8px; }
         .week-item-icon { color: #ef6c00; }
@@ -194,6 +197,7 @@ $notificationCount = is_array($notificationsNew) ? count($notificationsNew) : 0;
         .history-item-title { font-weight: 700; color: #3e2723; }
         .history-item-meta { color: #6d4c41; font-size: 0.95rem; }
         .history-item-points { font-weight: 700; color: #00bb01; white-space: nowrap; }
+        .history-item-points.is-negative { color: #d32f2f; }
     </style>
     <script>
         document.addEventListener('DOMContentLoaded', function () {
@@ -291,7 +295,13 @@ $notificationCount = is_array($notificationsNew) ? count($notificationsNew) : 0;
                     scheduleTarget.innerHTML = '<div class="week-item"><div class="week-item-main"><i class="fa-solid fa-calendar-day week-item-icon"></i><div><div class="week-item-title">Nothing scheduled</div><div class="week-item-meta">Check back later</div></div></div></div>';
                     return;
                 }
-                scheduleTarget.innerHTML = items.map(item => {
+                const sections = [
+                    { key: 'anytime', label: 'Due Today' },
+                    { key: 'morning', label: 'Morning' },
+                    { key: 'afternoon', label: 'Afternoon' },
+                    { key: 'evening', label: 'Evening' }
+                ];
+                const buildItem = (item) => {
                     return '<div class="week-item">' +
                         '<div class="week-item-main">' +
                         '<i class="' + item.icon + ' week-item-icon"></i>' +
@@ -302,7 +312,16 @@ $notificationCount = is_array($notificationsNew) ? count($notificationsNew) : 0;
                         '</div>' +
                         '<div class="week-item-points">' + item.points + ' pts</div>' +
                         '</div>';
+                };
+                const sectionHtml = sections.map(section => {
+                    const sectionItems = items.filter(item => item.time_of_day === section.key);
+                    if (!sectionItems.length) return '';
+                    return '<div class="week-section">' +
+                        '<div class="week-section-title">' + section.label + '</div>' +
+                        '<div class="week-section-list">' + sectionItems.map(buildItem).join('') + '</div>' +
+                        '</div>';
                 }).join('');
+                scheduleTarget.innerHTML = sectionHtml || '<div class="week-item"><div class="week-item-main"><i class="fa-solid fa-calendar-day week-item-icon"></i><div><div class="week-item-title">Nothing scheduled</div><div class="week-item-meta">Check back later</div></div></div></div>';
             };
 
             const setActiveDay = (dateKey) => {
@@ -463,17 +482,22 @@ $notificationCount = is_array($notificationsNew) ? count($notificationsNew) : 0;
             $scheduleByDay[$dateKey] = [];
             $weekCursor->modify('+1 day');
          }
-         $taskWeekStmt = $db->prepare("SELECT title, points, due_date, end_date, recurrence, recurrence_days FROM tasks WHERE child_user_id = :child_id AND due_date IS NOT NULL AND DATE(due_date) <= :end ORDER BY due_date");
+         $taskWeekStmt = $db->prepare("SELECT title, points, due_date, end_date, recurrence, recurrence_days, time_of_day FROM tasks WHERE child_user_id = :child_id AND due_date IS NOT NULL AND DATE(due_date) <= :end ORDER BY due_date");
          $taskWeekStmt->execute([
             ':child_id' => $_SESSION['user_id'],
             ':end' => $weekEnd->format('Y-m-d')
          ]);
          foreach ($taskWeekStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $timeOfDay = $row['time_of_day'] ?? 'anytime';
             $dueDate = $row['due_date'];
             $startDateKey = date('Y-m-d', strtotime($dueDate));
             $endDateKey = !empty($row['end_date']) ? $row['end_date'] : null;
             $timeSort = date('H:i', strtotime($dueDate));
             $timeLabel = date('g:i A', strtotime($dueDate));
+            if ($timeOfDay === 'anytime') {
+               $timeSort = '99:99';
+               $timeLabel = 'Anytime';
+            }
             $repeat = $row['recurrence'] ?? '';
             $repeatDays = array_filter(array_map('trim', explode(',', (string)($row['recurrence_days'] ?? ''))));
             foreach ($weekDates as $day) {
@@ -502,13 +526,17 @@ $notificationCount = is_array($notificationsNew) ? count($notificationsNew) : 0;
                   'points' => (int)($row['points'] ?? 0),
                   'time' => $timeSort,
                   'time_label' => $timeLabel,
+                  'time_of_day' => $timeOfDay,
                   'icon' => 'fa-solid fa-list-check'
                ];
             }
          }
          foreach ($routines as $routine) {
+            $timeOfDay = $routine['time_of_day'] ?? 'anytime';
             $recurrence = $routine['recurrence'] ?? '';
             $routineWeekday = !empty($routine['created_at']) ? (int) date('N', strtotime($routine['created_at'])) : null;
+            $routineDays = array_values(array_filter(array_map('trim', explode(',', (string) ($routine['recurrence_days'] ?? '')))));
+            $routineDateKey = !empty($routine['routine_date']) ? $routine['routine_date'] : (!empty($routine['created_at']) ? date('Y-m-d', strtotime($routine['created_at'])) : null);
             $routinePointsTotal = 0;
             foreach (($routine['tasks'] ?? []) as $task) {
                $routinePointsTotal += (int) ($task['point_value'] ?? 0);
@@ -516,11 +544,28 @@ $notificationCount = is_array($notificationsNew) ? count($notificationsNew) : 0;
             $totalPoints = $routinePointsTotal + (int) ($routine['bonus_points'] ?? 0);
             $timeSort = !empty($routine['start_time']) ? date('H:i', strtotime($routine['start_time'])) : '99:99';
             $timeLabel = !empty($routine['start_time']) ? date('g:i A', strtotime($routine['start_time'])) : 'Anytime';
+            if ($timeOfDay === 'anytime') {
+               $timeSort = '99:99';
+               $timeLabel = 'Anytime';
+            }
             foreach ($weekDates as $day) {
                $dateKey = $day['date'];
-               if ($recurrence === 'weekly' && $routineWeekday) {
-                  $dayWeek = (int) date('N', strtotime($dateKey));
-                  if ($dayWeek !== $routineWeekday) {
+               if ($recurrence === 'daily') {
+                  // include every day
+               } elseif ($recurrence === 'weekly') {
+                  if (!empty($routineDays)) {
+                     $dayName = date('D', strtotime($dateKey));
+                     if (!in_array($dayName, $routineDays, true)) {
+                        continue;
+                     }
+                  } elseif ($routineWeekday) {
+                     $dayWeek = (int) date('N', strtotime($dateKey));
+                     if ($dayWeek !== $routineWeekday) {
+                        continue;
+                     }
+                  }
+               } else {
+                  if (!$routineDateKey || $dateKey !== $routineDateKey) {
                      continue;
                   }
                }
@@ -530,6 +575,7 @@ $notificationCount = is_array($notificationsNew) ? count($notificationsNew) : 0;
                   'points' => $totalPoints,
                   'time' => $timeSort,
                   'time_label' => $timeLabel,
+                  'time_of_day' => $timeOfDay,
                   'icon' => 'fa-solid fa-repeat'
                ];
             }
@@ -699,7 +745,7 @@ $notificationCount = is_array($notificationsNew) ? count($notificationsNew) : 0;
                                     <div class="history-item-title"><?php echo htmlspecialchars($item['type']); ?>: <?php echo htmlspecialchars($item['title']); ?></div>
                                     <div class="history-item-meta"><?php echo htmlspecialchars(date('g:i A', strtotime($item['date']))); ?></div>
                                  </div>
-                                 <div class="history-item-points"><?php echo ($item['points'] >= 0 ? '+' : '') . (int)$item['points']; ?> pts</div>
+                                 <div class="history-item-points<?php echo ($item['points'] < 0 ? ' is-negative' : ''); ?>"><?php echo ($item['points'] >= 0 ? '+' : '') . (int)$item['points']; ?> pts</div>
                               </li>
                            <?php endforeach; ?>
                         </ul>
