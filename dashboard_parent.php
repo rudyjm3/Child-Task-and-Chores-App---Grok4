@@ -1516,7 +1516,6 @@ for ($i = 0; $i < 7; $i++) {
                       </button>
                    </div>
                       </div>
-                      </div>
                   </div>
                <?php endforeach; ?>
                </div>
