@@ -226,6 +226,28 @@ $bodyClasses = [];
 if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
     $bodyClasses[] = 'child-theme';
 }
+$calendarTasks = [];
+foreach ($tasks as $task) {
+    $calendarTasks[] = [
+        'id' => (int) ($task['id'] ?? 0),
+        'title' => $task['title'] ?? '',
+        'description' => $task['description'] ?? '',
+        'due_date' => $task['due_date'] ?? '',
+        'due_date_formatted' => $task['due_date_formatted'] ?? '',
+        'end_date' => $task['end_date'] ?? '',
+        'points' => (int) ($task['points'] ?? 0),
+        'recurrence' => $task['recurrence'] ?? '',
+        'recurrence_days' => $task['recurrence_days'] ?? '',
+        'time_of_day' => $task['time_of_day'] ?? 'anytime',
+        'category' => $task['category'] ?? '',
+        'timing_mode' => $task['timing_mode'] ?? '',
+        'timer_minutes' => (int) ($task['timer_minutes'] ?? 0),
+        'child_user_id' => (int) ($task['child_user_id'] ?? 0),
+        'child_name' => $task['child_display_name'] ?? '',
+        'creator_name' => $task['creator_display_name'] ?? ''
+    ];
+}
+$calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION['premium_access']) || !empty($_SESSION['is_premium']);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -324,6 +346,48 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
         .task-section-toggle { margin: 18px 0 10px; border: 1px solid #e0e0e0; border-radius: 10px; padding: 8px 12px; background: #fff; }
         .task-section-toggle summary { cursor: pointer; font-weight: 700; color: #37474f; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
         .task-count-badge { background: #ff6f61; color: #fff; border-radius: 12px; padding: 2px 8px; font-size: 0.8rem; font-weight: 700; min-width: 24px; text-align: center; }
+        .task-calendar-section { width: 100%; max-width: 100%; margin: 0 auto 24px; padding: 0 20px; }
+        .task-calendar-card { background: #fff; border-radius: 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); padding: 16px; display: grid; gap: 16px; }
+        .calendar-header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+        .calendar-header h2 { margin: 0; font-size: 1.2rem; }
+        .calendar-subtitle { margin: 4px 0 0; color: #607d8b; font-size: 0.95rem; }
+        .calendar-nav { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+        .calendar-nav-button { border: 1px solid #d5def0; background: #eef4ff; color: #0d47a1; font-weight: 700; border-radius: 999px; padding: 6px 12px; cursor: pointer; }
+        .calendar-nav-button:hover { background: #dce8ff; }
+        .calendar-nav-button[disabled] { opacity: 0.6; cursor: not-allowed; }
+        .calendar-range { font-weight: 700; color: #37474f; }
+        .calendar-premium-note { font-size: 0.85rem; color: #8d6e63; }
+        .calendar-filters { display: grid; gap: 12px; }
+        .calendar-filter-header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+        .calendar-filter-title { font-weight: 700; color: #37474f; }
+        .calendar-select-all { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; color: #37474f; }
+        .calendar-select-all input { width: 18px; height: 18px; }
+        .calendar-child-grid { display: flex; flex-wrap: wrap; gap: 14px; }
+        .calendar-child-card { border: none; border-radius: 50%; padding: 0; background: transparent; display: grid; justify-items: center; gap: 6px; cursor: pointer; position: relative; }
+        .calendar-child-card input[type="checkbox"] { position: absolute; opacity: 0; width: 0; height: 0; pointer-events: none; }
+        .calendar-child-card img { width: 56px; height: 56px; border-radius: 50%; object-fit: cover; box-shadow: 0 2px 6px rgba(0,0,0,0.15); transition: box-shadow 150ms ease, transform 150ms ease; }
+        .calendar-child-card span { font-size: 13px; text-align: center; transition: color 150ms ease, text-shadow 150ms ease; }
+        .calendar-child-card input[type="checkbox"]:checked + img { box-shadow: 0 0 0 4px rgba(100,181,246,0.8), 0 0 14px rgba(100,181,246,0.8); transform: translateY(-2px); }
+        .calendar-child-card input[type="checkbox"]:checked + img + span { color: #0d47a1; text-shadow: 0 1px 8px rgba(100,181,246,0.8); }
+        .task-week-calendar { border: 1px solid #d5def0; border-radius: 12px; background: #fff; overflow: hidden; position: relative; }
+        .task-week-scroll { overflow-x: auto; }
+        .week-days { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
+        .week-day-name { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; }
+        .week-day-num { font-size: 1rem; }
+        .week-days-header { background: #f5f7fb; padding: 8px; min-width: 980px; }
+        .week-days-header .week-day { background: #fff; border: 1px solid #d5def0; border-radius: 10px; padding: 6px 0; display: grid; gap: 2px; justify-items: center; font-weight: 700; color: #37474f; }
+        .week-days-header .week-day.is-today { background: #ffe0b2; border-color: #ffd28a; color: #ef6c00; }
+        .week-grid { display: grid; grid-template-columns: repeat(7, minmax(140px, 1fr)); gap: 6px; background: #f5f7fb; padding: 6px 8px 10px; min-width: 980px; }
+        .week-column { background: #fff; border: 1px solid #d5def0; border-radius: 10px; padding: 8px; display: flex; flex-direction: column; gap: 8px; min-height: 140px; }
+        .week-column-tasks { display: grid; gap: 8px; }
+        .calendar-task-item { border: 1px solid #ffd28a; background: #fff7e6; border-radius: 10px; padding: 8px; text-align: left; cursor: pointer; display: grid; gap: 4px; font-size: 0.9rem; }
+        .calendar-task-item:hover { background: #ffe9c6; }
+        .calendar-task-title { font-weight: 700; color: #3e2723; }
+        .calendar-task-meta { color: #6d4c41; font-size: 0.85rem; }
+        .calendar-task-child { font-size: 0.8rem; color: #455a64; font-weight: 600; }
+        .calendar-day-empty { color: #9e9e9e; font-size: 0.85rem; text-align: center; padding: 8px 0; }
+        .calendar-empty { display: none; text-align: center; color: #9e9e9e; font-weight: 600; padding: 18px; }
+        .calendar-empty.active { display: block; }
         /* Overdue styles (role-specific colors for autism-friendliness) */
         .overdue {
             border-left: 5px solid <?php echo (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) ? '#d9534f' : '#ff9900'; ?>; /* Red for parent/family/caregiver, orange for child */
@@ -391,6 +455,8 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
     .nav-button:hover { background: #dce8ff; }
     </style>
     <script>
+        const taskCalendarData = <?php echo json_encode($calendarTasks, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+        const taskCalendarPremium = <?php echo $calendarPremium ? 'true' : 'false'; ?>;
         const taskTimers = {};
 
         document.addEventListener('DOMContentLoaded', () => {
@@ -653,6 +719,7 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
             deleteModal.addEventListener('click', (e) => { if (e.target === deleteModal) closeDeleteModal(); });
             document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeDeleteModal(); });
         }
+        initTaskCalendar();
     });
 
         function updateTimerDisplay(taskId) {
@@ -824,6 +891,402 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
             state.countdownElement.style.display = 'none';
             state.countdownElement.textContent = '';
         }
+
+        function initTaskCalendar() {
+            const calendar = document.querySelector('[data-task-calendar]');
+            if (!calendar) return;
+            const weekDaysEl = calendar.querySelector('[data-week-days]');
+            const weekGridEl = calendar.querySelector('[data-week-grid]');
+            const weekRangeEl = document.querySelector('[data-week-range]');
+            const emptyEl = calendar.querySelector('[data-calendar-empty]');
+            const navButtons = document.querySelectorAll('[data-week-nav]');
+            const previewModal = document.querySelector('[data-task-preview-modal]');
+            const previewBody = previewModal ? previewModal.querySelector('[data-task-preview-body]') : null;
+            const previewCloses = previewModal ? previewModal.querySelectorAll('[data-task-preview-close]') : [];
+            const childFilters = Array.from(document.querySelectorAll('[data-calendar-child]'));
+            const selectAll = document.querySelector('[data-calendar-select-all]');
+            const taskById = new Map();
+
+            (Array.isArray(taskCalendarData) ? taskCalendarData : []).forEach((task) => {
+                taskById.set(String(task.id), task);
+            });
+
+            let currentWeekStart = startOfWeek(new Date());
+            const premiumEnabled = !!taskCalendarPremium;
+
+            navButtons.forEach((btn) => {
+                if (!premiumEnabled) {
+                    btn.disabled = true;
+                    btn.title = 'Premium feature';
+                }
+                btn.addEventListener('click', () => {
+                    if (!premiumEnabled) return;
+                    const delta = parseInt(btn.dataset.weekNav, 10);
+                    if (Number.isNaN(delta)) return;
+                    currentWeekStart = addDays(currentWeekStart, delta * 7);
+                    renderWeek();
+                });
+            });
+
+            const updateSelectAllState = () => {
+                if (!selectAll || !childFilters.length) return;
+                const allChecked = childFilters.every((input) => input.checked);
+                const anyChecked = childFilters.some((input) => input.checked);
+                selectAll.checked = allChecked;
+                selectAll.indeterminate = !allChecked && anyChecked;
+            };
+
+            if (childFilters.length) {
+                childFilters.forEach((input) => {
+                    input.addEventListener('change', () => {
+                        updateSelectAllState();
+                        renderWeek();
+                    });
+                });
+                if (selectAll) {
+                    selectAll.addEventListener('change', () => {
+                        const checked = selectAll.checked;
+                        childFilters.forEach((input) => {
+                            input.checked = checked;
+                        });
+                        updateSelectAllState();
+                        renderWeek();
+                    });
+                    updateSelectAllState();
+                }
+            }
+
+            const closePreview = () => {
+                if (!previewModal) return;
+                previewModal.classList.remove('open');
+                document.body.classList.remove('no-scroll');
+            };
+
+            const openPreview = (taskId) => {
+                if (!previewModal || !previewBody) return;
+                const task = taskById.get(String(taskId));
+                if (!task) return;
+                previewBody.innerHTML = '';
+                previewBody.appendChild(buildTaskPreviewCard(task));
+                previewModal.classList.add('open');
+                document.body.classList.add('no-scroll');
+            };
+
+            if (previewModal) {
+                previewCloses.forEach((btn) => btn.addEventListener('click', closePreview));
+                previewModal.addEventListener('click', (e) => { if (e.target === previewModal) closePreview(); });
+                document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closePreview(); });
+            }
+
+            const getSelectedChildIds = () => {
+                if (!childFilters.length) return null;
+                return childFilters
+                    .filter((input) => input.checked)
+                    .map((input) => parseInt(input.value, 10))
+                    .filter((value) => !Number.isNaN(value));
+            };
+
+            const renderWeek = () => {
+                if (!weekDaysEl || !weekGridEl) return;
+                weekDaysEl.innerHTML = '';
+                weekGridEl.innerHTML = '';
+                const weekDates = [];
+                const todayKey = formatDateKey(new Date());
+
+                for (let i = 0; i < 7; i += 1) {
+                    const date = addDays(currentWeekStart, i);
+                    const dateKey = formatDateKey(date);
+                    weekDates.push({ date, dateKey });
+                    const dayName = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][date.getDay()];
+                    const dayCell = document.createElement('div');
+                    dayCell.className = `week-day${dateKey === todayKey ? ' is-today' : ''}`;
+                    const nameSpan = document.createElement('span');
+                    nameSpan.className = 'week-day-name';
+                    nameSpan.textContent = dayName;
+                    const numSpan = document.createElement('span');
+                    numSpan.className = 'week-day-num';
+                    numSpan.textContent = String(date.getDate());
+                    dayCell.appendChild(nameSpan);
+                    dayCell.appendChild(numSpan);
+                    weekDaysEl.appendChild(dayCell);
+                }
+
+                if (weekRangeEl) {
+                    weekRangeEl.textContent = formatWeekRange(currentWeekStart);
+                }
+
+                const selectedChildIds = getSelectedChildIds();
+                const filteredTasks = (Array.isArray(taskCalendarData) ? taskCalendarData : []).filter((task) => {
+                    if (!selectedChildIds) return true;
+                    return selectedChildIds.includes(parseInt(task.child_user_id, 10));
+                });
+
+                let totalItems = 0;
+
+                weekDates.forEach(({ date, dateKey }) => {
+                    const dayShort = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][date.getDay()];
+                    const items = [];
+                    filteredTasks.forEach((task) => {
+                        if (!isTaskOnDate(task, dateKey, dayShort)) return;
+                        const timeInfo = getTaskTimeInfo(task);
+                        items.push({ task, timeInfo });
+                    });
+                    items.sort((a, b) => {
+                        const timeCompare = a.timeInfo.sort.localeCompare(b.timeInfo.sort);
+                        if (timeCompare !== 0) return timeCompare;
+                        return String(a.task.title || '').localeCompare(String(b.task.title || ''));
+                    });
+                    totalItems += items.length;
+
+                    const column = document.createElement('div');
+                    column.className = 'week-column';
+                    const list = document.createElement('div');
+                    list.className = 'week-column-tasks';
+
+                    if (!items.length) {
+                        const empty = document.createElement('div');
+                        empty.className = 'calendar-day-empty';
+                        empty.textContent = 'No tasks';
+                        list.appendChild(empty);
+                    } else {
+                        items.forEach(({ task, timeInfo }) => {
+                            const item = document.createElement('button');
+                            item.type = 'button';
+                            item.className = 'calendar-task-item';
+                            item.dataset.taskId = task.id;
+                            const title = document.createElement('span');
+                            title.className = 'calendar-task-title';
+                            title.textContent = task.title || 'Task';
+                            const meta = document.createElement('span');
+                            meta.className = 'calendar-task-meta';
+                            meta.textContent = timeInfo.label;
+                            item.appendChild(title);
+                            item.appendChild(meta);
+                            if (task.child_name) {
+                                const child = document.createElement('span');
+                                child.className = 'calendar-task-child';
+                                child.textContent = task.child_name;
+                                item.appendChild(child);
+                            }
+                            item.addEventListener('click', () => openPreview(task.id));
+                            list.appendChild(item);
+                        });
+                    }
+
+                    column.appendChild(list);
+                    weekGridEl.appendChild(column);
+                });
+
+                if (emptyEl) {
+                    emptyEl.classList.toggle('active', totalItems === 0);
+                }
+            };
+
+            renderWeek();
+        }
+
+        function startOfWeek(date) {
+            const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+            const day = d.getDay();
+            const diff = (day + 6) % 7;
+            d.setDate(d.getDate() - diff);
+            d.setHours(0, 0, 0, 0);
+            return d;
+        }
+
+        function addDays(date, days) {
+            const d = new Date(date.getTime());
+            d.setDate(d.getDate() + days);
+            d.setHours(0, 0, 0, 0);
+            return d;
+        }
+
+        function formatDateKey(date) {
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        }
+
+        function formatWeekRange(startDate) {
+            const endDate = addDays(startDate, 6);
+            const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            const startLabel = `${months[startDate.getMonth()]} ${startDate.getDate()}`;
+            const endLabel = `${months[endDate.getMonth()]} ${endDate.getDate()}`;
+            const yearLabel = startDate.getFullYear() === endDate.getFullYear()
+                ? startDate.getFullYear()
+                : `${startDate.getFullYear()}/${endDate.getFullYear()}`;
+            return `${startLabel} - ${endLabel}, ${yearLabel}`;
+        }
+
+        function getDateKeyFromString(dateString) {
+            if (!dateString) return null;
+            const parts = String(dateString).split(' ')[0].split('-');
+            if (parts.length < 3) return null;
+            const year = parts[0];
+            const month = parts[1].padStart(2, '0');
+            const day = parts[2].padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        }
+
+        function getTaskTimeInfo(task) {
+            const timeOfDay = task.time_of_day || 'anytime';
+            const timeParts = getTimeParts(task.due_date);
+            if (timeOfDay === 'anytime') {
+                return { label: 'Anytime', sort: '99:99' };
+            }
+            const fallbackSort = timeOfDay === 'morning' ? '08:00' : (timeOfDay === 'afternoon' ? '13:00' : '18:00');
+            if (!timeParts) {
+                return { label: capitalize(timeOfDay), sort: fallbackSort };
+            }
+            const timeLabel = formatTime(timeParts.hours, timeParts.minutes);
+            if (timeLabel === '12:00 AM') {
+                return { label: capitalize(timeOfDay), sort: fallbackSort };
+            }
+            return { label: timeLabel, sort: `${String(timeParts.hours).padStart(2, '0')}:${String(timeParts.minutes).padStart(2, '0')}` };
+        }
+
+        function getTimeParts(dateString) {
+            if (!dateString) return null;
+            const parts = String(dateString).split(' ');
+            if (parts.length < 2) return null;
+            const timeParts = parts[1].split(':');
+            if (timeParts.length < 2) return null;
+            const hours = parseInt(timeParts[0], 10);
+            const minutes = parseInt(timeParts[1], 10);
+            if (Number.isNaN(hours) || Number.isNaN(minutes)) return null;
+            return { hours, minutes };
+        }
+
+        function formatTime(hours, minutes) {
+            const period = hours >= 12 ? 'PM' : 'AM';
+            const hour12 = hours % 12 === 0 ? 12 : hours % 12;
+            return `${hour12}:${String(minutes).padStart(2, '0')} ${period}`;
+        }
+
+        function isTaskOnDate(task, dateKey, dayShort) {
+            const startKey = getDateKeyFromString(task.due_date);
+            if (!startKey) return false;
+            const endKey = getDateKeyFromString(task.end_date);
+            if (dateKey < startKey) return false;
+            if (endKey && dateKey > endKey) return false;
+            if (task.recurrence === 'daily') {
+                return true;
+            }
+            if (task.recurrence === 'weekly') {
+                const days = String(task.recurrence_days || '')
+                    .split(',')
+                    .map((day) => day.trim())
+                    .filter(Boolean);
+                return days.includes(dayShort);
+            }
+            return dateKey === startKey;
+        }
+
+        function buildTaskPreviewCard(task) {
+            const card = document.createElement('div');
+            card.className = 'task-card';
+
+            const header = document.createElement('div');
+            header.className = 'task-card-header';
+
+            const title = document.createElement('div');
+            title.className = 'task-card-title';
+            title.textContent = task.title || 'Task';
+
+            const points = document.createElement('div');
+            points.className = 'task-pill';
+            points.textContent = `${task.points || 0} pts`;
+
+            header.appendChild(title);
+            header.appendChild(points);
+            card.appendChild(header);
+
+            const meta = document.createElement('div');
+            meta.className = 'task-meta';
+            const dueDisplay = getTaskDueDisplay(task);
+            meta.appendChild(buildMetaRow('Due', dueDisplay));
+
+            const infoRow = document.createElement('div');
+            infoRow.className = 'task-meta-row';
+            infoRow.appendChild(buildMetaItem('Category', task.category || ''));
+            infoRow.appendChild(buildMetaItem('Timing', task.timing_mode || ''));
+            infoRow.appendChild(buildMetaItem('Repeat', getRepeatLabel(task)));
+            meta.appendChild(infoRow);
+
+            if (task.creator_name) {
+                meta.appendChild(buildMetaRow('Created by', task.creator_name));
+            }
+            if (task.child_name) {
+                meta.appendChild(buildMetaRow('Assigned to', task.child_name));
+            }
+
+            card.appendChild(meta);
+
+            if (task.description) {
+                const desc = document.createElement('div');
+                desc.className = 'task-description';
+                desc.textContent = task.description;
+                card.appendChild(desc);
+            }
+
+            return card;
+        }
+
+        function buildMetaRow(label, value) {
+            const row = document.createElement('div');
+            row.className = 'task-meta-row';
+            const span = document.createElement('span');
+            const labelSpan = document.createElement('span');
+            labelSpan.className = 'task-meta-label';
+            labelSpan.textContent = `${label}:`;
+            span.appendChild(labelSpan);
+            span.appendChild(document.createTextNode(` ${value}`));
+            row.appendChild(span);
+            return row;
+        }
+
+        function buildMetaItem(label, value) {
+            const span = document.createElement('span');
+            const labelSpan = document.createElement('span');
+            labelSpan.className = 'task-meta-label';
+            labelSpan.textContent = `${label}:`;
+            span.appendChild(labelSpan);
+            span.appendChild(document.createTextNode(` ${value}`));
+            return span;
+        }
+
+        function getRepeatLabel(task) {
+            if (task.recurrence === 'daily') return 'Every Day';
+            if (task.recurrence === 'weekly') {
+                const days = String(task.recurrence_days || '').split(',').map((day) => day.trim()).filter(Boolean);
+                const label = days.length ? days.join(', ') : 'Specific Days';
+                return `Specific Days (${label})`;
+            }
+            return 'Once';
+        }
+
+        function getTaskDueDisplay(task) {
+            const timeOfDay = task.time_of_day || 'anytime';
+            const isOnce = !task.recurrence;
+            if (isOnce) {
+                return task.due_date_formatted || 'No date set';
+            }
+            if (timeOfDay === 'anytime') {
+                return 'Anytime';
+            }
+            const timeParts = getTimeParts(task.due_date);
+            if (!timeParts) {
+                return capitalize(timeOfDay);
+            }
+            const timeLabel = formatTime(timeParts.hours, timeParts.minutes);
+            return timeLabel === '12:00 AM' ? capitalize(timeOfDay) : timeLabel;
+        }
+
+        function capitalize(value) {
+            if (!value) return '';
+            return value.charAt(0).toUpperCase() + value.slice(1);
+        }
     </script>
 </head>
 <body<?php echo !empty($bodyClasses) ? ' class="' . implode(' ', $bodyClasses) . '"' : ''; ?>>
@@ -951,6 +1414,51 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                 </form>
             </section>
         <?php endif; ?>
+        <section class="task-calendar-section">
+            <div class="task-calendar-card">
+                <div class="calendar-header">
+                    <div>
+                        <h2>Weekly Calendar</h2>
+                        <p class="calendar-subtitle">Tap children to filter tasks in the week view.</p>
+                    </div>
+                    <div class="calendar-nav">
+                        <button type="button" class="calendar-nav-button" data-week-nav="-1">Previous Week</button>
+                        <div class="calendar-range" data-week-range></div>
+                        <button type="button" class="calendar-nav-button" data-week-nav="1">Next Week</button>
+                        <?php if (!$calendarPremium): ?>
+                            <span class="calendar-premium-note">Premium feature</span>
+                        <?php endif; ?>
+                    </div>
+                </div>
+                <?php if (canCreateContent($_SESSION['user_id'])): ?>
+                    <div class="calendar-filters">
+                        <div class="calendar-filter-header">
+                            <span class="calendar-filter-title">Filter by child</span>
+                            <label class="calendar-select-all">
+                                <input type="checkbox" data-calendar-select-all <?php echo !empty($children) ? 'checked' : ''; ?>>
+                                Select all
+                            </label>
+                        </div>
+                        <div class="calendar-child-grid">
+                            <?php foreach ($children as $child): ?>
+                                <label class="calendar-child-card">
+                                    <input type="checkbox" data-calendar-child value="<?php echo (int) $child['child_user_id']; ?>" checked>
+                                    <img src="<?php echo htmlspecialchars($child['avatar']); ?>" alt="<?php echo htmlspecialchars($child['first_name'] ?? $child['child_name']); ?>">
+                                    <span><?php echo htmlspecialchars($child['first_name'] ?? $child['child_name']); ?></span>
+                                </label>
+                            <?php endforeach; ?>
+                        </div>
+                    </div>
+                <?php endif; ?>
+                <div class="task-week-calendar" data-task-calendar>
+                    <div class="task-week-scroll">
+                        <div class="week-days week-days-header" data-week-days></div>
+                        <div class="week-grid" data-week-grid></div>
+                    </div>
+                    <div class="calendar-empty" data-calendar-empty>No tasks match the selected children for this week.</div>
+                </div>
+            </div>
+        </section>
         <div class="task-list">
             <h2><?php echo (canCreateContent($_SESSION['user_id'])) ? 'Created Tasks' : 'Assigned Tasks'; ?></h2>
             <?php if (empty($tasks)): ?>
@@ -1346,6 +1854,15 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                 </div>
             </div>
         <?php endif; ?>
+        <div class="task-modal" data-task-preview-modal>
+            <div class="task-modal-card" role="dialog" aria-modal="true" aria-labelledby="task-preview-title">
+                <header>
+                    <h2 id="task-preview-title">Task Details</h2>
+                    <button type="button" class="task-modal-close" aria-label="Close task details" data-task-preview-close>&times;</button>
+                </header>
+                <div class="task-modal-body" data-task-preview-body></div>
+            </div>
+        </div>
     </main>
     <footer>
       <p>Child Task and Chore App - Ver 3.12.2</p>
