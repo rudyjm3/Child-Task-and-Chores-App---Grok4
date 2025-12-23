@@ -197,6 +197,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             $first_name = filter_input(INPUT_POST, 'first_name', FILTER_SANITIZE_STRING);
             $last_name = filter_input(INPUT_POST, 'last_name', FILTER_SANITIZE_STRING);
+            $role_badge_label = filter_input(INPUT_POST, 'role_badge_label', FILTER_SANITIZE_STRING);
+            $use_role_badge_label = !empty($_POST['use_role_badge_label']) ? 1 : 0;
             $target_effective_role_for_update = getEffectiveRole($user_id);
 
             if (in_array($target_effective_role_for_update, ['main_parent', 'secondary_parent'], true)) {
@@ -238,12 +240,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
 
                 if (!$parent_conflict) {
-                    $stmt = $db->prepare("UPDATE users SET first_name = :first_name, last_name = :last_name, gender = :gender, parent_title = :parent_title WHERE id = :id");
+                    $stmt = $db->prepare("UPDATE users SET first_name = :first_name, last_name = :last_name, gender = :gender, parent_title = :parent_title, role_badge_label = :role_badge_label, use_role_badge_label = :use_role_badge_label WHERE id = :id");
                     if ($stmt->execute([
                         ':first_name' => $first_name,
                         ':last_name' => $last_name,
                         ':gender' => $gender ?: null,
                         ':parent_title' => $parent_title,
+                        ':role_badge_label' => $role_badge_label,
+                        ':use_role_badge_label' => $use_role_badge_label,
                         ':id' => $user_id
                     ])) {
                         $message = "Profile updated successfully!";
@@ -264,10 +268,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
                 }
             } else {
-                $stmt = $db->prepare("UPDATE users SET first_name = :first_name, last_name = :last_name, parent_title = NULL WHERE id = :id");
+                $stmt = $db->prepare("UPDATE users SET first_name = :first_name, last_name = :last_name, parent_title = NULL, role_badge_label = :role_badge_label, use_role_badge_label = :use_role_badge_label WHERE id = :id");
                 if ($stmt->execute([
                     ':first_name' => $first_name,
                     ':last_name' => $last_name,
+                    ':role_badge_label' => $role_badge_label,
+                    ':use_role_badge_label' => $use_role_badge_label,
                     ':id' => $user_id
                 ])) {
                     $message = "Profile updated successfully!";
@@ -442,6 +448,28 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                         <input type="text" id="last_name" name="last_name" value="<?php echo htmlspecialchars($user['last_name'] ?? ''); ?>" required>
                     </div>
                     <div class="form-group">
+                        <label for="role_badge_label">Role Badge (optional):</label>
+                        <input type="text" id="role_badge_label" name="role_badge_label" value="<?php echo htmlspecialchars($user['role_badge_label'] ?? ''); ?>">
+                    </div>
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" name="use_role_badge_label" value="1" <?php echo !empty($user['use_role_badge_label']) ? 'checked' : ''; ?>>
+                            Use custom role badge
+                        </label>
+                        <small style="display:block;margin-top:5px;color:#555;">This label appears wherever your role badge is shown.</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="role_badge_label">Role Badge (optional):</label>
+                        <input type="text" id="role_badge_label" name="role_badge_label" value="<?php echo htmlspecialchars($user['role_badge_label'] ?? ''); ?>">
+                    </div>
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" name="use_role_badge_label" value="1" <?php echo !empty($user['use_role_badge_label']) ? 'checked' : ''; ?>>
+                            Use custom role badge
+                        </label>
+                        <small style="display:block;margin-top:5px;color:#555;">This label appears wherever your role badge is shown.</small>
+                    </div>
+                    <div class="form-group">
                         <label for="birthday">Birthday:</label>
                         <input type="date" id="birthday" name="birthday" value="<?php echo htmlspecialchars($profile['birthday'] ?? ''); ?>" required>
                     </div>
@@ -510,6 +538,17 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                         <input type="text" id="last_name" name="last_name" value="<?php echo htmlspecialchars($user['last_name'] ?? ''); ?>" required>
                     </div>
                     <div class="form-group">
+                        <label for="role_badge_label">Role Badge (optional):</label>
+                        <input type="text" id="role_badge_label" name="role_badge_label" value="<?php echo htmlspecialchars($user['role_badge_label'] ?? ''); ?>">
+                    </div>
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" name="use_role_badge_label" value="1" <?php echo !empty($user['use_role_badge_label']) ? 'checked' : ''; ?>>
+                            Use custom role badge
+                        </label>
+                        <small style="display:block;margin-top:5px;color:#555;">This label appears wherever your role badge is shown.</small>
+                    </div>
+                    <div class="form-group">
                         <label for="gender">Gender:</label>
                         <select id="gender" name="gender">
                             <option value="">Select</option>
@@ -571,6 +610,17 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                     <div class="form-group">
                         <label for="last_name">Last Name:</label>
                         <input type="text" id="last_name" name="last_name" value="<?php echo htmlspecialchars($user['last_name'] ?? ''); ?>" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="role_badge_label">Role Badge (optional):</label>
+                        <input type="text" id="role_badge_label" name="role_badge_label" value="<?php echo htmlspecialchars($user['role_badge_label'] ?? ''); ?>">
+                    </div>
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" name="use_role_badge_label" value="1" <?php echo !empty($user['use_role_badge_label']) ? 'checked' : ''; ?>>
+                            Use custom role badge
+                        </label>
+                        <small style="display:block;margin-top:5px;color:#555;">This label appears wherever your role badge is shown.</small>
                     </div>
                     <button type="submit" name="update_parent_profile" class="button">Update Profile</button>
                 </form>

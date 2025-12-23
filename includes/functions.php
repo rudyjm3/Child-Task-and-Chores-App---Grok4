@@ -80,8 +80,18 @@ function getEffectiveRole($user_id) {
 
 // Human readable role label for badges
 function getUserRoleLabel($user_id) {
+    global $db;
     $role = getEffectiveRole($user_id);
     if (!$role) return null;
+
+    if ($role !== 'child') {
+        $badgeStmt = $db->prepare("SELECT role_badge_label, use_role_badge_label FROM users WHERE id = :id");
+        $badgeStmt->execute([':id' => $user_id]);
+        $badge = $badgeStmt->fetch(PDO::FETCH_ASSOC);
+        if (!empty($badge['use_role_badge_label']) && !empty($badge['role_badge_label'])) {
+            return trim((string) $badge['role_badge_label']);
+        }
+    }
 
     if (in_array($role, ['main_parent', 'secondary_parent'], true)) {
         $parentTitle = getParentTitle($user_id);
@@ -124,6 +134,8 @@ function calculateAge($birthday) {
 $db->exec("ALTER TABLE users 
     ADD COLUMN IF NOT EXISTS first_name VARCHAR(50) DEFAULT NULL,
     ADD COLUMN IF NOT EXISTS last_name VARCHAR(50) DEFAULT NULL,
+    ADD COLUMN IF NOT EXISTS role_badge_label VARCHAR(50) DEFAULT NULL,
+    ADD COLUMN IF NOT EXISTS use_role_badge_label TINYINT(1) DEFAULT 0,
     ADD COLUMN IF NOT EXISTS parent_title ENUM('mother','father') DEFAULT NULL,
     ADD COLUMN IF NOT EXISTS deleted_at DATETIME DEFAULT NULL");
 
@@ -816,7 +828,12 @@ function getDashboardData($user_id) {
                                 g.id, 
                                 g.title, 
                                 g.requested_at, 
-                                COALESCE(CONCAT(u.first_name, ' ', u.last_name), u.name, u.username) AS child_username,
+                                COALESCE(
+                                    NULLIF(TRIM(CONCAT(COALESCE(u.first_name, ''), ' ', COALESCE(u.last_name, ''))), ''),
+                                    NULLIF(u.name, ''),
+                                    u.username,
+                                    'Unknown'
+                                ) AS child_username,
                                 COALESCE(
                                     NULLIF(TRIM(CONCAT(COALESCE(creator.first_name, ''), ' ', COALESCE(creator.last_name, ''))), ''),
                                     NULLIF(creator.name, ''),
@@ -2141,9 +2158,11 @@ try {
     $db->exec($sql);
     error_log("Created/verified users table successfully");
 
-    // Add name column to users if not exists
+   // Add name column to users if not exists
    $db->exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS name VARCHAR(50) DEFAULT NULL");
    $db->exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS gender ENUM('male', 'female') DEFAULT NULL");
+   $db->exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS role_badge_label VARCHAR(50) DEFAULT NULL");
+   $db->exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS use_role_badge_label TINYINT(1) DEFAULT 0");
    error_log("Added/verified name and gender columns in users");
 
     // Create child_profiles table if not exists (removed preferences, added child_name)

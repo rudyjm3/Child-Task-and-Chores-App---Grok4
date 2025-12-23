@@ -104,12 +104,15 @@ $notificationCount = is_array($notificationsNew) ? count($notificationsNew) : 0;
     <style>
         .dashboard { padding: 20px; max-width: 720px; margin: 0 auto; text-align: center; }
         .points-summary { margin: 20px 0; display: flex; align-items: flex-start; gap: 25px; text-align: left; }
-        .child-identity { display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 120px; position: relative; }
+        .child-identity { display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 120px; }
+        .child-edit-wrapper { display: flex; justify-content: center; }
+        .child-edit-button { background: transparent; border: none; color: #5d4037; cursor: pointer; font-size: 1rem; padding: 4px; text-decoration: none; }
+        .child-edit-button:hover { color: #0d47a1; }
         .child-avatar { width: 72px; height: 72px; border-radius: 50%; object-fit: cover; border: 3px solid #ffd28a; background: #fff; box-shadow: 0 4px 10px rgba(0,0,0,0.12); }
         .child-first-name { font-size: 1rem; font-weight: 700; color: #263238; }
         .points-total { margin: 0; font-weight: 700; color: #263238; display: flex; flex-direction: column; gap: 6px; text-align: center; }
         .dashboard-cards { margin: 18px 0 24px; display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; }
-        .dashboard-card { background: #fff7e6; border: 2px solid #ffd28a; border-radius: 12px; padding: 14px 12px; display: flex; align-items: center; justify-content: center; gap: 10px; font-weight: 700; color: #5d4037; text-decoration: none; box-shadow: 0 4px 10px rgba(0,0,0,0.08); position: relative; cursor: pointer; appearance: none; }
+        .dashboard-card { background: #fff7e6; border: 2px solid #ffd28a; border-radius: 12px; padding: 14px 12px; display: flex; align-items: center; justify-content: center; gap: 10px; font-weight: 700; color: #5d4037; text-decoration: none; box-shadow: 0 4px 10px rgba(0,0,0,0.08); position: relative; cursor: pointer; appearance: none; font-family: 'Sigmar One', 'Sigma One', cursive; }
         .dashboard-card i { font-size: 1.2rem; color: #ef6c00; }
         .dashboard-card:hover { background: #ffe9c6; }
         .dashboard-card-count { position: absolute; top: 8px; right: 10px; background: #ff6f61; color: #fff; font-size: 0.8rem; min-width: 24px; height: 24px; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; padding: 0 6px; box-shadow: 0 2px 6px rgba(0,0,0,0.18); }
@@ -640,6 +643,11 @@ $notificationCount = is_array($notificationsNew) ? count($notificationsNew) : 0;
             <img class="child-avatar" src="<?php echo htmlspecialchars($childAvatar); ?>" alt="<?php echo htmlspecialchars($childFirstName !== '' ? $childFirstName : 'Child'); ?>">
             <button type="button" class="notification-trigger avatar-notification" data-child-notify-trigger aria-label="Notifications"><i class="fa-solid fa-bell"></i><?php if ($notificationCount > 0): ?><span class="notification-badge"><?php echo (int)$notificationCount; ?></span><?php endif; ?></button>
             <div class="child-first-name"><?php echo htmlspecialchars($childFirstName); ?></div>
+            <div class="child-edit-wrapper">
+               <a class="child-edit-button" href="profile.php?self=1" aria-label="Edit profile">
+                  <i class="fa-solid fa-pen"></i>
+               </a>
+            </div>
          </div>
          <div class="points-total">
             <span class="points-total-label">Total Points</span>
