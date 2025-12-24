@@ -3,7 +3,7 @@
 // Purpose: Display child dashboard with progress and task/reward links
 // Inputs: Session data
 // Outputs: Dashboard interface
-// Version: 3.12.2 (Notifications moved to header-triggered modal, Font Awesome icons)
+// Version: 3.15.0 (Notifications moved to header-triggered modal, Font Awesome icons)
 
 require_once __DIR__ . '/includes/functions.php';
 
@@ -99,12 +99,13 @@ $notificationCount = is_array($notificationsNew) ? count($notificationsNew) : 0;
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Child Dashboard</title>
-   <link rel="stylesheet" href="css/main.css?v=3.14.3">
+   <link rel="stylesheet" href="css/main.css?v=3.15.0">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" integrity="Evv84Mr4kqVGRNSgIGL/F/aIDqQb7xQ2vcrdIwxfjThSH8CSR7PBEakCr51Ck+w+/U6swU2Im1vVX0SVk9ABhg==" crossorigin="anonymous" referrerpolicy="no-referrer">
     <style>
         .dashboard { padding: 20px; max-width: 720px; margin: 0 auto; text-align: center; }
         .points-summary { margin: 20px 0; display: flex; align-items: flex-start; gap: 25px; text-align: left; }
         .child-identity { display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 120px; }
+        .child-avatar-wrap { position: relative; display: inline-block; }
         .child-edit-wrapper { display: flex; justify-content: center; }
         .child-edit-button { background: transparent; border: none; color: #5d4037; cursor: pointer; font-size: 1rem; padding: 4px; text-decoration: none; }
         .child-edit-button:hover { color: #0d47a1; }
@@ -148,7 +149,8 @@ $notificationCount = is_array($notificationsNew) ? count($notificationsNew) : 0;
         .notification-trigger { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; background: #fff; border: 2px solid #ffd28a; border-radius: 50%; box-shadow: 0 2px 4px rgba(0,0,0,0.12); cursor: pointer; }
         .notification-trigger i { font-size: 18px; color: #ef6c00; }
         .notification-badge { position: absolute; top: -6px; right: -8px; background: #d32f2f; color: #fff; border-radius: 12px; padding: 2px 6px; font-size: 0.75rem; font-weight: 700; min-width: 22px; text-align: center; }
-        .avatar-notification { position: absolute; top: -8px; right: -8px; }
+        .avatar-notification { position: absolute; top: 0; right: 0; transform: translate(35%, -35%); }
+        .week-item-badge { display: inline-flex; align-items: center; gap: 4px; margin-left: 8px; padding: 2px 8px; border-radius: 999px; font-size: 0.7rem; font-weight: 700; background: #2e7d32; color: #fff; text-transform: uppercase; }
         .nav-links { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: center; margin-top: 8px; }
         .nav-button { display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; background: #eef4ff; border: 1px solid #d5def0; border-radius: 8px; color: #0d47a1; font-weight: 700; text-decoration: none; }
         .nav-button:hover { background: #dce8ff; }
@@ -305,11 +307,14 @@ $notificationCount = is_array($notificationsNew) ? count($notificationsNew) : 0;
                     { key: 'evening', label: 'Evening' }
                 ];
                 const buildItem = (item) => {
+                    const badge = item.completed
+                        ? '<span class="week-item-badge"><i class="fa-solid fa-check"></i>Done</span>'
+                        : '';
                     return '<div class="week-item">' +
                         '<div class="week-item-main">' +
                         '<i class="' + item.icon + ' week-item-icon"></i>' +
                         '<div>' +
-                        '<div class="week-item-title">' + item.title + '</div>' +
+                        '<div class="week-item-title">' + item.title + badge + '</div>' +
                         '<div class="week-item-meta">' + item.time_label + '</div>' +
                         '</div>' +
                         '</div>' +
@@ -450,10 +455,93 @@ $notificationCount = is_array($notificationsNew) ? count($notificationsNew) : 0;
             $fallbackName = trim((string)($_SESSION['name'] ?? ($profile['name'] ?? $profile['username'] ?? '')));
             $childFirstName = $fallbackName !== '' ? explode(' ', $fallbackName)[0] : '';
          }
-         $routineCount = is_array($routines) ? count($routines) : 0;
-         $taskCountStmt = $db->prepare("SELECT COUNT(*) FROM tasks WHERE child_user_id = :child_id");
+         $todayDate = date('Y-m-d');
+         $todayDay = date('D');
+         $isRoutineScheduledOnDate = static function (array $routine, string $dateKey): bool {
+            $recurrence = $routine['recurrence'] ?? '';
+            $routineWeekday = !empty($routine['created_at']) ? (int) date('N', strtotime($routine['created_at'])) : null;
+            $routineDays = array_values(array_filter(array_map('trim', explode(',', (string) ($routine['recurrence_days'] ?? '')))));
+            $routineDateKey = !empty($routine['routine_date']) ? $routine['routine_date'] : (!empty($routine['created_at']) ? date('Y-m-d', strtotime($routine['created_at'])) : null);
+            if ($recurrence === 'daily') {
+               return true;
+            }
+            if ($recurrence === 'weekly') {
+               if (!empty($routineDays)) {
+                  $dayName = date('D', strtotime($dateKey));
+                  return in_array($dayName, $routineDays, true);
+               }
+               if ($routineWeekday) {
+                  $dayWeek = (int) date('N', strtotime($dateKey));
+                  return $dayWeek === $routineWeekday;
+               }
+               return false;
+            }
+            return $routineDateKey !== null && $routineDateKey === $dateKey;
+         };
+         $isRoutineCompletedOnDate = static function (array $routine, string $dateKey): bool {
+            $tasks = $routine['tasks'] ?? [];
+            if (empty($tasks)) {
+               return false;
+            }
+            foreach ($tasks as $task) {
+               $completedAt = $task['completed_at'] ?? null;
+               if (empty($completedAt)) {
+                  return false;
+               }
+               $completedDate = date('Y-m-d', strtotime($completedAt));
+               if ($completedDate !== $dateKey || ($task['status'] ?? 'pending') !== 'completed') {
+                  return false;
+               }
+            }
+            return true;
+         };
+         $routineCount = 0;
+         foreach ($routines as $routineEntry) {
+            if ($isRoutineScheduledOnDate($routineEntry, $todayDate) && !$isRoutineCompletedOnDate($routineEntry, $todayDate)) {
+               $routineCount++;
+            }
+         }
+         $taskCount = 0;
+         $taskCountStmt = $db->prepare("SELECT due_date, end_date, recurrence, recurrence_days, status, completed_at FROM tasks WHERE child_user_id = :child_id");
          $taskCountStmt->execute([':child_id' => $_SESSION['user_id']]);
-         $taskCount = (int)($taskCountStmt->fetchColumn() ?: 0);
+         foreach ($taskCountStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $dueDate = $row['due_date'] ?? null;
+            if (empty($dueDate)) {
+               continue;
+            }
+            $startKey = date('Y-m-d', strtotime($dueDate));
+            $endKey = !empty($row['end_date']) ? $row['end_date'] : null;
+            if ($todayDate < $startKey) {
+               continue;
+            }
+            if ($endKey && $todayDate > $endKey) {
+               continue;
+            }
+            $repeat = $row['recurrence'] ?? '';
+            $repeatDays = array_filter(array_map('trim', explode(',', (string) ($row['recurrence_days'] ?? ''))));
+            if ($repeat === 'daily') {
+               // keep
+            } elseif ($repeat === 'weekly') {
+               if (!in_array($todayDay, $repeatDays, true)) {
+                  continue;
+               }
+            } else {
+               if ($todayDate !== $startKey) {
+                  continue;
+               }
+            }
+            $status = $row['status'] ?? 'pending';
+            $completedAt = $row['completed_at'] ?? null;
+            $completedToday = false;
+            if (!empty($completedAt)) {
+               $completedDate = date('Y-m-d', strtotime($completedAt));
+               $completedToday = $completedDate === $todayDate && in_array($status, ['completed', 'approved'], true);
+            }
+            if ($completedToday) {
+               continue;
+            }
+            $taskCount++;
+         }
          $goalCount = isset($data['active_goals']) && is_array($data['active_goals']) ? count($data['active_goals']) : 0;
          $rewardCount = isset($data['rewards']) && is_array($data['rewards']) ? count($data['rewards']) : 0;
          $redeemedRewards = isset($data['redeemed_rewards']) && is_array($data['redeemed_rewards']) ? $data['redeemed_rewards'] : [];
@@ -471,7 +559,6 @@ $notificationCount = is_array($notificationsNew) ? count($notificationsNew) : 0;
             }
             return $stamp >= $weekStart->getTimestamp() && $stamp <= $weekEnd->getTimestamp();
          }));
-         $todayDate = date('Y-m-d');
          $weekDates = [];
          $scheduleByDay = [];
          $weekCursor = clone $weekStart;
@@ -534,12 +621,12 @@ $notificationCount = is_array($notificationsNew) ? count($notificationsNew) : 0;
                ];
             }
          }
-         foreach ($routines as $routine) {
-            $timeOfDay = $routine['time_of_day'] ?? 'anytime';
-            $recurrence = $routine['recurrence'] ?? '';
-            $routineWeekday = !empty($routine['created_at']) ? (int) date('N', strtotime($routine['created_at'])) : null;
-            $routineDays = array_values(array_filter(array_map('trim', explode(',', (string) ($routine['recurrence_days'] ?? '')))));
-            $routineDateKey = !empty($routine['routine_date']) ? $routine['routine_date'] : (!empty($routine['created_at']) ? date('Y-m-d', strtotime($routine['created_at'])) : null);
+            foreach ($routines as $routine) {
+               $timeOfDay = $routine['time_of_day'] ?? 'anytime';
+               $recurrence = $routine['recurrence'] ?? '';
+               $routineWeekday = !empty($routine['created_at']) ? (int) date('N', strtotime($routine['created_at'])) : null;
+               $routineDays = array_values(array_filter(array_map('trim', explode(',', (string) ($routine['recurrence_days'] ?? '')))));
+               $routineDateKey = !empty($routine['routine_date']) ? $routine['routine_date'] : (!empty($routine['created_at']) ? date('Y-m-d', strtotime($routine['created_at'])) : null);
             $routinePointsTotal = 0;
             foreach (($routine['tasks'] ?? []) as $task) {
                $routinePointsTotal += (int) ($task['point_value'] ?? 0);
@@ -551,11 +638,11 @@ $notificationCount = is_array($notificationsNew) ? count($notificationsNew) : 0;
                $timeSort = '99:99';
                $timeLabel = 'Anytime';
             }
-            foreach ($weekDates as $day) {
-               $dateKey = $day['date'];
-               if ($recurrence === 'daily') {
-                  // include every day
-               } elseif ($recurrence === 'weekly') {
+               foreach ($weekDates as $day) {
+                  $dateKey = $day['date'];
+                  if ($recurrence === 'daily') {
+                     // include every day
+                  } elseif ($recurrence === 'weekly') {
                   if (!empty($routineDays)) {
                      $dayName = date('D', strtotime($dateKey));
                      if (!in_array($dayName, $routineDays, true)) {
@@ -568,21 +655,23 @@ $notificationCount = is_array($notificationsNew) ? count($notificationsNew) : 0;
                      }
                   }
                } else {
-                  if (!$routineDateKey || $dateKey !== $routineDateKey) {
-                     continue;
+                     if (!$routineDateKey || $dateKey !== $routineDateKey) {
+                        continue;
+                     }
                   }
+                  $completedFlag = $isRoutineCompletedOnDate($routine, $dateKey);
+                  $scheduleByDay[$dateKey][] = [
+                     'title' => $routine['title'],
+                     'type' => 'Routine',
+                     'points' => $totalPoints,
+                     'time' => $timeSort,
+                     'time_label' => $timeLabel,
+                     'time_of_day' => $timeOfDay,
+                     'icon' => 'fa-solid fa-repeat',
+                     'completed' => $completedFlag
+                  ];
                }
-               $scheduleByDay[$dateKey][] = [
-                  'title' => $routine['title'],
-                  'type' => 'Routine',
-                  'points' => $totalPoints,
-                  'time' => $timeSort,
-                  'time_label' => $timeLabel,
-                  'time_of_day' => $timeOfDay,
-                  'icon' => 'fa-solid fa-repeat'
-               ];
             }
-         }
          $historyItems = [];
          $taskHistoryStmt = $db->prepare("SELECT title, points, completed_at FROM tasks WHERE child_user_id = :child_id AND status = 'approved' AND completed_at IS NOT NULL");
          $taskHistoryStmt->execute([':child_id' => $_SESSION['user_id']]);
@@ -640,8 +729,10 @@ $notificationCount = is_array($notificationsNew) ? count($notificationsNew) : 0;
       </script>
       <div class="points-summary">
          <div class="child-identity">
-            <img class="child-avatar" src="<?php echo htmlspecialchars($childAvatar); ?>" alt="<?php echo htmlspecialchars($childFirstName !== '' ? $childFirstName : 'Child'); ?>">
-            <button type="button" class="notification-trigger avatar-notification" data-child-notify-trigger aria-label="Notifications"><i class="fa-solid fa-bell"></i><?php if ($notificationCount > 0): ?><span class="notification-badge"><?php echo (int)$notificationCount; ?></span><?php endif; ?></button>
+            <div class="child-avatar-wrap">
+               <img class="child-avatar" src="<?php echo htmlspecialchars($childAvatar); ?>" alt="<?php echo htmlspecialchars($childFirstName !== '' ? $childFirstName : 'Child'); ?>">
+               <button type="button" class="notification-trigger avatar-notification" data-child-notify-trigger aria-label="Notifications"><i class="fa-solid fa-bell"></i><?php if ($notificationCount > 0): ?><span class="notification-badge"><?php echo (int)$notificationCount; ?></span><?php endif; ?></button>
+            </div>
             <div class="child-first-name"><?php echo htmlspecialchars($childFirstName); ?></div>
             <div class="child-edit-wrapper">
                <a class="child-edit-button" href="profile.php?self=1" aria-label="Edit profile">
@@ -767,10 +858,11 @@ $notificationCount = is_array($notificationsNew) ? count($notificationsNew) : 0;
       </div>
    </main>
    <footer>
-   <p>Child Task and Chore App - Ver 3.12.2</p>
+   <p>Child Task and Chore App - Ver 3.15.0</p>
 </footer>
 </body>
 </html>
+
 
 
 

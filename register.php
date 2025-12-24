@@ -1,7 +1,7 @@
 <?php
 // register.php - User registration
 // Purpose: Register new parent account (child creation now parent-driven)
-// Version: 3.12.2
+// Version: 3.15.0
 
 require_once __DIR__ . '/includes/functions.php';
 
@@ -32,7 +32,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Register - Child Task and Chore App</title>
-    <link rel="stylesheet" href="css/main.css?v=3.12.2">
+    <link rel="stylesheet" href="css/main.css?v=3.15.0">
     <style>
         .register-form { padding: 20px; max-width: 400px; margin: 0 auto; text-align: center; }
         .form-group { margin-bottom: 15px; }
@@ -82,3 +82,4 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </div>
 </body>
 </html>
+

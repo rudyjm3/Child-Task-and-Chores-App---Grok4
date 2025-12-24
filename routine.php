@@ -786,6 +786,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 $routine_tasks = $isParentContext ? getRoutineTasks($family_root_id) : [];
 $routines = getRoutines($_SESSION['user_id']);
+$todayDate = date('Y-m-d');
+
+foreach ($routines as &$routineEntry) {
+    $tasks = $routineEntry['tasks'] ?? [];
+    $completedTodayCount = 0;
+    foreach ($tasks as &$task) {
+        $completedAt = $task['completed_at'] ?? null;
+        $completedToday = false;
+        if (!empty($completedAt)) {
+            $completedDate = date('Y-m-d', strtotime($completedAt));
+            $completedToday = $completedDate === $todayDate && ($task['status'] ?? 'pending') === 'completed';
+        }
+        $task['completed_today'] = $completedToday;
+        if (!$completedToday) {
+            $task['status'] = 'pending';
+        }
+        if ($completedToday) {
+            $completedTodayCount++;
+        }
+    }
+    unset($task);
+    $routineEntry['tasks'] = $tasks;
+    $routineEntry['completed_today'] = !empty($tasks) && $completedTodayCount === count($tasks);
+}
+unset($routineEntry);
 
 foreach ($routines as &$routineEntry) {
     $timerWarningEnabled = !empty($routinePreferences['timer_warnings_enabled']) ? 1 : 0;
@@ -892,7 +917,7 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Routine Management</title>
-    <link rel="stylesheet" href="css/main.css?v=3.12.2">
+    <link rel="stylesheet" href="css/main.css?v=3.15.0">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" integrity="Evv84Mr4kqVGRNSgIGL/F/aIDqQb7xQ2vcrdIwxfjThSH8CSR7PBEakCr51Ck+w+/U6swU2Im1vVX0SVk9ABhg==" crossorigin="anonymous" referrerpolicy="no-referrer">
     <style>
         .page-messages { max-width: 960px; margin: 0 auto 20px; }
@@ -1976,7 +2001,7 @@ margin-bottom: 20px;}
         </section>
     </main>
     <footer>
-        <p>Child Task and Chore App - Ver 3.12.2</p>
+        <p>Child Task and Chore App - Ver 3.15.0</p>
     </footer>
     <script>
         window.RoutinePage = <?php echo json_encode($pageState, $jsonOptions); ?>;
@@ -3965,6 +3990,7 @@ margin-bottom: 20px;}
 </body>
 </html>
 <?php
+
 
 
 

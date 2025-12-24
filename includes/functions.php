@@ -3,7 +3,7 @@
 // Purpose: Centralize common operations for maintainability
 // Inputs: None initially
 // Outputs: Functions for app logic
-// Version: 3.10.14 (Family-wide role support and linked management enhancements)
+// Version: 3.15.0 (Family-wide role support and linked management enhancements)
 
 require_once __DIR__ . '/db_connect.php';
 
@@ -666,12 +666,53 @@ function getDashboardData($user_id) {
 
         if (!empty($childIds)) {
             $placeholders = implode(',', array_fill(0, count($childIds), '?'));
+            $todayDate = date('Y-m-d');
+            $todayDay = date('D');
 
             // Tasks assigned per child
-            $stmt = $db->prepare("SELECT child_user_id, COUNT(*) AS task_count FROM tasks WHERE child_user_id IN ($placeholders) GROUP BY child_user_id");
+            $stmt = $db->prepare("SELECT child_user_id, due_date, end_date, recurrence, recurrence_days, status, completed_at FROM tasks WHERE child_user_id IN ($placeholders)");
             $stmt->execute($childIds);
             while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-                $taskCounts[(int)$row['child_user_id']] = (int)$row['task_count'];
+                $childId = (int) $row['child_user_id'];
+                if (!isset($taskCounts[$childId])) {
+                    $taskCounts[$childId] = 0;
+                }
+                $dueDate = $row['due_date'] ?? null;
+                if (empty($dueDate)) {
+                    continue;
+                }
+                $startKey = date('Y-m-d', strtotime($dueDate));
+                $endKey = !empty($row['end_date']) ? $row['end_date'] : null;
+                if ($todayDate < $startKey) {
+                    continue;
+                }
+                if ($endKey && $todayDate > $endKey) {
+                    continue;
+                }
+                $repeat = $row['recurrence'] ?? '';
+                $repeatDays = array_filter(array_map('trim', explode(',', (string) ($row['recurrence_days'] ?? ''))));
+                if ($repeat === 'daily') {
+                    // keep
+                } elseif ($repeat === 'weekly') {
+                    if (!in_array($todayDay, $repeatDays, true)) {
+                        continue;
+                    }
+                } else {
+                    if ($todayDate !== $startKey) {
+                        continue;
+                    }
+                }
+                $status = $row['status'] ?? 'pending';
+                $completedAt = $row['completed_at'] ?? null;
+                $completedToday = false;
+                if (!empty($completedAt)) {
+                    $completedDate = date('Y-m-d', strtotime($completedAt));
+                    $completedToday = $completedDate === $todayDate && in_array($status, ['completed', 'approved'], true);
+                }
+                if ($completedToday) {
+                    continue;
+                }
+                $taskCounts[$childId] += 1;
             }
 
             // Points earned per child
@@ -2534,3 +2575,4 @@ $sql = "ALTER TABLE child_profiles
 $db->exec($sql);
 
 ?>
+

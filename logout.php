@@ -37,3 +37,4 @@ session_destroy();
     <!-- Body is empty as the script handles the action -->
 </body>
 </html>
+

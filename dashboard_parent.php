@@ -3,7 +3,7 @@
 // Purpose: Display parent dashboard with child overview and management links
 // Inputs: Session data
 // Outputs: Dashboard interface
-// Version: 3.12.2 (Notifications moved to header-triggered modal, Font Awesome icons, routine/reward updates)
+// Version: 3.15.0 (Notifications moved to header-triggered modal, Font Awesome icons, routine/reward updates)
 
 require_once __DIR__ . '/includes/functions.php';
 
@@ -390,6 +390,23 @@ foreach (($data['redeemed_rewards'] ?? []) as $rr) {
     }
 }
 $todayDate = date('Y-m-d');
+$isRoutineCompletedOnDate = static function (array $routine, string $dateKey): bool {
+    $tasks = $routine['tasks'] ?? [];
+    if (empty($tasks)) {
+        return false;
+    }
+    foreach ($tasks as $task) {
+        $completedAt = $task['completed_at'] ?? null;
+        if (empty($completedAt)) {
+            return false;
+        }
+        $completedDate = date('Y-m-d', strtotime($completedAt));
+        if ($completedDate !== $dateKey || ($task['status'] ?? 'pending') !== 'completed') {
+            return false;
+        }
+    }
+    return true;
+};
 $weekStart = new DateTime('monday this week');
 $weekStart->setTime(0, 0, 0);
 $weekEnd = new DateTime('sunday this week');
@@ -407,7 +424,7 @@ for ($i = 0; $i < 7; $i++) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Parent Dashboard</title>
-    <link rel="stylesheet" href="css/main.css?v=3.12.2">
+    <link rel="stylesheet" href="css/main.css?v=3.15.0">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" integrity="Evv84Mr4kqVGRNSgIGL/F/aIDqQb7xQ2vcrdIwxfjThSH8CSR7PBEakCr51Ck+w+/U6swU2Im1vVX0SVk9ABhg==" crossorigin="anonymous" referrerpolicy="no-referrer">
     <style>
         .dashboard { padding: 20px; max-width: 900px; margin: 0 auto; }
@@ -464,6 +481,7 @@ for ($i = 0; $i < 7; $i++) {
         .child-schedule-title { font-weight: 600; color: #3e2723; }
         .child-schedule-time { color: #6d4c41; font-size: 0.9rem; }
         .child-schedule-points { font-weight: 700; color: #2e7d32; white-space: nowrap; }
+        .child-schedule-badge { display: inline-flex; align-items: center; gap: 4px; margin-left: 8px; padding: 2px 8px; border-radius: 999px; font-size: 0.7rem; font-weight: 700; background: #2e7d32; color: #fff; text-transform: uppercase; }
         .view-week-button { justify-self: start; padding: 6px 12px; font-size: 0.9rem; background: #eef4ff; border: 1px solid #d5def0; color: #0d47a1; border-radius: 8px; cursor: pointer; }
         .week-modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.55); display: none; align-items: center; justify-content: center; z-index: 3200; padding: 14px; }
         .week-modal-backdrop.open { display: flex; }
@@ -778,18 +796,21 @@ for ($i = 0; $i < 7; $i++) {
                             { key: 'afternoon', label: 'Afternoon' },
                             { key: 'evening', label: 'Evening' }
                         ];
-                        const buildItem = (item) => {
-                            return '<li class="child-schedule-item">' +
-                                '<div class="child-schedule-main">' +
-                                '<i class="' + item.icon + '"></i>' +
-                                '<div>' +
-                                '<div class="child-schedule-title">' + item.title + '</div>' +
-                                '<div class="child-schedule-time">' + item.time_label + '</div>' +
-                                '</div>' +
-                                '</div>' +
-                                '<div class="child-schedule-points">' + item.points + ' pts</div>' +
-                                '</li>';
-                        };
+                    const buildItem = (item) => {
+                        const badge = item.completed
+                            ? '<span class="child-schedule-badge"><i class="fa-solid fa-check"></i>Done</span>'
+                            : '';
+                        return '<li class="child-schedule-item">' +
+                            '<div class="child-schedule-main">' +
+                            '<i class="' + item.icon + '"></i>' +
+                            '<div>' +
+                            '<div class="child-schedule-title">' + item.title + badge + '</div>' +
+                            '<div class="child-schedule-time">' + item.time_label + '</div>' +
+                            '</div>' +
+                            '</div>' +
+                            '<div class="child-schedule-points">' + item.points + ' pts</div>' +
+                            '</li>';
+                    };
                         const sectionsHtml = sections.map((section) => {
                             const sectionItems = items.filter((item) => item.time_of_day === section.key);
                             if (!sectionItems.length) {
@@ -1339,10 +1360,10 @@ for ($i = 0; $i < 7; $i++) {
                            $timeSort = '99:99';
                            $timeLabel = 'Anytime';
                         }
-                        foreach ($weekDates as $dateKey) {
-                           if ($recurrence === 'daily') {
-                              // include every day
-                           } elseif ($recurrence === 'weekly') {
+                       foreach ($weekDates as $dateKey) {
+                          if ($recurrence === 'daily') {
+                             // include every day
+                          } elseif ($recurrence === 'weekly') {
                               if (!empty($routineDays)) {
                                  $dayName = date('D', strtotime($dateKey));
                                  if (!in_array($dayName, $routineDays, true)) {
@@ -1355,21 +1376,23 @@ for ($i = 0; $i < 7; $i++) {
                                  }
                               }
                            } else {
-                              if (!$routineDateKey || $dateKey !== $routineDateKey) {
-                                 continue;
-                              }
-                           }
-                           $weekSchedule[$dateKey][] = [
-                              'title' => $routine['title'],
-                              'type' => 'Routine',
-                              'points' => $totalPoints,
-                              'time' => $timeSort,
-                              'time_label' => $timeLabel,
-                              'time_of_day' => $timeOfDay,
-                              'icon' => 'fa-solid fa-repeat'
-                           ];
-                        }
-                     }
+                             if (!$routineDateKey || $dateKey !== $routineDateKey) {
+                                continue;
+                             }
+                          }
+                          $completedFlag = $isRoutineCompletedOnDate($routine, $dateKey);
+                          $weekSchedule[$dateKey][] = [
+                             'title' => $routine['title'],
+                             'type' => 'Routine',
+                             'points' => $totalPoints,
+                             'time' => $timeSort,
+                             'time_label' => $timeLabel,
+                             'time_of_day' => $timeOfDay,
+                              'icon' => 'fa-solid fa-repeat',
+                              'completed' => $completedFlag
+                          ];
+                       }
+                    }
                      foreach ($weekSchedule as &$items) {
                         usort($items, static function ($a, $b) {
                            return ($a['time'] ?? '99:99') <=> ($b['time'] ?? '99:99');
@@ -1492,7 +1515,7 @@ for ($i = 0; $i < 7; $i++) {
                                               <div class="child-schedule-main">
                                                  <i class="<?php echo htmlspecialchars($item['icon']); ?>"></i>
                                                  <div>
-                                                    <div class="child-schedule-title"><?php echo htmlspecialchars($item['title']); ?></div>
+                                                    <div class="child-schedule-title"><?php echo htmlspecialchars($item['title']); ?><?php if (!empty($item['completed'])): ?><span class="child-schedule-badge"><i class="fa-solid fa-check"></i>Done</span><?php endif; ?></div>
                                                     <div class="child-schedule-time"><?php echo htmlspecialchars($item['time_label']); ?></div>
                                                  </div>
                                               </div>
@@ -1985,7 +2008,7 @@ for ($i = 0; $i < 7; $i++) {
         </div>
     </div>
     <footer>
-     <p>Child Task and Chores App - Ver 3.12.2</p>
+     <p>Child Task and Chores App - Ver 3.15.0</p>
    </footer>
 </body>
 <div class="child-remove-backdrop" data-child-remove-modal aria-hidden="true">
@@ -2004,4 +2027,5 @@ for ($i = 0; $i < 7; $i++) {
 </div>
 </body>
 </html>
+
 
