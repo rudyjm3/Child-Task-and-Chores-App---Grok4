@@ -434,6 +434,7 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
             gap: 10px;
             flex-wrap: wrap;
             margin-top: 8px;
+            position: relative;
         }
         .timer-button {
             padding: 10px 20px;
@@ -454,9 +455,20 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
         }
         .pause-hold-countdown {
             display: none;
-            font-weight: bold;
-            color: #ff5722;
-            width: 100%;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            min-width: 40px;
+            padding: 8px 12px;
+            border-radius: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            color: #fff;
+            font-weight: 700;
+            font-size: 1rem;
+            text-align: center;
+            z-index: 2;
+            pointer-events: none;
         }
     .nav-links { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: center; margin-top: 8px; }
     .nav-button { display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; background: #eef4ff; border: 1px solid #d5def0; border-radius: 8px; color: #0d47a1; font-weight: 700; text-decoration: none; }
@@ -838,19 +850,19 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                 }
             }
 
-            state.holdRemaining = 5;
-            showCountdown(state, `Hold for ${state.holdRemaining}s to pause`);
+            state.holdRemaining = 3;
+            showCountdown(state, state.holdRemaining);
 
             state.holdIntervalId = setInterval(() => {
                 state.holdRemaining -= 1;
                 if (state.holdRemaining > 0) {
-                    showCountdown(state, `Hold for ${state.holdRemaining}s to pause`);
+                    showCountdown(state, state.holdRemaining);
                     return;
                 }
 
                 clearInterval(state.holdIntervalId);
                 state.holdIntervalId = null;
-                showCountdown(state, 'Pausing...');
+                showCountdown(state, 0);
                 pauseTimer(taskId);
                 if (state.activePointerId !== null && state.button && state.button.releasePointerCapture) {
                     try {
@@ -888,10 +900,10 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
             hideCountdown(state);
         }
 
-        function showCountdown(state, message) {
+        function showCountdown(state, value) {
             if (!state.countdownElement) return;
             state.countdownElement.style.display = 'block';
-            state.countdownElement.textContent = message;
+            state.countdownElement.textContent = String(value);
         }
 
         function hideCountdown(state) {
