@@ -80,6 +80,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <p>Already have an account? <a href="login.php">Login here</a></p>
         <p class="role-note">Child accounts are created by parents during setup.</p>
     </div>
+  <script src="js/number-stepper.js" defer></script>
 </body>
 </html>
+
 

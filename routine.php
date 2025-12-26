@@ -375,6 +375,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $bonusAwarded = is_numeric($bonus) ? (int) $bonus : 0;
         $_SESSION['routine_awards'][$routineId] = true;
         $newTotal = getChildTotalPoints($childId);
+        if ($taskPointsAwarded > 0 || $bonusAwarded > 0) {
+            logRoutinePointsAward($routineId, $childId, $taskPointsAwarded, $bonusAwarded);
+        }
 
         if (!empty($routine['parent_user_id'])) {
             $parentIdForNote = (int) $routine['parent_user_id'];
@@ -763,6 +766,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $bonusAwarded = 0;
                 if ($childId > 0) {
                     $bonusAwarded = completeRoutine($routine_id, $childId, $grantBonus);
+                }
+                if ($childId > 0 && ($awardedPoints > 0 || $bonusAwarded > 0)) {
+                    logRoutinePointsAward($routine_id, $childId, $awardedPoints, $bonusAwarded);
                 }
                 $summaryParts = [];
                 if ($awardedPoints > 0) {
@@ -3987,9 +3993,11 @@ margin-bottom: 20px;}
             }
         })();
     </script>
+  <script src="js/number-stepper.js" defer></script>
 </body>
 </html>
 <?php
+
 
 
 

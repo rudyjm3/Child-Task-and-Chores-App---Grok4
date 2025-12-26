@@ -272,13 +272,6 @@ foreach ($activeRewards as $reward) {
         .modal-close { border: none; background: transparent; font-size: 20px; cursor: pointer; }
         #modal-body { overflow-y: auto; max-height: 70vh; }
         body.modal-open { overflow: hidden; }
-        .number-stepper { display: grid; grid-template-columns: auto 1fr auto; gap: 6px; align-items: center; }
-        .stepper-btn { border: 1px solid #e0e0e0; background: #f7f7f7; border-radius: 6px; padding: 8px 10px; cursor: pointer; color: #555; }
-        .stepper-btn:hover { background: #ededed; }
-        .stepper-input { width: 100%; }
-        input[type=number]::-webkit-outer-spin-button,
-        input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-        input[type=number] { -moz-appearance: textfield; }
         @media (max-width: 640px) {
             .template-card { max-width: 100%; width: 100%; padding-right: 64px; }
             .template-card .template-actions { position: absolute; top: 10px; right: 10px; justify-content: flex-end; }
@@ -638,6 +631,7 @@ $hasRecentMore = $recentTotal > $recentLimit;
         </div>
 
     </div>
+  <script src="js/number-stepper.js" defer></script>
 </body>
 <div class="modal-backdrop" id="modal-backdrop" aria-hidden="true">
     <div class="modal" role="dialog" aria-modal="true">
@@ -967,4 +961,5 @@ $hasRecentMore = $recentTotal > $recentLimit;
     })();
 </script>
 </html>
+
 

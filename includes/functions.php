@@ -979,9 +979,9 @@ function getDashboardData($user_id) {
 }
 
 // Create a new task
-function createTask($parent_user_id, $child_user_id, $title, $description, $due_date, $end_date, $points, $recurrence, $recurrence_days, $category, $timing_mode, $timer_minutes = null, $time_of_day = 'anytime', $creator_user_id = null) {
+function createTask($parent_user_id, $child_user_id, $title, $description, $due_date, $end_date, $points, $recurrence, $recurrence_days, $category, $timing_mode, $timer_minutes = null, $time_of_day = 'anytime', $photo_proof_required = 0, $creator_user_id = null) {
     global $db;
-    $stmt = $db->prepare("INSERT INTO tasks (parent_user_id, child_user_id, title, description, due_date, end_date, points, recurrence, recurrence_days, category, timing_mode, timer_minutes, time_of_day, created_by) VALUES (:parent_id, :child_id, :title, :description, :due_date, :end_date, :points, :recurrence, :recurrence_days, :category, :timing_mode, :timer_minutes, :time_of_day, :created_by)");
+    $stmt = $db->prepare("INSERT INTO tasks (parent_user_id, child_user_id, title, description, due_date, end_date, points, recurrence, recurrence_days, category, timing_mode, timer_minutes, time_of_day, photo_proof_required, created_by) VALUES (:parent_id, :child_id, :title, :description, :due_date, :end_date, :points, :recurrence, :recurrence_days, :category, :timing_mode, :timer_minutes, :time_of_day, :photo_proof_required, :created_by)");
     return $stmt->execute([
         ':parent_id' => $parent_user_id,
         ':child_id' => $child_user_id,
@@ -996,6 +996,7 @@ function createTask($parent_user_id, $child_user_id, $title, $description, $due_
         ':timing_mode' => $timing_mode,
         ':timer_minutes' => $timer_minutes,
         ':time_of_day' => $time_of_day,
+        ':photo_proof_required' => !empty($photo_proof_required) ? 1 : 0,
         ':created_by' => $creator_user_id ?? $parent_user_id
     ]);
 }
@@ -1134,6 +1135,35 @@ function getParentNotifications($parent_user_id) {
     ];
 }
 
+function ensureRoutinePointsLogsTable() {
+    global $db;
+    $db->exec("
+        CREATE TABLE IF NOT EXISTS routine_points_logs (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            routine_id INT NOT NULL,
+            child_user_id INT NOT NULL,
+            task_points INT NOT NULL DEFAULT 0,
+            bonus_points INT NOT NULL DEFAULT 0,
+            created_at DATETIME NOT NULL,
+            INDEX idx_routine_points_child (child_user_id, created_at),
+            INDEX idx_routine_points_routine (routine_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    ");
+}
+
+function logRoutinePointsAward($routine_id, $child_id, $task_points, $bonus_points) {
+    global $db;
+    ensureRoutinePointsLogsTable();
+    $stmt = $db->prepare("INSERT INTO routine_points_logs (routine_id, child_user_id, task_points, bonus_points, created_at)
+                          VALUES (:routine_id, :child_id, :task_points, :bonus_points, NOW())");
+    $stmt->execute([
+        ':routine_id' => (int) $routine_id,
+        ':child_id' => (int) $child_id,
+        ':task_points' => (int) $task_points,
+        ':bonus_points' => (int) $bonus_points
+    ]);
+}
+
 // Approve a task
 function approveTask($task_id) {
     global $db;
@@ -1141,7 +1171,7 @@ function approveTask($task_id) {
     $stmt->execute([':id' => $task_id]);
     $task = $stmt->fetch(PDO::FETCH_ASSOC);
     if ($task) {
-        $stmt = $db->prepare("UPDATE tasks SET status = 'approved' WHERE id = :id");
+        $stmt = $db->prepare("UPDATE tasks SET status = 'approved', approved_at = NOW() WHERE id = :id");
         if ($stmt->execute([':id' => $task_id])) {
             updateChildPoints($task['child_user_id'], $task['points']);
             addChildNotification(
@@ -2256,7 +2286,9 @@ try {
        end_date DATE DEFAULT NULL,
        status ENUM('pending', 'completed', 'approved') DEFAULT 'pending',
        photo_proof VARCHAR(255),
+       photo_proof_required TINYINT(1) DEFAULT 0,
        completed_at DATETIME,
+       approved_at DATETIME,
        created_by INT NULL,
        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (parent_user_id) REFERENCES users(id) ON DELETE CASCADE,
@@ -2277,6 +2309,10 @@ try {
    error_log("Added/verified recurrence_days in tasks");
    $db->exec("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS end_date DATE NULL");
    error_log("Added/verified end_date in tasks");
+   $db->exec("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS photo_proof_required TINYINT(1) DEFAULT 0");
+   error_log("Added/verified photo_proof_required in tasks");
+   $db->exec("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS approved_at DATETIME NULL");
+   error_log("Added/verified approved_at in tasks");
 
    // Create reward_templates table (library of reusable rewards)
    $sql = "CREATE TABLE IF NOT EXISTS reward_templates (

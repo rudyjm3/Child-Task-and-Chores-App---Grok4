@@ -474,6 +474,8 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
     <footer>
         <p>Child Task and Chore App - Ver 3.15.0</p>
     </footer>
+  <script src="js/number-stepper.js" defer></script>
 </body>
 </html>
+
 

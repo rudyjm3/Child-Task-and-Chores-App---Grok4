@@ -31,6 +31,41 @@ input[type="number"] {
   text-align: center;
 }
 
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+input[type="number"] {
+  -moz-appearance: textfield;
+}
+
+.number-stepper {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 6px;
+  align-items: center;
+}
+
+.stepper-btn {
+  border: 1px solid #e0e0e0;
+  background: #f7f7f7;
+  border-radius: 6px;
+  padding: 8px 10px;
+  cursor: pointer;
+  color: #555;
+}
+
+.stepper-btn:hover {
+  background: #ededed;
+}
+
+.stepper-input {
+  width: 100%;
+  text-align: center;
+}
+
 input:focus,
 textarea:focus,
 select:focus {

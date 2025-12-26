@@ -31,6 +31,8 @@ if (isset($_SESSION['user_id'])) {
         <a href="login.php" class="button">Login</a>
         <a href="register.php" class="button">Register</a>
     </div>
+  <script src="js/number-stepper.js" defer></script>
 </body>
 </html>
+
 

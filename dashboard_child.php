@@ -673,15 +673,41 @@ $notificationCount = is_array($notificationsNew) ? count($notificationsNew) : 0;
                }
             }
          $historyItems = [];
-         $taskHistoryStmt = $db->prepare("SELECT title, points, completed_at FROM tasks WHERE child_user_id = :child_id AND status = 'approved' AND completed_at IS NOT NULL");
+         $taskHistoryStmt = $db->prepare("SELECT title, points, approved_at, completed_at FROM tasks WHERE child_user_id = :child_id AND status = 'approved'");
          $taskHistoryStmt->execute([':child_id' => $_SESSION['user_id']]);
          foreach ($taskHistoryStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
-            $historyItems[] = [
-               'type' => 'Task',
-               'title' => $row['title'],
-               'points' => (int)($row['points'] ?? 0),
-               'date' => $row['completed_at']
-            ];
+               $dateValue = $row['approved_at'] ?? $row['completed_at'] ?? null;
+               if (empty($dateValue)) {
+                  continue;
+               }
+               $historyItems[] = [
+                  'type' => 'Task',
+                  'title' => $row['title'],
+                  'points' => (int)($row['points'] ?? 0),
+                  'date' => $dateValue
+               ];
+            }
+         try {
+            ensureRoutinePointsLogsTable();
+            $routineHistoryStmt = $db->prepare("
+                SELECT rpl.task_points, rpl.bonus_points, rpl.created_at, r.title
+                FROM routine_points_logs rpl
+                LEFT JOIN routines r ON rpl.routine_id = r.id
+                WHERE rpl.child_user_id = :child_id
+                ORDER BY rpl.created_at DESC
+            ");
+            $routineHistoryStmt->execute([':child_id' => $_SESSION['user_id']]);
+            foreach ($routineHistoryStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+               $totalPoints = (int)($row['task_points'] ?? 0) + (int)($row['bonus_points'] ?? 0);
+               $historyItems[] = [
+                  'type' => 'Routine',
+                  'title' => $row['title'] ?: 'Routine',
+                  'points' => $totalPoints,
+                  'date' => $row['created_at']
+               ];
+            }
+         } catch (Exception $e) {
+            $historyItems = $historyItems;
          }
          try {
             $db->exec("
@@ -860,8 +886,10 @@ $notificationCount = is_array($notificationsNew) ? count($notificationsNew) : 0;
    <footer>
    <p>Child Task and Chore App - Ver 3.15.0</p>
 </footer>
+  <script src="js/number-stepper.js" defer></script>
 </body>
 </html>
+
 
 
 

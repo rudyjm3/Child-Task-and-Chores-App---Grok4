@@ -58,11 +58,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($timing_mode !== 'timer') {
             $timer_minutes = null;
         }
+        $photo_proof_required = !empty($_POST['photo_proof_required']) ? 1 : 0;
 
         if (!empty($child_ids) && canCreateContent($_SESSION['user_id'])) {
             $allOk = true;
             foreach ($child_ids as $child_user_id) {
-                $ok = createTask($family_root_id, $child_user_id, $title, $description, $due_date, $end_date, $points, $recurrence, $recurrence_days, $category, $timing_mode, $timer_minutes, $time_of_day, $_SESSION['user_id']);
+                $ok = createTask($family_root_id, $child_user_id, $title, $description, $due_date, $end_date, $points, $recurrence, $recurrence_days, $category, $timing_mode, $timer_minutes, $time_of_day, $photo_proof_required, $_SESSION['user_id']);
                 if (!$ok) {
                     $allOk = false;
                 }
@@ -105,6 +106,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($timing_mode !== 'timer') {
             $timer_minutes = null;
         }
+        $photo_proof_required = !empty($_POST['photo_proof_required']) ? 1 : 0;
 
         if ($task_id && !empty($child_ids)) {
             $primary_child_id = $child_ids[0];
@@ -120,7 +122,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                       category = :category,
                                       timing_mode = :timing_mode,
                                       timer_minutes = :timer_minutes,
-                                      time_of_day = :time_of_day
+                                      time_of_day = :time_of_day,
+                                      photo_proof_required = :photo_proof_required
                                   WHERE id = :id AND parent_user_id = :parent_id AND status = 'pending'");
             $ok = $stmt->execute([
                 ':child_id' => $primary_child_id,
@@ -135,12 +138,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ':timing_mode' => $timing_mode,
                 ':timer_minutes' => $timer_minutes,
                 ':time_of_day' => $time_of_day,
+                ':photo_proof_required' => $photo_proof_required,
                 ':id' => $task_id,
                 ':parent_id' => $family_root_id
             ]);
             $allOk = $ok;
             foreach (array_slice($child_ids, 1) as $child_id) {
-                $cloneOk = createTask($family_root_id, $child_id, $title, $description, $due_date, $end_date, $points, $recurrence, $recurrence_days, $category, $timing_mode, $timer_minutes, $time_of_day, $_SESSION['user_id']);
+                $cloneOk = createTask($family_root_id, $child_id, $title, $description, $due_date, $end_date, $points, $recurrence, $recurrence_days, $category, $timing_mode, $timer_minutes, $time_of_day, $photo_proof_required, $_SESSION['user_id']);
                 if (!$cloneOk) {
                     $allOk = false;
                 }
@@ -160,14 +164,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     } elseif (isset($_POST['complete_task'])) {
         $task_id = filter_input(INPUT_POST, 'task_id', FILTER_VALIDATE_INT);
-        $photo_proof = $_FILES['photo_proof']['name'] ? 'uploads/' . $_FILES['photo_proof']['name'] : null;
-        if (completeTask($task_id, $_SESSION['user_id'], $photo_proof)) {
-            if ($photo_proof && is_uploaded_file($_FILES['photo_proof']['tmp_name'])) {
-                move_uploaded_file($_FILES['photo_proof']['tmp_name'], $photo_proof);
-            }
-            $message = "Task marked as completed (awaiting approval).";
+        $photo_proof = null;
+        $taskInfoStmt = $db->prepare("SELECT parent_user_id, title, photo_proof_required FROM tasks WHERE id = :id AND child_user_id = :child_id");
+        $taskInfoStmt->execute([':id' => $task_id, ':child_id' => $_SESSION['user_id']]);
+        $taskInfo = $taskInfoStmt->fetch(PDO::FETCH_ASSOC);
+        if (!$taskInfo) {
+            $message = "Task not found.";
         } else {
-            $message = "Failed to complete task.";
+            $photoRequired = !empty($taskInfo['photo_proof_required']);
+            $hasUpload = isset($_FILES['photo_proof']) && !empty($_FILES['photo_proof']['name']) && is_uploaded_file($_FILES['photo_proof']['tmp_name']);
+            if ($photoRequired && !$hasUpload) {
+                $message = "Photo proof is required to complete this task.";
+            } else {
+                if ($hasUpload) {
+                    $ext = pathinfo($_FILES['photo_proof']['name'], PATHINFO_EXTENSION);
+                    $ext = $ext ? '.' . strtolower($ext) : '';
+                    $photo_proof = 'uploads/task_' . (int) $task_id . '_' . time() . $ext;
+                }
+                if (completeTask($task_id, $_SESSION['user_id'], $photo_proof)) {
+                    if ($photo_proof && $hasUpload) {
+                        move_uploaded_file($_FILES['photo_proof']['tmp_name'], $photo_proof);
+                    }
+                    $childName = $_SESSION['name'] ?? $_SESSION['username'] ?? 'Child';
+        if (!empty($taskInfo['parent_user_id'])) {
+            $noteMessage = sprintf('%s completed task: %s', $childName, $taskInfo['title'] ?? 'Task');
+            addParentNotification((int) $taskInfo['parent_user_id'], 'task_completed', $noteMessage, 'task.php#task-' . (int) $task_id);
+        }
+                    $message = "Task marked as completed (awaiting approval).";
+                } else {
+                    $message = "Failed to complete task.";
+                }
+            }
         }
     } elseif (isset($_POST['approve_task']) && isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id']) && canAddEditChild($_SESSION['user_id'])) {
         $task_id = filter_input(INPUT_POST, 'task_id', FILTER_VALIDATE_INT);
@@ -243,6 +270,8 @@ foreach ($tasks as $task) {
         'timing_mode' => $task['timing_mode'] ?? '',
         'timer_minutes' => (int) ($task['timer_minutes'] ?? 0),
         'status' => $task['status'] ?? '',
+        'completed_at' => $task['completed_at'] ?? '',
+        'photo_proof_required' => !empty($task['photo_proof_required']) ? 1 : 0,
         'child_user_id' => (int) ($task['child_user_id'] ?? 0),
         'child_name' => $task['child_display_name'] ?? '',
         'creator_name' => $task['creator_display_name'] ?? ''
@@ -415,6 +444,8 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
         .task-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: none; align-items: center; justify-content: center; z-index: 4000; padding: 14px; }
         .task-modal.open { display: flex; }
         .task-modal-card { background: #fff; border-radius: 12px; max-width: 760px; width: min(760px, 100%); max-height: 85vh; overflow: hidden; box-shadow: 0 12px 32px rgba(0,0,0,0.25); display: grid; grid-template-rows: auto 1fr; }
+        .task-photo-thumb { width: 56px; height: 56px; border-radius: 10px; object-fit: cover; border: 1px solid #d5def0; box-shadow: 0 2px 6px rgba(0,0,0,0.12); cursor: pointer; }
+        .task-photo-preview { width: 100%; max-height: 70vh; object-fit: contain; border-radius: 10px; }
         .no-scroll { overflow: hidden; }
         .task-modal-card header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid #e0e0e0; }
         .task-modal-card h2 { margin: 0; font-size: 1.1rem; }
@@ -530,6 +561,15 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
         const deleteCloses = deleteModal ? deleteModal.querySelectorAll('[data-task-delete-close]') : [];
         const deleteForm = deleteModal ? deleteModal.querySelector('[data-task-delete-form]') : null;
         const deleteCopy = deleteModal ? deleteModal.querySelector('[data-task-delete-copy]') : null;
+        const proofButtons = document.querySelectorAll('[data-task-proof-open]');
+        const proofModal = document.querySelector('[data-task-proof-modal]');
+        const proofCloses = proofModal ? proofModal.querySelectorAll('[data-task-proof-close]') : [];
+        const proofForm = proofModal ? proofModal.querySelector('[data-task-proof-form]') : null;
+        const proofFileInput = proofModal ? proofModal.querySelector('input[name="photo_proof"]') : null;
+        const photoThumbs = document.querySelectorAll('[data-task-photo-src]');
+        const photoModal = document.querySelector('[data-task-photo-modal]');
+        const photoCloses = photoModal ? photoModal.querySelectorAll('[data-task-photo-close]') : [];
+        const photoPreview = photoModal ? photoModal.querySelector('[data-task-photo-preview]') : null;
 
         const updateTimerField = (wrapper, selectEl) => {
             if (!wrapper || !selectEl) return;
@@ -587,6 +627,10 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
             modalForm.querySelector('[name="category"]').value = data.category || 'household';
             modalForm.querySelector('[name="timing_mode"]').value = data.timingMode || 'no_limit';
             modalForm.querySelector('[name="timer_minutes"]').value = data.timerMinutes || '';
+            const photoToggle = modalForm.querySelector('[name="photo_proof_required"]');
+            if (photoToggle) {
+                photoToggle.checked = !!data.photoRequired;
+            }
             updateTimerField(
                 modalForm.querySelector('[data-timer-minutes-wrapper]'),
                 modalForm.querySelector('[name="timing_mode"]')
@@ -627,6 +671,34 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
             deleteModal.classList.remove('open');
             document.body.classList.remove('no-scroll');
         };
+        const openProofModal = (data) => {
+            if (!proofModal || !proofForm) return;
+            proofForm.querySelector('[name="task_id"]').value = data.id;
+            if (proofFileInput) {
+                proofFileInput.value = '';
+            }
+            proofModal.classList.add('open');
+            document.body.classList.add('no-scroll');
+        };
+        const closeProofModal = () => {
+            if (!proofModal) return;
+            proofModal.classList.remove('open');
+            document.body.classList.remove('no-scroll');
+        };
+        const openPhotoModal = (src) => {
+            if (!photoModal || !photoPreview) return;
+            photoPreview.src = src;
+            photoModal.classList.add('open');
+            document.body.classList.add('no-scroll');
+        };
+        const closePhotoModal = () => {
+            if (!photoModal) return;
+            photoModal.classList.remove('open');
+            document.body.classList.remove('no-scroll');
+            if (photoPreview) {
+                photoPreview.src = '';
+            }
+        };
 
         if (editButtons.length && modal) {
             editButtons.forEach((btn) => {
@@ -645,7 +717,8 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                         timingMode: btn.dataset.timingMode,
                         timerMinutes: btn.dataset.timerMinutes,
                         timeOfDay: btn.dataset.timeOfDay,
-                        recurrenceDays: btn.dataset.recurrenceDays
+                        recurrenceDays: btn.dataset.recurrenceDays,
+                        photoRequired: btn.dataset.photoRequired === '1'
                     });
                 });
             });
@@ -659,7 +732,7 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
         const createTimerWrapper = document.querySelector('[data-create-timer-minutes]');
         const createRepeatSelect = document.querySelector('#recurrence');
         const createRepeatWrapper = document.querySelector('[data-create-recurrence-days]');
-        const createForm = document.querySelector('form[action="task.php"]');
+        const createForm = document.querySelector('[data-create-task-form]');
         const createEndToggle = document.querySelector('[data-end-date-toggle]');
         const createEndWrapper = document.querySelector('[data-create-end-date]');
         const createEndToggleField = document.querySelector('[data-create-end-toggle]');
@@ -738,6 +811,35 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
             }
             deleteModal.addEventListener('click', (e) => { if (e.target === deleteModal) closeDeleteModal(); });
             document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeDeleteModal(); });
+        }
+        if (proofButtons.length && proofModal) {
+            proofButtons.forEach((btn) => {
+                btn.addEventListener('click', () => {
+                    openProofModal({
+                        id: btn.dataset.taskId
+                    });
+                });
+            });
+            if (proofCloses.length) {
+                proofCloses.forEach((btn) => btn.addEventListener('click', closeProofModal));
+            }
+            proofModal.addEventListener('click', (e) => { if (e.target === proofModal) closeProofModal(); });
+            document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeProofModal(); });
+        }
+        if (photoThumbs.length && photoModal) {
+            photoThumbs.forEach((thumb) => {
+                thumb.addEventListener('click', () => {
+                    const src = thumb.dataset.taskPhotoSrc;
+                    if (src) {
+                        openPhotoModal(src);
+                    }
+                });
+            });
+            if (photoCloses.length) {
+                photoCloses.forEach((btn) => btn.addEventListener('click', closePhotoModal));
+            }
+            photoModal.addEventListener('click', (e) => { if (e.target === photoModal) closePhotoModal(); });
+            document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closePhotoModal(); });
         }
         initTaskCalendar();
     });
@@ -1094,8 +1196,8 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                                 const title = document.createElement('span');
                                 title.className = 'calendar-task-title';
                                 title.textContent = task.title || 'Task';
-                                const isCompleted = isTaskCompleted(task);
-                                const isOverdue = !isCompleted && isTaskOverdue(task, dateKey);
+                            const isCompleted = isTaskCompleted(task, dateKey);
+                            const isOverdue = !isCompleted && isTaskOverdue(task, dateKey);
                                 let badge = null;
                                 if (isCompleted) {
                                     badge = document.createElement('span');
@@ -1245,13 +1347,21 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
             return dateKey === startKey;
         }
 
-        function isTaskCompleted(task) {
+        function isTaskCompleted(task, dateKey) {
             if (!task) return false;
-            return task.status === 'completed' || task.status === 'approved';
+            const statusDone = task.status === 'completed' || task.status === 'approved';
+            if (!statusDone) return false;
+            const repeat = task.recurrence || '';
+            if (!repeat) return true;
+            if (!task.completed_at || !dateKey) return false;
+            return getDateKeyFromString(task.completed_at) === dateKey;
         }
 
         function isTaskOverdue(task, dateKey) {
-            if (!task || task.status !== 'pending' || !dateKey) return false;
+            if (!task || !dateKey) return false;
+            if (isTaskCompleted(task, dateKey)) return false;
+            const repeat = task.recurrence || '';
+            if (!repeat && task.status !== 'pending') return false;
             const stamp = getInstanceDueTimestamp(task, dateKey);
             if (!stamp) return false;
             return stamp < Date.now();
@@ -1300,9 +1410,11 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
             const infoRow = document.createElement('div');
             infoRow.className = 'task-meta-row';
             infoRow.appendChild(buildMetaItem('Category', task.category || ''));
-            infoRow.appendChild(buildMetaItem('Timing', task.timing_mode || ''));
+            infoRow.appendChild(buildMetaItem('Timing', getTimingLabel(task.timing_mode)));
             infoRow.appendChild(buildMetaItem('Repeat', getRepeatLabel(task)));
             meta.appendChild(infoRow);
+
+            meta.appendChild(buildMetaRow('Photo Proof', task.photo_proof_required ? 'Required' : 'Not required'));
 
             if (task.creator_name) {
                 meta.appendChild(buildMetaRow('Created by', task.creator_name));
@@ -1356,6 +1468,12 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
             return 'Once';
         }
 
+        function getTimingLabel(value) {
+            if (!value) return '';
+            if (value === 'no_limit') return 'None';
+            return value.charAt(0).toUpperCase() + value.slice(1);
+        }
+
         function getTaskDueDisplay(task) {
             const timeOfDay = task.time_of_day || 'anytime';
             const isOnce = !task.recurrence;
@@ -1404,7 +1522,7 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                 <div class="routine-section-header">
                     <h2>Create Task</h2>
                 </div>
-                <form method="POST" action="task.php" enctype="multipart/form-data">
+                <form method="POST" action="task.php" enctype="multipart/form-data" data-create-task-form>
                     <?php $autoSelectChildId = count($children) === 1 ? (int) $children[0]['child_user_id'] : null; ?>
                     <input type="hidden" name="start_date" value="<?php echo date('Y-m-d'); ?>">
                     <div class="form-grid">
@@ -1466,6 +1584,15 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                             <label class="toggle-row">
                                 <span class="toggle-switch">
                                     <input type="checkbox" name="end_date_enabled" data-end-date-toggle>
+                                    <span class="toggle-slider"></span>
+                                </span>
+                            </label>
+                        </div>
+                        <div class="form-group toggle-field">
+                            <span class="toggle-label">Photo Proof</span>
+                            <label class="toggle-row">
+                                <span class="toggle-switch">
+                                    <input type="checkbox" name="photo_proof_required" value="1">
                                     <span class="toggle-slider"></span>
                                 </span>
                             </label>
@@ -1565,7 +1692,7 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                         $current_time = time();
                         error_log("Task ID {$task['id']}: due_date={$task['due_date']}, due_time=$due_time, current_time=$current_time, overdue=" . ($due_time < $current_time ? 'true' : 'false'));
                         ?>
-                        <div class="task-card<?php if ($due_time < $current_time) { echo ' overdue'; } ?>" data-task-id="<?php echo $task['id']; ?>">
+                        <div class="task-card<?php if ($due_time < $current_time) { echo ' overdue'; } ?>" id="task-<?php echo (int) $task['id']; ?>" data-task-id="<?php echo $task['id']; ?>">
                             <div class="task-card-header">
                                 <div class="task-card-title"><?php echo htmlspecialchars($task['title']); ?></div>
                                 <div class="task-pill"><?php echo (int)$task['points']; ?> pts</div>
@@ -1591,7 +1718,7 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                                 </div>
                                 <div class="task-meta-row">
                                     <span><span class="task-meta-label">Category:</span> <?php echo htmlspecialchars($task['category']); ?></span>
-                                    <span><span class="task-meta-label">Timing:</span> <?php echo htmlspecialchars($task['timing_mode']); ?></span>
+                                    <span><span class="task-meta-label">Timing:</span> <?php echo htmlspecialchars($task['timing_mode'] === 'no_limit' ? 'None' : ucfirst($task['timing_mode'])); ?></span>
                                     <span><span class="task-meta-label">Repeat:</span>
                                         <?php
                                             $repeatLabel = 'Once';
@@ -1604,6 +1731,9 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                                             echo htmlspecialchars($repeatLabel);
                                         ?>
                                     </span>
+                                </div>
+                                <div class="task-meta-row">
+                                    <span><span class="task-meta-label">Photo Proof:</span> <?php echo !empty($task['photo_proof_required']) ? 'Required' : 'Not required'; ?></span>
                                 </div>
                                 <?php if (!empty($task['creator_display_name'])): ?>
                                     <div class="task-meta-row">
@@ -1619,6 +1749,11 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                             <?php if (!empty($task['description'])): ?>
                                 <div class="task-description"><?php echo htmlspecialchars($task['description']); ?></div>
                             <?php endif; ?>
+                            <?php if (!empty($task['photo_proof'])): ?>
+                                <div class="task-description">
+                                    <img src="<?php echo htmlspecialchars($task['photo_proof']); ?>" alt="Photo proof" class="task-photo-thumb" data-task-photo-src="<?php echo htmlspecialchars($task['photo_proof'], ENT_QUOTES); ?>">
+                                </div>
+                            <?php endif; ?>
                             <?php if ($task['timing_mode'] === 'timer' && !empty($task['timer_minutes'])): ?>
                                 <?php $timerMinutes = (int) $task['timer_minutes']; ?>
                                 <p class="timer" id="timer-<?php echo $task['id']; ?>"><?php echo sprintf('%02d:00', $timerMinutes); ?></p>
@@ -1629,12 +1764,15 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                                 </div>
                             <?php endif; ?>
                                 <?php if (!canCreateContent($_SESSION['user_id'])): ?>
-                                <form method="POST" action="task.php" enctype="multipart/form-data">
-                                    <input type="hidden" name="task_id" value="<?php echo $task['id']; ?>">
-                                    <input type="file" name="photo_proof">
-                                    <button type="submit" name="complete_task">Finish Task</button>
-                                </form>
-                            <?php endif; ?>
+                                    <?php if (!empty($task['photo_proof_required'])): ?>
+                                        <button type="button" class="button" data-task-proof-open data-task-id="<?php echo (int) $task['id']; ?>" data-task-title="<?php echo htmlspecialchars($task['title'], ENT_QUOTES); ?>">Finish Task</button>
+                                    <?php else: ?>
+                                        <form method="POST" action="task.php">
+                                            <input type="hidden" name="task_id" value="<?php echo (int) $task['id']; ?>">
+                                            <button type="submit" name="complete_task">Finish Task</button>
+                                        </form>
+                                    <?php endif; ?>
+                                <?php endif; ?>
                             <?php if (canCreateContent($_SESSION['user_id']) && canAddEditChild($_SESSION['user_id'])): ?>
                                 <div class="task-card-actions">
                                     <?php $childName = $childNameById[(int)$task['child_user_id']] ?? 'Child'; ?>
@@ -1661,7 +1799,8 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                                             data-recurrence-days="<?php echo htmlspecialchars($task['recurrence_days'] ?? '', ENT_QUOTES); ?>"
                                             data-category="<?php echo htmlspecialchars($task['category'] ?? '', ENT_QUOTES); ?>"
                                             data-timing-mode="<?php echo htmlspecialchars($task['timing_mode'] ?? '', ENT_QUOTES); ?>"
-                                            data-timer-minutes="<?php echo (int)($task['timer_minutes'] ?? 0); ?>">
+                                            data-timer-minutes="<?php echo (int)($task['timer_minutes'] ?? 0); ?>"
+                                            data-photo-required="<?php echo (int)($task['photo_proof_required'] ?? 0); ?>">
                                         <i class="fa-solid fa-pen"></i>
                                     </button>
                                     <button type="button"
@@ -1688,7 +1827,7 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                         <p>No tasks waiting approval.</p>
                     <?php else: ?>
                         <?php foreach ($completed_tasks as $task): ?>
-                        <div class="task-card" data-task-id="<?php echo $task['id']; ?>">
+                        <div class="task-card" id="task-<?php echo (int) $task['id']; ?>" data-task-id="<?php echo $task['id']; ?>">
                             <div class="task-card-header">
                                 <div class="task-card-title"><?php echo htmlspecialchars($task['title']); ?></div>
                                 <div class="task-pill"><?php echo (int)$task['points']; ?> pts</div>
@@ -1714,7 +1853,7 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                                 </div>
                                 <div class="task-meta-row">
                                     <span><span class="task-meta-label">Category:</span> <?php echo htmlspecialchars($task['category']); ?></span>
-                                    <span><span class="task-meta-label">Timing:</span> <?php echo htmlspecialchars($task['timing_mode']); ?></span>
+                                    <span><span class="task-meta-label">Timing:</span> <?php echo htmlspecialchars($task['timing_mode'] === 'no_limit' ? 'None' : ucfirst($task['timing_mode'])); ?></span>
                                     <span><span class="task-meta-label">Repeat:</span>
                                         <?php
                                             $repeatLabel = 'Once';
@@ -1728,6 +1867,9 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                                         ?>
                                     </span>
                                 </div>
+                                <div class="task-meta-row">
+                                    <span><span class="task-meta-label">Photo Proof:</span> <?php echo !empty($task['photo_proof_required']) ? 'Required' : 'Not required'; ?></span>
+                                </div>
                                 <?php if (!empty($task['creator_display_name'])): ?>
                                     <div class="task-meta-row">
                                         <span><span class="task-meta-label">Created by:</span> <?php echo htmlspecialchars($task['creator_display_name']); ?></span>
@@ -1736,6 +1878,11 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                             </div>
                             <?php if (!empty($task['description'])): ?>
                                 <div class="task-description"><?php echo htmlspecialchars($task['description']); ?></div>
+                            <?php endif; ?>
+                            <?php if (!empty($task['photo_proof'])): ?>
+                                <div class="task-description">
+                                    <img src="<?php echo htmlspecialchars($task['photo_proof']); ?>" alt="Photo proof" class="task-photo-thumb" data-task-photo-src="<?php echo htmlspecialchars($task['photo_proof'], ENT_QUOTES); ?>">
+                                </div>
                             <?php endif; ?>
                             <?php if (canCreateContent($_SESSION['user_id']) && canAddEditChild($_SESSION['user_id'])): ?>
                                 <form method="POST" action="task.php">
@@ -1759,7 +1906,7 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                         <p>No approved tasks.</p>
                     <?php else: ?>
                         <?php foreach ($approved_tasks as $task): ?>
-                        <div class="task-card" data-task-id="<?php echo $task['id']; ?>">
+                        <div class="task-card" id="task-<?php echo (int) $task['id']; ?>" data-task-id="<?php echo $task['id']; ?>">
                             <div class="task-card-header">
                                 <div class="task-card-title"><?php echo htmlspecialchars($task['title']); ?></div>
                                 <div class="task-pill"><?php echo (int)$task['points']; ?> pts</div>
@@ -1785,7 +1932,7 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                                 </div>
                                 <div class="task-meta-row">
                                     <span><span class="task-meta-label">Category:</span> <?php echo htmlspecialchars($task['category']); ?></span>
-                                    <span><span class="task-meta-label">Timing:</span> <?php echo htmlspecialchars($task['timing_mode']); ?></span>
+                                    <span><span class="task-meta-label">Timing:</span> <?php echo htmlspecialchars($task['timing_mode'] === 'no_limit' ? 'None' : ucfirst($task['timing_mode'])); ?></span>
                                     <span><span class="task-meta-label">Repeat:</span>
                                         <?php
                                             $repeatLabel = 'Once';
@@ -1798,6 +1945,9 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                                             echo htmlspecialchars($repeatLabel);
                                         ?>
                                     </span>
+                                </div>
+                                <div class="task-meta-row">
+                                    <span><span class="task-meta-label">Photo Proof:</span> <?php echo !empty($task['photo_proof_required']) ? 'Required' : 'Not required'; ?></span>
                                 </div>
                                 <?php if (!empty($task['creator_display_name'])): ?>
                                     <div class="task-meta-row">
@@ -1889,6 +2039,15 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                                         </span>
                                     </label>
                                 </div>
+                                <div class="form-group toggle-field">
+                                    <span class="toggle-label">Photo Proof</span>
+                                    <label class="toggle-row">
+                                        <span class="toggle-switch">
+                                            <input type="checkbox" name="photo_proof_required" value="1">
+                                            <span class="toggle-slider"></span>
+                                        </span>
+                                    </label>
+                                </div>
                                 <div class="form-group end-date-field" data-end-date-wrapper>
                                     <label>End Date</label>
                                     <input type="date" name="end_date" value="">
@@ -1944,6 +2103,39 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                 </div>
             </div>
         <?php endif; ?>
+        <div class="task-modal" data-task-proof-modal>
+            <div class="task-modal-card" role="dialog" aria-modal="true" aria-labelledby="task-proof-title">
+                <header>
+                    <h2 id="task-proof-title">Photo Proof</h2>
+                    <button type="button" class="task-modal-close" aria-label="Close photo proof" data-task-proof-close>&times;</button>
+                </header>
+                <div class="task-modal-body">
+                    <p>Please upload a photo to complete this task.</p>
+                    <form method="POST" action="task.php" enctype="multipart/form-data" data-task-proof-form>
+                        <input type="hidden" name="task_id" value="">
+                        <div class="form-group">
+                            <label for="photo_proof">Photo Proof</label>
+                            <input type="file" id="photo_proof" name="photo_proof" accept="image/*" capture="environment" required>
+                        </div>
+                        <div class="modal-actions">
+                            <button type="submit" name="complete_task" class="button">Complete Task</button>
+                            <button type="button" class="button secondary" data-task-proof-close>Cancel</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+        <div class="task-modal" data-task-photo-modal>
+            <div class="task-modal-card" role="dialog" aria-modal="true" aria-labelledby="task-photo-title">
+                <header>
+                    <h2 id="task-photo-title">Photo Proof</h2>
+                    <button type="button" class="task-modal-close" aria-label="Close photo preview" data-task-photo-close>&times;</button>
+                </header>
+                <div class="task-modal-body">
+                    <img src="" alt="Task photo proof" class="task-photo-preview" data-task-photo-preview>
+                </div>
+            </div>
+        </div>
         <div class="task-modal" data-task-preview-modal>
             <div class="task-modal-card" role="dialog" aria-modal="true" aria-labelledby="task-preview-title">
                 <header>
@@ -1957,6 +2149,8 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
     <footer>
       <p>Child Task and Chore App - Ver 3.15.0</p>
    </footer>
+  <script src="js/number-stepper.js" defer></script>
 </body>
 </html>
+
 

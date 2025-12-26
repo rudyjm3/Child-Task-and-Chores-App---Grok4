@@ -144,6 +144,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt->execute($params);
             $message = "Notifications deleted.";
         }
+    } elseif (isset($_POST['approve_task_notification'])) {
+        $task_id = filter_input(INPUT_POST, 'task_id', FILTER_VALIDATE_INT);
+        $parent_notification_id = filter_input(INPUT_POST, 'parent_notification_id', FILTER_VALIDATE_INT);
+        if ($task_id) {
+            $taskStmt = $db->prepare("SELECT parent_user_id, status FROM tasks WHERE id = :id LIMIT 1");
+            $taskStmt->execute([':id' => $task_id]);
+            $taskRow = $taskStmt->fetch(PDO::FETCH_ASSOC);
+            if ($taskRow && (int) $taskRow['parent_user_id'] === (int) $main_parent_id && ($taskRow['status'] ?? '') === 'completed') {
+                if (approveTask($task_id)) {
+                    $message = "Task approved!";
+                    if ($parent_notification_id) {
+                        ensureParentNotificationsTable();
+                        $mark = $db->prepare("UPDATE parent_notifications SET is_read = 1 WHERE id = :id AND parent_user_id = :pid");
+                        $mark->execute([':id' => $parent_notification_id, ':pid' => $main_parent_id]);
+                    }
+                } else {
+                    $message = "Failed to approve task.";
+                }
+            } else {
+                $message = "Task is no longer waiting approval.";
+            }
+        } else {
+            $message = "Invalid task approval request.";
+        }
     } elseif (isset($_POST['create_reward'])) {
         $title = filter_input(INPUT_POST, 'reward_title', FILTER_SANITIZE_STRING);
         $description = filter_input(INPUT_POST, 'reward_description', FILTER_SANITIZE_STRING);
@@ -494,6 +518,21 @@ for ($i = 0; $i < 7; $i++) {
         .week-day-title { font-weight: 700; color: #f9f9f9; margin-bottom: 6px; padding: 6px 10px; border-radius: 8px; background: linear-gradient(135deg, #5a98e2, #84b3ed); }
         .week-day-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
         body.modal-open { overflow: hidden; }
+        .child-history-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: none; align-items: center; justify-content: center; z-index: 4200; padding: 14px; }
+        .child-history-modal.open { display: flex; }
+        .child-history-card { background: #fff; border-radius: 12px; max-width: 620px; width: min(620px, 100%); max-height: 82vh; overflow: hidden; box-shadow: 0 12px 32px rgba(0,0,0,0.25); display: grid; grid-template-rows: auto 1fr; }
+        .child-history-card header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid #e0e0e0; }
+        .child-history-card h2 { margin: 0; font-size: 1.1rem; }
+        .child-history-close { background: transparent; border: none; font-size: 1.3rem; cursor: pointer; color: #555; }
+        .child-history-body { padding: 12px 16px 16px; overflow-y: auto; text-align: left; }
+        .child-history-day { margin-top: 12px; }
+        .child-history-day-title { font-weight: 700; color: #5d4037; margin-bottom: 6px; }
+        .child-history-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
+        .child-history-item { background: #fff7e6; border: 1px solid #ffd28a; border-radius: 10px; padding: 10px 12px; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+        .child-history-item-title { font-weight: 700; color: #3e2723; }
+        .child-history-item-meta { color: #6d4c41; font-size: 0.95rem; }
+        .child-history-item-points { font-weight: 700; color: #00bb01; white-space: nowrap; }
+        .child-history-item-points.is-negative { color: #d32f2f; }
         .adjust-modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.55); display: none; align-items: center; justify-content: center; z-index: 3000; padding: 12px; }
         .adjust-modal-backdrop.open { display: flex; }
         .adjust-modal { background: #fff; border-radius: 10px; padding: 18px; max-width: 420px; width: min(420px, 100%); box-shadow: 0 14px 36px rgba(0,0,0,0.25); display: grid; gap: 12px; }
@@ -615,6 +654,14 @@ for ($i = 0; $i < 7; $i++) {
         .parent-notification-item { padding: 10px; background: #fff; border: 1px solid #e0e0e0; border-radius: 8px; display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
         .parent-notification-item input[type="checkbox"] { width: 19.8px; height: 19.8px; }
         .parent-notification-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 8px; }
+        .parent-task-photo-thumb { width: 54px; height: 54px; border-radius: 10px; object-fit: cover; border: 1px solid #d5def0; box-shadow: 0 2px 6px rgba(0,0,0,0.12); cursor: pointer; }
+        .parent-photo-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: none; align-items: center; justify-content: center; z-index: 4200; padding: 14px; }
+        .parent-photo-modal.open { display: flex; }
+        .parent-photo-card { background: #fff; border-radius: 12px; max-width: 720px; width: min(720px, 100%); max-height: 85vh; overflow: hidden; box-shadow: 0 12px 32px rgba(0,0,0,0.25); display: grid; grid-template-rows: auto 1fr; }
+        .parent-photo-card header { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid #e0e0e0; }
+        .parent-photo-close { background: transparent; border: none; font-size: 1.3rem; cursor: pointer; color: #555; }
+        .parent-photo-body { padding: 12px 14px 16px; }
+        .parent-photo-preview { width: 100%; max-height: 70vh; object-fit: contain; border-radius: 10px; }
         .parent-trash-button { border: none; background: transparent; cursor: pointer; font-size: 1.1rem; padding: 4px; color: #b71c1c; }
         .nav-links { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: center; margin-top: 8px; }
         .nav-button { display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; background: #eef4ff; border: 1px solid #d5def0; border-radius: 8px; color: #0d47a1; font-weight: 700; text-decoration: none; }
@@ -730,6 +777,38 @@ for ($i = 0; $i < 7; $i++) {
                 });
             }
 
+            const parentPhotoThumbs = document.querySelectorAll('[data-parent-photo-src]');
+            const parentPhotoModal = document.querySelector('[data-parent-photo-modal]');
+            const parentPhotoClose = parentPhotoModal ? parentPhotoModal.querySelector('[data-parent-photo-close]') : null;
+            const parentPhotoPreview = parentPhotoModal ? parentPhotoModal.querySelector('[data-parent-photo-preview]') : null;
+            const openParentPhotoModal = (src) => {
+                if (!parentPhotoModal || !parentPhotoPreview) return;
+                parentPhotoPreview.src = src;
+                parentPhotoModal.classList.add('open');
+                document.body.classList.add('no-scroll');
+            };
+            const closeParentPhotoModal = () => {
+                if (!parentPhotoModal) return;
+                parentPhotoModal.classList.remove('open');
+                document.body.classList.remove('no-scroll');
+                if (parentPhotoPreview) {
+                    parentPhotoPreview.src = '';
+                }
+            };
+            if (parentPhotoThumbs.length && parentPhotoModal) {
+                parentPhotoThumbs.forEach((thumb) => {
+                    thumb.addEventListener('click', () => {
+                        const src = thumb.dataset.parentPhotoSrc;
+                        if (src) {
+                            openParentPhotoModal(src);
+                        }
+                    });
+                });
+                if (parentPhotoClose) parentPhotoClose.addEventListener('click', closeParentPhotoModal);
+                parentPhotoModal.addEventListener('click', (e) => { if (e.target === parentPhotoModal) closeParentPhotoModal(); });
+                document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeParentPhotoModal(); });
+            }
+
             const params = new URLSearchParams(window.location.search);
             const highlightReward = params.get('highlight_reward');
             if (highlightReward) {
@@ -762,6 +841,36 @@ for ($i = 0; $i < 7; $i++) {
                     }
                 }
             }
+
+            const historyButtons = document.querySelectorAll('[data-child-history-open]');
+            const historyModals = document.querySelectorAll('[data-child-history-modal]');
+            historyButtons.forEach((btn) => {
+                btn.addEventListener('click', () => {
+                    const childId = btn.dataset.childHistoryId;
+                    const modal = document.querySelector(`[data-child-history-modal][data-child-history-id="${childId}"]`);
+                    if (!modal) return;
+                    modal.classList.add('open');
+                    document.body.classList.add('no-scroll');
+                });
+            });
+            historyModals.forEach((modal) => {
+                const closeBtn = modal.querySelector('[data-child-history-close]');
+                const closeModal = () => {
+                    modal.classList.remove('open');
+                    document.body.classList.remove('no-scroll');
+                };
+                if (closeBtn) closeBtn.addEventListener('click', closeModal);
+                modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
+            });
+            document.addEventListener('keydown', (e) => {
+                if (e.key !== 'Escape') return;
+                historyModals.forEach((modal) => {
+                    if (modal.classList.contains('open')) {
+                        modal.classList.remove('open');
+                        document.body.classList.remove('no-scroll');
+                    }
+                });
+            });
 
             const weekModal = document.querySelector('[data-week-modal]');
             const weekModalBody = weekModal ? weekModal.querySelector('[data-week-modal-body]') : null;
@@ -1131,6 +1240,29 @@ for ($i = 0; $i < 7; $i++) {
                                 <input type="checkbox" name="parent_notification_ids[]" value="<?php echo (int)$note['id']; ?>" aria-label="Mark notification as read">
                                 <div>
                                     <div><?php echo htmlspecialchars($note['message']); ?></div>
+                                    <?php
+                                        $taskIdFromLink = null;
+                                        $taskPhoto = null;
+                                        $taskStatus = null;
+                                        $taskApprovedAt = null;
+                                        if ($note['type'] === 'task_completed' && !empty($note['link_url'])) {
+                                            $urlParts = parse_url($note['link_url']);
+                                            if (!empty($urlParts['query'])) {
+                                                parse_str($urlParts['query'], $queryVars);
+                                                if (!empty($queryVars['task_id'])) {
+                                                    $taskIdFromLink = (int) $queryVars['task_id'];
+                                                }
+                                            }
+                                            if ($taskIdFromLink) {
+                                                $taskPhotoStmt = $db->prepare("SELECT photo_proof, status, approved_at FROM tasks WHERE id = :id LIMIT 1");
+                                                $taskPhotoStmt->execute([':id' => $taskIdFromLink]);
+                                                $taskRow = $taskPhotoStmt->fetch(PDO::FETCH_ASSOC);
+                                                $taskPhoto = $taskRow['photo_proof'] ?? null;
+                                                $taskStatus = $taskRow['status'] ?? null;
+                                                $taskApprovedAt = $taskRow['approved_at'] ?? null;
+                                            }
+                                        }
+                                    ?>
                                     <div class="parent-notification-meta">
                                         <?php echo htmlspecialchars(date('m/d/Y h:i A', strtotime($note['created_at']))); ?>
                                         <?php if (!empty($note['type'])): ?> | <?php echo htmlspecialchars(str_replace('_', ' ', $note['type'])); ?><?php endif; ?>
@@ -1151,12 +1283,20 @@ for ($i = 0; $i < 7; $i++) {
                                         if ($note['type'] === 'reward_redeemed' && $rewardIdFromLink) {
                                             $viewLink = 'dashboard_parent.php?highlight_redeemed=' . (int)$rewardIdFromLink . '#redeemed-reward-' . (int)$rewardIdFromLink;
                                         }
+                                        if ($note['type'] === 'task_completed' && $taskIdFromLink) {
+                                            $viewLink = 'task.php#task-' . (int) $taskIdFromLink;
+                                        }
                                         if ($viewLink) {
                                             echo ' | <a href="' . htmlspecialchars($viewLink) . '">View</a>';
                                         }
                                         $fulfillMeta = $rewardIdFromLink ? $getRewardFulfillMeta($rewardIdFromLink) : null;
                                     ?>
                                 </div>
+                                <?php if (!empty($taskPhoto)): ?>
+                                    <div style="margin-top:8px;">
+                                        <img src="<?php echo htmlspecialchars($taskPhoto); ?>" alt="Task photo proof" class="parent-task-photo-thumb" data-parent-photo-src="<?php echo htmlspecialchars($taskPhoto, ENT_QUOTES); ?>">
+                                    </div>
+                                <?php endif; ?>
                                 <?php if ($note['type'] === 'reward_redeemed' && $rewardIdFromLink): ?>
                                     <?php if (!empty($fulfillMeta) && !empty($fulfillMeta['fulfilled_on'])): ?>
                                         <div class="parent-notification-meta">
@@ -1176,6 +1316,19 @@ for ($i = 0; $i < 7; $i++) {
                                             <button type="submit" name="fulfill_reward" value="<?php echo (int)$rewardIdFromLink; ?>" class="button approve-button">Fulfill</button>
                                         </div>
                                     <?php endif; ?>
+                                <?php endif; ?>
+                                <?php if ($note['type'] === 'task_completed' && $taskIdFromLink): ?>
+                                    <div class="inline-form" style="margin-top:6px;">
+                                        <?php if ($taskStatus === 'approved'): ?>
+                                            <div class="parent-notification-meta">
+                                                Approved!<?php if (!empty($taskApprovedAt)): ?> <?php echo htmlspecialchars(date('m/d/Y h:i A', strtotime($taskApprovedAt))); ?><?php endif; ?>
+                                            </div>
+                                        <?php else: ?>
+                                            <input type="hidden" name="task_id" value="<?php echo (int)$taskIdFromLink; ?>">
+                                            <input type="hidden" name="parent_notification_id" value="<?php echo (int)$note['id']; ?>">
+                                            <button type="submit" name="approve_task_notification" class="button approve-button">Approve Task Completed</button>
+                                        <?php endif; ?>
+                                    </div>
                                 <?php endif; ?>
                             </div>
                         </li>
@@ -1197,6 +1350,29 @@ for ($i = 0; $i < 7; $i++) {
                                 <input type="checkbox" name="parent_notification_ids[]" value="<?php echo (int)$note['id']; ?>" aria-label="Move to trash">
                                 <div>
                                     <div><?php echo htmlspecialchars($note['message']); ?></div>
+                                    <?php
+                                        $taskIdFromLink = null;
+                                        $taskPhoto = null;
+                                        $taskStatus = null;
+                                        $taskApprovedAt = null;
+                                        if ($note['type'] === 'task_completed' && !empty($note['link_url'])) {
+                                            $urlParts = parse_url($note['link_url']);
+                                            if (!empty($urlParts['query'])) {
+                                                parse_str($urlParts['query'], $queryVars);
+                                                if (!empty($queryVars['task_id'])) {
+                                                    $taskIdFromLink = (int) $queryVars['task_id'];
+                                                }
+                                            }
+                                            if ($taskIdFromLink) {
+                                                $taskPhotoStmt = $db->prepare("SELECT photo_proof, status, approved_at FROM tasks WHERE id = :id LIMIT 1");
+                                                $taskPhotoStmt->execute([':id' => $taskIdFromLink]);
+                                                $taskRow = $taskPhotoStmt->fetch(PDO::FETCH_ASSOC);
+                                                $taskPhoto = $taskRow['photo_proof'] ?? null;
+                                                $taskStatus = $taskRow['status'] ?? null;
+                                                $taskApprovedAt = $taskRow['approved_at'] ?? null;
+                                            }
+                                        }
+                                    ?>
                                     <div class="parent-notification-meta">
                                         <?php echo htmlspecialchars(date('m/d/Y h:i A', strtotime($note['created_at']))); ?>
                                         <?php
@@ -1216,13 +1392,21 @@ for ($i = 0; $i < 7; $i++) {
                                             if ($note['type'] === 'reward_redeemed' && $rewardIdFromLink) {
                                                 $viewLink = 'dashboard_parent.php?highlight_redeemed=' . (int)$rewardIdFromLink . '#redeemed-reward-' . (int)$rewardIdFromLink;
                                             }
+                                            if ($note['type'] === 'task_completed' && $taskIdFromLink) {
+                                                $viewLink = 'task.php#task-' . (int) $taskIdFromLink;
+                                            }
                                             if ($viewLink) {
                                                 echo ' | <a href="' . htmlspecialchars($viewLink) . '">View</a>';
                                             }
-                                            $fulfillMeta = $rewardIdFromLink ? $getRewardFulfillMeta($rewardIdFromLink) : null;
-                                        ?>
+                                        $fulfillMeta = $rewardIdFromLink ? $getRewardFulfillMeta($rewardIdFromLink) : null;
+                                    ?>
+                                </div>
+                                <?php if (!empty($taskPhoto)): ?>
+                                    <div style="margin-top:8px;">
+                                        <img src="<?php echo htmlspecialchars($taskPhoto); ?>" alt="Task photo proof" class="parent-task-photo-thumb" data-parent-photo-src="<?php echo htmlspecialchars($taskPhoto, ENT_QUOTES); ?>">
                                     </div>
-                                    <?php if ($note['type'] === 'reward_redeemed' && $rewardIdFromLink): ?>
+                                <?php endif; ?>
+                                <?php if ($note['type'] === 'reward_redeemed' && $rewardIdFromLink): ?>
                                         <?php if (!empty($fulfillMeta) && !empty($fulfillMeta['fulfilled_on'])): ?>
                                             <div class="parent-notification-meta">
                                                 Fulfilled on: <?php echo htmlspecialchars(date('m/d/Y h:i A', strtotime($fulfillMeta['fulfilled_on']))); ?>
@@ -1280,7 +1464,19 @@ for ($i = 0; $i < 7; $i++) {
             </form>
          </div>
       </div>
-   </div><main class="dashboard">
+   </div>
+   <div class="parent-photo-modal" data-parent-photo-modal>
+      <div class="parent-photo-card" role="dialog" aria-modal="true" aria-labelledby="parent-photo-title">
+         <header>
+            <h2 id="parent-photo-title">Photo Proof</h2>
+            <button type="button" class="parent-photo-close" aria-label="Close photo preview" data-parent-photo-close><i class="fa-solid fa-xmark"></i></button>
+         </header>
+         <div class="parent-photo-body">
+            <img src="" alt="Task photo proof" class="parent-photo-preview" data-parent-photo-preview>
+         </div>
+      </div>
+   </div>
+   <main class="dashboard">
       <?php if (isset($message)) echo "<p>$message</p>"; ?>
       
       <div class="children-overview">
@@ -1402,7 +1598,7 @@ for ($i = 0; $i < 7; $i++) {
                      $todayItems = $weekSchedule[$todayDate] ?? [];
                      $weekScheduleJson = htmlspecialchars(json_encode($weekSchedule, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT), ENT_QUOTES);
                   ?>
-                   <div class="child-info-card">
+                  <div class="child-info-card">
                       <div class="child-info-header">
                          <img src="<?php echo htmlspecialchars($child['avatar'] ?? 'default-avatar.png'); ?>" alt="Avatar for <?php echo htmlspecialchars($child['child_name']); ?>">
                          <div class="child-info-header-details">
@@ -1437,8 +1633,82 @@ for ($i = 0; $i < 7; $i++) {
                                   <span class="icon">+ / -</span>
                               </button>
                           <?php endif; ?>
+                          <button type="button"
+                                  class="button secondary"
+                                  data-child-history-open
+                                  data-child-history-id="<?php echo (int)$child['child_user_id']; ?>"
+                                  data-child-history-name="<?php echo htmlspecialchars($child['child_name']); ?>">
+                              History
+                          </button>
                       </div>
                       <div class="child-info-content">
+                      <?php
+                          $historyItems = [];
+                          $taskHistoryStmt = $db->prepare("SELECT title, points, approved_at, completed_at FROM tasks WHERE child_user_id = :child_id AND status = 'approved'");
+                          $taskHistoryStmt->execute([':child_id' => $childId]);
+                          foreach ($taskHistoryStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                              $dateValue = $row['approved_at'] ?? $row['completed_at'] ?? null;
+                              if (empty($dateValue)) {
+                                  continue;
+                              }
+                              $historyItems[] = [
+                                  'type' => 'Task',
+                                  'title' => $row['title'],
+                                  'points' => (int)($row['points'] ?? 0),
+                                  'date' => $dateValue
+                              ];
+                          }
+                          try {
+                              ensureRoutinePointsLogsTable();
+                              $routineHistoryStmt = $db->prepare("
+                                  SELECT rpl.task_points, rpl.bonus_points, rpl.created_at, r.title
+                                  FROM routine_points_logs rpl
+                                  LEFT JOIN routines r ON rpl.routine_id = r.id
+                                  WHERE rpl.child_user_id = :child_id
+                                  ORDER BY rpl.created_at DESC
+                              ");
+                              $routineHistoryStmt->execute([':child_id' => $childId]);
+                              foreach ($routineHistoryStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                                  $totalPoints = (int)($row['task_points'] ?? 0) + (int)($row['bonus_points'] ?? 0);
+                                  $historyItems[] = [
+                                      'type' => 'Routine',
+                                      'title' => $row['title'] ?: 'Routine',
+                                      'points' => $totalPoints,
+                                      'date' => $row['created_at']
+                                  ];
+                              }
+                          } catch (Exception $e) {
+                              $historyItems = $historyItems;
+                          }
+                          try {
+                              $adjStmt = $db->prepare("SELECT delta_points, reason, created_at FROM child_point_adjustments WHERE child_user_id = :child_id");
+                              $adjStmt->execute([':child_id' => $childId]);
+                              foreach ($adjStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                                  $historyItems[] = [
+                                      'type' => 'Adjustment',
+                                      'title' => $row['reason'],
+                                      'points' => (int) $row['delta_points'],
+                                      'date' => $row['created_at']
+                                  ];
+                              }
+                          } catch (Exception $e) {
+                              $historyItems = $historyItems;
+                          }
+                          usort($historyItems, static function ($a, $b) {
+                              return strtotime($b['date']) <=> strtotime($a['date']);
+                          });
+                          $historyByDay = [];
+                          foreach ($historyItems as $item) {
+                              if (empty($item['date'])) {
+                                  continue;
+                              }
+                              $dayKey = date('Y-m-d', strtotime($item['date']));
+                              if (!isset($historyByDay[$dayKey])) {
+                                  $historyByDay[$dayKey] = [];
+                              }
+                              $historyByDay[$dayKey][] = $item;
+                          }
+                      ?>
                       <div class="child-info-body">
                          <div class="child-stats-grid">
                             <div class="child-stats-row">
@@ -1538,6 +1808,36 @@ for ($i = 0; $i < 7; $i++) {
                           View Week
                       </button>
                    </div>
+                      </div>
+                  </div>
+                  <div class="child-history-modal" data-child-history-modal data-child-history-id="<?php echo (int)$childId; ?>">
+                      <div class="child-history-card" role="dialog" aria-modal="true" aria-labelledby="child-history-title-<?php echo (int)$childId; ?>">
+                          <header>
+                              <h2 id="child-history-title-<?php echo (int)$childId; ?>"><?php echo htmlspecialchars($child['child_name']); ?> Points History</h2>
+                              <button type="button" class="child-history-close" aria-label="Close points history" data-child-history-close>&times;</button>
+                          </header>
+                          <div class="child-history-body">
+                              <?php if (!empty($historyByDay)): ?>
+                                  <?php foreach ($historyByDay as $day => $items): ?>
+                                      <div class="child-history-day">
+                                          <div class="child-history-day-title"><?php echo htmlspecialchars(date('M j', strtotime($day))); ?></div>
+                                          <ul class="child-history-list">
+                                              <?php foreach ($items as $item): ?>
+                                                  <li class="child-history-item">
+                                                      <div>
+                                                          <div class="child-history-item-title"><?php echo htmlspecialchars($item['type']); ?>: <?php echo htmlspecialchars($item['title']); ?></div>
+                                                          <div class="child-history-item-meta"><?php echo htmlspecialchars(date('g:i A', strtotime($item['date']))); ?></div>
+                                                      </div>
+                                                      <div class="child-history-item-points<?php echo ($item['points'] < 0 ? ' is-negative' : ''); ?>"><?php echo ($item['points'] >= 0 ? '+' : '') . (int)$item['points']; ?> pts</div>
+                                                  </li>
+                                              <?php endforeach; ?>
+                                          </ul>
+                                      </div>
+                                  <?php endforeach; ?>
+                              <?php else: ?>
+                                  <p>No points history yet.</p>
+                              <?php endif; ?>
+                          </div>
                       </div>
                   </div>
                <?php endforeach; ?>
@@ -1978,7 +2278,7 @@ for ($i = 0; $i < 7; $i++) {
                     <label for="adjust_points_input">Points (positive or negative)</label>
                     <div class="adjust-control">
                         <button type="button" data-action="decrement-points">-</button>
-                        <input id="adjust_points_input" type="number" name="points_delta" step="1" value="1" required>
+                        <input id="adjust_points_input" type="number" name="points_delta" step="1" value="1" required data-stepper="false">
                         <button type="button" data-action="increment-points">+</button>
                     </div>
                 </div>
@@ -2025,7 +2325,9 @@ for ($i = 0; $i < 7; $i++) {
         </div>
     </div>
 </div>
+  <script src="js/number-stepper.js" defer></script>
 </body>
 </html>
+
 
 

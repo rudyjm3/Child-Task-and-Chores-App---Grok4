@@ -35,6 +35,8 @@ session_destroy();
 </head>
 <body>
     <!-- Body is empty as the script handles the action -->
+  <script src="js/number-stepper.js" defer></script>
 </body>
 </html>
+
 

@@ -69,6 +69,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </form>
         <p>New user? <a href="register.php">Register here</a></p>
     </div>
+  <script src="js/number-stepper.js" defer></script>
 </body>
 </html>
+
 

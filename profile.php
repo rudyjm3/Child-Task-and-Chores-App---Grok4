@@ -639,6 +639,8 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
         <?php endif; ?>
         <a href="dashboard_<?php echo $role; ?>.php" class="button">Back to Dashboard</a>
     </div>
+  <script src="js/number-stepper.js" defer></script>
 </body>
 </html>
+
 
