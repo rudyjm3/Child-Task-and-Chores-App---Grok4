@@ -407,7 +407,7 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
         .week-days-header { background: #f5f7fb; padding: 8px; min-width: 980px; }
         .week-days-header .week-day { background: #fff; border: 1px solid #d5def0; border-radius: 10px; padding: 6px 0; display: grid; gap: 2px; justify-items: center; font-weight: 700; color: #37474f; font-family: 'Sigmar One', 'Sigma One', cursive; }
         .week-days-header .week-day.is-today { background: #ffe0b2; border-color: #ffd28a; color: #ef6c00; }
-        .week-grid { display: grid; grid-template-columns: repeat(7, minmax(140px, 1fr)); gap: 6px; background: #f5f7fb; padding: 6px 8px 10px; min-width: 980px; }
+        .week-grid { display: grid; grid-template-columns: repeat(7, minmax(133px, 1fr)); gap: 6px; background: #f5f7fb; padding: 6px 8px 10px; min-width: 980px; }
         .week-column { background: #fff; border: 1px solid #d5def0; border-radius: 10px; padding: 8px; display: flex; flex-direction: column; gap: 8px; min-height: 140px; }
         .week-column-tasks { display: grid; gap: 8px; }
         .calendar-section { display: grid; gap: 6px; }
