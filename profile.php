@@ -448,28 +448,6 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                         <input type="text" id="last_name" name="last_name" value="<?php echo htmlspecialchars($user['last_name'] ?? ''); ?>" required>
                     </div>
                     <div class="form-group">
-                        <label for="role_badge_label">Role Badge (optional):</label>
-                        <input type="text" id="role_badge_label" name="role_badge_label" value="<?php echo htmlspecialchars($user['role_badge_label'] ?? ''); ?>">
-                    </div>
-                    <div class="form-group">
-                        <label>
-                            <input type="checkbox" name="use_role_badge_label" value="1" <?php echo !empty($user['use_role_badge_label']) ? 'checked' : ''; ?>>
-                            Use custom role badge
-                        </label>
-                        <small style="display:block;margin-top:5px;color:#555;">This label appears wherever your role badge is shown.</small>
-                    </div>
-                    <div class="form-group">
-                        <label for="role_badge_label">Role Badge (optional):</label>
-                        <input type="text" id="role_badge_label" name="role_badge_label" value="<?php echo htmlspecialchars($user['role_badge_label'] ?? ''); ?>">
-                    </div>
-                    <div class="form-group">
-                        <label>
-                            <input type="checkbox" name="use_role_badge_label" value="1" <?php echo !empty($user['use_role_badge_label']) ? 'checked' : ''; ?>>
-                            Use custom role badge
-                        </label>
-                        <small style="display:block;margin-top:5px;color:#555;">This label appears wherever your role badge is shown.</small>
-                    </div>
-                    <div class="form-group">
                         <label for="birthday">Birthday:</label>
                         <input type="date" id="birthday" name="birthday" value="<?php echo htmlspecialchars($profile['birthday'] ?? ''); ?>" required>
                     </div>

@@ -463,8 +463,10 @@ for ($i = 0; $i < 7; $i++) {
         .child-info-meta { margin: 0; font-size: 0.9em; color: #666; }
         .child-info-actions { display: flex; gap: 8px;     justify-content: center;
     align-items: center; }
-        .child-action-icon { width: 36px; height: 36px; border-radius: 50%; border: 1px solid #d5def0; background: #f5f5f5; color: #616161; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
-        .child-action-icon.danger { color: #c62828; }
+        .child-action-icon { width: 36px; height: 36px; border-radius: 50%; border: none; background: transparent; color: #9f9f9f; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+        .child-action-icon:hover { color: #7a7a7a; }
+        .child-action-icon.danger { color: #9f9f9f; }
+        .child-action-icon.danger:hover { color: #7a7a7a; }
         .child-info-content { display: contents; }
         .child-info-body { display: grid; gap: 12px; }
         .child-stats-grid { display: grid; gap: 12px; }
