@@ -387,6 +387,9 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
         .calendar-nav-button[disabled] { opacity: 0.6; cursor: not-allowed; }
         .calendar-range { font-weight: 700; color: #37474f; }
         .calendar-premium-note { font-size: 0.85rem; color: #8d6e63; }
+        .calendar-view-toggle { display: inline-flex; align-items: center; gap: 6px; padding: 4px; border-radius: 999px; border: 1px solid #d5def0; background: #f5f7fb; }
+        .calendar-view-button { width: 36px; height: 36px; border: none; border-radius: 50%; background: transparent; color: #607d8b; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
+        .calendar-view-button.active { background: #0d47a1; color: #fff; box-shadow: 0 4px 10px rgba(13, 71, 161, 0.2); }
         .calendar-filters { display: grid; gap: 12px; }
         .calendar-filter-header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
         .calendar-filter-title { font-weight: 700; color: #37474f; }
@@ -410,15 +413,30 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
         .week-grid { display: grid; grid-template-columns: repeat(7, minmax(133px, 1fr)); gap: 6px; background: #f5f7fb; padding: 6px 8px 10px; min-width: 980px; }
         .week-column { background: #fff; border: 1px solid #d5def0; border-radius: 10px; padding: 8px; display: flex; flex-direction: column; gap: 8px; min-height: 140px; }
         .week-column-tasks { display: grid; gap: 8px; }
+        .task-week-calendar.is-hidden { display: none; }
+        .task-week-list { display: none; border: 1px solid #d5def0; border-radius: 12px; background: #fff; padding: 12px; }
+        .task-week-list.active { display: grid; gap: 12px; }
+        .week-list-day { border: 1px solid #d5def0; border-radius: 12px; padding: 12px; background: #fdfdfd; display: grid; gap: 10px; }
+        .week-list-day-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-weight: 700; color: #37474f; }
+        .week-list-day-name { text-transform: uppercase; letter-spacing: 0.04em; font-size: 0.8rem; color: #607d8b; }
+        .week-list-day-date { color: #0d47a1; }
+        .week-list-sections { display: grid; gap: 10px; }
+        .week-list-section-title { font-weight: 700; color: #37474f; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; }
+        .week-list-items { display: grid; gap: 8px; }
+        .week-list-empty { color: #9e9e9e; font-size: 0.9rem; text-align: center; }
         .calendar-section { display: grid; gap: 6px; }
         .calendar-section-title { font-weight: 700; color: #37474f; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.04em; }
         .calendar-task-item { border: 1px solid #ffd28a; background: #fff7e6; border-radius: 10px; padding: 8px; text-align: left; cursor: pointer; display: grid; gap: 4px; font-size: 0.9rem; }
         .calendar-task-item:hover { background: #ffe9c6; }
         .child-theme .calendar-task-item { font-family: inherit; }
+        .calendar-task-header { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+        .task-week-list .calendar-task-header { flex-direction: row; align-items: center; flex-wrap: wrap; }
+        .calendar-task-title-wrap { display: inline-flex; align-items: center; gap: 6px; flex: 1; min-width: 0; }
         .calendar-task-badge { display: inline-flex; align-items: center; justify-content: center; gap: 4px; width: fit-content; padding: 2px 8px; border-radius: 999px; font-size: 0.7rem; font-weight: 700; letter-spacing: 0.02em; text-transform: uppercase; }
         .calendar-task-badge.overdue { background: #d9534f; color: #fff; }
         .calendar-task-badge.completed { background: #2e7d32; color: #fff; }
         .calendar-task-title { font-weight: 700; color: #3e2723; }
+        .calendar-task-points { color: #6d4c41; font-size: 0.85rem; font-weight: 700; }
         .calendar-task-meta { color: #6d4c41; font-size: 0.85rem; }
         .calendar-task-child { font-size: 0.8rem; color: #455a64; font-weight: 600; }
         .calendar-day-empty { color: #9e9e9e; font-size: 0.85rem; text-align: center; padding: 8px 0; }
@@ -444,6 +462,14 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
         .task-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: none; align-items: center; justify-content: center; z-index: 4000; padding: 14px; }
         .task-modal.open { display: flex; }
         .task-modal-card { background: #fff; border-radius: 12px; max-width: 760px; width: min(760px, 100%); max-height: 85vh; overflow: hidden; box-shadow: 0 12px 32px rgba(0,0,0,0.25); display: grid; grid-template-rows: auto 1fr; }
+        .task-create-fab { position: sticky; top: 0; z-index: 5; display: flex; justify-content: flex-end; margin: 10px 0 0; }
+        .task-create-button { width: 52px; height: 52px; border-radius: 50%; border: none; background: #4caf50; color: #fff; display: inline-flex; align-items: center; justify-content: center; font-size: 1.4rem; cursor: pointer; box-shadow: 0 6px 14px rgba(76, 175, 80, 0.35); }
+        .task-create-button:hover { background: #43a047; }
+        .task-create-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: none; align-items: center; justify-content: center; z-index: 4100; padding: 14px; }
+        .task-create-modal.open { display: flex; }
+        .task-create-card { background: #fff; border-radius: 14px; max-width: 860px; width: min(860px, 100%); max-height: 90vh; overflow: hidden; box-shadow: 0 12px 32px rgba(0,0,0,0.25); display: grid; grid-template-rows: auto 1fr; }
+        .task-create-card header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid #e0e0e0; }
+        .task-create-body { padding: 12px 16px 18px; overflow-y: auto; }
         .task-photo-thumb { width: 56px; height: 56px; border-radius: 10px; object-fit: cover; border: 1px solid #d5def0; box-shadow: 0 2px 6px rgba(0,0,0,0.12); cursor: pointer; }
         .task-photo-preview { width: 100%; max-height: 70vh; object-fit: contain; border-radius: 10px; }
         .no-scroll { overflow: hidden; }
@@ -1021,6 +1047,8 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
             const weekGridEl = calendar.querySelector('[data-week-grid]');
             const weekRangeEl = document.querySelector('[data-week-range]');
             const emptyEl = calendar.querySelector('[data-calendar-empty]');
+            const listWrap = calendar.closest('.task-calendar-card')?.querySelector('[data-task-list]');
+            const viewButtons = Array.from(document.querySelectorAll('[data-calendar-view]'));
             const navButtons = document.querySelectorAll('[data-week-nav]');
             const previewModal = document.querySelector('[data-task-preview-modal]');
             const previewBody = previewModal ? previewModal.querySelector('[data-task-preview-body]') : null;
@@ -1028,6 +1056,7 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
             const childFilters = Array.from(document.querySelectorAll('[data-calendar-child]'));
             const selectAll = document.querySelector('[data-calendar-select-all]');
             const taskById = new Map();
+            let currentView = 'calendar';
 
             (Array.isArray(taskCalendarData) ? taskCalendarData : []).forEach((task) => {
                 taskById.set(String(task.id), task);
@@ -1100,12 +1129,189 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closePreview(); });
             }
 
+            const createModal = document.querySelector('[data-task-create-modal]');
+            const createOpen = document.querySelector('[data-task-create-open]');
+            const createClose = createModal ? createModal.querySelector('[data-task-create-close]') : null;
+
+            if (createModal && createOpen) {
+                const closeCreate = () => {
+                    createModal.classList.remove('open');
+                    document.body.classList.remove('no-scroll');
+                };
+                const openCreate = () => {
+                    createModal.classList.add('open');
+                    document.body.classList.add('no-scroll');
+                };
+                createOpen.addEventListener('click', openCreate);
+                if (createClose) {
+                    createClose.addEventListener('click', closeCreate);
+                }
+                createModal.addEventListener('click', (event) => {
+                    if (event.target === createModal) {
+                        closeCreate();
+                    }
+                });
+                document.addEventListener('keydown', (event) => {
+                    if (event.key === 'Escape') {
+                        closeCreate();
+                    }
+                });
+            }
+
+            const setView = (view) => {
+                currentView = view;
+                viewButtons.forEach((btn) => {
+                    const isActive = btn.dataset.calendarView === view;
+                    btn.classList.toggle('active', isActive);
+                    btn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+                });
+                calendar.classList.toggle('is-hidden', view === 'list');
+                if (listWrap) {
+                    listWrap.classList.toggle('active', view === 'list');
+                }
+            };
+
+            if (viewButtons.length) {
+                viewButtons.forEach((btn) => {
+                    btn.addEventListener('click', () => {
+                        const view = btn.dataset.calendarView;
+                        if (!view) return;
+                        setView(view);
+                    });
+                });
+                setView(currentView);
+            }
+
             const getSelectedChildIds = () => {
                 if (!childFilters.length) return null;
                 return childFilters
                     .filter((input) => input.checked)
                     .map((input) => parseInt(input.value, 10))
                     .filter((value) => !Number.isNaN(value));
+            };
+
+            const buildTaskItem = (task, dateKey, timeInfo) => {
+                const item = document.createElement('button');
+                item.type = 'button';
+                item.className = 'calendar-task-item';
+                item.dataset.taskId = task.id;
+                const header = document.createElement('div');
+                header.className = 'calendar-task-header';
+                const titleWrap = document.createElement('span');
+                titleWrap.className = 'calendar-task-title-wrap';
+                const title = document.createElement('span');
+                title.className = 'calendar-task-title';
+                title.textContent = task.title || 'Task';
+                titleWrap.appendChild(title);
+                const isCompleted = isTaskCompleted(task, dateKey);
+                const isOverdue = !isCompleted && isTaskOverdue(task, dateKey);
+                let badge = null;
+                if (isCompleted) {
+                    badge = document.createElement('span');
+                    badge.className = 'calendar-task-badge completed';
+                    const icon = document.createElement('i');
+                    icon.className = 'fa-solid fa-check';
+                    badge.appendChild(icon);
+                    badge.appendChild(document.createTextNode(' Done'));
+                } else if (isOverdue) {
+                    badge = document.createElement('span');
+                    badge.className = 'calendar-task-badge overdue';
+                    badge.textContent = 'Overdue';
+                }
+                const points = document.createElement('span');
+                points.className = 'calendar-task-points';
+                points.textContent = `${task.points || 0} pts`;
+                const meta = document.createElement('span');
+                meta.className = 'calendar-task-meta';
+                meta.textContent = `Due: ${timeInfo.label}`;
+                header.appendChild(titleWrap);
+                header.appendChild(points);
+                if (badge) {
+                    header.appendChild(badge);
+                }
+                item.appendChild(header);
+                item.appendChild(meta);
+                if (task.child_name) {
+                    const child = document.createElement('span');
+                    child.className = 'calendar-task-child';
+                    child.textContent = task.child_name;
+                    item.appendChild(child);
+                }
+                item.addEventListener('click', () => openPreview(task.id));
+                return item;
+            };
+
+            const renderList = (weekDates, filteredTasks) => {
+                if (!listWrap) return 0;
+                listWrap.innerHTML = '';
+                let totalItems = 0;
+                const sections = [
+                    { key: 'anytime', label: 'Due Today' },
+                    { key: 'morning', label: 'Morning' },
+                    { key: 'afternoon', label: 'Afternoon' },
+                    { key: 'evening', label: 'Evening' }
+                ];
+
+                weekDates.forEach(({ date, dateKey }) => {
+                    const dayShort = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][date.getDay()];
+                    const items = [];
+                    filteredTasks.forEach((task) => {
+                        if (!isTaskOnDate(task, dateKey, dayShort)) return;
+                        const timeInfo = getTaskTimeInfo(task);
+                        items.push({ task, timeInfo });
+                    });
+                    items.sort((a, b) => {
+                        const timeCompare = a.timeInfo.sort.localeCompare(b.timeInfo.sort);
+                        if (timeCompare !== 0) return timeCompare;
+                        return String(a.task.title || '').localeCompare(String(b.task.title || ''));
+                    });
+                    totalItems += items.length;
+
+                    const dayCard = document.createElement('div');
+                    dayCard.className = 'week-list-day';
+                    const header = document.createElement('div');
+                    header.className = 'week-list-day-header';
+                    const name = document.createElement('span');
+                    name.className = 'week-list-day-name';
+                    name.textContent = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][date.getDay()];
+                    const dateLabel = document.createElement('span');
+                    dateLabel.className = 'week-list-day-date';
+                    dateLabel.textContent = date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+                    header.appendChild(name);
+                    header.appendChild(dateLabel);
+                    dayCard.appendChild(header);
+
+                    if (!items.length) {
+                        const empty = document.createElement('div');
+                        empty.className = 'week-list-empty';
+                        empty.textContent = 'No tasks';
+                        dayCard.appendChild(empty);
+                    } else {
+                        const sectionsWrap = document.createElement('div');
+                        sectionsWrap.className = 'week-list-sections';
+                        sections.forEach((section) => {
+                            const sectionItems = items.filter(({ task }) => (task.time_of_day || 'anytime') === section.key);
+                            if (!sectionItems.length) return;
+                            const sectionWrap = document.createElement('div');
+                            const sectionTitle = document.createElement('div');
+                            sectionTitle.className = 'week-list-section-title';
+                            sectionTitle.textContent = section.label;
+                            const itemsWrap = document.createElement('div');
+                            itemsWrap.className = 'week-list-items';
+                            sectionItems.forEach(({ task, timeInfo }) => {
+                                itemsWrap.appendChild(buildTaskItem(task, dateKey, timeInfo));
+                            });
+                            sectionWrap.appendChild(sectionTitle);
+                            sectionWrap.appendChild(itemsWrap);
+                            sectionsWrap.appendChild(sectionWrap);
+                        });
+                        dayCard.appendChild(sectionsWrap);
+                    }
+
+                    listWrap.appendChild(dayCard);
+                });
+
+                return totalItems;
             };
 
             const renderWeek = () => {
@@ -1189,48 +1395,7 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                             sectionWrap.appendChild(sectionTitle);
 
                             sectionItems.forEach(({ task, timeInfo }) => {
-                                const item = document.createElement('button');
-                                item.type = 'button';
-                                item.className = 'calendar-task-item';
-                                item.dataset.taskId = task.id;
-                                const title = document.createElement('span');
-                                title.className = 'calendar-task-title';
-                                title.textContent = task.title || 'Task';
-                            const isCompleted = isTaskCompleted(task, dateKey);
-                            const isOverdue = !isCompleted && isTaskOverdue(task, dateKey);
-                                let badge = null;
-                                if (isCompleted) {
-                                    badge = document.createElement('span');
-                                    badge.className = 'calendar-task-badge completed';
-                                    const icon = document.createElement('i');
-                                    icon.className = 'fa-solid fa-check';
-                                    badge.appendChild(icon);
-                                    badge.appendChild(document.createTextNode(' Done'));
-                                } else if (isOverdue) {
-                                    badge = document.createElement('span');
-                                    badge.className = 'calendar-task-badge overdue';
-                                    badge.textContent = 'Overdue';
-                                }
-                                const points = document.createElement('span');
-                                points.className = 'calendar-task-meta';
-                                points.textContent = `${task.points || 0} pts`;
-                                const meta = document.createElement('span');
-                                meta.className = 'calendar-task-meta';
-                                meta.textContent = timeInfo.label;
-                                item.appendChild(title);
-                                if (badge) {
-                                    item.appendChild(badge);
-                                }
-                                item.appendChild(points);
-                                item.appendChild(meta);
-                                if (task.child_name) {
-                                    const child = document.createElement('span');
-                                    child.className = 'calendar-task-child';
-                                    child.textContent = task.child_name;
-                                    item.appendChild(child);
-                                }
-                                item.addEventListener('click', () => openPreview(task.id));
-                                sectionWrap.appendChild(item);
+                                sectionWrap.appendChild(buildTaskItem(task, dateKey, timeInfo));
                             });
 
                             list.appendChild(sectionWrap);
@@ -1244,6 +1409,7 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                 if (emptyEl) {
                     emptyEl.classList.toggle('active', totalItems === 0);
                 }
+                renderList(weekDates, filteredTasks);
             };
 
             renderWeek();
@@ -1397,9 +1563,28 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
             const points = document.createElement('div');
             points.className = 'task-pill';
             points.textContent = `${task.points || 0} pts`;
+            const todayKey = formatDateKey(new Date());
+            const isCompleted = isTaskCompleted(task, todayKey);
+            const isOverdue = !isCompleted && isTaskOverdue(task, todayKey);
+            let badge = null;
+            if (isCompleted) {
+                badge = document.createElement('span');
+                badge.className = 'calendar-task-badge completed';
+                const icon = document.createElement('i');
+                icon.className = 'fa-solid fa-check';
+                badge.appendChild(icon);
+                badge.appendChild(document.createTextNode(' Done'));
+            } else if (isOverdue) {
+                badge = document.createElement('span');
+                badge.className = 'calendar-task-badge overdue';
+                badge.textContent = 'Overdue';
+            }
 
             header.appendChild(title);
             header.appendChild(points);
+            if (badge) {
+                header.appendChild(badge);
+            }
             card.appendChild(header);
 
             const meta = document.createElement('div');
@@ -1518,118 +1703,13 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
     <main>
         <?php if (isset($message)) echo "<p>$message</p>"; ?>
         <?php if (canCreateContent($_SESSION['user_id'])): ?>
-            <section class="task-form routine-section">
-                <div class="routine-section-header">
-                    <h2>Create Task</h2>
-                </div>
-                <form method="POST" action="task.php" enctype="multipart/form-data" data-create-task-form>
-                    <?php $autoSelectChildId = count($children) === 1 ? (int) $children[0]['child_user_id'] : null; ?>
-                    <input type="hidden" name="start_date" value="<?php echo date('Y-m-d'); ?>">
-                    <div class="form-grid">
-                        <div class="form-group">
-                            <label>Child</label>
-                            <div class="child-select-grid">
-                                <?php foreach ($children as $index => $child): ?>
-                                    <label class="child-select-card">
-                                        <input type="checkbox" name="child_user_ids[]" value="<?php echo (int) $child['child_user_id']; ?>"<?php echo $autoSelectChildId === (int) $child['child_user_id'] ? ' checked' : ''; ?>>
-                                        <img src="<?php echo htmlspecialchars($child['avatar']); ?>" alt="<?php echo htmlspecialchars($child['first_name'] ?? $child['child_name']); ?>">
-                                        <span><?php echo htmlspecialchars($child['first_name'] ?? $child['child_name']); ?></span>
-                                    </label>
-                                <?php endforeach; ?>
-                            </div>
-                        </div>
-                        <div class="form-group">
-                            <label for="title">Title</label>
-                            <input type="text" id="title" name="title" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="description">Description</label>
-                            <textarea id="description" name="description"></textarea>
-                        </div>
-                        <div class="form-group">
-                            <label for="points">Points</label>
-                            <input type="number" id="points" name="points" min="1" required>
-                        </div>
-                        <div class="form-group repeat-group">
-                            <label for="recurrence">Repeat</label>
-                            <select id="recurrence" name="recurrence">
-                                <option value="">Once</option>
-                                <option value="daily">Every Day</option>
-                                <option value="weekly">Specific Days</option>
-                            </select>
-                            <div class="repeat-days" data-create-recurrence-days>
-                                <div class="repeat-days-label">Specific Days</div>
-                                <div class="repeat-days-grid">
-                                    <label class="repeat-day"><input type="checkbox" name="recurrence_days[]" value="Sun"><span>Sun</span></label>
-                                    <label class="repeat-day"><input type="checkbox" name="recurrence_days[]" value="Mon"><span>Mon</span></label>
-                                    <label class="repeat-day"><input type="checkbox" name="recurrence_days[]" value="Tue"><span>Tue</span></label>
-                                    <label class="repeat-day"><input type="checkbox" name="recurrence_days[]" value="Wed"><span>Wed</span></label>
-                                    <label class="repeat-day"><input type="checkbox" name="recurrence_days[]" value="Thu"><span>Thu</span></label>
-                                    <label class="repeat-day"><input type="checkbox" name="recurrence_days[]" value="Fri"><span>Fri</span></label>
-                                    <label class="repeat-day"><input type="checkbox" name="recurrence_days[]" value="Sat"><span>Sat</span></label>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="form-group">
-                            <label for="time_of_day">Time of Day</label>
-                            <select id="time_of_day" name="time_of_day">
-                                <option value="anytime" selected>Anytime</option>
-                                <option value="morning">Morning</option>
-                                <option value="afternoon">Afternoon</option>
-                                <option value="evening">Evening</option>
-                            </select>
-                        </div>
-                        <div class="form-group toggle-field" data-create-end-toggle>
-                            <span class="toggle-label">End Date</span>
-                            <label class="toggle-row">
-                                <span class="toggle-switch">
-                                    <input type="checkbox" name="end_date_enabled" data-end-date-toggle>
-                                    <span class="toggle-slider"></span>
-                                </span>
-                            </label>
-                        </div>
-                        <div class="form-group toggle-field">
-                            <span class="toggle-label">Photo Proof</span>
-                            <label class="toggle-row">
-                                <span class="toggle-switch">
-                                    <input type="checkbox" name="photo_proof_required" value="1">
-                                    <span class="toggle-slider"></span>
-                                </span>
-                            </label>
-                        </div>
-                        <div class="form-group end-date-field" data-create-end-date>
-                            <label for="end_date">End Date</label>
-                            <input type="date" id="end_date" name="end_date" value="">
-                        </div>
-                        <div class="form-group" data-due-time-wrapper>
-                            <label for="due_time">Time Due By</label>
-                            <input type="time" id="due_time" name="due_time">
-                        </div>
-                        <div class="form-group">
-                            <label for="category">Category</label>
-                            <select id="category" name="category">
-                                <option value="hygiene">Hygiene</option>
-                                <option value="homework">Homework</option>
-                                <option value="household">Household</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label for="timing_mode">Timing Mode</label>
-                            <select id="timing_mode" name="timing_mode">
-                                <option value="no_limit" selected>None</option>
-                                <option value="timer">Timer</option>
-                            </select>
-                        </div>
-                        <div class="form-group" data-create-timer-minutes>
-                            <label for="timer_minutes">Timer Minutes</label>
-                            <input type="number" id="timer_minutes" name="timer_minutes" min="1" value="">
-                        </div>
-                    </div>
-                    <div class="form-actions">
-                        <button type="submit" name="create_task" class="button">Create Task</button>
-                    </div>
-                </form>
-            </section>
+            <div class="task-create-fab">
+                <button type="button" class="task-create-button" data-task-create-open aria-label="Create Task">
+                    <i class="fa-solid fa-plus"></i>
+                </button>
+            </div>
+        <?php endif; ?>
+        <?php if (canCreateContent($_SESSION['user_id'])): ?>
         <?php endif; ?>
         <section class="task-calendar-section">
             <div class="task-calendar-card">
@@ -1639,6 +1719,14 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                         <p class="calendar-subtitle">Tap children to filter tasks in the week view.</p>
                     </div>
                     <div class="calendar-nav">
+                        <div class="calendar-view-toggle" role="group" aria-label="Calendar view">
+                            <button type="button" class="calendar-view-button active" data-calendar-view="calendar" aria-pressed="true" title="Calendar view">
+                                <i class="fa-solid fa-calendar-days"></i>
+                            </button>
+                            <button type="button" class="calendar-view-button" data-calendar-view="list" aria-pressed="false" title="List view">
+                                <i class="fa-solid fa-list"></i>
+                            </button>
+                        </div>
                         <button type="button" class="calendar-nav-button" data-week-nav="-1">Previous Week</button>
                         <div class="calendar-range" data-week-range></div>
                         <button type="button" class="calendar-nav-button" data-week-nav="1">Next Week</button>
@@ -1674,6 +1762,7 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                     </div>
                     <div class="calendar-empty" data-calendar-empty>No tasks match the selected children for this week.</div>
                 </div>
+                <div class="task-week-list" data-task-list></div>
             </div>
         </section>
         <div class="task-list">
@@ -2146,6 +2235,125 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
             </div>
         </div>
     </main>
+    <?php if (canCreateContent($_SESSION['user_id'])): ?>
+        <div class="task-create-modal" data-task-create-modal>
+            <div class="task-create-card" role="dialog" aria-modal="true" aria-labelledby="task-create-title">
+                <header>
+                    <h2 id="task-create-title">Create Task</h2>
+                    <button type="button" class="task-modal-close" aria-label="Close create task" data-task-create-close>&times;</button>
+                </header>
+                <div class="task-create-body">
+                    <form method="POST" action="task.php" enctype="multipart/form-data" data-create-task-form>
+                        <?php $autoSelectChildId = count($children) === 1 ? (int) $children[0]['child_user_id'] : null; ?>
+                        <input type="hidden" name="start_date" value="<?php echo date('Y-m-d'); ?>">
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label>Child</label>
+                                <div class="child-select-grid">
+                                    <?php foreach ($children as $index => $child): ?>
+                                        <label class="child-select-card">
+                                            <input type="checkbox" name="child_user_ids[]" value="<?php echo (int) $child['child_user_id']; ?>"<?php echo $autoSelectChildId === (int) $child['child_user_id'] ? ' checked' : ''; ?>>
+                                            <img src="<?php echo htmlspecialchars($child['avatar']); ?>" alt="<?php echo htmlspecialchars($child['first_name'] ?? $child['child_name']); ?>">
+                                            <span><?php echo htmlspecialchars($child['first_name'] ?? $child['child_name']); ?></span>
+                                        </label>
+                                    <?php endforeach; ?>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label for="title">Title</label>
+                                <input type="text" id="title" name="title" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="description">Description</label>
+                                <textarea id="description" name="description"></textarea>
+                            </div>
+                            <div class="form-group">
+                                <label for="points">Points</label>
+                                <input type="number" id="points" name="points" min="1" required>
+                            </div>
+                            <div class="form-group repeat-group">
+                                <label for="recurrence">Repeat</label>
+                                <select id="recurrence" name="recurrence">
+                                    <option value="">Once</option>
+                                    <option value="daily">Every Day</option>
+                                    <option value="weekly">Specific Days</option>
+                                </select>
+                                <div class="repeat-days" data-create-recurrence-days>
+                                    <div class="repeat-days-label">Specific Days</div>
+                                    <div class="repeat-days-grid">
+                                        <label class="repeat-day"><input type="checkbox" name="recurrence_days[]" value="Sun"><span>Sun</span></label>
+                                        <label class="repeat-day"><input type="checkbox" name="recurrence_days[]" value="Mon"><span>Mon</span></label>
+                                        <label class="repeat-day"><input type="checkbox" name="recurrence_days[]" value="Tue"><span>Tue</span></label>
+                                        <label class="repeat-day"><input type="checkbox" name="recurrence_days[]" value="Wed"><span>Wed</span></label>
+                                        <label class="repeat-day"><input type="checkbox" name="recurrence_days[]" value="Thu"><span>Thu</span></label>
+                                        <label class="repeat-day"><input type="checkbox" name="recurrence_days[]" value="Fri"><span>Fri</span></label>
+                                        <label class="repeat-day"><input type="checkbox" name="recurrence_days[]" value="Sat"><span>Sat</span></label>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label for="time_of_day">Time of Day</label>
+                                <select id="time_of_day" name="time_of_day">
+                                    <option value="anytime" selected>Anytime</option>
+                                    <option value="morning">Morning</option>
+                                    <option value="afternoon">Afternoon</option>
+                                    <option value="evening">Evening</option>
+                                </select>
+                            </div>
+                            <div class="form-group toggle-field" data-create-end-toggle>
+                                <span class="toggle-label">End Date</span>
+                                <label class="toggle-row">
+                                    <span class="toggle-switch">
+                                        <input type="checkbox" name="end_date_enabled" data-end-date-toggle>
+                                        <span class="toggle-slider"></span>
+                                    </span>
+                                </label>
+                            </div>
+                            <div class="form-group toggle-field">
+                                <span class="toggle-label">Photo Proof</span>
+                                <label class="toggle-row">
+                                    <span class="toggle-switch">
+                                        <input type="checkbox" name="photo_proof_required" value="1">
+                                        <span class="toggle-slider"></span>
+                                    </span>
+                                </label>
+                            </div>
+                            <div class="form-group end-date-field" data-create-end-date>
+                                <label for="end_date">End Date</label>
+                                <input type="date" id="end_date" name="end_date" value="">
+                            </div>
+                            <div class="form-group" data-due-time-wrapper>
+                                <label for="due_time">Time Due By</label>
+                                <input type="time" id="due_time" name="due_time">
+                            </div>
+                            <div class="form-group">
+                                <label for="category">Category</label>
+                                <select id="category" name="category">
+                                    <option value="hygiene">Hygiene</option>
+                                    <option value="homework">Homework</option>
+                                    <option value="household">Household</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="timing_mode">Timing Mode</label>
+                                <select id="timing_mode" name="timing_mode">
+                                    <option value="no_limit" selected>None</option>
+                                    <option value="timer">Timer</option>
+                                </select>
+                            </div>
+                            <div class="form-group" data-create-timer-minutes>
+                                <label for="timer_minutes">Timer Minutes</label>
+                                <input type="number" id="timer_minutes" name="timer_minutes" min="1" value="">
+                            </div>
+                        </div>
+                        <div class="form-actions">
+                            <button type="submit" name="create_task" class="button">Create Task</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    <?php endif; ?>
     <footer>
       <p>Child Task and Chore App - Ver 3.15.0</p>
    </footer>
