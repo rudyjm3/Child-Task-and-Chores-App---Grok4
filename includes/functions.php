@@ -1044,7 +1044,7 @@ function getTasks($user_id) {
 // Complete a task
 function completeTask($task_id, $child_id, $photo_proof = null) {
     global $db;
-    $stmt = $db->prepare("UPDATE tasks SET status = 'completed', photo_proof = :photo_proof, completed_at = NOW() WHERE id = :id AND child_user_id = :child_id AND status = 'pending'");
+    $stmt = $db->prepare("UPDATE tasks SET status = 'completed', photo_proof = :photo_proof, completed_at = NOW(), approved_at = NULL WHERE id = :id AND child_user_id = :child_id AND status = 'pending'");
     return $stmt->execute([':photo_proof' => $photo_proof, ':id' => $task_id, ':child_id' => $child_id]);
 }
 
@@ -1184,6 +1184,58 @@ function approveTask($task_id) {
         }
     }
     return false;
+}
+
+function rejectTask($task_id, $parent_user_id, $note = '', $reactivate = false, $actor_id = null) {
+    global $db;
+    $stmt = $db->prepare("SELECT child_user_id, title FROM tasks WHERE id = :id AND parent_user_id = :parent_id AND status = 'completed'");
+    $stmt->execute([':id' => $task_id, ':parent_id' => $parent_user_id]);
+    $task = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$task) {
+        return false;
+    }
+
+    $status = $reactivate ? 'pending' : 'rejected';
+    $stmt = $db->prepare("
+        UPDATE tasks
+        SET status = :status,
+            completed_at = IF(:reactivate = 1, NULL, completed_at),
+            approved_at = NULL,
+            rejected_at = NOW(),
+            rejected_note = :note,
+            rejected_by = :rejected_by,
+            photo_proof = IF(:reactivate = 1, NULL, photo_proof)
+        WHERE id = :id AND parent_user_id = :parent_id AND status = 'completed'
+    ");
+    $ok = $stmt->execute([
+        ':status' => $status,
+        ':reactivate' => $reactivate ? 1 : 0,
+        ':note' => $note !== '' ? $note : null,
+        ':rejected_by' => $actor_id,
+        ':id' => $task_id,
+        ':parent_id' => $parent_user_id
+    ]);
+
+    if ($ok) {
+        $noteSuffix = $note !== '' ? " Note: $note" : '';
+        if ($reactivate) {
+            addChildNotification(
+                (int)$task['child_user_id'],
+                'task_rejected',
+                'Task needs to be redone: ' . ($task['title'] ?? 'Task') . '.' . $noteSuffix,
+                'task.php#task-' . (int)$task_id
+            );
+        } else {
+            addChildNotification(
+                (int)$task['child_user_id'],
+                'task_rejected_closed',
+                'Task rejected: ' . ($task['title'] ?? 'Task') . '.' . $noteSuffix,
+                'task.php#task-' . (int)$task_id
+            );
+        }
+    }
+
+    return $ok;
 }
 
 // Create reward (optionally scoped to a child or template)
@@ -2284,11 +2336,14 @@ try {
        time_of_day ENUM('anytime', 'morning', 'afternoon', 'evening') DEFAULT 'anytime',
        recurrence_days VARCHAR(32) DEFAULT NULL,
        end_date DATE DEFAULT NULL,
-       status ENUM('pending', 'completed', 'approved') DEFAULT 'pending',
+       status ENUM('pending', 'completed', 'approved', 'rejected') DEFAULT 'pending',
        photo_proof VARCHAR(255),
        photo_proof_required TINYINT(1) DEFAULT 0,
        completed_at DATETIME,
        approved_at DATETIME,
+       rejected_at DATETIME,
+       rejected_note TEXT,
+       rejected_by INT NULL,
        created_by INT NULL,
        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (parent_user_id) REFERENCES users(id) ON DELETE CASCADE,
@@ -2313,6 +2368,12 @@ try {
    error_log("Added/verified photo_proof_required in tasks");
    $db->exec("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS approved_at DATETIME NULL");
    error_log("Added/verified approved_at in tasks");
+   $db->exec("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS rejected_at DATETIME NULL");
+   $db->exec("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS rejected_note TEXT NULL");
+   $db->exec("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS rejected_by INT NULL");
+   error_log("Added/verified rejection fields in tasks");
+   $db->exec("ALTER TABLE tasks MODIFY COLUMN status ENUM('pending', 'completed', 'approved', 'rejected') DEFAULT 'pending'");
+   error_log("Expanded tasks status enum to include rejected");
 
    // Create reward_templates table (library of reusable rewards)
    $sql = "CREATE TABLE IF NOT EXISTS reward_templates (

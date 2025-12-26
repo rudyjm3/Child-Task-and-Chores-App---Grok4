@@ -203,6 +203,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             $message = "Failed to approve task.";
         }
+    } elseif (isset($_POST['reject_task']) && isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id']) && canAddEditChild($_SESSION['user_id'])) {
+        $task_id = filter_input(INPUT_POST, 'task_id', FILTER_VALIDATE_INT);
+        $reject_note = trim((string)filter_input(INPUT_POST, 'reject_note', FILTER_SANITIZE_STRING));
+        $reject_action = filter_input(INPUT_POST, 'reject_action', FILTER_SANITIZE_STRING);
+        $reactivate = $reject_action === 'reactivate';
+        if ($task_id && rejectTask($task_id, $family_root_id, $reject_note, $reactivate, $_SESSION['user_id'])) {
+            $message = $reactivate ? "Task rejected and reactivated." : "Task rejected and closed.";
+        } else {
+            $message = "Failed to reject task.";
+        }
     }
 }
 
@@ -255,6 +265,9 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
 }
 $calendarTasks = [];
 foreach ($tasks as $task) {
+    if (($task['status'] ?? '') === 'rejected') {
+        continue;
+    }
     $calendarTasks[] = [
         'id' => (int) ($task['id'] ?? 0),
         'title' => $task['title'] ?? '',
@@ -484,6 +497,9 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
          background-color: rgba(0, 0, 0, 0.0);
          color: #9f9f9f; /*background: #f5f5f5; border-color: #d5def0; color: #757575;*/ }
         .task-card-actions { margin-top: 10px; display: flex; gap: 8px; }
+        .task-reject-form { margin-top: 12px; display: grid; gap: 8px; }
+        .task-reject-form textarea { width: 100%; min-height: 70px; resize: vertical; }
+        .task-reject-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
         .modal-actions { display: flex; flex-wrap: wrap; gap: 12px; justify-content: flex-end; }
         .timer-controls {
             display: flex;
@@ -500,6 +516,11 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
             border: none;
             border-radius: 5px;
             cursor: pointer;
+            user-select: none;
+            -webkit-user-select: none;
+            -ms-user-select: none;
+            -webkit-touch-callout: none;
+            touch-action: manipulation;
         }
         .timer-cancel-button {
             padding: 10px 20px;
@@ -509,6 +530,11 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
             border-radius: 5px;
             cursor: pointer;
             display: none;
+            user-select: none;
+            -webkit-user-select: none;
+            -ms-user-select: none;
+            -webkit-touch-callout: none;
+            touch-action: manipulation;
         }
         .pause-hold-countdown {
             display: none;
@@ -967,6 +993,9 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
 
             if (typeof event.preventDefault === 'function') {
                 event.preventDefault();
+            }
+            if (typeof event.stopPropagation === 'function') {
+                event.stopPropagation();
             }
 
             if (event.pointerId !== undefined && state.button.setPointerCapture) {
@@ -1977,6 +2006,16 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                                 <form method="POST" action="task.php">
                                     <input type="hidden" name="task_id" value="<?php echo $task['id']; ?>">
                                     <button type="submit" name="approve_task">Approve Task</button>
+                                </form>
+                                <form method="POST" action="task.php" class="task-reject-form">
+                                    <input type="hidden" name="task_id" value="<?php echo $task['id']; ?>">
+                                    <input type="hidden" name="reject_task" value="1">
+                                    <label for="reject_note_<?php echo (int) $task['id']; ?>">Rejection note (optional)</label>
+                                    <textarea id="reject_note_<?php echo (int) $task['id']; ?>" name="reject_note" placeholder="Explain why this task was rejected."></textarea>
+                                    <div class="task-reject-actions">
+                                        <button type="submit" name="reject_action" value="reactivate" class="button secondary">Reject &amp; Reactivate</button>
+                                        <button type="submit" name="reject_action" value="close" class="button danger">Reject &amp; Close</button>
+                                    </div>
                                 </form>
                             <?php else: ?>
                                 <p class="waiting-label">Waiting for approval</p>
