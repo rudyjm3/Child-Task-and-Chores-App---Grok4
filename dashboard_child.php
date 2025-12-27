@@ -133,7 +133,7 @@ $notificationCount = is_array($notificationsNew) ? count($notificationsNew) : 0;
    <link rel="stylesheet" href="css/main.css?v=3.16.7">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" integrity="Evv84Mr4kqVGRNSgIGL/F/aIDqQb7xQ2vcrdIwxfjThSH8CSR7PBEakCr51Ck+w+/U6swU2Im1vVX0SVk9ABhg==" crossorigin="anonymous" referrerpolicy="no-referrer">
     <style>
-        .dashboard { padding: 20px; max-width: 720px; margin: 0 auto; text-align: center; }
+        .dashboard { padding: 20px; /*max-width: 720px;*/ max-width: 100%; margin: 0 auto; text-align: center; }
         .points-summary { margin: 20px 0; display: flex; align-items: flex-start; gap: 25px; text-align: left; }
         .child-identity { display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 120px; }
         .child-avatar-wrap { position: relative; display: inline-block; }
