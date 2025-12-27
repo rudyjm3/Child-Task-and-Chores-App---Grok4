@@ -483,8 +483,15 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
         .task-meta-row { display: flex; flex-wrap: wrap; gap: 10px; }
         .task-meta-label { font-weight: 600; color: #37474f; }
         .task-description { margin-top: 8px; color: #546e7a; }
-        .task-section-toggle { margin: 18px 0 10px; border: 1px solid #e0e0e0; border-radius: 10px; padding: 8px 12px; background: #fff; }
+        .task-section-toggle { margin: 18px 0 10px; border: 1px solid #e0e0e0; border-radius: 10px; padding: 8px 12px; background: #fff; overflow: hidden; transition: border-color 200ms ease, box-shadow 200ms ease; }
         .task-section-toggle summary { cursor: pointer; font-weight: 700; color: #37474f; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+        .task-section-title { display: inline-flex; align-items: center; gap: 8px; }
+        .task-section-toggle summary::-webkit-details-marker { display: none; }
+        .task-section-toggle summary::after { content: '\f078'; font-family: 'Font Awesome 6 Free'; font-weight: 900; font-size: 0.85rem; color: #607d8b; transition: transform 200ms ease; }
+        .task-section-toggle[open] summary::after { transform: rotate(180deg); }
+        .task-section-toggle[open] { border-color: #ffd28a; box-shadow: 0 6px 16px rgba(255, 210, 138, 0.25); }
+        .task-section-content { overflow: hidden; max-height: 0; opacity: 0; transform: translateY(-6px); transition: max-height 280ms ease, opacity 200ms ease, transform 200ms ease; }
+        .task-section-toggle[open] .task-section-content { max-height: 3000px; opacity: 1; transform: translateY(0); }
         .task-count-badge { background: #ff6f61; color: #fff; border-radius: 12px; padding: 2px 8px; font-size: 0.8rem; font-weight: 700; min-width: 24px; text-align: center; }
         .task-calendar-section { width: 100%; max-width: 100%; margin: 0 auto 24px; padding: 0 20px; }
         .task-calendar-card { background: #fff; border-radius: 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); padding: 16px; display: grid; gap: 16px; }
@@ -2485,11 +2492,15 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
             <?php if (empty($tasks)): ?>
                 <p>No tasks available.</p>
             <?php else: ?>
-                <h3>Active Tasks</h3>
-                <?php if (empty($pending_tasks)): ?>
-                    <p>No active tasks.</p>
-                <?php else: ?>
-                    <?php foreach ($pending_tasks as $task): ?>
+                <details class="task-section-toggle">
+                    <summary>
+                        <span class="task-section-title">Active Tasks <span class="task-count-badge"><?php echo count($pending_tasks); ?></span></span>
+                    </summary>
+                    <div class="task-section-content">
+                        <?php if (empty($pending_tasks)): ?>
+                            <p>No active tasks.</p>
+                        <?php else: ?>
+                            <?php foreach ($pending_tasks as $task): ?>
                         <?php
                         $today_key = date('Y-m-d');
                         $instance_today = $taskInstancesByTask[(int) $task['id']][$today_key] ?? null;
@@ -2639,19 +2650,21 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                                 </div>
                             <?php endif; ?>
                         </div>
-                    <?php endforeach; ?>
-                <?php endif; ?>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                    </div>
+                </details>
 
                 <details class="task-section-toggle" <?php echo !empty($completed_tasks) ? 'open' : ''; ?>>
                     <summary>
-                        <span>Tasks Waiting Approval</span>
-                        <span class="task-count-badge"><?php echo count($completed_tasks); ?></span>
+                        <span class="task-section-title">Tasks Waiting Approval <span class="task-count-badge"><?php echo count($completed_tasks); ?></span></span>
                     </summary>
-                    <?php if (empty($completed_tasks)): ?>
-                        <p>No tasks waiting approval.</p>
-                    <?php else: ?>
-                        <?php foreach ($completed_tasks as $task): ?>
-                        <div class="task-card" id="task-<?php echo (int) $task['id']; ?>" data-task-id="<?php echo $task['id']; ?>">
+                    <div class="task-section-content">
+                        <?php if (empty($completed_tasks)): ?>
+                            <p>No tasks waiting approval.</p>
+                        <?php else: ?>
+                            <?php foreach ($completed_tasks as $task): ?>
+                            <div class="task-card" id="task-<?php echo (int) $task['id']; ?>" data-task-id="<?php echo $task['id']; ?>">
                             <div class="task-card-header">
                                 <div class="task-card-title"><?php echo htmlspecialchars($task['title']); ?></div>
                                 <div class="task-pill"><?php echo (int)$task['points']; ?> pts</div>
@@ -2732,21 +2745,22 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                             <?php else: ?>
                                 <p class="waiting-label">Waiting for approval</p>
                             <?php endif; ?>
-                        </div>
-                        <?php endforeach; ?>
-                    <?php endif; ?>
+                            </div>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                    </div>
                 </details>
 
                 <details class="task-section-toggle">
                     <summary>
-                        <span>Approved Tasks</span>
-                        <span class="task-count-badge"><?php echo count($approved_tasks); ?></span>
+                        <span class="task-section-title">Approved Tasks <span class="task-count-badge"><?php echo count($approved_tasks); ?></span></span>
                     </summary>
-                    <?php if (empty($approved_tasks)): ?>
-                        <p>No approved tasks.</p>
-                    <?php else: ?>
-                        <?php foreach ($approved_tasks as $task): ?>
-                        <div class="task-card" id="task-<?php echo (int) $task['id']; ?>" data-task-id="<?php echo $task['id']; ?>">
+                    <div class="task-section-content">
+                        <?php if (empty($approved_tasks)): ?>
+                            <p>No approved tasks.</p>
+                        <?php else: ?>
+                            <?php foreach ($approved_tasks as $task): ?>
+                            <div class="task-card" id="task-<?php echo (int) $task['id']; ?>" data-task-id="<?php echo $task['id']; ?>">
                             <div class="task-card-header">
                                 <div class="task-card-title"><?php echo htmlspecialchars($task['title']); ?></div>
                                 <div class="task-pill"><?php echo (int)$task['points']; ?> pts</div>
@@ -2806,9 +2820,10 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                                 <div class="task-description"><?php echo htmlspecialchars($task['description']); ?></div>
                             <?php endif; ?>
                             <p class="completed">Approved!</p>
-                        </div>
-                        <?php endforeach; ?>
-                    <?php endif; ?>
+                            </div>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                    </div>
                 </details>
             <?php endif; ?>
         </div>
