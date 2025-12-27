@@ -528,6 +528,9 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
         .task-week-list { display: none; border: 1px solid #d5def0; border-radius: 12px; background: #fff; padding: 12px; }
         .task-week-list.active { display: grid; gap: 12px; }
         .week-list-day { border: 1px solid #d5def0; border-radius: 12px; padding: 12px; background: #fdfdfd; display: grid; gap: 10px; }
+        .week-list-day.is-today { border-color: #ffd28a; background: #ffe0b2; }
+        .week-list-day.is-today .week-list-day-name,
+        .week-list-day.is-today .week-list-day-date { color: #ef6c00; }
         .week-list-day-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-weight: 700; color: #37474f; }
         .week-list-day-name { text-transform: uppercase; letter-spacing: 0.04em; font-size: 0.8rem; color: #607d8b; }
         .week-list-day-date { color: #0d47a1; }
@@ -1663,6 +1666,7 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
             const renderList = (weekDates, filteredTasks) => {
                 if (!listWrap) return 0;
                 listWrap.innerHTML = '';
+                const todayKey = formatDateKey(new Date());
                 let totalItems = 0;
                 const sections = [
                     { key: 'anytime', label: 'Due Today' },
@@ -1689,7 +1693,7 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                     totalItems += items.length;
 
                     const dayCard = document.createElement('div');
-                    dayCard.className = 'week-list-day';
+                    dayCard.className = `week-list-day${dateKey === todayKey ? ' is-today' : ''}`;
                     const header = document.createElement('div');
                     header.className = 'week-list-day-header';
                     const name = document.createElement('span');

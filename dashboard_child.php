@@ -124,7 +124,7 @@ $notificationCount = is_array($notificationsNew) ? count($notificationsNew) : 0;
         .week-calendar { flex: 1; min-width: 220px; text-align: left; }
         .week-days { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
         .week-day { background: #f5f5f5; border: 1px solid #d5def0; border-radius: 10px; padding: 8px 0; display: grid; gap: 2px; justify-items: center; font-weight: 700; color: #37474f; cursor: pointer; }
-        .week-day.active { background: #ffe0b2; border-color: #ffd28a; color: #ef6c00; }
+        .week-day.active { background: #ffe0b2; border-color: #ffd28a; }
         .week-day-name { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; }
         .week-day-num { font-size: 1rem; }
         .week-schedule { margin-top: 10px; display: grid; gap: 8px; }
