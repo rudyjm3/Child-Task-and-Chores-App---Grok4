@@ -670,7 +670,7 @@ function getDashboardData($user_id) {
             $todayDay = date('D');
 
             // Tasks assigned per child
-            $stmt = $db->prepare("SELECT child_user_id, due_date, end_date, recurrence, recurrence_days, status, completed_at FROM tasks WHERE child_user_id IN ($placeholders)");
+            $stmt = $db->prepare("SELECT child_user_id, due_date, end_date, recurrence, recurrence_days, status, completed_at, approved_at FROM tasks WHERE child_user_id IN ($placeholders)");
             $stmt->execute($childIds);
             while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
                 $childId = (int) $row['child_user_id'];
@@ -704,10 +704,14 @@ function getDashboardData($user_id) {
                 }
                 $status = $row['status'] ?? 'pending';
                 $completedAt = $row['completed_at'] ?? null;
+                $approvedAt = $row['approved_at'] ?? null;
                 $completedToday = false;
-                if (!empty($completedAt)) {
+                if (!empty($approvedAt)) {
+                    $approvedDate = date('Y-m-d', strtotime($approvedAt));
+                    $completedToday = $approvedDate === $todayDate;
+                } elseif (!empty($completedAt)) {
                     $completedDate = date('Y-m-d', strtotime($completedAt));
-                    $completedToday = $completedDate === $todayDate && in_array($status, ['completed', 'approved'], true);
+                    $completedToday = $completedDate === $todayDate;
                 }
                 if ($completedToday) {
                     continue;
@@ -1167,12 +1171,14 @@ function logRoutinePointsAward($routine_id, $child_id, $task_points, $bonus_poin
 // Approve a task
 function approveTask($task_id) {
     global $db;
-    $stmt = $db->prepare("SELECT child_user_id, points, title FROM tasks WHERE id = :id AND status = 'completed'");
+    $stmt = $db->prepare("SELECT child_user_id, points, title, recurrence FROM tasks WHERE id = :id AND status = 'completed'");
     $stmt->execute([':id' => $task_id]);
     $task = $stmt->fetch(PDO::FETCH_ASSOC);
     if ($task) {
-        $stmt = $db->prepare("UPDATE tasks SET status = 'approved', approved_at = NOW() WHERE id = :id");
-        if ($stmt->execute([':id' => $task_id])) {
+        $isRecurring = !empty($task['recurrence']);
+        $nextStatus = $isRecurring ? 'pending' : 'approved';
+        $stmt = $db->prepare("UPDATE tasks SET status = :status, approved_at = NOW() WHERE id = :id");
+        if ($stmt->execute([':id' => $task_id, ':status' => $nextStatus])) {
             updateChildPoints($task['child_user_id'], $task['points']);
             addChildNotification(
                 (int)$task['child_user_id'],

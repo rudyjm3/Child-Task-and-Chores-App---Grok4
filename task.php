@@ -37,10 +37,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (empty($start_date)) {
             $start_date = date('Y-m-d');
         }
-        $due_date = $start_date;
-        if (!empty($due_time)) {
-            $due_date .= ' ' . $due_time . ':00';
-        }
         $points = filter_input(INPUT_POST, 'points', FILTER_VALIDATE_INT);
         $repeat = filter_input(INPUT_POST, 'recurrence', FILTER_SANITIZE_STRING);
         $recurrence = $repeat === 'daily' ? 'daily' : ($repeat === 'weekly' ? 'weekly' : '');
@@ -52,6 +48,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         $time_of_day_input = filter_input(INPUT_POST, 'time_of_day', FILTER_SANITIZE_STRING);
         $time_of_day = in_array($time_of_day_input, ['anytime', 'morning', 'afternoon', 'evening'], true) ? $time_of_day_input : 'anytime';
+        $due_date = $start_date;
+        if (!empty($due_time)) {
+            $due_date .= ' ' . $due_time . ':00';
+        } elseif ($recurrence === '' && $time_of_day === 'anytime') {
+            $due_date .= ' 23:59:00';
+        }
         $category = filter_input(INPUT_POST, 'category', FILTER_SANITIZE_STRING);
         $timing_mode = filter_input(INPUT_POST, 'timing_mode', FILTER_SANITIZE_STRING);
         $timer_minutes = filter_input(INPUT_POST, 'timer_minutes', FILTER_VALIDATE_INT);
@@ -85,10 +87,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (empty($start_date)) {
             $start_date = date('Y-m-d');
         }
-        $due_date = $start_date;
-        if (!empty($due_time)) {
-            $due_date .= ' ' . $due_time . ':00';
-        }
         $points = filter_input(INPUT_POST, 'points', FILTER_VALIDATE_INT);
         $repeat = filter_input(INPUT_POST, 'recurrence', FILTER_SANITIZE_STRING);
         $recurrence = $repeat === 'daily' ? 'daily' : ($repeat === 'weekly' ? 'weekly' : '');
@@ -100,6 +98,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         $time_of_day_input = filter_input(INPUT_POST, 'time_of_day', FILTER_SANITIZE_STRING);
         $time_of_day = in_array($time_of_day_input, ['anytime', 'morning', 'afternoon', 'evening'], true) ? $time_of_day_input : 'anytime';
+        $due_date = $start_date;
+        if (!empty($due_time)) {
+            $due_date .= ' ' . $due_time . ':00';
+        } elseif ($recurrence === '' && $time_of_day === 'anytime') {
+            $due_date .= ' 23:59:00';
+        }
         $category = filter_input(INPUT_POST, 'category', FILTER_SANITIZE_STRING);
         $timing_mode = filter_input(INPUT_POST, 'timing_mode', FILTER_SANITIZE_STRING);
         $timer_minutes = filter_input(INPUT_POST, 'timer_minutes', FILTER_VALIDATE_INT);
@@ -284,6 +288,8 @@ foreach ($tasks as $task) {
         'timer_minutes' => (int) ($task['timer_minutes'] ?? 0),
         'status' => $task['status'] ?? '',
         'completed_at' => $task['completed_at'] ?? '',
+        'approved_at' => $task['approved_at'] ?? '',
+        'photo_proof' => $task['photo_proof'] ?? '',
         'photo_proof_required' => !empty($task['photo_proof_required']) ? 1 : 0,
         'child_user_id' => (int) ($task['child_user_id'] ?? 0),
         'child_name' => $task['child_display_name'] ?? '',
@@ -474,6 +480,7 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
         .task-edit-button { margin-top: 10px; }
         .task-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: none; align-items: center; justify-content: center; z-index: 4000; padding: 14px; }
         .task-modal.open { display: flex; }
+        .task-modal[data-task-delete-modal] { z-index: 4200; }
         .task-modal-card { background: #fff; border-radius: 12px; max-width: 760px; width: min(760px, 100%); max-height: 85vh; overflow: hidden; box-shadow: 0 12px 32px rgba(0,0,0,0.25); display: grid; grid-template-rows: auto 1fr; }
         .task-create-fab { position: sticky; top: 0; z-index: 5; display: flex; justify-content: flex-end; margin: 10px 0 0; }
         .task-create-button { width: 52px; height: 52px; border-radius: 50%; border: none; background: #4caf50; color: #fff; display: inline-flex; align-items: center; justify-content: center; font-size: 1.4rem; cursor: pointer; box-shadow: 0 6px 14px rgba(76, 175, 80, 0.35); }
@@ -536,6 +543,50 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
             -webkit-touch-callout: none;
             touch-action: manipulation;
         }
+        .floating-task-timer {
+            position: fixed;
+            top: 16px;
+            right: 16px;
+            z-index: 5000;
+            width: min(320px, 92vw);
+            background: #fff;
+            border: 1px solid #d5def0;
+            border-radius: 14px;
+            box-shadow: 0 12px 26px rgba(0,0,0,0.18);
+            padding: 12px;
+            display: none;
+            gap: 10px;
+        }
+        .floating-task-timer.active { display: grid; }
+        .floating-task-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+        .floating-task-title { font-weight: 700; color: #37474f; }
+        .floating-task-points { color: #6d4c41; font-weight: 700; font-size: 0.9rem; }
+        .floating-task-header-actions { display: flex; gap: 6px; }
+        .floating-task-icon {
+            border: none;
+            background: transparent;
+            color: #607d8b;
+            cursor: pointer;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+        }
+        .floating-task-icon:hover { color: #455a64; background: rgba(0,0,0,0.04); }
+        .floating-task-time { font-weight: 700; font-size: 1rem; color: #263238; }
+        .floating-task-actions { display: flex; align-items: center; gap: 10px; justify-content: flex-end; flex-wrap: wrap; }
+        .floating-task-pause {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            border: none;
+            background: #2196f3;
+            color: #fff;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
+        .floating-task-pause:hover { background: #1976d2; }
         .pause-hold-countdown {
             display: none;
             position: absolute;
@@ -560,49 +611,26 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
     <script>
         const taskCalendarData = <?php echo json_encode($calendarTasks, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
         const taskCalendarPremium = <?php echo $calendarPremium ? 'true' : 'false'; ?>;
+        const isParentView = <?php echo canCreateContent($_SESSION['user_id']) ? 'true' : 'false'; ?>;
+        const canManageTasks = <?php echo (canCreateContent($_SESSION['user_id']) && canAddEditChild($_SESSION['user_id'])) ? 'true' : 'false'; ?>;
         const taskTimers = {};
+        let taskCalendarMap = new Map();
+        let activePreviewTaskId = null;
+        let floatingTaskId = null;
+        let floatingTimerEl = null;
+        let floatingTitleEl = null;
+        let floatingPointsEl = null;
+        let floatingOpenBtn = null;
+        let floatingCloseBtn = null;
+        let floatingFinishBtn = null;
+        let openTaskPreview = null;
+        let openEditTaskModal = null;
+        let openDeleteTaskModal = null;
+        let openProofTaskModal = null;
+        let openPhotoViewer = null;
 
         document.addEventListener('DOMContentLoaded', () => {
-        document.querySelectorAll('.timer-button').forEach((button) => {
-                const taskId = button.dataset.taskId;
-                const limitMinutes = parseInt(button.dataset.limit, 10) || 5;
-                const timerElement = document.getElementById(`timer-${taskId}`);
-                const countdownElement = document.getElementById(`pause-countdown-${taskId}`);
-                const cancelButton = document.querySelector(`.timer-cancel-button[data-task-id="${taskId}"]`);
-
-                if (!timerElement || !cancelButton) return;
-
-                const limitSeconds = limitMinutes * 60;
-                taskTimers[taskId] = {
-                    remaining: limitSeconds,
-                    initial: limitSeconds,
-                    intervalId: null,
-                    holdIntervalId: null,
-                    holdRemaining: 0,
-                    isRunning: false,
-                    ignoreNextClick: false,
-                    activePointerId: null,
-                    timerElement,
-                    button,
-                    countdownElement,
-                    cancelButton
-                };
-
-                updateTimerDisplay(taskId);
-
-                button.addEventListener('click', (event) => handleTimerClick(event, taskId));
-
-                const holdStartEvents = ['pointerdown', 'touchstart', 'mousedown'];
-                const holdEndEvents = ['pointerup', 'pointerleave', 'pointercancel', 'touchend', 'touchcancel', 'mouseup'];
-
-                holdStartEvents.forEach((evt) => {
-                    button.addEventListener(evt, (event) => beginHold(event, taskId), { passive: false });
-                });
-                holdEndEvents.forEach((evt) => {
-                    button.addEventListener(evt, (event) => cancelHold(taskId, { event }));
-                });
-            cancelButton.addEventListener('click', () => cancelTimer(taskId));
-        });
+        bindTimerControls(document);
 
         const editButtons = document.querySelectorAll('[data-task-edit-open]');
         const deleteButtons = document.querySelectorAll('[data-task-delete-open]');
@@ -622,6 +650,12 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
         const photoModal = document.querySelector('[data-task-photo-modal]');
         const photoCloses = photoModal ? photoModal.querySelectorAll('[data-task-photo-close]') : [];
         const photoPreview = photoModal ? photoModal.querySelector('[data-task-photo-preview]') : null;
+        floatingTimerEl = document.querySelector('[data-floating-timer]');
+        floatingTitleEl = floatingTimerEl ? floatingTimerEl.querySelector('[data-floating-title]') : null;
+        floatingPointsEl = floatingTimerEl ? floatingTimerEl.querySelector('[data-floating-points]') : null;
+        floatingOpenBtn = floatingTimerEl ? floatingTimerEl.querySelector('[data-floating-open]') : null;
+        floatingCloseBtn = floatingTimerEl ? floatingTimerEl.querySelector('[data-floating-close]') : null;
+        floatingFinishBtn = floatingTimerEl ? floatingTimerEl.querySelector('[data-floating-finish]') : null;
 
         const updateTimerField = (wrapper, selectEl) => {
             if (!wrapper || !selectEl) return;
@@ -663,6 +697,10 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
         };
         const openModal = (data) => {
             if (!modal || !modalForm) return;
+            const previewModalEl = document.querySelector('[data-task-preview-modal]');
+            if (previewModalEl && previewModalEl.classList.contains('open')) {
+                previewModalEl.classList.remove('open');
+            }
             modalForm.querySelector('[name="task_id"]').value = data.id;
             modalForm.querySelectorAll('[name="child_user_ids[]"]').forEach((box) => {
                 box.checked = box.value === String(data.childId);
@@ -713,6 +751,10 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
         };
         const openDeleteModal = (data) => {
             if (!deleteModal || !deleteForm || !deleteCopy) return;
+            const previewModalEl = document.querySelector('[data-task-preview-modal]');
+            if (previewModalEl && previewModalEl.classList.contains('open')) {
+                previewModalEl.classList.remove('open');
+            }
             deleteForm.querySelector('[name="task_id"]').value = data.id;
             deleteCopy.textContent = `Are you sure you want to delete task "${data.title}" assigned to ${data.childName}?`;
             deleteModal.classList.add('open');
@@ -751,29 +793,34 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                 photoPreview.src = '';
             }
         };
-
-        if (editButtons.length && modal) {
-            editButtons.forEach((btn) => {
-                btn.addEventListener('click', () => {
-                    openModal({
-                        id: btn.dataset.taskId,
-                        childId: btn.dataset.childId,
-                        title: btn.dataset.title,
-                        description: btn.dataset.description,
-                        startDate: btn.dataset.startDate,
-                        dueTime: btn.dataset.dueTime,
-                        endDate: btn.dataset.endDate,
-                        points: btn.dataset.points,
-                        recurrence: btn.dataset.recurrence,
-                        category: btn.dataset.category,
-                        timingMode: btn.dataset.timingMode,
-                        timerMinutes: btn.dataset.timerMinutes,
-                        timeOfDay: btn.dataset.timeOfDay,
-                        recurrenceDays: btn.dataset.recurrenceDays,
-                        photoRequired: btn.dataset.photoRequired === '1'
-                    });
+        openEditTaskModal = openModal;
+        openDeleteTaskModal = openDeleteModal;
+        openProofTaskModal = openProofModal;
+        openPhotoViewer = openPhotoModal;
+        if (floatingTimerEl) {
+            if (floatingOpenBtn) {
+                floatingOpenBtn.addEventListener('click', () => {
+                    if (floatingTaskId && openTaskPreview) {
+                        openTaskPreview(floatingTaskId);
+                        hideFloatingTimer(floatingTaskId);
+                    }
                 });
-            });
+            }
+            if (floatingFinishBtn) {
+                floatingFinishBtn.addEventListener('click', () => {
+                    if (floatingTaskId && openTaskPreview) {
+                        openTaskPreview(floatingTaskId);
+                        hideFloatingTimer(floatingTaskId);
+                    }
+                });
+            }
+            if (floatingCloseBtn) {
+                floatingCloseBtn.addEventListener('click', () => hideFloatingTimer(floatingTaskId));
+            }
+        }
+
+        if (modal) {
+            bindTaskEditDeleteButtons(document);
             if (modalCloses.length) {
                 modalCloses.forEach((btn) => btn.addEventListener('click', closeModal));
             }
@@ -864,29 +911,16 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
             deleteModal.addEventListener('click', (e) => { if (e.target === deleteModal) closeDeleteModal(); });
             document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeDeleteModal(); });
         }
-        if (proofButtons.length && proofModal) {
-            proofButtons.forEach((btn) => {
-                btn.addEventListener('click', () => {
-                    openProofModal({
-                        id: btn.dataset.taskId
-                    });
-                });
-            });
+        if (proofModal) {
+            bindTaskProofButtons(document);
             if (proofCloses.length) {
                 proofCloses.forEach((btn) => btn.addEventListener('click', closeProofModal));
             }
             proofModal.addEventListener('click', (e) => { if (e.target === proofModal) closeProofModal(); });
             document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeProofModal(); });
         }
-        if (photoThumbs.length && photoModal) {
-            photoThumbs.forEach((thumb) => {
-                thumb.addEventListener('click', () => {
-                    const src = thumb.dataset.taskPhotoSrc;
-                    if (src) {
-                        openPhotoModal(src);
-                    }
-                });
-            });
+        if (photoModal) {
+            bindPhotoThumbs(document);
             if (photoCloses.length) {
                 photoCloses.forEach((btn) => btn.addEventListener('click', closePhotoModal));
             }
@@ -896,12 +930,240 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
         initTaskCalendar();
     });
 
+        function getTaskTimerMinutes(taskId) {
+            const task = taskCalendarMap.get(String(taskId));
+            const minutes = parseInt(task?.timer_minutes, 10);
+            return Number.isFinite(minutes) && minutes > 0 ? minutes : 0;
+        }
+
+        function ensureTimerState(taskId, limitMinutes) {
+            if (!taskId) return null;
+            const key = String(taskId);
+            if (taskTimers[key]) return taskTimers[key];
+            const minutes = parseInt(limitMinutes, 10) || getTaskTimerMinutes(key);
+            if (!minutes) return null;
+            const limitSeconds = minutes * 60;
+            taskTimers[key] = {
+                remaining: limitSeconds,
+                initial: limitSeconds,
+                intervalId: null,
+                holdIntervalId: null,
+                holdRemaining: 0,
+                isRunning: false,
+                ignoreNextClick: false,
+                activePointerId: null,
+                holdButton: null
+            };
+            updateTimerDisplay(key);
+            syncTimerUI(key);
+            return taskTimers[key];
+        }
+
+        function bindTimerControls(container) {
+            if (!container) return;
+            const holdStartEvents = ['pointerdown', 'touchstart', 'mousedown'];
+            const holdEndEvents = ['pointerup', 'pointerleave', 'pointercancel', 'touchend', 'touchcancel', 'mouseup'];
+
+            container.querySelectorAll('[data-timer-action="start"]').forEach((button) => {
+                if (button.dataset.timerBound) return;
+                const taskId = button.dataset.taskId;
+                const limitMinutes = button.dataset.limit;
+                const state = ensureTimerState(taskId, limitMinutes);
+                if (!state) return;
+                button.dataset.timerBound = '1';
+                button.addEventListener('click', (event) => handleTimerClick(event, button.dataset.taskId));
+                holdStartEvents.forEach((evt) => {
+                    button.addEventListener(evt, (event) => beginHold(event, button.dataset.taskId), { passive: false });
+                });
+                holdEndEvents.forEach((evt) => {
+                    button.addEventListener(evt, (event) => cancelHold(button.dataset.taskId, { event }));
+                });
+                updateTimerDisplay(taskId);
+                syncTimerUI(taskId);
+            });
+
+            container.querySelectorAll('[data-timer-action="cancel"]').forEach((button) => {
+                if (button.dataset.timerBound) return;
+                const taskId = button.dataset.taskId;
+                if (!ensureTimerState(taskId, button.dataset.limit)) return;
+                button.dataset.timerBound = '1';
+                button.addEventListener('click', () => cancelTimer(button.dataset.taskId));
+            });
+
+            container.querySelectorAll('[data-timer-action="pause-toggle"]').forEach((button) => {
+                if (button.dataset.timerBound) return;
+                const taskId = button.dataset.taskId;
+                if (!ensureTimerState(taskId, button.dataset.limit)) return;
+                button.dataset.timerBound = '1';
+                button.addEventListener('click', () => toggleTimerPause(button.dataset.taskId));
+            });
+        }
+
         function updateTimerDisplay(taskId) {
-            const state = taskTimers[taskId];
-            if (!state || !state.timerElement) return;
+            const state = taskTimers[String(taskId)];
+            if (!state) return;
             const minutes = Math.floor(state.remaining / 60);
             const seconds = state.remaining % 60;
-            state.timerElement.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+            const label = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+            document.querySelectorAll(`[data-timer-display][data-task-id="${taskId}"]`).forEach((el) => {
+                el.textContent = label;
+            });
+        }
+
+        function syncTimerUI(taskId) {
+            const state = taskTimers[String(taskId)];
+            if (!state) return;
+            const startButtons = document.querySelectorAll(`[data-timer-action="start"][data-task-id="${taskId}"]`);
+            const cancelButtons = document.querySelectorAll(`[data-timer-action="cancel"][data-task-id="${taskId}"]`);
+            const pauseButtons = document.querySelectorAll(`[data-timer-action="pause-toggle"][data-task-id="${taskId}"]`);
+
+            let startLabel = 'Start Timer';
+            if (state.isRunning) {
+                startLabel = 'Pause Timer';
+            } else if (state.remaining <= 0) {
+                startLabel = 'Restart';
+            } else if (state.remaining < state.initial) {
+                startLabel = 'Resume';
+            }
+
+            startButtons.forEach((button) => {
+                button.textContent = startLabel;
+            });
+
+            const showCancel = !state.isRunning && state.remaining < state.initial;
+            cancelButtons.forEach((button) => {
+                button.style.display = showCancel ? 'inline-block' : 'none';
+            });
+
+            pauseButtons.forEach((button) => {
+                const icon = button.querySelector('i');
+                if (state.isRunning) {
+                    if (icon) icon.className = 'fa-solid fa-pause';
+                    button.setAttribute('aria-label', 'Pause timer');
+                } else {
+                    if (icon) icon.className = 'fa-solid fa-play';
+                    button.setAttribute('aria-label', 'Resume timer');
+                }
+            });
+        }
+
+        function showFloatingTimer(taskId) {
+            if (!floatingTimerEl) return;
+            const task = taskCalendarMap.get(String(taskId));
+            if (!task) return;
+            ensureTimerState(taskId, task.timer_minutes);
+            floatingTaskId = String(taskId);
+            if (floatingTitleEl) {
+                floatingTitleEl.textContent = task.title || 'Task';
+            }
+            if (floatingPointsEl) {
+                floatingPointsEl.textContent = `${task.points || 0} pts`;
+            }
+            floatingTimerEl.querySelectorAll('[data-timer-display]').forEach((el) => {
+                el.dataset.taskId = String(taskId);
+            });
+            floatingTimerEl.querySelectorAll('[data-timer-action="pause-toggle"]').forEach((el) => {
+                el.dataset.taskId = String(taskId);
+            });
+            floatingTimerEl.classList.add('active');
+            bindTimerControls(floatingTimerEl);
+            updateTimerDisplay(taskId);
+            syncTimerUI(taskId);
+        }
+
+        function shouldShowFloatingTimer(taskId) {
+            const state = taskTimers[String(taskId)];
+            if (!state) return false;
+            return state.remaining < state.initial && state.remaining > 0;
+        }
+
+        function hideFloatingTimer(taskId) {
+            if (!floatingTimerEl) return;
+            if (taskId && floatingTaskId && String(taskId) !== String(floatingTaskId)) return;
+            floatingTimerEl.classList.remove('active');
+            floatingTaskId = null;
+        }
+
+        function toggleTimerPause(taskId) {
+            const state = taskTimers[String(taskId)];
+            if (!state) return;
+            if (state.isRunning) {
+                pauseTimer(taskId);
+            } else {
+                if (state.remaining <= 0) {
+                    state.remaining = state.initial;
+                    updateTimerDisplay(taskId);
+                }
+                startTimer(taskId);
+            }
+        }
+
+        function bindTaskProofButtons(container) {
+            if (!container || !openProofTaskModal) return;
+            container.querySelectorAll('[data-task-proof-open]').forEach((btn) => {
+                if (btn.dataset.taskProofBound) return;
+                btn.dataset.taskProofBound = '1';
+                btn.addEventListener('click', () => {
+                    openProofTaskModal({
+                        id: btn.dataset.taskId
+                    });
+                });
+            });
+        }
+
+        function bindPhotoThumbs(container) {
+            if (!container || !openPhotoViewer) return;
+            container.querySelectorAll('[data-task-photo-src]').forEach((thumb) => {
+                if (thumb.dataset.taskPhotoBound) return;
+                thumb.dataset.taskPhotoBound = '1';
+                thumb.addEventListener('click', () => {
+                    const src = thumb.dataset.taskPhotoSrc;
+                    if (src) {
+                        openPhotoViewer(src);
+                    }
+                });
+            });
+        }
+
+        function bindTaskEditDeleteButtons(container) {
+            if (!container) return;
+            container.querySelectorAll('[data-task-edit-open]').forEach((btn) => {
+                if (btn.dataset.taskEditBound) return;
+                btn.dataset.taskEditBound = '1';
+                btn.addEventListener('click', () => {
+                    if (!openEditTaskModal) return;
+                    openEditTaskModal({
+                        id: btn.dataset.taskId,
+                        childId: btn.dataset.childId,
+                        title: btn.dataset.title,
+                        description: btn.dataset.description,
+                        startDate: btn.dataset.startDate,
+                        dueTime: btn.dataset.dueTime,
+                        endDate: btn.dataset.endDate,
+                        points: btn.dataset.points,
+                        recurrence: btn.dataset.recurrence,
+                        category: btn.dataset.category,
+                        timingMode: btn.dataset.timingMode,
+                        timerMinutes: btn.dataset.timerMinutes,
+                        timeOfDay: btn.dataset.timeOfDay,
+                        recurrenceDays: btn.dataset.recurrenceDays,
+                        photoRequired: btn.dataset.photoRequired === '1'
+                    });
+                });
+            });
+
+            container.querySelectorAll('[data-task-delete-open]').forEach((btn) => {
+                if (btn.dataset.taskDeleteBound) return;
+                btn.dataset.taskDeleteBound = '1';
+                btn.addEventListener('click', () => {
+                    if (!openDeleteTaskModal) return;
+                    openDeleteTaskModal({
+                        id: btn.dataset.taskId,
+                        childName: btn.dataset.childName,
+                        title: btn.dataset.title
+                    });
+                });
+            });
         }
 
         function handleTimerClick(event, taskId) {
@@ -932,9 +1194,8 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
             if (!state || state.isRunning) return;
 
             state.isRunning = true;
-            state.button.textContent = 'Pause Timer';
-            state.cancelButton.style.display = 'none';
-            hideCountdown(state);
+            hideCountdown(taskId);
+            syncTimerUI(taskId);
 
             clearInterval(state.intervalId);
             state.intervalId = setInterval(() => {
@@ -945,10 +1206,10 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                     clearInterval(state.intervalId);
                     state.intervalId = null;
                     state.isRunning = false;
-                    state.button.textContent = 'Restart';
-                    state.cancelButton.style.display = 'inline-block';
                     state.ignoreNextClick = false;
-                    hideCountdown(state);
+                    hideCountdown(taskId);
+                    syncTimerUI(taskId);
+                    hideFloatingTimer(taskId);
                     alert("Time's up! Try to hurry and finish up.");
                     return;
                 }
@@ -956,6 +1217,7 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
             }, 1000);
 
             updateTimerDisplay(taskId);
+            syncTimerUI(taskId);
         }
 
         function pauseTimer(taskId) {
@@ -964,9 +1226,8 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
             clearInterval(state.intervalId);
             state.intervalId = null;
             state.isRunning = false;
-            state.button.textContent = 'Resume';
-            state.cancelButton.style.display = 'inline-block';
             state.ignoreNextClick = true;
+            syncTimerUI(taskId);
         }
 
         function cancelTimer(taskId) {
@@ -979,10 +1240,10 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
             cancelHold(taskId);
             state.isRunning = false;
             state.remaining = state.initial;
-            state.button.textContent = 'Start Timer';
-            state.cancelButton.style.display = 'none';
             state.ignoreNextClick = false;
             updateTimerDisplay(taskId);
+            syncTimerUI(taskId);
+            hideFloatingTimer(taskId);
         }
 
         function beginHold(event, taskId) {
@@ -998,9 +1259,11 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                 event.stopPropagation();
             }
 
-            if (event.pointerId !== undefined && state.button.setPointerCapture) {
+            const holdButton = event.currentTarget;
+            state.holdButton = holdButton;
+            if (event.pointerId !== undefined && holdButton && holdButton.setPointerCapture) {
                 try {
-                    state.button.setPointerCapture(event.pointerId);
+                    holdButton.setPointerCapture(event.pointerId);
                     state.activePointerId = event.pointerId;
                 } catch (error) {
                     state.activePointerId = null;
@@ -1008,28 +1271,28 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
             }
 
             state.holdRemaining = 3;
-            showCountdown(state, state.holdRemaining);
+            showCountdown(taskId, state.holdRemaining);
 
             state.holdIntervalId = setInterval(() => {
                 state.holdRemaining -= 1;
                 if (state.holdRemaining > 0) {
-                    showCountdown(state, state.holdRemaining);
+                    showCountdown(taskId, state.holdRemaining);
                     return;
                 }
 
                 clearInterval(state.holdIntervalId);
                 state.holdIntervalId = null;
-                showCountdown(state, 0);
+                showCountdown(taskId, 0);
                 pauseTimer(taskId);
-                if (state.activePointerId !== null && state.button && state.button.releasePointerCapture) {
+                if (state.activePointerId !== null && state.holdButton && state.holdButton.releasePointerCapture) {
                     try {
-                        state.button.releasePointerCapture(state.activePointerId);
+                        state.holdButton.releasePointerCapture(state.activePointerId);
                     } catch (error) {
                         // ignore release failures
                     }
                 }
                 state.activePointerId = null;
-                setTimeout(() => hideCountdown(state), 600);
+                setTimeout(() => hideCountdown(taskId), 600);
             }, 1000);
         }
 
@@ -1040,33 +1303,36 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                 clearInterval(state.holdIntervalId);
                 state.holdIntervalId = null;
             }
-            if (event && event.pointerId !== undefined && state.button && state.button.hasPointerCapture && state.button.hasPointerCapture(event.pointerId)) {
+            if (event && event.pointerId !== undefined && state.holdButton && state.holdButton.hasPointerCapture && state.holdButton.hasPointerCapture(event.pointerId)) {
                 try {
-                    state.button.releasePointerCapture(event.pointerId);
+                    state.holdButton.releasePointerCapture(event.pointerId);
                 } catch (error) {
                     // ignore release failures
                 }
-            } else if (state.activePointerId !== null && state.button && state.button.releasePointerCapture) {
+            } else if (state.activePointerId !== null && state.holdButton && state.holdButton.releasePointerCapture) {
                 try {
-                    state.button.releasePointerCapture(state.activePointerId);
+                    state.holdButton.releasePointerCapture(state.activePointerId);
                 } catch (error) {
                     // ignore release failures
                 }
             }
             state.activePointerId = null;
-            hideCountdown(state);
+            state.holdButton = null;
+            hideCountdown(taskId);
         }
 
-        function showCountdown(state, value) {
-            if (!state.countdownElement) return;
-            state.countdownElement.style.display = 'block';
-            state.countdownElement.textContent = String(value);
+        function showCountdown(taskId, value) {
+            document.querySelectorAll(`[data-timer-countdown][data-task-id="${taskId}"]`).forEach((el) => {
+                el.style.display = 'block';
+                el.textContent = String(value);
+            });
         }
 
-        function hideCountdown(state) {
-            if (!state.countdownElement) return;
-            state.countdownElement.style.display = 'none';
-            state.countdownElement.textContent = '';
+        function hideCountdown(taskId) {
+            document.querySelectorAll(`[data-timer-countdown][data-task-id="${taskId}"]`).forEach((el) => {
+                el.style.display = 'none';
+                el.textContent = '';
+            });
         }
 
         function initTaskCalendar() {
@@ -1090,6 +1356,7 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
             (Array.isArray(taskCalendarData) ? taskCalendarData : []).forEach((task) => {
                 taskById.set(String(task.id), task);
             });
+            taskCalendarMap = taskById;
 
             let currentWeekStart = startOfWeek(new Date());
             const premiumEnabled = !!taskCalendarPremium;
@@ -1140,6 +1407,10 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                 if (!previewModal) return;
                 previewModal.classList.remove('open');
                 document.body.classList.remove('no-scroll');
+                if (activePreviewTaskId && shouldShowFloatingTimer(activePreviewTaskId)) {
+                    showFloatingTimer(activePreviewTaskId);
+                }
+                activePreviewTaskId = null;
             };
 
             const openPreview = (taskId) => {
@@ -1150,7 +1421,14 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                 previewBody.appendChild(buildTaskPreviewCard(task));
                 previewModal.classList.add('open');
                 document.body.classList.add('no-scroll');
+                activePreviewTaskId = String(taskId);
+                hideFloatingTimer(taskId);
+                bindTimerControls(previewBody);
+                bindTaskProofButtons(previewBody);
+                bindTaskEditDeleteButtons(previewBody);
+                bindPhotoThumbs(previewBody);
             };
+            openTaskPreview = openPreview;
 
             if (previewModal) {
                 previewCloses.forEach((btn) => btn.addEventListener('click', closePreview));
@@ -1544,17 +1822,22 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
 
         function isTaskCompleted(task, dateKey) {
             if (!task) return false;
-            const statusDone = task.status === 'completed' || task.status === 'approved';
-            if (!statusDone) return false;
             const repeat = task.recurrence || '';
-            if (!repeat) return true;
-            if (!task.completed_at || !dateKey) return false;
-            return getDateKeyFromString(task.completed_at) === dateKey;
+            if (!repeat) {
+                const statusDone = task.status === 'completed' || task.status === 'approved';
+                return statusDone;
+            }
+            if (!dateKey) return false;
+            const approvedKey = task.approved_at ? getDateKeyFromString(task.approved_at) : null;
+            const completedKey = task.completed_at ? getDateKeyFromString(task.completed_at) : null;
+            return approvedKey === dateKey || completedKey === dateKey;
         }
 
         function isTaskOverdue(task, dateKey) {
             if (!task || !dateKey) return false;
             if (isTaskCompleted(task, dateKey)) return false;
+            const todayKey = formatDateKey(new Date());
+            if (dateKey > todayKey) return false;
             const repeat = task.recurrence || '';
             if (!repeat && task.status !== 'pending') return false;
             const stamp = getInstanceDueTimestamp(task, dateKey);
@@ -1644,6 +1927,197 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                 desc.className = 'task-description';
                 desc.textContent = task.description;
                 card.appendChild(desc);
+            }
+
+            if (task.photo_proof) {
+                const proofWrap = document.createElement('div');
+                proofWrap.className = 'task-description';
+                const img = document.createElement('img');
+                img.src = task.photo_proof;
+                img.alt = 'Photo proof';
+                img.className = 'task-photo-thumb';
+                img.dataset.taskPhotoSrc = task.photo_proof;
+                proofWrap.appendChild(img);
+                card.appendChild(proofWrap);
+            }
+
+            if (task.timing_mode === 'timer' && task.timer_minutes && task.status === 'pending') {
+                const timerText = document.createElement('p');
+                timerText.className = 'timer';
+                timerText.dataset.timerDisplay = '';
+                timerText.dataset.taskId = String(task.id);
+                timerText.textContent = `${String(task.timer_minutes).padStart(2, '0')}:00`;
+                card.appendChild(timerText);
+
+                const controls = document.createElement('div');
+                controls.className = 'timer-controls';
+                const countdown = document.createElement('div');
+                countdown.className = 'pause-hold-countdown';
+                countdown.dataset.timerCountdown = '';
+                countdown.dataset.taskId = String(task.id);
+                countdown.setAttribute('aria-live', 'polite');
+                const startButton = document.createElement('button');
+                startButton.type = 'button';
+                startButton.className = 'timer-button';
+                startButton.dataset.timerAction = 'start';
+                startButton.dataset.taskId = String(task.id);
+                startButton.dataset.limit = String(task.timer_minutes || 0);
+                startButton.textContent = 'Start Timer';
+                const cancelButton = document.createElement('button');
+                cancelButton.type = 'button';
+                cancelButton.className = 'timer-cancel-button';
+                cancelButton.dataset.timerAction = 'cancel';
+                cancelButton.dataset.taskId = String(task.id);
+                cancelButton.textContent = 'Cancel';
+                controls.appendChild(countdown);
+                controls.appendChild(startButton);
+                controls.appendChild(cancelButton);
+                card.appendChild(controls);
+            }
+
+            if (!isParentView) {
+                if (task.status === 'pending') {
+                    if (task.photo_proof_required) {
+                        const finishButton = document.createElement('button');
+                        finishButton.type = 'button';
+                        finishButton.className = 'button';
+                        finishButton.dataset.taskProofOpen = '';
+                        finishButton.dataset.taskId = String(task.id);
+                        finishButton.dataset.taskTitle = task.title || '';
+                        finishButton.textContent = 'Finish Task';
+                        card.appendChild(finishButton);
+                    } else {
+                        const form = document.createElement('form');
+                        form.method = 'POST';
+                        form.action = 'task.php';
+                        const hidden = document.createElement('input');
+                        hidden.type = 'hidden';
+                        hidden.name = 'task_id';
+                        hidden.value = String(task.id);
+                        const button = document.createElement('button');
+                        button.type = 'submit';
+                        button.name = 'complete_task';
+                        button.textContent = 'Finish Task';
+                        form.appendChild(hidden);
+                        form.appendChild(button);
+                        card.appendChild(form);
+                    }
+                } else if (task.status === 'completed') {
+                    const waiting = document.createElement('p');
+                    waiting.className = 'waiting-label';
+                    waiting.textContent = 'Waiting for approval';
+                    card.appendChild(waiting);
+                } else if (task.status === 'approved') {
+                    const approved = document.createElement('p');
+                    approved.className = 'completed';
+                    approved.textContent = 'Approved!';
+                    card.appendChild(approved);
+                }
+            } else if (canManageTasks) {
+                if (task.status === 'pending') {
+                    const actions = document.createElement('div');
+                    actions.className = 'task-card-actions';
+                    const editButton = document.createElement('button');
+                    editButton.type = 'button';
+                    editButton.className = 'icon-button';
+                    editButton.setAttribute('aria-label', 'Edit task');
+                    editButton.dataset.taskEditOpen = '';
+                    editButton.dataset.taskId = String(task.id);
+                    editButton.dataset.childId = String(task.child_user_id || '');
+                    editButton.dataset.title = task.title || '';
+                    editButton.dataset.description = task.description || '';
+                    editButton.dataset.startDate = getDateKeyFromString(task.due_date) || '';
+                    if (getTimeParts(task.due_date)) {
+                        const timeParts = getTimeParts(task.due_date);
+                        editButton.dataset.dueTime = `${String(timeParts.hours).padStart(2, '0')}:${String(timeParts.minutes).padStart(2, '0')}`;
+                    } else {
+                        editButton.dataset.dueTime = '';
+                    }
+                    editButton.dataset.endDate = task.end_date || '';
+                    editButton.dataset.points = String(task.points || 0);
+                    editButton.dataset.timeOfDay = task.time_of_day || 'anytime';
+                    editButton.dataset.recurrence = task.recurrence || '';
+                    editButton.dataset.recurrenceDays = task.recurrence_days || '';
+                    editButton.dataset.category = task.category || '';
+                    editButton.dataset.timingMode = task.timing_mode || '';
+                    editButton.dataset.timerMinutes = String(task.timer_minutes || 0);
+                    editButton.dataset.photoRequired = task.photo_proof_required ? '1' : '0';
+                    editButton.innerHTML = '<i class="fa-solid fa-pen"></i>';
+                    const deleteButton = document.createElement('button');
+                    deleteButton.type = 'button';
+                    deleteButton.className = 'icon-button danger';
+                    deleteButton.setAttribute('aria-label', 'Delete task');
+                    deleteButton.dataset.taskDeleteOpen = '';
+                    deleteButton.dataset.taskId = String(task.id);
+                    deleteButton.dataset.childName = task.child_name || '';
+                    deleteButton.dataset.title = task.title || '';
+                    deleteButton.innerHTML = '<i class="fa-solid fa-trash"></i>';
+                    actions.appendChild(editButton);
+                    actions.appendChild(deleteButton);
+                    card.appendChild(actions);
+                } else if (task.status === 'completed') {
+                    const approveForm = document.createElement('form');
+                    approveForm.method = 'POST';
+                    approveForm.action = 'task.php';
+                    const hidden = document.createElement('input');
+                    hidden.type = 'hidden';
+                    hidden.name = 'task_id';
+                    hidden.value = String(task.id);
+                    const approveButton = document.createElement('button');
+                    approveButton.type = 'submit';
+                    approveButton.name = 'approve_task';
+                    approveButton.textContent = 'Approve Task';
+                    approveForm.appendChild(hidden);
+                    approveForm.appendChild(approveButton);
+                    card.appendChild(approveForm);
+
+                    const rejectForm = document.createElement('form');
+                    rejectForm.method = 'POST';
+                    rejectForm.action = 'task.php';
+                    rejectForm.className = 'task-reject-form';
+                    const rejectHidden = document.createElement('input');
+                    rejectHidden.type = 'hidden';
+                    rejectHidden.name = 'task_id';
+                    rejectHidden.value = String(task.id);
+                    const rejectFlag = document.createElement('input');
+                    rejectFlag.type = 'hidden';
+                    rejectFlag.name = 'reject_task';
+                    rejectFlag.value = '1';
+                    const rejectLabel = document.createElement('label');
+                    rejectLabel.setAttribute('for', `reject_note_modal_${task.id}`);
+                    rejectLabel.textContent = 'Rejection note (optional)';
+                    const rejectNote = document.createElement('textarea');
+                    rejectNote.name = 'reject_note';
+                    rejectNote.id = `reject_note_modal_${task.id}`;
+                    rejectNote.placeholder = 'Explain why this task was rejected.';
+                    const rejectActions = document.createElement('div');
+                    rejectActions.className = 'task-reject-actions';
+                    const reactivateBtn = document.createElement('button');
+                    reactivateBtn.type = 'submit';
+                    reactivateBtn.name = 'reject_action';
+                    reactivateBtn.value = 'reactivate';
+                    reactivateBtn.className = 'button secondary';
+                    reactivateBtn.textContent = 'Reject & Reactivate';
+                    const closeBtn = document.createElement('button');
+                    closeBtn.type = 'submit';
+                    closeBtn.name = 'reject_action';
+                    closeBtn.value = 'close';
+                    closeBtn.className = 'button danger';
+                    closeBtn.textContent = 'Reject & Close';
+                    rejectActions.appendChild(reactivateBtn);
+                    rejectActions.appendChild(closeBtn);
+                    rejectForm.appendChild(rejectHidden);
+                    rejectForm.appendChild(rejectFlag);
+                    rejectForm.appendChild(rejectLabel);
+                    rejectForm.appendChild(rejectNote);
+                    rejectForm.appendChild(rejectActions);
+                    card.appendChild(rejectForm);
+                } else if (task.status === 'approved') {
+                    const approved = document.createElement('p');
+                    approved.className = 'completed';
+                    approved.textContent = 'Approved!';
+                    card.appendChild(approved);
+                }
             }
 
             return card;
@@ -1799,15 +2273,19 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
             <?php if (empty($tasks)): ?>
                 <p>No tasks available.</p>
             <?php else: ?>
-                <h3>Pending Tasks</h3>
+                <h3>Active Tasks</h3>
                 <?php if (empty($pending_tasks)): ?>
-                    <p>No pending tasks.</p>
+                    <p>No active tasks.</p>
                 <?php else: ?>
                     <?php foreach ($pending_tasks as $task): ?>
                         <?php
                         // Debug overdue check
                         $due_time = strtotime($task['due_date']);
                         $current_time = time();
+                        if (empty($task['recurrence']) && ($task['time_of_day'] ?? 'anytime') === 'anytime') {
+                            $due_date_key = !empty($task['due_date']) ? date('Y-m-d', strtotime($task['due_date'])) : date('Y-m-d');
+                            $due_time = strtotime($due_date_key . ' 23:59:00');
+                        }
                         error_log("Task ID {$task['id']}: due_date={$task['due_date']}, due_time=$due_time, current_time=$current_time, overdue=" . ($due_time < $current_time ? 'true' : 'false'));
                         ?>
                         <div class="task-card<?php if ($due_time < $current_time) { echo ' overdue'; } ?>" id="task-<?php echo (int) $task['id']; ?>" data-task-id="<?php echo $task['id']; ?>">
@@ -1874,11 +2352,11 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                             <?php endif; ?>
                             <?php if ($task['timing_mode'] === 'timer' && !empty($task['timer_minutes'])): ?>
                                 <?php $timerMinutes = (int) $task['timer_minutes']; ?>
-                                <p class="timer" id="timer-<?php echo $task['id']; ?>"><?php echo sprintf('%02d:00', $timerMinutes); ?></p>
+                                <p class="timer" id="timer-<?php echo $task['id']; ?>" data-timer-display data-task-id="<?php echo $task['id']; ?>"><?php echo sprintf('%02d:00', $timerMinutes); ?></p>
                                 <div class="timer-controls">
-                                    <div class="pause-hold-countdown" id="pause-countdown-<?php echo $task['id']; ?>" aria-live="polite"></div>
-                                    <button type="button" class="timer-button" data-task-id="<?php echo $task['id']; ?>" data-limit="<?php echo $timerMinutes; ?>">Start Timer</button>
-                                    <button type="button" class="timer-cancel-button" data-task-id="<?php echo $task['id']; ?>">Cancel</button>
+                                    <div class="pause-hold-countdown" id="pause-countdown-<?php echo $task['id']; ?>" data-timer-countdown data-task-id="<?php echo $task['id']; ?>" aria-live="polite"></div>
+                                    <button type="button" class="timer-button" data-timer-action="start" data-task-id="<?php echo $task['id']; ?>" data-limit="<?php echo $timerMinutes; ?>">Start Timer</button>
+                                    <button type="button" class="timer-cancel-button" data-timer-action="cancel" data-task-id="<?php echo $task['id']; ?>">Cancel</button>
                                 </div>
                             <?php endif; ?>
                                 <?php if (!canCreateContent($_SESSION['user_id'])): ?>
@@ -2042,6 +2520,8 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                             <?php
                                 $timeOfDay = $task['time_of_day'] ?? 'anytime';
                                 $isOnce = empty($task['recurrence']);
+                                $approvedStamp = $task['approved_at'] ?? $task['completed_at'] ?? null;
+                                $approvedDateLabel = $approvedStamp ? date('m/d/Y', strtotime($approvedStamp)) : '';
                                 if ($isOnce) {
                                     $dueDisplay = $task['due_date_formatted'];
                                 } elseif ($timeOfDay === 'anytime') {
@@ -2055,6 +2535,11 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                                 }
                             ?>
                             <div class="task-meta">
+                                <?php if (!$isOnce && $approvedDateLabel !== ''): ?>
+                                    <div class="task-meta-row">
+                                        <span><span class="task-meta-label">Approved date:</span> <?php echo htmlspecialchars($approvedDateLabel); ?></span>
+                                    </div>
+                                <?php endif; ?>
                                 <div class="task-meta-row">
                                     <span><span class="task-meta-label">Due:</span> <?php echo htmlspecialchars($dueDisplay); ?></span>
                                 </div>
@@ -2271,6 +2756,29 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                     <button type="button" class="task-modal-close" aria-label="Close task details" data-task-preview-close>&times;</button>
                 </header>
                 <div class="task-modal-body" data-task-preview-body></div>
+            </div>
+        </div>
+        <div class="floating-task-timer" data-floating-timer aria-live="polite">
+            <div class="floating-task-header">
+                <div>
+                    <div class="floating-task-title" data-floating-title></div>
+                    <div class="floating-task-points" data-floating-points></div>
+                </div>
+                <div class="floating-task-header-actions">
+                    <button type="button" class="floating-task-icon" data-floating-open aria-label="Open task">
+                        <i class="fa-solid fa-up-right-from-square"></i>
+                    </button>
+                    <button type="button" class="floating-task-icon" data-floating-close aria-label="Hide timer">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="floating-task-time" data-timer-display data-task-id=""></div>
+            <div class="floating-task-actions">
+                <button type="button" class="floating-task-pause" data-timer-action="pause-toggle" data-task-id="" aria-label="Pause timer">
+                    <i class="fa-solid fa-pause"></i>
+                </button>
+                <button type="button" class="button" data-floating-finish>Finish Task</button>
             </div>
         </div>
     </main>

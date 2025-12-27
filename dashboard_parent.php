@@ -1646,7 +1646,7 @@ for ($i = 0; $i < 7; $i++) {
                       <div class="child-info-content">
                       <?php
                           $historyItems = [];
-                          $taskHistoryStmt = $db->prepare("SELECT title, points, approved_at, completed_at FROM tasks WHERE child_user_id = :child_id AND status = 'approved'");
+                          $taskHistoryStmt = $db->prepare("SELECT title, points, approved_at, completed_at FROM tasks WHERE child_user_id = :child_id AND approved_at IS NOT NULL");
                           $taskHistoryStmt->execute([':child_id' => $childId]);
                           foreach ($taskHistoryStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
                               $dateValue = $row['approved_at'] ?? $row['completed_at'] ?? null;

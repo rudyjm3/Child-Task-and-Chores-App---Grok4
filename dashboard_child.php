@@ -502,7 +502,7 @@ $notificationCount = is_array($notificationsNew) ? count($notificationsNew) : 0;
             }
          }
          $taskCount = 0;
-         $taskCountStmt = $db->prepare("SELECT due_date, end_date, recurrence, recurrence_days, status, completed_at FROM tasks WHERE child_user_id = :child_id");
+         $taskCountStmt = $db->prepare("SELECT due_date, end_date, recurrence, recurrence_days, status, completed_at, approved_at FROM tasks WHERE child_user_id = :child_id");
          $taskCountStmt->execute([':child_id' => $_SESSION['user_id']]);
          foreach ($taskCountStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
             $dueDate = $row['due_date'] ?? null;
@@ -532,10 +532,14 @@ $notificationCount = is_array($notificationsNew) ? count($notificationsNew) : 0;
             }
             $status = $row['status'] ?? 'pending';
             $completedAt = $row['completed_at'] ?? null;
+            $approvedAt = $row['approved_at'] ?? null;
             $completedToday = false;
-            if (!empty($completedAt)) {
+            if (!empty($approvedAt)) {
+               $approvedDate = date('Y-m-d', strtotime($approvedAt));
+               $completedToday = $approvedDate === $todayDate;
+            } elseif (!empty($completedAt)) {
                $completedDate = date('Y-m-d', strtotime($completedAt));
-               $completedToday = $completedDate === $todayDate && in_array($status, ['completed', 'approved'], true);
+               $completedToday = $completedDate === $todayDate;
             }
             if ($completedToday) {
                continue;
@@ -673,7 +677,7 @@ $notificationCount = is_array($notificationsNew) ? count($notificationsNew) : 0;
                }
             }
          $historyItems = [];
-         $taskHistoryStmt = $db->prepare("SELECT title, points, approved_at, completed_at FROM tasks WHERE child_user_id = :child_id AND status = 'approved'");
+        $taskHistoryStmt = $db->prepare("SELECT title, points, approved_at, completed_at FROM tasks WHERE child_user_id = :child_id AND approved_at IS NOT NULL");
          $taskHistoryStmt->execute([':child_id' => $_SESSION['user_id']]);
          foreach ($taskHistoryStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
                $dateValue = $row['approved_at'] ?? $row['completed_at'] ?? null;
