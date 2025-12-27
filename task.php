@@ -592,6 +592,15 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
         .task-modal-card h2 { margin: 0; font-size: 1.1rem; }
         .task-modal-close { background: transparent; border: none; font-size: 1.3rem; cursor: pointer; color: #555; }
         .task-modal-body { padding: 12px 16px 16px; overflow-y: auto; }
+        .help-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: none; align-items: center; justify-content: center; z-index: 4300; padding: 14px; }
+        .help-modal.open { display: flex; }
+        .help-card { background: #fff; border-radius: 12px; max-width: 720px; width: min(720px, 100%); max-height: 85vh; overflow: hidden; box-shadow: 0 12px 32px rgba(0,0,0,0.25); display: grid; grid-template-rows: auto 1fr; }
+        .help-card header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid #e0e0e0; }
+        .help-card h2 { margin: 0; font-size: 1.1rem; }
+        .help-close { background: transparent; border: none; font-size: 1.3rem; cursor: pointer; color: #555; }
+        .help-body { padding: 12px 16px 16px; overflow-y: auto; display: grid; gap: 12px; }
+        .help-section h3 { margin: 0 0 6px; font-size: 1rem; color: #37474f; }
+        .help-section ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; color: #455a64; }
         .icon-button { width: 36px; height: 36px;     border: none;
          background-color: rgba(0, 0, 0, 0.0);
          color: #9f9f9f; /*border-radius: 50%; border: 1px solid #d5def0; background: #f5f5f5; color: #757575; display: inline-flex; align-items: center; justify-content: center;*/ cursor: pointer; }
@@ -1035,6 +1044,25 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
             }
             photoModal.addEventListener('click', (e) => { if (e.target === photoModal) closePhotoModal(); });
             document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closePhotoModal(); });
+        }
+        const helpOpen = document.querySelector('[data-help-open]');
+        const helpModal = document.querySelector('[data-help-modal]');
+        const helpClose = helpModal ? helpModal.querySelector('[data-help-close]') : null;
+        const openHelp = () => {
+            if (!helpModal) return;
+            helpModal.classList.add('open');
+            document.body.classList.add('no-scroll');
+        };
+        const closeHelp = () => {
+            if (!helpModal) return;
+            helpModal.classList.remove('open');
+            document.body.classList.remove('no-scroll');
+        };
+        if (helpOpen && helpModal) {
+            helpOpen.addEventListener('click', openHelp);
+            if (helpClose) helpClose.addEventListener('click', closeHelp);
+            helpModal.addEventListener('click', (e) => { if (e.target === helpModal) closeHelp(); });
+            document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeHelp(); });
         }
         initTaskCalendar();
     });
@@ -2384,6 +2412,7 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
             <a class="nav-button" href="rewards.php">Rewards</a>
             <a class="nav-button" href="profile.php?self=1">Profile</a>
             <a class="nav-button" href="logout.php">Logout</a>
+            <button type="button" class="nav-button" data-help-open>Help</button>
          </div>
     </header>
     <main>
@@ -2985,6 +3014,38 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                     <i class="fa-solid fa-pause"></i>
                 </button>
                 <button type="button" class="button" data-floating-finish>Finish Task</button>
+            </div>
+        </div>
+        <div class="help-modal" data-help-modal>
+            <div class="help-card" role="dialog" aria-modal="true" aria-labelledby="help-title">
+                <header>
+                    <h2 id="help-title">Task Help</h2>
+                    <button type="button" class="help-close" data-help-close aria-label="Close help">&times;</button>
+                </header>
+                <div class="help-body">
+                    <?php if (canCreateContent($_SESSION['user_id'])): ?>
+                        <section class="help-section">
+                            <h3>Parent view</h3>
+                            <ul>
+                                <li>Create one-time or repeating tasks with optional end dates, time-of-day, and due time.</li>
+                                <li>Use the calendar or list view and click an item to open Task Details.</li>
+                                <li>Start timers in the Task Details modal; a floating timer appears if you close the modal.</li>
+                                <li>Finish tasks from Task Details to auto-approve and award points.</li>
+                                <li>Approve or reject completed tasks (with optional notes) in Waiting Approval.</li>
+                            </ul>
+                        </section>
+                    <?php else: ?>
+                        <section class="help-section">
+                            <h3>Child view</h3>
+                            <ul>
+                                <li>Tap a task in the calendar or list view to open Task Details.</li>
+                                <li>Start timers from Task Details; the floating timer keeps running if you close it.</li>
+                                <li>Finish tasks in Task Details. Photo proof is required when toggled on.</li>
+                                <li>Completed tasks wait for parent approval before points are awarded.</li>
+                            </ul>
+                        </section>
+                    <?php endif; ?>
+                </div>
             </div>
         </div>
     </main>

@@ -560,6 +560,15 @@ $getScheduleDueStamp = static function ($dateKey, $timeOfDay, $timeValue) {
         .week-modal h3 { margin: 0; font-size: 1.1rem; }
         .week-modal-close { background: transparent; border: none; font-size: 1.3rem; cursor: pointer; color: #555; }
         .week-modal-body { padding: 12px 16px 16px; overflow-y: auto; text-align: left; }
+        .help-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.55); display: none; align-items: center; justify-content: center; z-index: 3300; padding: 14px; }
+        .help-modal.open { display: flex; }
+        .help-card { background: #fff; border-radius: 12px; max-width: 720px; width: min(720px, 100%); max-height: 85vh; overflow: hidden; box-shadow: 0 14px 36px rgba(0,0,0,0.25); display: grid; grid-template-rows: auto 1fr; }
+        .help-card header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid #e0e0e0; }
+        .help-card h2 { margin: 0; font-size: 1.1rem; }
+        .help-close { background: transparent; border: none; font-size: 1.3rem; cursor: pointer; color: #555; }
+        .help-body { padding: 12px 16px 16px; overflow-y: auto; display: grid; gap: 12px; }
+        .help-section h3 { margin: 0 0 6px; font-size: 1rem; color: #37474f; }
+        .help-section ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; color: #455a64; }
         .week-day-group { margin-bottom: 12px; }
         .week-day-title { font-weight: 700; color: #f9f9f9; margin-bottom: 6px; padding: 6px 10px; border-radius: 8px; background: linear-gradient(135deg, #5a98e2, #84b3ed); }
         .week-day-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
@@ -1009,6 +1018,26 @@ $getScheduleDueStamp = static function ($dateKey, $timeOfDay, $timeValue) {
                 });
             }
 
+            const helpOpen = document.querySelector('[data-help-open]');
+            const helpModal = document.querySelector('[data-help-modal]');
+            const helpClose = helpModal ? helpModal.querySelector('[data-help-close]') : null;
+            const openHelp = () => {
+                if (!helpModal) return;
+                helpModal.classList.add('open');
+                document.body.classList.add('modal-open');
+            };
+            const closeHelp = () => {
+                if (!helpModal) return;
+                helpModal.classList.remove('open');
+                document.body.classList.remove('modal-open');
+            };
+            if (helpOpen && helpModal) {
+                helpOpen.addEventListener('click', openHelp);
+                if (helpClose) helpClose.addEventListener('click', closeHelp);
+                helpModal.addEventListener('click', (e) => { if (e.target === helpModal) closeHelp(); });
+                document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeHelp(); });
+            }
+
             const adjustModal = document.querySelector('[data-role="adjust-modal"]');
             const adjustTitle = adjustModal ? adjustModal.querySelector('[data-role="adjust-title"]') : null;
             const adjustChildIdInput = adjustModal ? adjustModal.querySelector('[data-role="adjust-child-id"]') : null;
@@ -1262,6 +1291,7 @@ $getScheduleDueStamp = static function ($dateKey, $timeOfDay, $timeValue) {
          <a class="nav-button" href="rewards.php">Rewards</a>
          <a class="nav-button" href="profile.php?self=1">Profile</a>
          <a class="nav-button" href="logout.php">Logout</a>
+         <button type="button" class="nav-button" data-help-open>Help</button>
          <button type="button" class="parent-notification-trigger" data-parent-notify-trigger aria-label="Notifications">
             <i class="fa-solid fa-bell"></i>
             <?php if ($parentNotificationCount > 0): ?>
@@ -2499,7 +2529,7 @@ $getScheduleDueStamp = static function ($dateKey, $timeOfDay, $timeValue) {
             </div>
         </div>
     </div>
-    <div class="week-modal-backdrop" data-week-modal>
+   <div class="week-modal-backdrop" data-week-modal>
         <div class="week-modal" role="dialog" aria-modal="true" aria-labelledby="week-modal-title">
             <header>
                 <h3 id="week-modal-title">Week Schedule</h3>
@@ -2508,6 +2538,26 @@ $getScheduleDueStamp = static function ($dateKey, $timeOfDay, $timeValue) {
             <div class="week-modal-body" data-week-modal-body></div>
         </div>
     </div>
+   <div class="help-modal" data-help-modal>
+      <div class="help-card" role="dialog" aria-modal="true" aria-labelledby="help-title">
+         <header>
+            <h2 id="help-title">Task Help</h2>
+            <button type="button" class="help-close" data-help-close aria-label="Close help"><i class="fa-solid fa-xmark"></i></button>
+         </header>
+         <div class="help-body">
+            <section class="help-section">
+               <h3>Parent view</h3>
+               <ul>
+                  <li>Create one-time or repeating tasks with optional end dates, time-of-day, and due time.</li>
+                  <li>Use the calendar or list view and click an item to open Task Details.</li>
+                  <li>Start timers in Task Details; a floating timer appears if you close the modal.</li>
+                  <li>Finish tasks from Task Details to auto-approve and award points.</li>
+                  <li>Approve or reject completed tasks (with optional notes) in Waiting Approval.</li>
+               </ul>
+            </section>
+         </div>
+      </div>
+   </div>
     <footer>
      <p>Child Task and Chores App - Ver 3.16.7</p>
    </footer>
