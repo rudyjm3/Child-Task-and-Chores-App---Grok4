@@ -366,8 +366,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             return $carry + max(0, (int) ($entry['actual_seconds'] ?? 0));
         }, 0);
 
-        if ($taskPointsAwarded > 0) {
-            updateChildPoints($childId, $taskPointsAwarded);
+          if ($taskPointsAwarded > 0) {
+              updateChildPoints($childId, $taskPointsAwarded);
         }
 
         $grantBonus = $allWithinLimits && count($awards) === count($taskLookup);
@@ -376,8 +376,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $_SESSION['routine_awards'][$routineId] = true;
         $newTotal = getChildTotalPoints($childId);
         if ($taskPointsAwarded > 0 || $bonusAwarded > 0) {
-            logRoutinePointsAward($routineId, $childId, $taskPointsAwarded, $bonusAwarded);
-        }
+              logRoutinePointsAward($routineId, $childId, $taskPointsAwarded, $bonusAwarded);
+          }
+  
+          refreshRoutineGoalsForChild($childId, $routineId);
 
         if (!empty($routine['parent_user_id'])) {
             $parentIdForNote = (int) $routine['parent_user_id'];

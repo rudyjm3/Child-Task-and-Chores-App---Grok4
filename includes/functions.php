@@ -1208,30 +1208,32 @@ function approveTask($task_id, $instance_date = null) {
                     updated_at = NOW()
                 WHERE task_id = :task_id AND date_key = :date_key AND status = 'completed'
             ");
-            if ($stmt->execute([':task_id' => $task_id, ':date_key' => $dateKey]) && $stmt->rowCount() > 0) {
-                updateChildPoints($task['child_user_id'], $task['points']);
-                addChildNotification(
-                    (int)$task['child_user_id'],
-                    'task_approved',
-                    'Task approved: ' . ($task['title'] ?? 'Task'),
-                    'task.php'
-                );
-                return true;
-            }
+              if ($stmt->execute([':task_id' => $task_id, ':date_key' => $dateKey]) && $stmt->rowCount() > 0) {
+                  updateChildPoints($task['child_user_id'], $task['points']);
+                  addChildNotification(
+                      (int)$task['child_user_id'],
+                      'task_approved',
+                      'Task approved: ' . ($task['title'] ?? 'Task'),
+                      'task.php'
+                  );
+                  refreshTaskGoalsForChild((int) $task['child_user_id']);
+                  return true;
+              }
             return false;
         }
 
         $stmt = $db->prepare("UPDATE tasks SET status = 'approved', approved_at = NOW() WHERE id = :id AND status = 'completed'");
-        if ($stmt->execute([':id' => $task_id])) {
-            updateChildPoints($task['child_user_id'], $task['points']);
-            addChildNotification(
-                (int)$task['child_user_id'],
-                'task_approved',
-                'Task approved: ' . ($task['title'] ?? 'Task'),
-                'task.php'
-            );
-            return true;
-        }
+          if ($stmt->execute([':id' => $task_id])) {
+              updateChildPoints($task['child_user_id'], $task['points']);
+              addChildNotification(
+                  (int)$task['child_user_id'],
+                  'task_approved',
+                  'Task approved: ' . ($task['title'] ?? 'Task'),
+                  'task.php'
+              );
+              refreshTaskGoalsForChild((int) $task['child_user_id']);
+              return true;
+          }
     }
     return false;
 }
@@ -1532,10 +1534,26 @@ function fulfillReward($reward_id, $parent_user_id, $actor_user_id) {
 }
 
 // Create goal
-function createGoal($parent_user_id, $child_user_id, $title, $start_date, $end_date, $reward_id = null, $creator_user_id = null) {
+function createGoal($parent_user_id, $child_user_id, $title, $start_date, $end_date, $reward_id = null, $creator_user_id = null, array $options = []) {
     global $db;
-    $stmt = $db->prepare("INSERT INTO goals (parent_user_id, child_user_id, title, target_points, start_date, end_date, reward_id, created_by) VALUES (:parent_id, :child_id, :title, :target_points, :start_date, :end_date, :reward_id, :created_by)");
-    return $stmt->execute([
+    $goalType = $options['goal_type'] ?? 'manual';
+    $routineId = !empty($options['routine_id']) ? (int) $options['routine_id'] : null;
+    $taskCategory = $options['task_category'] ?? null;
+    $targetCount = isset($options['target_count']) ? (int) $options['target_count'] : 0;
+    $streakRequired = isset($options['streak_required']) ? (int) $options['streak_required'] : 0;
+    $timeWindowType = $options['time_window_type'] ?? 'rolling';
+    $timeWindowDays = isset($options['time_window_days']) ? (int) $options['time_window_days'] : 0;
+    $fixedStart = $options['fixed_window_start'] ?? null;
+    $fixedEnd = $options['fixed_window_end'] ?? null;
+    $requireOnTime = !empty($options['require_on_time']) ? 1 : 0;
+    $pointsAwarded = isset($options['points_awarded']) ? (int) $options['points_awarded'] : 0;
+    $awardMode = $options['award_mode'] ?? 'both';
+    $requiresApproval = array_key_exists('requires_parent_approval', $options) ? (!empty($options['requires_parent_approval']) ? 1 : 0) : 1;
+    $taskTargets = $options['task_target_ids'] ?? [];
+
+    $stmt = $db->prepare("INSERT INTO goals (parent_user_id, child_user_id, title, target_points, start_date, end_date, reward_id, goal_type, routine_id, task_category, target_count, streak_required, time_window_type, time_window_days, fixed_window_start, fixed_window_end, require_on_time, points_awarded, award_mode, requires_parent_approval, created_by)
+                          VALUES (:parent_id, :child_id, :title, :target_points, :start_date, :end_date, :reward_id, :goal_type, :routine_id, :task_category, :target_count, :streak_required, :time_window_type, :time_window_days, :fixed_window_start, :fixed_window_end, :require_on_time, :points_awarded, :award_mode, :requires_parent_approval, :created_by)");
+    $ok = $stmt->execute([
         ':parent_id' => $parent_user_id,
         ':child_id' => $child_user_id,
         ':title' => $title,
@@ -1543,44 +1561,576 @@ function createGoal($parent_user_id, $child_user_id, $title, $start_date, $end_d
         ':start_date' => $start_date,
         ':end_date' => $end_date,
         ':reward_id' => $reward_id,
+        ':goal_type' => $goalType,
+        ':routine_id' => $routineId,
+        ':task_category' => $taskCategory,
+        ':target_count' => $targetCount,
+        ':streak_required' => $streakRequired,
+        ':time_window_type' => $timeWindowType,
+        ':time_window_days' => $timeWindowDays,
+        ':fixed_window_start' => $fixedStart,
+        ':fixed_window_end' => $fixedEnd,
+        ':require_on_time' => $requireOnTime,
+        ':points_awarded' => $pointsAwarded,
+        ':award_mode' => $awardMode,
+        ':requires_parent_approval' => $requiresApproval,
         ':created_by' => $creator_user_id ?? $parent_user_id
     ]);
+    if (!$ok) {
+        return false;
+    }
+    $goalId = (int) $db->lastInsertId();
+    if ($goalId && !empty($taskTargets)) {
+        saveGoalTaskTargets($goalId, $taskTargets);
+    }
+    return true;
 }
 
 // Keep existing updateGoal function (for editing goal details)
-function updateGoal($goal_id, $parent_user_id, $title, $start_date, $end_date, $reward_id = null) {
+function updateGoal($goal_id, $parent_user_id, $title, $start_date, $end_date, $reward_id = null, array $options = []) {
     global $db;
+    $stmt = $db->prepare("SELECT * FROM goals WHERE id = :goal_id AND parent_user_id = :parent_id");
+    $stmt->execute([':goal_id' => $goal_id, ':parent_id' => $parent_user_id]);
+    $existing = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$existing) {
+        return false;
+    }
+
+    $childId = array_key_exists('child_user_id', $options) ? (int) $options['child_user_id'] : (int) ($existing['child_user_id'] ?? 0);
+    $goalType = $options['goal_type'] ?? ($existing['goal_type'] ?? 'manual');
+    $routineId = array_key_exists('routine_id', $options) ? (!empty($options['routine_id']) ? (int) $options['routine_id'] : null) : ($existing['routine_id'] ?? null);
+    $taskCategory = array_key_exists('task_category', $options) ? ($options['task_category'] ?? null) : ($existing['task_category'] ?? null);
+    $targetCount = array_key_exists('target_count', $options) ? (int) $options['target_count'] : (int) ($existing['target_count'] ?? 0);
+    $streakRequired = array_key_exists('streak_required', $options) ? (int) $options['streak_required'] : (int) ($existing['streak_required'] ?? 0);
+    $timeWindowType = array_key_exists('time_window_type', $options) ? ($options['time_window_type'] ?? 'rolling') : ($existing['time_window_type'] ?? 'rolling');
+    $timeWindowDays = array_key_exists('time_window_days', $options) ? (int) $options['time_window_days'] : (int) ($existing['time_window_days'] ?? 0);
+    $fixedStart = array_key_exists('fixed_window_start', $options) ? ($options['fixed_window_start'] ?? null) : ($existing['fixed_window_start'] ?? null);
+    $fixedEnd = array_key_exists('fixed_window_end', $options) ? ($options['fixed_window_end'] ?? null) : ($existing['fixed_window_end'] ?? null);
+    $requireOnTime = array_key_exists('require_on_time', $options) ? (!empty($options['require_on_time']) ? 1 : 0) : (int) ($existing['require_on_time'] ?? 0);
+    $pointsAwarded = array_key_exists('points_awarded', $options) ? (int) $options['points_awarded'] : (int) ($existing['points_awarded'] ?? 0);
+    $awardMode = array_key_exists('award_mode', $options) ? ($options['award_mode'] ?? 'both') : ($existing['award_mode'] ?? 'both');
+    $requiresApproval = array_key_exists('requires_parent_approval', $options) ? (!empty($options['requires_parent_approval']) ? 1 : 0) : (int) ($existing['requires_parent_approval'] ?? 1);
+
+    if (array_key_exists('goal_type', $options) && $goalType === 'manual') {
+        $routineId = null;
+        $taskCategory = null;
+        $targetCount = 0;
+        $streakRequired = 0;
+        $timeWindowType = 'rolling';
+        $timeWindowDays = 0;
+        $fixedStart = null;
+        $fixedEnd = null;
+        $requireOnTime = 0;
+    }
+
     $stmt = $db->prepare("UPDATE goals 
-                         SET title = :title, 
+                         SET child_user_id = :child_id,
+                             title = :title, 
                              target_points = 0, 
                              start_date = :start_date, 
                              end_date = :end_date, 
-                             reward_id = :reward_id 
+                             reward_id = :reward_id,
+                             goal_type = :goal_type,
+                             routine_id = :routine_id,
+                             task_category = :task_category,
+                             target_count = :target_count,
+                             streak_required = :streak_required,
+                             time_window_type = :time_window_type,
+                             time_window_days = :time_window_days,
+                             fixed_window_start = :fixed_window_start,
+                             fixed_window_end = :fixed_window_end,
+                             require_on_time = :require_on_time,
+                             points_awarded = :points_awarded,
+                             award_mode = :award_mode,
+                             requires_parent_approval = :requires_parent_approval
                          WHERE id = :goal_id 
                          AND parent_user_id = :parent_id");
-    return $stmt->execute([
+    $ok = $stmt->execute([
         ':goal_id' => $goal_id,
         ':parent_id' => $parent_user_id,
+        ':child_id' => $childId,
         ':title' => $title,
         ':start_date' => $start_date,
         ':end_date' => $end_date,
-        ':reward_id' => $reward_id
+        ':reward_id' => $reward_id,
+        ':goal_type' => $goalType,
+        ':routine_id' => $routineId,
+        ':task_category' => $taskCategory,
+        ':target_count' => $targetCount,
+        ':streak_required' => $streakRequired,
+        ':time_window_type' => $timeWindowType,
+        ':time_window_days' => $timeWindowDays,
+        ':fixed_window_start' => $fixedStart,
+        ':fixed_window_end' => $fixedEnd,
+        ':require_on_time' => $requireOnTime,
+        ':points_awarded' => $pointsAwarded,
+        ':award_mode' => $awardMode,
+        ':requires_parent_approval' => $requiresApproval
     ]);
+    if (!$ok) {
+        return false;
+    }
+    if (array_key_exists('task_target_ids', $options)) {
+        saveGoalTaskTargets($goal_id, $options['task_target_ids'] ?? []);
+    }
+    $updated = $db->prepare("SELECT * FROM goals WHERE id = :goal_id");
+    $updated->execute([':goal_id' => $goal_id]);
+    $goalRow = $updated->fetch(PDO::FETCH_ASSOC);
+    if ($goalRow && ($goalRow['status'] ?? '') === 'active') {
+        refreshGoalProgress($goalRow, $goalRow['child_user_id']);
+    }
+    return true;
+}
+
+function saveGoalTaskTargets($goal_id, array $task_ids) {
+    global $db;
+    $goal_id = (int) $goal_id;
+    $task_ids = array_values(array_filter(array_map('intval', $task_ids)));
+    $db->prepare("DELETE FROM goal_task_targets WHERE goal_id = :goal_id")->execute([':goal_id' => $goal_id]);
+    if (empty($task_ids)) {
+        return true;
+    }
+    $stmt = $db->prepare("INSERT INTO goal_task_targets (goal_id, task_id) VALUES (:goal_id, :task_id)");
+    foreach ($task_ids as $taskId) {
+        $stmt->execute([':goal_id' => $goal_id, ':task_id' => $taskId]);
+    }
+    return true;
+}
+
+function getGoalTaskTargetIds($goal_id) {
+    global $db;
+    $stmt = $db->prepare("SELECT task_id FROM goal_task_targets WHERE goal_id = :goal_id");
+    $stmt->execute([':goal_id' => (int) $goal_id]);
+    return array_values(array_filter(array_map('intval', $stmt->fetchAll(PDO::FETCH_COLUMN))));
+}
+
+function awardGoalReward($goal, $child_id) {
+    global $db;
+    $rewardId = isset($goal['reward_id']) ? (int) $goal['reward_id'] : 0;
+    if ($rewardId <= 0) {
+        return false;
+    }
+    $stmt = $db->prepare("SELECT id, title, status FROM rewards WHERE id = :id");
+    $stmt->execute([':id' => $rewardId]);
+    $reward = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$reward || ($reward['status'] ?? '') !== 'available') {
+        return false;
+    }
+    $db->prepare("UPDATE rewards SET status = 'redeemed', redeemed_by = :child_id, redeemed_on = NOW() WHERE id = :id")
+       ->execute([':child_id' => (int) $child_id, ':id' => $rewardId]);
+    $title = $reward['title'] ?? 'Reward';
+    $message = "Goal reward earned: " . $title;
+    $parentId = (int) ($goal['parent_user_id'] ?? 0);
+    if ($parentId) {
+        $link = "dashboard_parent.php?highlight_reward=" . $rewardId . "#reward-" . $rewardId;
+        addParentNotification($parentId, 'goal_reward_earned', $message, $link);
+    }
+    addChildNotification((int) $child_id, 'goal_reward_earned', $message, 'goal.php');
+    return true;
+}
+
+function markGoalCompleted($goal, $child_id, $note = null, $notifyParent = true) {
+    global $db;
+    $goalId = (int) ($goal['id'] ?? 0);
+    if ($goalId <= 0) {
+        return false;
+    }
+    $stmt = $db->prepare("UPDATE goals SET status = 'completed', completed_at = NOW() WHERE id = :goal_id");
+    $stmt->execute([':goal_id' => $goalId]);
+    $db->prepare("INSERT INTO goal_progress (goal_id, child_user_id, celebration_shown) VALUES (:goal_id, :child_id, 0)
+                  ON DUPLICATE KEY UPDATE child_user_id = VALUES(child_user_id), celebration_shown = 0")
+       ->execute([':goal_id' => $goalId, ':child_id' => (int) $child_id]);
+    $message = $note ?: ('Goal completed: ' . ($goal['title'] ?? 'Goal'));
+    addChildNotification((int) $child_id, 'goal_completed', $message, 'goal.php');
+    $parentId = (int) ($goal['parent_user_id'] ?? 0);
+    if ($notifyParent && $parentId) {
+        addParentNotification($parentId, 'goal_completed', $message, 'goal.php');
+    }
+    $awardMode = $goal['award_mode'] ?? 'both';
+    $pointsAwarded = isset($goal['points_awarded']) ? (int) $goal['points_awarded'] : 0;
+    if ($pointsAwarded > 0 && in_array($awardMode, ['points', 'both'], true)) {
+        updateChildPoints((int) $child_id, $pointsAwarded);
+        addChildNotification((int) $child_id, 'goal_points_awarded', "You earned {$pointsAwarded} points for completing a goal!", 'dashboard_child.php');
+    }
+    if (!empty($goal['reward_id']) && in_array($awardMode, ['reward', 'both'], true)) {
+        awardGoalReward($goal, $child_id);
+    }
+    return true;
+}
+
+function markGoalPendingApproval($goal) {
+    global $db;
+    $goalId = (int) ($goal['id'] ?? 0);
+    if ($goalId <= 0) {
+        return false;
+    }
+    $stmt = $db->prepare("UPDATE goals SET status = 'pending_approval', requested_at = NOW() WHERE id = :goal_id AND status = 'active'");
+    $stmt->execute([':goal_id' => $goalId]);
+    if ($stmt->rowCount() <= 0) {
+        return false;
+    }
+    $childId = (int) ($goal['child_user_id'] ?? 0);
+    $title = $goal['title'] ?? 'Goal';
+    addChildNotification($childId, 'goal_ready', "Goal ready for approval: {$title}", 'goal.php');
+    $parentId = (int) ($goal['parent_user_id'] ?? 0);
+    if ($parentId) {
+        addParentNotification($parentId, 'goal_ready', "Goal ready for approval: {$title}", 'goal.php');
+    }
+    return true;
+}
+
+function getGoalWindowRange(array $goal) {
+    $type = $goal['time_window_type'] ?? 'rolling';
+    $today = new DateTimeImmutable('today');
+    if ($type === 'fixed') {
+        $start = !empty($goal['fixed_window_start']) ? new DateTimeImmutable($goal['fixed_window_start']) : null;
+        $end = !empty($goal['fixed_window_end']) ? new DateTimeImmutable($goal['fixed_window_end']) : null;
+        if (!$start && !empty($goal['start_date'])) {
+            $start = new DateTimeImmutable(date('Y-m-d', strtotime($goal['start_date'])));
+        }
+        if (!$end && !empty($goal['end_date'])) {
+            $end = new DateTimeImmutable(date('Y-m-d', strtotime($goal['end_date'])));
+        }
+        if (!$start) {
+            $start = $today;
+        }
+        if (!$end) {
+            $end = $today;
+        }
+        return [$start, $end];
+    }
+    $days = isset($goal['time_window_days']) && (int) $goal['time_window_days'] > 0 ? (int) $goal['time_window_days'] : 7;
+    $start = $today->modify('-' . ($days - 1) . ' days');
+    return [$start, $today];
+}
+
+function getDueTimestampForTask(array $task, string $dateKey = null) {
+    $timeOfDay = $task['time_of_day'] ?? 'anytime';
+    $dueDate = $task['due_date'] ?? null;
+    if (empty($dateKey)) {
+        $dateKey = !empty($dueDate) ? date('Y-m-d', strtotime($dueDate)) : date('Y-m-d');
+    }
+    $timeValue = !empty($dueDate) ? date('H:i', strtotime($dueDate)) : '';
+    $hasExplicitTime = $timeValue !== '' && $timeValue !== '00:00';
+    if ($hasExplicitTime) {
+        $stamp = strtotime($dateKey . ' ' . $timeValue . ':00');
+        return $stamp === false ? null : $stamp;
+    }
+    if ($timeOfDay !== 'anytime') {
+        $fallback = $timeOfDay === 'morning' ? '08:00' : ($timeOfDay === 'afternoon' ? '13:00' : '18:00');
+        $stamp = strtotime($dateKey . ' ' . $fallback . ':00');
+        return $stamp === false ? null : $stamp;
+    }
+    $stamp = strtotime($dateKey . ' 23:59:59');
+    return $stamp === false ? null : $stamp;
+}
+
+function calculateGoalProgress(array $goal, $child_id) {
+    global $db;
+    $goalType = $goal['goal_type'] ?? 'manual';
+    $goalType = $goalType !== '' ? $goalType : 'manual';
+    $status = $goal['status'] ?? 'active';
+    $title = $goal['title'] ?? 'Goal';
+    $requireOnTime = !empty($goal['require_on_time']);
+    $target = 1;
+    $current = 0;
+    $currentStreak = 0;
+    $lastProgressDate = null;
+    $nextHint = null;
+
+    if ($goalType === 'routine_streak') {
+        $target = max(1, (int) ($goal['streak_required'] ?? 0));
+        $routineId = (int) ($goal['routine_id'] ?? 0);
+        if ($routineId > 0) {
+            $stmt = $db->prepare("SELECT DATE(created_at) AS date_key
+                                  FROM routine_points_logs
+                                  WHERE routine_id = :routine_id AND child_user_id = :child_id
+                                  GROUP BY DATE(created_at)
+                                  ORDER BY date_key ASC");
+            $stmt->execute([':routine_id' => $routineId, ':child_id' => (int) $child_id]);
+            $dates = $stmt->fetchAll(PDO::FETCH_COLUMN) ?: [];
+            if ($requireOnTime && !empty($dates)) {
+                $otStmt = $db->prepare("SELECT DISTINCT DATE(occurred_at) AS date_key
+                                        FROM routine_overtime_logs
+                                        WHERE routine_id = :routine_id AND child_user_id = :child_id");
+                $otStmt->execute([':routine_id' => $routineId, ':child_id' => (int) $child_id]);
+                $overtimeDates = array_flip($otStmt->fetchAll(PDO::FETCH_COLUMN) ?: []);
+                $dates = array_values(array_filter($dates, static function ($date) use ($overtimeDates) {
+                    return !isset($overtimeDates[$date]);
+                }));
+            }
+            if (!empty($dates)) {
+                $lastDate = end($dates);
+                $lastProgressDate = $lastDate;
+                $currentStreak = 1;
+                for ($i = count($dates) - 2; $i >= 0; $i--) {
+                    $prev = $dates[$i];
+                    $expected = date('Y-m-d', strtotime($lastDate . ' -1 day'));
+                    if ($prev === $expected) {
+                        $currentStreak++;
+                        $lastDate = $prev;
+                    } else {
+                        break;
+                    }
+                }
+                $current = $currentStreak;
+            }
+        }
+        $remaining = max(0, $target - $currentStreak);
+        if ($remaining > 0) {
+            $today = date('Y-m-d');
+            if ($lastProgressDate === $today) {
+                $nextHint = "Keep the streak! Complete it tomorrow to reach day " . ($currentStreak + 1) . ".";
+            } elseif ($lastProgressDate === date('Y-m-d', strtotime('-1 day'))) {
+                $nextHint = "Complete it today for day " . ($currentStreak + 1) . ".";
+            } else {
+                $nextHint = "Complete the routine today to start your streak.";
+            }
+        }
+    } elseif ($goalType === 'routine_count') {
+        $target = max(1, (int) ($goal['target_count'] ?? 0));
+        $routineId = (int) ($goal['routine_id'] ?? 0);
+        if ($routineId > 0) {
+            [$start, $end] = getGoalWindowRange($goal);
+            $stmt = $db->prepare("SELECT DATE(created_at) AS date_key
+                                  FROM routine_points_logs
+                                  WHERE routine_id = :routine_id
+                                    AND child_user_id = :child_id
+                                    AND DATE(created_at) BETWEEN :start_date AND :end_date
+                                  GROUP BY DATE(created_at)");
+            $stmt->execute([
+                ':routine_id' => $routineId,
+                ':child_id' => (int) $child_id,
+                ':start_date' => $start->format('Y-m-d'),
+                ':end_date' => $end->format('Y-m-d')
+            ]);
+            $dates = $stmt->fetchAll(PDO::FETCH_COLUMN) ?: [];
+            if ($requireOnTime && !empty($dates)) {
+                $otStmt = $db->prepare("SELECT DISTINCT DATE(occurred_at) AS date_key
+                                        FROM routine_overtime_logs
+                                        WHERE routine_id = :routine_id AND child_user_id = :child_id");
+                $otStmt->execute([':routine_id' => $routineId, ':child_id' => (int) $child_id]);
+                $overtimeDates = array_flip($otStmt->fetchAll(PDO::FETCH_COLUMN) ?: []);
+                $dates = array_values(array_filter($dates, static function ($date) use ($overtimeDates) {
+                    return !isset($overtimeDates[$date]);
+                }));
+            }
+            $current = count($dates);
+            $lastProgressDate = !empty($dates) ? max($dates) : null;
+            $remaining = max(0, $target - $current);
+            if ($remaining > 0) {
+                if (($goal['time_window_type'] ?? 'rolling') === 'fixed') {
+                    $nextHint = "Complete it {$remaining} more time(s) by " . $end->format('m/d');
+                } else {
+                    $nextHint = "Complete it {$remaining} more time(s) in the next " . ($goal['time_window_days'] ?: 7) . " days.";
+                }
+            }
+        }
+    } elseif ($goalType === 'task_quota') {
+        $target = max(1, (int) ($goal['target_count'] ?? 0));
+        [$start, $end] = getGoalWindowRange($goal);
+        $taskTargetIds = getGoalTaskTargetIds((int) ($goal['id'] ?? 0));
+        $taskCategory = $goal['task_category'] ?? null;
+        $taskFilterSql = '';
+        $params = [(int) $child_id, $start->format('Y-m-d'), $end->format('Y-m-d')];
+        if (!empty($taskTargetIds)) {
+            $placeholders = implode(',', array_fill(0, count($taskTargetIds), '?'));
+            $taskFilterSql = " AND t.id IN ($placeholders)";
+            $params = array_merge($params, $taskTargetIds);
+        } elseif (!empty($taskCategory)) {
+            $taskFilterSql = " AND t.category = ?";
+            $params[] = $taskCategory;
+        }
+
+        $nonRecurringSql = "
+            SELECT t.id, t.due_date, t.time_of_day, t.completed_at, t.approved_at
+            FROM tasks t
+            WHERE t.child_user_id = ?
+              AND (t.recurrence IS NULL OR t.recurrence = '')
+              AND DATE(t.approved_at) BETWEEN ? AND ?
+              {$taskFilterSql}
+        ";
+        $stmt = $db->prepare($nonRecurringSql);
+        $stmt->execute($params);
+        $nonRecurring = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+        $recurringSql = "
+            SELECT t.id, t.due_date, t.time_of_day, ti.date_key, ti.completed_at, ti.approved_at
+            FROM task_instances ti
+            JOIN tasks t ON t.id = ti.task_id
+            WHERE t.child_user_id = ?
+              AND (t.recurrence IS NOT NULL AND t.recurrence != '')
+              AND ti.status = 'approved'
+              AND DATE(ti.approved_at) BETWEEN ? AND ?
+              {$taskFilterSql}
+        ";
+        $stmt = $db->prepare($recurringSql);
+        $stmt->execute($params);
+        $recurring = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+        $count = 0;
+        $lastDate = null;
+        $checkOnTime = static function ($row, $dateKeyOverride = null) {
+            $dueStamp = getDueTimestampForTask($row, $dateKeyOverride);
+            $completedAt = $row['completed_at'] ?? $row['approved_at'] ?? null;
+            if (!$completedAt || !$dueStamp) {
+                return false;
+            }
+            return strtotime($completedAt) <= $dueStamp;
+        };
+        foreach ($nonRecurring as $row) {
+            if ($requireOnTime && !$checkOnTime($row)) {
+                continue;
+            }
+            $count++;
+            $rowDate = !empty($row['completed_at']) ? date('Y-m-d', strtotime($row['completed_at'])) : (!empty($row['approved_at']) ? date('Y-m-d', strtotime($row['approved_at'])) : null);
+            if ($rowDate) {
+                $lastDate = $lastDate ? max($lastDate, $rowDate) : $rowDate;
+            }
+        }
+        foreach ($recurring as $row) {
+            $dateKey = $row['date_key'] ?? null;
+            if ($requireOnTime && !$checkOnTime($row, $dateKey)) {
+                continue;
+            }
+            $count++;
+            if ($dateKey) {
+                $lastDate = $lastDate ? max($lastDate, $dateKey) : $dateKey;
+            }
+        }
+        $current = $count;
+        $lastProgressDate = $lastDate;
+        $remaining = max(0, $target - $current);
+        if ($remaining > 0) {
+            if (($goal['time_window_type'] ?? 'rolling') === 'fixed') {
+                $nextHint = "Complete {$remaining} more task(s) by " . $end->format('m/d') . ".";
+            } else {
+                $nextHint = "Complete {$remaining} more task(s) in the next " . ($goal['time_window_days'] ?: 7) . " days.";
+            }
+        }
+    } else {
+        $target = 1;
+        $current = $status === 'completed' ? 1 : 0;
+        if ($current === 0 && $status === 'active') {
+            $nextHint = "Request completion when you're done.";
+        }
+    }
+
+    $isMet = ($goalType === 'routine_streak') ? ($currentStreak >= $target) : ($current >= $target);
+    if ($status === 'completed') {
+        $current = $target;
+        $currentStreak = max($currentStreak, $target);
+        $isMet = true;
+    }
+
+    $percent = $target > 0 ? min(100, (int) round(($current / $target) * 100)) : 0;
+    return [
+        'goal_id' => (int) ($goal['id'] ?? 0),
+        'title' => $title,
+        'goal_type' => $goalType,
+        'status' => $status,
+        'target' => $target,
+        'current' => $current,
+        'current_streak' => $currentStreak,
+        'percent' => $percent,
+        'last_progress_date' => $lastProgressDate,
+        'next_needed' => $nextHint,
+        'is_met' => $isMet
+    ];
+}
+
+function refreshGoalProgress(array $goal, $child_id) {
+    global $db;
+    $progress = calculateGoalProgress($goal, $child_id);
+    $goalId = (int) ($goal['id'] ?? 0);
+    if ($goalId > 0) {
+        $db->prepare("INSERT INTO goal_progress (goal_id, child_user_id, current_count, current_streak, last_progress_date, next_needed_hint)
+                      VALUES (:goal_id, :child_id, :current_count, :current_streak, :last_progress_date, :next_needed_hint)
+                      ON DUPLICATE KEY UPDATE
+                        child_user_id = VALUES(child_user_id),
+                        current_count = VALUES(current_count),
+                        current_streak = VALUES(current_streak),
+                        last_progress_date = VALUES(last_progress_date),
+                        next_needed_hint = VALUES(next_needed_hint)")
+            ->execute([
+                ':goal_id' => $goalId,
+                ':child_id' => (int) $child_id,
+                ':current_count' => (int) $progress['current'],
+                ':current_streak' => (int) $progress['current_streak'],
+                ':last_progress_date' => $progress['last_progress_date'],
+                ':next_needed_hint' => $progress['next_needed']
+            ]);
+    }
+    $requiresApproval = !empty($goal['requires_parent_approval']);
+    if ($progress['is_met'] && ($goal['status'] ?? 'active') === 'active') {
+        if ($requiresApproval) {
+            markGoalPendingApproval($goal);
+        } else {
+            markGoalCompleted($goal, $child_id);
+        }
+    }
+    return $progress;
+}
+
+function refreshTaskGoalsForChild($child_id) {
+    global $db;
+    $stmt = $db->prepare("SELECT * FROM goals WHERE child_user_id = :child_id AND status = 'active' AND goal_type = 'task_quota'");
+    $stmt->execute([':child_id' => (int) $child_id]);
+    $goals = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    foreach ($goals as $goal) {
+        refreshGoalProgress($goal, $child_id);
+    }
+}
+
+function refreshRoutineGoalsForChild($child_id, $routine_id) {
+    global $db;
+    $stmt = $db->prepare("SELECT * FROM goals WHERE child_user_id = :child_id AND status = 'active' AND goal_type IN ('routine_streak', 'routine_count') AND routine_id = :routine_id");
+    $stmt->execute([
+        ':child_id' => (int) $child_id,
+        ':routine_id' => (int) $routine_id
+    ]);
+    $goals = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    foreach ($goals as $goal) {
+        refreshGoalProgress($goal, $child_id);
+    }
+}
+
+function getGoalProgressSnapshot(array $goal, $child_id) {
+    global $db;
+    $progress = refreshGoalProgress($goal, $child_id);
+    $celebrationShown = 1;
+    $goalId = (int) ($goal['id'] ?? 0);
+    if ($goalId > 0) {
+        $stmt = $db->prepare("SELECT celebration_shown FROM goal_progress WHERE goal_id = :goal_id");
+        $stmt->execute([':goal_id' => $goalId]);
+        $celebrationShown = (int) ($stmt->fetchColumn() ?? 1);
+    }
+    $celebrationReady = ($goal['status'] ?? 'active') === 'completed' && $celebrationShown === 0;
+    return [
+        'progress' => $progress,
+        'celebration_ready' => $celebrationReady
+    ];
+}
+
+function markGoalCelebrationShown($goal_id) {
+    global $db;
+    $db->prepare("UPDATE goal_progress SET celebration_shown = 1 WHERE goal_id = :goal_id")
+       ->execute([':goal_id' => (int) $goal_id]);
 }
 
 // Add back requestGoalCompletion function
 function requestGoalCompletion($goal_id, $child_user_id) {
     global $db;
-    $stmt = $db->prepare("UPDATE goals 
-                         SET status = 'pending_approval', 
-                             requested_at = NOW() 
-                         WHERE id = :goal_id 
-                         AND child_user_id = :child_id 
-                         AND status = 'active'");
-    return $stmt->execute([
-        ':goal_id' => $goal_id,
-        ':child_id' => $child_user_id
-    ]);
+    $stmt = $db->prepare("SELECT * FROM goals WHERE id = :goal_id AND child_user_id = :child_id AND status = 'active'");
+    $stmt->execute([':goal_id' => $goal_id, ':child_id' => $child_user_id]);
+    $goal = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$goal) {
+        return false;
+    }
+    if (!empty($goal['requires_parent_approval'])) {
+        return markGoalPendingApproval($goal);
+    }
+    return markGoalCompleted($goal, $child_user_id);
 }
 
 // Add back approveGoal function
@@ -1592,7 +2142,7 @@ function approveGoal($goal_id, $parent_user_id) {
             $db->beginTransaction();
         }
         
-        $stmt = $db->prepare("SELECT child_user_id, title 
+        $stmt = $db->prepare("SELECT * 
                                FROM goals 
                                WHERE id = :goal_id 
                                AND parent_user_id = :parent_id 
@@ -1604,19 +2154,7 @@ function approveGoal($goal_id, $parent_user_id) {
         $goal = $stmt->fetch(PDO::FETCH_ASSOC);
         
         if ($goal) {
-            // Update goal status to completed
-            $stmt = $db->prepare("UPDATE goals 
-                                SET status = 'completed', 
-                                    completed_at = NOW() 
-                                WHERE id = :goal_id");
-            $stmt->execute([':goal_id' => $goal_id]);
-            
-            addChildNotification(
-                (int)$goal['child_user_id'],
-                'goal_approved',
-                'Goal approved: ' . ($goal['title'] ?? 'Goal'),
-                'dashboard_child.php'
-            );
+            markGoalCompleted($goal, (int) $goal['child_user_id'], 'Goal approved: ' . ($goal['title'] ?? 'Goal'), false);
             
             if ($managesTransaction && $db->inTransaction()) {
                 $db->commit();
@@ -1948,7 +2486,7 @@ function completeGoal($child_user_id, $goal_id) {
     $db->beginTransaction();
     try {
         // Check if the goal exists and is active for the child
-        $stmt = $db->prepare("SELECT id FROM goals WHERE id = :goal_id AND child_user_id = :child_id AND status = 'active'");
+        $stmt = $db->prepare("SELECT * FROM goals WHERE id = :goal_id AND child_user_id = :child_id AND status = 'active'");
         $stmt->execute([':goal_id' => $goal_id, ':child_id' => $child_user_id]);
         $goal = $stmt->fetch(PDO::FETCH_ASSOC);
         if (!$goal) {
@@ -1956,9 +2494,7 @@ function completeGoal($child_user_id, $goal_id) {
             return false;
         }
 
-        // Update goal status to completed
-        $stmt = $db->prepare("UPDATE goals SET status = 'completed', completed_at = NOW() WHERE id = :goal_id");
-        $stmt->execute([':goal_id' => $goal_id]);
+        markGoalCompleted($goal, $child_user_id);
 
         $db->commit();
         return true;
@@ -2530,32 +3066,88 @@ try {
 
    // Create goals table with corrected constraints
    $sql = "CREATE TABLE IF NOT EXISTS goals (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    parent_user_id INT NOT NULL,
-    child_user_id INT NOT NULL,
-    title VARCHAR(100) NOT NULL,
-    target_points INT NOT NULL DEFAULT 0,
-    start_date DATETIME,
-    end_date DATETIME,
-    status ENUM('active', 'pending_approval', 'completed', 'rejected') DEFAULT 'active',
-    reward_id INT NULL,
-    completed_at DATETIME DEFAULT NULL,
-    requested_at DATETIME DEFAULT NULL,
-    rejected_at DATETIME DEFAULT NULL,
-    rejection_comment TEXT DEFAULT NULL,
-    created_by INT NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (parent_user_id) REFERENCES users(id) ON DELETE CASCADE,
-    FOREIGN KEY (child_user_id) REFERENCES users(id) ON DELETE CASCADE,
-    FOREIGN KEY (reward_id) REFERENCES rewards(id) ON DELETE SET NULL,
-    FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
-  )";
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      parent_user_id INT NOT NULL,
+      child_user_id INT NOT NULL,
+      title VARCHAR(100) NOT NULL,
+      target_points INT NOT NULL DEFAULT 0,
+      start_date DATETIME,
+      end_date DATETIME,
+      status ENUM('active', 'pending_approval', 'completed', 'rejected') DEFAULT 'active',
+      reward_id INT NULL,
+      goal_type VARCHAR(24) DEFAULT 'manual',
+      routine_id INT NULL,
+      task_category VARCHAR(50) DEFAULT NULL,
+      target_count INT NOT NULL DEFAULT 0,
+      streak_required INT NOT NULL DEFAULT 0,
+      time_window_type VARCHAR(16) DEFAULT 'rolling',
+      time_window_days INT NOT NULL DEFAULT 0,
+      fixed_window_start DATE DEFAULT NULL,
+      fixed_window_end DATE DEFAULT NULL,
+      require_on_time TINYINT(1) NOT NULL DEFAULT 0,
+      points_awarded INT NOT NULL DEFAULT 0,
+      award_mode VARCHAR(12) DEFAULT 'both',
+      requires_parent_approval TINYINT(1) NOT NULL DEFAULT 1,
+      completed_at DATETIME DEFAULT NULL,
+      requested_at DATETIME DEFAULT NULL,
+      rejected_at DATETIME DEFAULT NULL,
+      rejection_comment TEXT DEFAULT NULL,
+      created_by INT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (parent_user_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (child_user_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (reward_id) REFERENCES rewards(id) ON DELETE SET NULL,
+      FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+    )";
   $db->exec($sql);
   error_log("Created/verified goals table successfully");
 
   // Add created_by to existing goals if not exists
   $db->exec("ALTER TABLE goals ADD COLUMN IF NOT EXISTS created_by INT NULL");
   error_log("Added/verified created_by in goals");
+  $db->exec("ALTER TABLE goals ADD COLUMN IF NOT EXISTS goal_type VARCHAR(24) DEFAULT 'manual'");
+  $db->exec("ALTER TABLE goals ADD COLUMN IF NOT EXISTS routine_id INT NULL");
+  $db->exec("ALTER TABLE goals ADD COLUMN IF NOT EXISTS task_category VARCHAR(50) DEFAULT NULL");
+  $db->exec("ALTER TABLE goals ADD COLUMN IF NOT EXISTS target_count INT NOT NULL DEFAULT 0");
+  $db->exec("ALTER TABLE goals ADD COLUMN IF NOT EXISTS streak_required INT NOT NULL DEFAULT 0");
+  $db->exec("ALTER TABLE goals ADD COLUMN IF NOT EXISTS time_window_type VARCHAR(16) DEFAULT 'rolling'");
+  $db->exec("ALTER TABLE goals ADD COLUMN IF NOT EXISTS time_window_days INT NOT NULL DEFAULT 0");
+  $db->exec("ALTER TABLE goals ADD COLUMN IF NOT EXISTS fixed_window_start DATE DEFAULT NULL");
+  $db->exec("ALTER TABLE goals ADD COLUMN IF NOT EXISTS fixed_window_end DATE DEFAULT NULL");
+  $db->exec("ALTER TABLE goals ADD COLUMN IF NOT EXISTS require_on_time TINYINT(1) NOT NULL DEFAULT 0");
+  $db->exec("ALTER TABLE goals ADD COLUMN IF NOT EXISTS points_awarded INT NOT NULL DEFAULT 0");
+  $db->exec("ALTER TABLE goals ADD COLUMN IF NOT EXISTS award_mode VARCHAR(12) DEFAULT 'both'");
+  $db->exec("ALTER TABLE goals ADD COLUMN IF NOT EXISTS requires_parent_approval TINYINT(1) NOT NULL DEFAULT 1");
+  error_log("Added/verified goal criteria columns in goals");
+
+  $sql = "CREATE TABLE IF NOT EXISTS goal_progress (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      goal_id INT NOT NULL,
+      child_user_id INT NOT NULL,
+      current_count INT NOT NULL DEFAULT 0,
+      current_streak INT NOT NULL DEFAULT 0,
+      last_progress_date DATE DEFAULT NULL,
+      next_needed_hint VARCHAR(255) DEFAULT NULL,
+      celebration_shown TINYINT(1) NOT NULL DEFAULT 0,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      UNIQUE KEY uniq_goal_progress (goal_id),
+      INDEX idx_goal_child (child_user_id, goal_id),
+      FOREIGN KEY (goal_id) REFERENCES goals(id) ON DELETE CASCADE,
+      FOREIGN KEY (child_user_id) REFERENCES users(id) ON DELETE CASCADE
+  )";
+  $db->exec($sql);
+  error_log("Created/verified goal_progress table successfully");
+
+  $sql = "CREATE TABLE IF NOT EXISTS goal_task_targets (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      goal_id INT NOT NULL,
+      task_id INT NOT NULL,
+      UNIQUE KEY uniq_goal_task (goal_id, task_id),
+      FOREIGN KEY (goal_id) REFERENCES goals(id) ON DELETE CASCADE,
+      FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
+  )";
+  $db->exec($sql);
+  error_log("Created/verified goal_task_targets table successfully");
 
   // Create routines table if not exists (fixed constraints)
    $sql = "CREATE TABLE IF NOT EXISTS routines (

@@ -24,6 +24,37 @@ $data = getDashboardData($_SESSION['user_id']);
 // Fetch routines for child dashboard
 $routines = getRoutines($_SESSION['user_id']);
 
+$goalRows = [];
+$dashboardGoals = [];
+$goalCelebrations = [];
+$goalStmt = $db->prepare("SELECT g.*, r.title AS reward_title, rt.title AS routine_title
+                          FROM goals g
+                          LEFT JOIN rewards r ON g.reward_id = r.id
+                          LEFT JOIN routines rt ON g.routine_id = rt.id
+                          WHERE g.child_user_id = :child_id
+                            AND g.status IN ('active', 'pending_approval', 'completed')
+                          ORDER BY g.start_date ASC");
+$goalStmt->execute([':child_id' => $_SESSION['user_id']]);
+$goalRows = $goalStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+foreach ($goalRows as &$goalRow) {
+    $snap = getGoalProgressSnapshot($goalRow, $_SESSION['user_id']);
+    $goalRow['progress'] = $snap['progress'];
+    $goalRow['celebration_ready'] = $snap['celebration_ready'];
+    if ($goalRow['status'] === 'active' && !empty($goalRow['progress']['is_met'])) {
+        $goalRow['status'] = !empty($goalRow['requires_parent_approval']) ? 'pending_approval' : 'completed';
+    }
+    if (!empty($goalRow['celebration_ready'])) {
+        $goalCelebrations[] = [
+            'id' => (int) $goalRow['id'],
+            'title' => $goalRow['title'] ?? 'Goal achieved'
+        ];
+    }
+    if (in_array($goalRow['status'], ['active', 'pending_approval'], true)) {
+        $dashboardGoals[] = $goalRow;
+    }
+}
+unset($goalRow);
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['request_completion'])) {
         $goal_id = filter_input(INPUT_POST, 'goal_id', FILTER_VALIDATE_INT);
@@ -112,6 +143,16 @@ $notificationCount = is_array($notificationsNew) ? count($notificationsNew) : 0;
         .child-avatar { width: 72px; height: 72px; border-radius: 50%; object-fit: cover; border: 3px solid #ffd28a; background: #fff; box-shadow: 0 4px 10px rgba(0,0,0,0.12); }
         .child-first-name { font-size: 1rem; font-weight: 700; color: #263238; }
         .points-total { margin: 0; font-weight: 700; color: #263238; display: flex; flex-direction: column; gap: 6px; text-align: center; }
+        .goal-summary { flex: 1; min-width: 220px; background: #fff; border: 2px solid #ffd28a; border-radius: 12px; padding: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.08); display: grid; gap: 10px; }
+        .goal-summary-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+        .goal-summary-title { font-weight: 800; color: #ef6c00; margin: 0; font-size: 1rem; }
+        .goal-item { background: #fff7e6; border: 1px solid #ffd28a; border-radius: 10px; padding: 10px; display: grid; gap: 6px; text-align: left; }
+        .goal-item-title { font-weight: 700; color: #3e2723; }
+        .goal-item-meta { font-size: 0.85rem; color: #6d4c41; }
+        .goal-progress-bar { height: 12px; border-radius: 999px; background: #ffe9c6; overflow: hidden; border: 1px dashed #ffb74d; }
+        .goal-progress-bar span { display: block; height: 100%; background: linear-gradient(90deg, #ff6f61, #ffd54f, #4caf50); background-size: 200% 100%; width: 0; transition: width 300ms ease; animation: goal-spark 2.4s linear infinite; box-shadow: 0 0 8px rgba(255, 111, 97, 0.35); }
+        .goal-next-needed { font-size: 0.85rem; color: #455a64; }
+        .goal-pending-pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 8px; border-radius: 999px; background: #ffe0b2; color: #ef6c00; font-size: 0.75rem; font-weight: 700; }
         .dashboard-cards { margin: 18px 0 24px; display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; }
         .dashboard-card { background: #fff7e6; border: 2px solid #ffd28a; border-radius: 12px; padding: 14px 12px; display: flex; align-items: center; justify-content: center; gap: 10px; font-weight: 700; color: #5d4037; text-decoration: none; box-shadow: 0 4px 10px rgba(0,0,0,0.08); position: relative; cursor: pointer; appearance: none; font-family: 'Sigmar One', 'Sigma One', cursive; }
         .dashboard-card i { font-size: 1.2rem; color: #ef6c00; }
@@ -172,6 +213,27 @@ $notificationCount = is_array($notificationsNew) ? count($notificationsNew) : 0;
         .notification-item { padding: 10px; background: #fff; border: 1px solid #e0e0e0; border-radius: 8px; display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
         .notification-item input[type="checkbox"] { width: 19.8px; height: 19.8px; }
         .notification-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 8px; }
+        .goal-celebration { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(255, 248, 225, 0.92); z-index: 5000; }
+        .goal-celebration.active { display: flex; }
+        .goal-celebration-card { background: #fff; border-radius: 18px; padding: 24px 26px; text-align: center; box-shadow: 0 18px 40px rgba(0,0,0,0.25); position: relative; animation: pop-in 300ms ease; }
+        .goal-celebration-icon { font-size: 2.2rem; color: #ff9800; margin-bottom: 8px; }
+        .goal-celebration-title { font-weight: 800; color: #4caf50; margin: 0 0 6px; }
+        .goal-celebration-goal { margin: 0; color: #37474f; font-weight: 700; }
+        .goal-confetti { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+        .goal-confetti span { position: absolute; width: 10px; height: 16px; border-radius: 4px; opacity: 0.9; animation: confetti-fall 1400ms ease-in-out forwards; }
+        @keyframes goal-spark {
+            0% { background-position: 0% 50%; }
+            100% { background-position: 200% 50%; }
+        }
+        @keyframes confetti-fall {
+            0% { transform: translateY(-20px) rotate(0deg); opacity: 0; }
+            10% { opacity: 1; }
+            100% { transform: translateY(260px) rotate(160deg); opacity: 0; }
+        }
+        @keyframes pop-in {
+            0% { transform: scale(0.9); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
+        }
 
         .rewards-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: none; align-items: center; justify-content: center; z-index: 4100; padding: 14px; }
         .rewards-modal.open { display: flex; }
@@ -377,6 +439,41 @@ $notificationCount = is_array($notificationsNew) ? count($notificationsNew) : 0;
                     btn.addEventListener('click', () => setActiveDay(btn.getAttribute('data-week-date')));
                 });
             }
+            
+            if (typeof celebrationQueue !== 'undefined' && celebrationQueue.length) {
+                const celebrationModal = document.querySelector('[data-goal-celebration]');
+                const celebrationTitle = document.querySelector('[data-goal-celebration-title]');
+                const confettiHost = document.querySelector('[data-goal-confetti]');
+                const colors = ['#ff7043', '#ffd54f', '#4caf50', '#29b6f6', '#ab47bc'];
+
+                const dropConfetti = () => {
+                    if (!confettiHost) return;
+                    confettiHost.innerHTML = '';
+                    for (let i = 0; i < 18; i += 1) {
+                        const piece = document.createElement('span');
+                        piece.style.left = `${Math.random() * 100}%`;
+                        piece.style.background = colors[i % colors.length];
+                        piece.style.animationDelay = `${Math.random() * 0.4}s`;
+                        confettiHost.appendChild(piece);
+                    }
+                };
+
+                const showNextCelebration = () => {
+                    const next = celebrationQueue.shift();
+                    if (!next || !celebrationModal) return;
+                    if (celebrationTitle) {
+                        celebrationTitle.textContent = next.title || 'Goal achieved!';
+                    }
+                    dropConfetti();
+                    celebrationModal.classList.add('active');
+                    setTimeout(() => {
+                        celebrationModal.classList.remove('active');
+                        setTimeout(showNextCelebration, 350);
+                    }, 1800);
+                };
+
+                showNextCelebration();
+            }
         });
     </script>
 </head>
@@ -580,7 +677,7 @@ $notificationCount = is_array($notificationsNew) ? count($notificationsNew) : 0;
             }
             $taskCount++;
          }
-         $goalCount = isset($data['active_goals']) && is_array($data['active_goals']) ? count($data['active_goals']) : 0;
+         $goalCount = count($dashboardGoals);
          $rewardCount = isset($data['rewards']) && is_array($data['rewards']) ? count($data['rewards']) : 0;
          $redeemedRewards = isset($data['redeemed_rewards']) && is_array($data['redeemed_rewards']) ? $data['redeemed_rewards'] : [];
          $weekStart = new DateTime('monday this week');
@@ -902,14 +999,51 @@ $notificationCount = is_array($notificationsNew) ? count($notificationsNew) : 0;
                </a>
             </div>
          </div>
-         <div class="points-total">
-            <span class="points-total-label">Total Points</span>
-            <span class="points-total-value"><?php echo $childTotalPoints; ?></span>
-            <button type="button" class="points-history-button" data-points-history-open aria-haspopup="dialog" aria-controls="points-history-modal">
-               <i class="fa-solid fa-clock-rotate-left"></i>History
-            </button>
-         </div>
-         <div class="week-calendar">
+          <div class="points-total">
+             <span class="points-total-label">Total Points</span>
+             <span class="points-total-value"><?php echo $childTotalPoints; ?></span>
+             <button type="button" class="points-history-button" data-points-history-open aria-haspopup="dialog" aria-controls="points-history-modal">
+                <i class="fa-solid fa-clock-rotate-left"></i>History
+             </button>
+          </div>
+          <div class="goal-summary">
+             <div class="goal-summary-header">
+                <h3 class="goal-summary-title">Goals</h3>
+                <a class="nav-button" href="goal.php">View</a>
+             </div>
+             <?php if (empty($dashboardGoals)): ?>
+                <div class="goal-item">
+                   <div class="goal-item-title">No active goals</div>
+                   <div class="goal-item-meta">Check back when a new goal is assigned.</div>
+                </div>
+             <?php else: ?>
+                <?php foreach ($dashboardGoals as $goal): ?>
+                   <?php
+                      $progress = $goal['progress'] ?? ['current' => 0, 'target' => 1, 'percent' => 0, 'goal_type' => 'manual'];
+                      $typeLabel = [
+                          'manual' => 'Manual',
+                          'routine_streak' => 'Routine streak',
+                          'routine_count' => 'Routine count',
+                          'task_quota' => 'Task quota'
+                      ][$progress['goal_type']] ?? 'Goal';
+                   ?>
+                   <div class="goal-item">
+                      <div class="goal-item-title"><?php echo htmlspecialchars($goal['title']); ?></div>
+                      <div class="goal-item-meta"><?php echo htmlspecialchars($typeLabel); ?> • <?php echo (int) $progress['current']; ?> / <?php echo (int) $progress['target']; ?></div>
+                      <div class="goal-progress-bar">
+                         <span style="width: <?php echo (int) $progress['percent']; ?>%;"></span>
+                      </div>
+                      <?php if (!empty($progress['next_needed'])): ?>
+                         <div class="goal-next-needed">Next: <?php echo htmlspecialchars($progress['next_needed']); ?></div>
+                      <?php endif; ?>
+                      <?php if (($goal['status'] ?? '') === 'pending_approval'): ?>
+                         <span class="goal-pending-pill">Waiting for approval</span>
+                      <?php endif; ?>
+                   </div>
+                <?php endforeach; ?>
+             <?php endif; ?>
+          </div>
+          <div class="week-calendar">
             <div class="week-days" aria-label="Current week">
                <?php foreach ($weekDates as $day): ?>
                   <button type="button" class="week-day<?php echo $day['date'] === $todayDate ? ' active' : ''; ?>" data-week-date="<?php echo htmlspecialchars($day['date']); ?>">
@@ -1038,6 +1172,22 @@ $notificationCount = is_array($notificationsNew) ? count($notificationsNew) : 0;
          </div>
       </div>
    </main>
+   <?php if (!empty($goalCelebrations)): ?>
+      <?php foreach ($goalCelebrations as $goalCelebration) {
+         markGoalCelebrationShown((int) $goalCelebration['id']);
+      } ?>
+      <div class="goal-celebration" data-goal-celebration>
+         <div class="goal-celebration-card">
+            <div class="goal-confetti" data-goal-confetti></div>
+            <div class="goal-celebration-icon"><i class="fa-solid fa-trophy"></i></div>
+            <h3 class="goal-celebration-title">Goal Achieved!</h3>
+            <p class="goal-celebration-goal" data-goal-celebration-title></p>
+         </div>
+      </div>
+      <script>
+         const celebrationQueue = <?php echo json_encode($goalCelebrations, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP); ?>;
+      </script>
+   <?php endif; ?>
    <footer>
    <p>Child Task and Chore App - Ver 3.16.7</p>
 </footer>
