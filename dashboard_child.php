@@ -149,8 +149,9 @@ $notificationCount = is_array($notificationsNew) ? count($notificationsNew) : 0;
         .goal-item { background: #fff7e6; border: 1px solid #ffd28a; border-radius: 10px; padding: 10px; display: grid; gap: 6px; text-align: left; }
         .goal-item-title { font-weight: 700; color: #3e2723; }
         .goal-item-meta { font-size: 0.85rem; color: #6d4c41; }
-        .goal-progress-bar { height: 12px; border-radius: 999px; background: #ffe9c6; overflow: hidden; border: 1px dashed #ffb74d; }
+        .goal-progress-bar { height: 20px; border-radius: 999px; background: #ffe9c6; overflow: hidden; border: 1px dashed #ffb74d; }
         .goal-progress-bar span { display: block; height: 100%; background: linear-gradient(90deg, #ff6f61, #ffd54f, #4caf50); background-size: 200% 100%; width: 0; transition: width 300ms ease; animation: goal-spark 2.4s linear infinite; box-shadow: 0 0 8px rgba(255, 111, 97, 0.35); }
+        .goal-progress-bar.complete span { background: #4caf50; animation: none; box-shadow: none; }
         .goal-next-needed { font-size: 0.85rem; color: #455a64; }
         .goal-pending-pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 8px; border-radius: 999px; background: #ffe0b2; color: #ef6c00; font-size: 0.75rem; font-weight: 700; }
         .dashboard-cards { margin: 18px 0 24px; display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; }
@@ -216,14 +217,16 @@ $notificationCount = is_array($notificationsNew) ? count($notificationsNew) : 0;
         .goal-celebration { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(255, 248, 225, 0.92); z-index: 5000; }
         .goal-celebration.active { display: flex; }
         .goal-celebration-card { background: #fff; border-radius: 18px; padding: 24px 26px; text-align: center; box-shadow: 0 18px 40px rgba(0,0,0,0.25); position: relative; animation: pop-in 300ms ease; }
+        .goal-celebration-close { position: absolute; top: 10px; right: 10px; width: 34px; height: 34px; border: none; border-radius: 50%; background: #f5f5f5; color: #37474f; cursor: pointer; }
+        .goal-celebration-close:hover { background: #e0e0e0; }
         .goal-celebration-icon { font-size: 2.2rem; color: #ff9800; margin-bottom: 8px; }
         .goal-celebration-title { font-weight: 800; color: #4caf50; margin: 0 0 6px; }
         .goal-celebration-goal { margin: 0; color: #37474f; font-weight: 700; }
         .goal-confetti { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
         .goal-confetti span { position: absolute; width: 10px; height: 16px; border-radius: 4px; opacity: 0.9; animation: confetti-fall 1400ms ease-in-out forwards; }
         @keyframes goal-spark {
-            0% { background-position: 0% 50%; }
-            100% { background-position: 200% 50%; }
+            0% { background-position: 200% 50%; }
+            100% { background-position: 0% 50%; }
         }
         @keyframes confetti-fall {
             0% { transform: translateY(-20px) rotate(0deg); opacity: 0; }
@@ -440,11 +443,18 @@ $notificationCount = is_array($notificationsNew) ? count($notificationsNew) : 0;
                 });
             }
             
-            if (typeof celebrationQueue !== 'undefined' && celebrationQueue.length) {
-                const celebrationModal = document.querySelector('[data-goal-celebration]');
-                const celebrationTitle = document.querySelector('[data-goal-celebration-title]');
-                const confettiHost = document.querySelector('[data-goal-confetti]');
-                const colors = ['#ff7043', '#ffd54f', '#4caf50', '#29b6f6', '#ab47bc'];
+              if (typeof celebrationQueue !== 'undefined' && celebrationQueue.length) {
+                  const celebrationModal = document.querySelector('[data-goal-celebration]');
+                  const celebrationTitle = document.querySelector('[data-goal-celebration-title]');
+                  const confettiHost = document.querySelector('[data-goal-confetti]');
+                  const celebrationClose = document.querySelector('[data-goal-celebration-close]');
+                  const colors = ['#ff7043', '#ffd54f', '#4caf50', '#29b6f6', '#ab47bc'];
+  
+                  const closeCelebration = () => {
+                      if (!celebrationModal) return;
+                      celebrationModal.classList.remove('active');
+                      setTimeout(showNextCelebration, 300);
+                  };
 
                 const dropConfetti = () => {
                     if (!confettiHost) return;
@@ -458,22 +468,21 @@ $notificationCount = is_array($notificationsNew) ? count($notificationsNew) : 0;
                     }
                 };
 
-                const showNextCelebration = () => {
-                    const next = celebrationQueue.shift();
-                    if (!next || !celebrationModal) return;
-                    if (celebrationTitle) {
-                        celebrationTitle.textContent = next.title || 'Goal achieved!';
-                    }
-                    dropConfetti();
-                    celebrationModal.classList.add('active');
-                    setTimeout(() => {
-                        celebrationModal.classList.remove('active');
-                        setTimeout(showNextCelebration, 350);
-                    }, 1800);
-                };
+                  const showNextCelebration = () => {
+                      const next = celebrationQueue.shift();
+                      if (!next || !celebrationModal) return;
+                      if (celebrationTitle) {
+                          celebrationTitle.textContent = next.title || 'Goal achieved!';
+                      }
+                      dropConfetti();
+                      celebrationModal.classList.add('active');
+                  };
 
-                showNextCelebration();
-            }
+                  if (celebrationClose) {
+                      celebrationClose.addEventListener('click', closeCelebration);
+                  }
+                  showNextCelebration();
+              }
         });
     </script>
 </head>
@@ -1179,6 +1188,9 @@ $notificationCount = is_array($notificationsNew) ? count($notificationsNew) : 0;
       <div class="goal-celebration" data-goal-celebration>
          <div class="goal-celebration-card">
             <div class="goal-confetti" data-goal-confetti></div>
+            <button type="button" class="goal-celebration-close" data-goal-celebration-close aria-label="Close celebration">
+               <i class="fa-solid fa-xmark"></i>
+            </button>
             <div class="goal-celebration-icon"><i class="fa-solid fa-trophy"></i></div>
             <h3 class="goal-celebration-title">Goal Achieved!</h3>
             <p class="goal-celebration-goal" data-goal-celebration-title></p>

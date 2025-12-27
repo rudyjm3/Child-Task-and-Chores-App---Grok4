@@ -617,8 +617,9 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
         .toggle-label { font-weight: 600; }
         .goal-progress { margin-top: 12px; display: grid; gap: 6px; }
         .goal-progress-header { display: flex; align-items: center; justify-content: space-between; font-weight: 700; color: #37474f; }
-        .goal-progress-bar { height: 8px; border-radius: 999px; background: #edf1f7; overflow: hidden; border: 1px solid #dfe6ee; }
+        .goal-progress-bar { height: 30px; border-radius: 999px; background: #edf1f7; overflow: hidden; border: 1px solid #dfe6ee; }
         .goal-progress-bar span { display: block; height: 100%; background: linear-gradient(90deg, #00bcd4, #4caf50); width: 0; transition: width 300ms ease; box-shadow: 0 0 8px rgba(0, 188, 212, 0.35); }
+        .goal-progress-bar.complete span { background: #4caf50; animation: none; box-shadow: none; }
         .goal-next-needed { font-size: 0.92rem; color: #455a64; }
         .goal-meta { display: grid; gap: 6px; color: #5f6c76; font-size: 0.92rem; margin-top: 8px; }
         .goal-detail-pill { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; background: #eef4ff; color: #0d47a1; font-weight: 700; font-size: 0.85rem; }
@@ -632,15 +633,18 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
         .icon-button:hover { background: rgba(0,0,0,0.06); color: #37474f; }
         .icon-button.danger { color: #d32f2f; }
         .icon-button.danger:hover { background: rgba(211,47,47,0.12); }
-        .child-theme .goal-progress-bar { height: 12px; background: #ffe9c6; border: 1px dashed #ffb74d; }
+        .child-theme .goal-progress-bar { height: 30px; background: #ffe9c6; border: 1px dashed #ffb74d; }
         .child-theme .goal-progress-bar span { background: linear-gradient(90deg, #ff6f61, #ffd54f, #4caf50); background-size: 200% 100%; animation: goal-spark 2.4s linear infinite; box-shadow: 0 0 8px rgba(255, 111, 97, 0.35); }
+        .child-theme .goal-progress-bar.complete span { background: #4caf50; animation: none; box-shadow: none; }
         @keyframes goal-spark {
-            0% { background-position: 0% 50%; }
-            100% { background-position: 200% 50%; }
+            0% { background-position: 200% 50%; }
+            100% { background-position: 0% 50%; }
         }
         .goal-celebration { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(255, 248, 225, 0.92); z-index: 5000; }
         .goal-celebration.active { display: flex; }
         .goal-celebration-card { background: #fff; border-radius: 18px; padding: 24px 26px; text-align: center; box-shadow: 0 18px 40px rgba(0,0,0,0.25); position: relative; animation: pop-in 300ms ease; }
+        .goal-celebration-close { position: absolute; top: 10px; right: 10px; width: 34px; height: 34px; border: none; border-radius: 50%; background: #f5f5f5; color: #37474f; cursor: pointer; }
+        .goal-celebration-close:hover { background: #e0e0e0; }
         .goal-celebration-icon { font-size: 2.2rem; color: #ff9800; margin-bottom: 8px; }
         .goal-celebration-title { font-weight: 800; color: #4caf50; margin: 0 0 6px; }
         .goal-celebration-goal { margin: 0; color: #37474f; font-weight: 700; }
@@ -746,7 +750,7 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
             <?php if (empty($goals)): ?>
                 <p>No goals available.</p>
             <?php else: ?>
-                <details class="task-section-toggle">
+                <details class="task-section-toggle" open>
                     <summary>
                         <span class="task-section-title">Active Goals <span class="task-count-badge"><?php echo count($active_goals); ?></span></span>
                     </summary>
@@ -908,9 +912,9 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                                     <span><?php echo htmlspecialchars($goalTypeLabel); ?></span>
                                     <span><?php echo htmlspecialchars($progressValue); ?></span>
                                 </div>
-                                <div class="goal-progress-bar">
-                                    <span style="width: 100%;"></span>
-                                </div>
+                            <div class="goal-progress-bar complete">
+                                <span style="width: 100%;"></span>
+                            </div>
                             </div>
                             <?php if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])): ?>
                                 <p>Child: <?php echo htmlspecialchars($goal['child_display_name']); ?></p>
@@ -1310,6 +1314,9 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
         <div class="goal-celebration" data-goal-celebration>
             <div class="goal-celebration-card">
                 <div class="goal-confetti" data-goal-confetti></div>
+                <button type="button" class="goal-celebration-close" data-goal-celebration-close aria-label="Close celebration">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
                 <div class="goal-celebration-icon"><i class="fa-solid fa-trophy"></i></div>
                 <h3 class="goal-celebration-title">Goal Achieved!</h3>
                 <p class="goal-celebration-goal" data-goal-celebration-title></p>
@@ -1638,7 +1645,14 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
           const celebrationModal = document.querySelector('[data-goal-celebration]');
           const celebrationTitle = document.querySelector('[data-goal-celebration-title]');
           const confettiHost = document.querySelector('[data-goal-confetti]');
+          const celebrationClose = document.querySelector('[data-goal-celebration-close]');
           const colors = ['#ff7043', '#ffd54f', '#4caf50', '#29b6f6', '#ab47bc'];
+
+          const closeCelebration = () => {
+              if (!celebrationModal) return;
+              celebrationModal.classList.remove('active');
+              setTimeout(showNextCelebration, 300);
+          };
 
           const dropConfetti = () => {
               if (!confettiHost) return;
@@ -1660,12 +1674,11 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
               }
               dropConfetti();
               celebrationModal.classList.add('active');
-              setTimeout(() => {
-                  celebrationModal.classList.remove('active');
-                  setTimeout(showNextCelebration, 350);
-              }, 1800);
           };
 
+          if (celebrationClose) {
+              celebrationClose.addEventListener('click', closeCelebration);
+          }
           showNextCelebration();
       }
   </script>
