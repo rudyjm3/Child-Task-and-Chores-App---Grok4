@@ -145,9 +145,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $message = "Notifications deleted.";
         }
     } elseif (isset($_POST['approve_task_notification'])) {
-        $task_id = filter_input(INPUT_POST, 'task_id', FILTER_VALIDATE_INT);
-        $parent_notification_id = filter_input(INPUT_POST, 'parent_notification_id', FILTER_VALIDATE_INT);
-        $instance_date = filter_input(INPUT_POST, 'instance_date', FILTER_SANITIZE_STRING);
+        $task_id = isset($_POST['approve_task_notification']) ? (int) $_POST['approve_task_notification'] : 0;
+        $parent_notification_id = null;
+        $instance_date = null;
+        if ($task_id) {
+            $instanceMap = $_POST['instance_date_map'] ?? [];
+            $parentMap = $_POST['parent_notification_map'] ?? [];
+            if (!empty($instanceMap[$task_id])) {
+                $instance_date = filter_var($instanceMap[$task_id], FILTER_SANITIZE_STRING);
+            }
+            if (!empty($parentMap[$task_id])) {
+                $parent_notification_id = (int) $parentMap[$task_id];
+            }
+        }
         if ($task_id) {
             $taskStmt = $db->prepare("SELECT parent_user_id, status, recurrence FROM tasks WHERE id = :id LIMIT 1");
             $taskStmt->execute([':id' => $task_id]);
@@ -1436,13 +1446,12 @@ $getScheduleDueStamp = static function ($dateKey, $timeOfDay, $timeValue) {
                                                 Approved!<?php if (!empty($taskApprovedAt)): ?> <?php echo htmlspecialchars(date('m/d/Y h:i A', strtotime($taskApprovedAt))); ?><?php endif; ?>
                                             </div>
                                         <?php else: ?>
-                                            <input type="hidden" name="task_id" value="<?php echo (int)$taskIdFromLink; ?>">
-                                            <?php if (!empty($taskInstanceDate)): ?>
-                                                <input type="hidden" name="instance_date" value="<?php echo htmlspecialchars($taskInstanceDate, ENT_QUOTES); ?>">
-                                            <?php endif; ?>
-                                            <input type="hidden" name="parent_notification_id" value="<?php echo (int)$note['id']; ?>">
-                                            <button type="submit" name="approve_task_notification" class="button approve-button">Approve Task Completed</button>
-                                        <?php endif; ?>
+                                              <?php if (!empty($taskInstanceDate)): ?>
+                                                  <input type="hidden" name="instance_date_map[<?php echo (int)$taskIdFromLink; ?>]" value="<?php echo htmlspecialchars($taskInstanceDate, ENT_QUOTES); ?>">
+                                              <?php endif; ?>
+                                              <input type="hidden" name="parent_notification_map[<?php echo (int)$taskIdFromLink; ?>]" value="<?php echo (int)$note['id']; ?>">
+                                              <button type="submit" name="approve_task_notification" value="<?php echo (int)$taskIdFromLink; ?>" class="button approve-button">Approve Task Completed</button>
+                                          <?php endif; ?>
                                     </div>
                                 <?php endif; ?>
                             </div>
