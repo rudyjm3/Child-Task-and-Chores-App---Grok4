@@ -1046,8 +1046,31 @@ function getTasks($user_id) {
 }
 
 // Complete a task
-function completeTask($task_id, $child_id, $photo_proof = null) {
+function completeTask($task_id, $child_id, $photo_proof = null, $instance_date = null) {
     global $db;
+    $stmt = $db->prepare("SELECT recurrence FROM tasks WHERE id = :id AND child_user_id = :child_id");
+    $stmt->execute([':id' => $task_id, ':child_id' => $child_id]);
+    $recurrence = $stmt->fetchColumn();
+    $isRecurring = !empty($recurrence);
+
+    if ($isRecurring) {
+        $dateKey = $instance_date ?: date('Y-m-d');
+        $stmt = $db->prepare("
+            INSERT INTO task_instances (task_id, date_key, status, photo_proof, completed_at, created_at)
+            VALUES (:task_id, :date_key, 'completed', :photo_proof, NOW(), NOW())
+            ON DUPLICATE KEY UPDATE
+                status = 'completed',
+                photo_proof = :photo_proof,
+                completed_at = NOW(),
+                updated_at = NOW()
+        ");
+        return $stmt->execute([
+            ':task_id' => $task_id,
+            ':date_key' => $dateKey,
+            ':photo_proof' => $photo_proof
+        ]);
+    }
+
     $stmt = $db->prepare("UPDATE tasks SET status = 'completed', photo_proof = :photo_proof, completed_at = NOW(), approved_at = NULL WHERE id = :id AND child_user_id = :child_id AND status = 'pending'");
     return $stmt->execute([':photo_proof' => $photo_proof, ':id' => $task_id, ':child_id' => $child_id]);
 }
@@ -1169,16 +1192,37 @@ function logRoutinePointsAward($routine_id, $child_id, $task_points, $bonus_poin
 }
 
 // Approve a task
-function approveTask($task_id) {
+function approveTask($task_id, $instance_date = null) {
     global $db;
-    $stmt = $db->prepare("SELECT child_user_id, points, title, recurrence FROM tasks WHERE id = :id AND status = 'completed'");
+    $stmt = $db->prepare("SELECT child_user_id, points, title, recurrence FROM tasks WHERE id = :id");
     $stmt->execute([':id' => $task_id]);
     $task = $stmt->fetch(PDO::FETCH_ASSOC);
     if ($task) {
         $isRecurring = !empty($task['recurrence']);
-        $nextStatus = $isRecurring ? 'pending' : 'approved';
-        $stmt = $db->prepare("UPDATE tasks SET status = :status, approved_at = NOW() WHERE id = :id");
-        if ($stmt->execute([':id' => $task_id, ':status' => $nextStatus])) {
+        if ($isRecurring) {
+            $dateKey = $instance_date ?: date('Y-m-d');
+            $stmt = $db->prepare("
+                UPDATE task_instances
+                SET status = 'approved',
+                    approved_at = NOW(),
+                    updated_at = NOW()
+                WHERE task_id = :task_id AND date_key = :date_key AND status = 'completed'
+            ");
+            if ($stmt->execute([':task_id' => $task_id, ':date_key' => $dateKey]) && $stmt->rowCount() > 0) {
+                updateChildPoints($task['child_user_id'], $task['points']);
+                addChildNotification(
+                    (int)$task['child_user_id'],
+                    'task_approved',
+                    'Task approved: ' . ($task['title'] ?? 'Task'),
+                    'task.php'
+                );
+                return true;
+            }
+            return false;
+        }
+
+        $stmt = $db->prepare("UPDATE tasks SET status = 'approved', approved_at = NOW() WHERE id = :id AND status = 'completed'");
+        if ($stmt->execute([':id' => $task_id])) {
             updateChildPoints($task['child_user_id'], $task['points']);
             addChildNotification(
                 (int)$task['child_user_id'],
@@ -1192,35 +1236,59 @@ function approveTask($task_id) {
     return false;
 }
 
-function rejectTask($task_id, $parent_user_id, $note = '', $reactivate = false, $actor_id = null) {
+function rejectTask($task_id, $parent_user_id, $note = '', $reactivate = false, $actor_id = null, $instance_date = null) {
     global $db;
-    $stmt = $db->prepare("SELECT child_user_id, title FROM tasks WHERE id = :id AND parent_user_id = :parent_id AND status = 'completed'");
+    $stmt = $db->prepare("SELECT child_user_id, title, recurrence FROM tasks WHERE id = :id AND parent_user_id = :parent_id");
     $stmt->execute([':id' => $task_id, ':parent_id' => $parent_user_id]);
     $task = $stmt->fetch(PDO::FETCH_ASSOC);
     if (!$task) {
         return false;
     }
 
-    $status = $reactivate ? 'pending' : 'rejected';
-    $stmt = $db->prepare("
-        UPDATE tasks
-        SET status = :status,
-            completed_at = IF(:reactivate = 1, NULL, completed_at),
-            approved_at = NULL,
-            rejected_at = NOW(),
-            rejected_note = :note,
-            rejected_by = :rejected_by,
-            photo_proof = IF(:reactivate = 1, NULL, photo_proof)
-        WHERE id = :id AND parent_user_id = :parent_id AND status = 'completed'
-    ");
-    $ok = $stmt->execute([
-        ':status' => $status,
-        ':reactivate' => $reactivate ? 1 : 0,
-        ':note' => $note !== '' ? $note : null,
-        ':rejected_by' => $actor_id,
-        ':id' => $task_id,
-        ':parent_id' => $parent_user_id
-    ]);
+    $isRecurring = !empty($task['recurrence']);
+    if ($isRecurring) {
+        $dateKey = $instance_date ?: date('Y-m-d');
+        if ($reactivate) {
+            $stmt = $db->prepare("DELETE FROM task_instances WHERE task_id = :task_id AND date_key = :date_key");
+            $ok = $stmt->execute([':task_id' => $task_id, ':date_key' => $dateKey]);
+        } else {
+            $stmt = $db->prepare("
+                INSERT INTO task_instances (task_id, date_key, status, note, rejected_at, created_at)
+                VALUES (:task_id, :date_key, 'rejected', :note, NOW(), NOW())
+                ON DUPLICATE KEY UPDATE
+                    status = 'rejected',
+                    note = :note,
+                    rejected_at = NOW(),
+                    updated_at = NOW()
+            ");
+            $ok = $stmt->execute([
+                ':task_id' => $task_id,
+                ':date_key' => $dateKey,
+                ':note' => $note !== '' ? $note : null
+            ]);
+        }
+    } else {
+        $status = $reactivate ? 'pending' : 'rejected';
+        $stmt = $db->prepare("
+            UPDATE tasks
+            SET status = :status,
+                completed_at = IF(:reactivate = 1, NULL, completed_at),
+                approved_at = NULL,
+                rejected_at = NOW(),
+                rejected_note = :note,
+                rejected_by = :rejected_by,
+                photo_proof = IF(:reactivate = 1, NULL, photo_proof)
+            WHERE id = :id AND parent_user_id = :parent_id AND status = 'completed'
+        ");
+        $ok = $stmt->execute([
+            ':status' => $status,
+            ':reactivate' => $reactivate ? 1 : 0,
+            ':note' => $note !== '' ? $note : null,
+            ':rejected_by' => $actor_id,
+            ':id' => $task_id,
+            ':parent_id' => $parent_user_id
+        ]);
+    }
 
     if ($ok) {
         $noteSuffix = $note !== '' ? " Note: $note" : '';
@@ -2380,6 +2448,26 @@ try {
    error_log("Added/verified rejection fields in tasks");
    $db->exec("ALTER TABLE tasks MODIFY COLUMN status ENUM('pending', 'completed', 'approved', 'rejected') DEFAULT 'pending'");
    error_log("Expanded tasks status enum to include rejected");
+
+   // Create task_instances table for per-date tracking of recurring tasks
+   $sql = "CREATE TABLE IF NOT EXISTS task_instances (
+       id INT AUTO_INCREMENT PRIMARY KEY,
+       task_id INT NOT NULL,
+       date_key DATE NOT NULL,
+       status ENUM('completed', 'approved', 'rejected') NOT NULL,
+       note TEXT NULL,
+       photo_proof VARCHAR(255) NULL,
+       completed_at DATETIME NULL,
+       approved_at DATETIME NULL,
+       rejected_at DATETIME NULL,
+       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+       UNIQUE KEY uniq_task_date (task_id, date_key),
+       INDEX idx_task_status (task_id, status),
+       FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
+   )";
+   $db->exec($sql);
+   error_log("Created/verified task_instances table successfully");
 
    // Create reward_templates table (library of reusable rewards)
    $sql = "CREATE TABLE IF NOT EXISTS reward_templates (

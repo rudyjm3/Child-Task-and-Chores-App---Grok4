@@ -168,6 +168,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     } elseif (isset($_POST['complete_task'])) {
         $task_id = filter_input(INPUT_POST, 'task_id', FILTER_VALIDATE_INT);
+        $instance_date = filter_input(INPUT_POST, 'instance_date', FILTER_SANITIZE_STRING);
         $photo_proof = null;
         $taskInfoStmt = $db->prepare("SELECT parent_user_id, title, photo_proof_required FROM tasks WHERE id = :id AND child_user_id = :child_id");
         $taskInfoStmt->execute([':id' => $task_id, ':child_id' => $_SESSION['user_id']]);
@@ -185,14 +186,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $ext = $ext ? '.' . strtolower($ext) : '';
                     $photo_proof = 'uploads/task_' . (int) $task_id . '_' . time() . $ext;
                 }
-                if (completeTask($task_id, $_SESSION['user_id'], $photo_proof)) {
+                if (completeTask($task_id, $_SESSION['user_id'], $photo_proof, $instance_date)) {
                     if ($photo_proof && $hasUpload) {
                         move_uploaded_file($_FILES['photo_proof']['tmp_name'], $photo_proof);
                     }
                     $childName = $_SESSION['name'] ?? $_SESSION['username'] ?? 'Child';
         if (!empty($taskInfo['parent_user_id'])) {
             $noteMessage = sprintf('%s completed task: %s', $childName, $taskInfo['title'] ?? 'Task');
-            addParentNotification((int) $taskInfo['parent_user_id'], 'task_completed', $noteMessage, 'task.php#task-' . (int) $task_id);
+            $linkInstanceDate = $instance_date ?: date('Y-m-d');
+            $linkUrl = 'task.php?task_id=' . (int) $task_id;
+            if (!empty($linkInstanceDate)) {
+                $linkUrl .= '&instance_date=' . urlencode($linkInstanceDate);
+            }
+            $linkUrl .= '#task-' . (int) $task_id;
+            addParentNotification((int) $taskInfo['parent_user_id'], 'task_completed', $noteMessage, $linkUrl);
         }
                     $message = "Task marked as completed (awaiting approval).";
                 } else {
@@ -202,7 +209,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     } elseif (isset($_POST['approve_task']) && isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id']) && canAddEditChild($_SESSION['user_id'])) {
         $task_id = filter_input(INPUT_POST, 'task_id', FILTER_VALIDATE_INT);
-        if (approveTask($task_id)) {
+        $instance_date = filter_input(INPUT_POST, 'instance_date', FILTER_SANITIZE_STRING);
+        if (approveTask($task_id, $instance_date)) {
             $message = "Task approved!";
         } else {
             $message = "Failed to approve task.";
@@ -212,7 +220,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $reject_note = trim((string)filter_input(INPUT_POST, 'reject_note', FILTER_SANITIZE_STRING));
         $reject_action = filter_input(INPUT_POST, 'reject_action', FILTER_SANITIZE_STRING);
         $reactivate = $reject_action === 'reactivate';
-        if ($task_id && rejectTask($task_id, $family_root_id, $reject_note, $reactivate, $_SESSION['user_id'])) {
+        $instance_date = filter_input(INPUT_POST, 'instance_date', FILTER_SANITIZE_STRING);
+        if ($task_id && rejectTask($task_id, $family_root_id, $reject_note, $reactivate, $_SESSION['user_id'], $instance_date)) {
             $message = $reactivate ? "Task rejected and reactivated." : "Task rejected and closed.";
         } else {
             $message = "Failed to reject task.";
@@ -250,10 +259,69 @@ foreach ($tasks as &$task) {
 }
 unset($task);
 
+$taskInstancesByTask = [];
+if (!empty($tasks)) {
+    $taskIds = array_map(static function ($task) {
+        return (int) ($task['id'] ?? 0);
+    }, $tasks);
+    $taskIds = array_values(array_filter($taskIds));
+    if (!empty($taskIds)) {
+        $placeholders = implode(',', array_fill(0, count($taskIds), '?'));
+        $stmt = $db->prepare("SELECT task_id, date_key, status, note, photo_proof, completed_at, approved_at, rejected_at FROM task_instances WHERE task_id IN ($placeholders)");
+        $stmt->execute($taskIds);
+        while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+            $taskId = (int) $row['task_id'];
+            $dateKey = $row['date_key'];
+            if (!isset($taskInstancesByTask[$taskId])) {
+                $taskInstancesByTask[$taskId] = [];
+            }
+            $taskInstancesByTask[$taskId][$dateKey] = [
+                'status' => $row['status'],
+                'note' => $row['note'],
+                'photo_proof' => $row['photo_proof'],
+                'completed_at' => $row['completed_at'],
+                'approved_at' => $row['approved_at'],
+                'rejected_at' => $row['rejected_at']
+            ];
+        }
+    }
+}
+
 // Group tasks by status for sectioned display
 $pending_tasks = array_filter($tasks, function($t) { return $t['status'] === 'pending'; });
-$completed_tasks = array_filter($tasks, function($t) { return $t['status'] === 'completed'; }); // Waiting approval
-$approved_tasks = array_filter($tasks, function($t) { return $t['status'] === 'approved'; });
+$completed_tasks = array_filter($tasks, function($t) { return $t['status'] === 'completed' && empty($t['recurrence']); }); // Waiting approval (non-recurring)
+$approved_tasks = array_filter($tasks, function($t) { return $t['status'] === 'approved' && empty($t['recurrence']); });
+
+$taskById = [];
+foreach ($tasks as $task) {
+    $taskById[(int) $task['id']] = $task;
+}
+
+$completed_instances = [];
+$approved_instances = [];
+foreach ($taskInstancesByTask as $taskId => $instances) {
+    $baseTask = $taskById[$taskId] ?? null;
+    if (!$baseTask) continue;
+    foreach ($instances as $dateKey => $instance) {
+        if ($instance['status'] === 'completed') {
+            $entry = $baseTask;
+            $entry['instance_date'] = $dateKey;
+            $entry['instance_status'] = $instance['status'];
+            $entry['photo_proof'] = $instance['photo_proof'];
+            $entry['completed_at'] = $instance['completed_at'];
+            $completed_instances[] = $entry;
+        } elseif ($instance['status'] === 'approved') {
+            $entry = $baseTask;
+            $entry['instance_date'] = $dateKey;
+            $entry['instance_status'] = $instance['status'];
+            $entry['photo_proof'] = $instance['photo_proof'];
+            $entry['approved_at'] = $instance['approved_at'];
+            $approved_instances[] = $entry;
+        }
+    }
+}
+$completed_tasks = array_values(array_merge($completed_tasks, $completed_instances));
+$approved_tasks = array_values(array_merge($approved_tasks, $approved_instances));
 
 $welcome_role_label = getUserRoleLabel($_SESSION['user_id']);
 if (!$welcome_role_label) {
@@ -291,6 +359,7 @@ foreach ($tasks as $task) {
         'approved_at' => $task['approved_at'] ?? '',
         'photo_proof' => $task['photo_proof'] ?? '',
         'photo_proof_required' => !empty($task['photo_proof_required']) ? 1 : 0,
+        'instances' => $taskInstancesByTask[(int) ($task['id'] ?? 0)] ?? [],
         'child_user_id' => (int) ($task['child_user_id'] ?? 0),
         'child_name' => $task['child_display_name'] ?? '',
         'creator_name' => $task['creator_display_name'] ?? ''
@@ -427,7 +496,8 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
         .week-day-name { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; }
         .week-day-num { font-size: 1rem; }
         .week-days-header { background: #f5f7fb; padding: 8px; min-width: 980px; }
-        .week-days-header .week-day { background: #fff; border: 1px solid #d5def0; border-radius: 10px; padding: 6px 0; display: grid; gap: 2px; justify-items: center; font-weight: 700; color: #37474f; font-family: 'Sigmar One', 'Sigma One', cursive; }
+        .week-days-header .week-day { background: #fff; border: 1px solid #d5def0; border-radius: 10px; padding: 6px 0; display: grid; gap: 2px; justify-items: center; font-weight: 700; color: #37474f; font-family: inherit; }
+        .child-theme .week-days-header .week-day { font-family: 'Sigmar One', 'Sigma One', cursive; }
         .week-days-header .week-day.is-today { background: #ffe0b2; border-color: #ffd28a; color: #ef6c00; }
         .week-grid { display: grid; grid-template-columns: repeat(7, minmax(133px, 1fr)); gap: 6px; background: #f5f7fb; padding: 6px 8px 10px; min-width: 980px; }
         .week-column { background: #fff; border: 1px solid #d5def0; border-radius: 10px; padding: 8px; display: flex; flex-direction: column; gap: 8px; min-height: 140px; }
@@ -628,6 +698,8 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
         let openDeleteTaskModal = null;
         let openProofTaskModal = null;
         let openPhotoViewer = null;
+        let activePreviewDateKey = null;
+        let floatingTaskDateKey = null;
 
         document.addEventListener('DOMContentLoaded', () => {
         bindTimerControls(document);
@@ -767,7 +839,15 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
         };
         const openProofModal = (data) => {
             if (!proofModal || !proofForm) return;
+            const previewModalEl = document.querySelector('[data-task-preview-modal]');
+            if (previewModalEl && previewModalEl.classList.contains('open')) {
+                previewModalEl.classList.remove('open');
+            }
             proofForm.querySelector('[name="task_id"]').value = data.id;
+            const instanceInput = proofForm.querySelector('[name="instance_date"]');
+            if (instanceInput) {
+                instanceInput.value = data.dateKey || '';
+            }
             if (proofFileInput) {
                 proofFileInput.value = '';
             }
@@ -801,7 +881,7 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
             if (floatingOpenBtn) {
                 floatingOpenBtn.addEventListener('click', () => {
                     if (floatingTaskId && openTaskPreview) {
-                        openTaskPreview(floatingTaskId);
+                        openTaskPreview(floatingTaskId, floatingTaskDateKey);
                         hideFloatingTimer(floatingTaskId);
                     }
                 });
@@ -809,7 +889,7 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
             if (floatingFinishBtn) {
                 floatingFinishBtn.addEventListener('click', () => {
                     if (floatingTaskId && openTaskPreview) {
-                        openTaskPreview(floatingTaskId);
+                        openTaskPreview(floatingTaskId, floatingTaskDateKey);
                         hideFloatingTimer(floatingTaskId);
                     }
                 });
@@ -1047,12 +1127,13 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
             });
         }
 
-        function showFloatingTimer(taskId) {
+        function showFloatingTimer(taskId, dateKey = null) {
             if (!floatingTimerEl) return;
             const task = taskCalendarMap.get(String(taskId));
             if (!task) return;
             ensureTimerState(taskId, task.timer_minutes);
             floatingTaskId = String(taskId);
+            floatingTaskDateKey = dateKey;
             if (floatingTitleEl) {
                 floatingTitleEl.textContent = task.title || 'Task';
             }
@@ -1082,6 +1163,7 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
             if (taskId && floatingTaskId && String(taskId) !== String(floatingTaskId)) return;
             floatingTimerEl.classList.remove('active');
             floatingTaskId = null;
+            floatingTaskDateKey = null;
         }
 
         function toggleTimerPause(taskId) {
@@ -1105,7 +1187,8 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                 btn.dataset.taskProofBound = '1';
                 btn.addEventListener('click', () => {
                     openProofTaskModal({
-                        id: btn.dataset.taskId
+                        id: btn.dataset.taskId,
+                        dateKey: btn.dataset.dateKey || null
                     });
                 });
             });
@@ -1408,20 +1491,22 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                 previewModal.classList.remove('open');
                 document.body.classList.remove('no-scroll');
                 if (activePreviewTaskId && shouldShowFloatingTimer(activePreviewTaskId)) {
-                    showFloatingTimer(activePreviewTaskId);
+                    showFloatingTimer(activePreviewTaskId, activePreviewDateKey);
                 }
                 activePreviewTaskId = null;
+                activePreviewDateKey = null;
             };
 
-            const openPreview = (taskId) => {
+            const openPreview = (taskId, dateKey = null) => {
                 if (!previewModal || !previewBody) return;
                 const task = taskById.get(String(taskId));
                 if (!task) return;
                 previewBody.innerHTML = '';
-                previewBody.appendChild(buildTaskPreviewCard(task));
+                previewBody.appendChild(buildTaskPreviewCard(task, dateKey));
                 previewModal.classList.add('open');
                 document.body.classList.add('no-scroll');
                 activePreviewTaskId = String(taskId);
+                activePreviewDateKey = dateKey;
                 hideFloatingTimer(taskId);
                 bindTimerControls(previewBody);
                 bindTaskProofButtons(previewBody);
@@ -1502,6 +1587,7 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                 item.type = 'button';
                 item.className = 'calendar-task-item';
                 item.dataset.taskId = task.id;
+                item.dataset.dateKey = dateKey;
                 const header = document.createElement('div');
                 header.className = 'calendar-task-header';
                 const titleWrap = document.createElement('span');
@@ -1544,7 +1630,7 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                     child.textContent = task.child_name;
                     item.appendChild(child);
                 }
-                item.addEventListener('click', () => openPreview(task.id));
+                item.addEventListener('click', () => openPreview(task.id, dateKey));
                 return item;
             };
 
@@ -1564,6 +1650,8 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                     const items = [];
                     filteredTasks.forEach((task) => {
                         if (!isTaskOnDate(task, dateKey, dayShort)) return;
+                        const instance = getTaskInstance(task, dateKey);
+                        if (instance && instance.status === 'rejected') return;
                         const timeInfo = getTaskTimeInfo(task);
                         items.push({ task, timeInfo });
                     });
@@ -1663,6 +1751,8 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                     const items = [];
                     filteredTasks.forEach((task) => {
                         if (!isTaskOnDate(task, dateKey, dayShort)) return;
+                        const instance = getTaskInstance(task, dateKey);
+                        if (instance && instance.status === 'rejected') return;
                         const timeInfo = getTaskTimeInfo(task);
                         items.push({ task, timeInfo });
                     });
@@ -1820,6 +1910,13 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
             return dateKey === startKey;
         }
 
+        function getTaskInstance(task, dateKey) {
+            if (!task || !dateKey) return null;
+            const instances = task.instances || null;
+            if (!instances) return null;
+            return instances[dateKey] || null;
+        }
+
         function isTaskCompleted(task, dateKey) {
             if (!task) return false;
             const repeat = task.recurrence || '';
@@ -1828,17 +1925,21 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                 return statusDone;
             }
             if (!dateKey) return false;
-            const approvedKey = task.approved_at ? getDateKeyFromString(task.approved_at) : null;
-            const completedKey = task.completed_at ? getDateKeyFromString(task.completed_at) : null;
-            return approvedKey === dateKey || completedKey === dateKey;
+            const instance = getTaskInstance(task, dateKey);
+            if (instance) {
+                return instance.status === 'completed' || instance.status === 'approved';
+            }
+            return false;
         }
 
         function isTaskOverdue(task, dateKey) {
             if (!task || !dateKey) return false;
+            const repeat = task.recurrence || '';
+            const instance = repeat ? getTaskInstance(task, dateKey) : null;
+            if (instance && instance.status === 'rejected') return false;
             if (isTaskCompleted(task, dateKey)) return false;
             const todayKey = formatDateKey(new Date());
             if (dateKey > todayKey) return false;
-            const repeat = task.recurrence || '';
             if (!repeat && task.status !== 'pending') return false;
             const stamp = getInstanceDueTimestamp(task, dateKey);
             if (!stamp) return false;
@@ -1861,9 +1962,14 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
             return new Date(parts[0], parts[1] - 1, parts[2], hours, minutes, seconds).getTime();
         }
 
-        function buildTaskPreviewCard(task) {
+        function buildTaskPreviewCard(task, dateKey = null) {
             const card = document.createElement('div');
             card.className = 'task-card';
+            const isRecurring = !!(task.recurrence || '');
+            const viewDateKey = dateKey || formatDateKey(new Date());
+            const instance = isRecurring ? getTaskInstance(task, viewDateKey) : null;
+            const statusForView = isRecurring ? (instance ? instance.status : 'pending') : (task.status || 'pending');
+            const proofSrc = instance && instance.photo_proof ? instance.photo_proof : task.photo_proof;
 
             const header = document.createElement('div');
             header.className = 'task-card-header';
@@ -1875,9 +1981,8 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
             const points = document.createElement('div');
             points.className = 'task-pill';
             points.textContent = `${task.points || 0} pts`;
-            const todayKey = formatDateKey(new Date());
-            const isCompleted = isTaskCompleted(task, todayKey);
-            const isOverdue = !isCompleted && isTaskOverdue(task, todayKey);
+            const isCompleted = isTaskCompleted(task, viewDateKey);
+            const isOverdue = !isCompleted && isTaskOverdue(task, viewDateKey);
             let badge = null;
             if (isCompleted) {
                 badge = document.createElement('span');
@@ -1929,19 +2034,19 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                 card.appendChild(desc);
             }
 
-            if (task.photo_proof) {
+            if (proofSrc) {
                 const proofWrap = document.createElement('div');
                 proofWrap.className = 'task-description';
                 const img = document.createElement('img');
-                img.src = task.photo_proof;
+                img.src = proofSrc;
                 img.alt = 'Photo proof';
                 img.className = 'task-photo-thumb';
-                img.dataset.taskPhotoSrc = task.photo_proof;
+                img.dataset.taskPhotoSrc = proofSrc;
                 proofWrap.appendChild(img);
                 card.appendChild(proofWrap);
             }
 
-            if (task.timing_mode === 'timer' && task.timer_minutes && task.status === 'pending') {
+            if (task.timing_mode === 'timer' && task.timer_minutes && statusForView === 'pending') {
                 const timerText = document.createElement('p');
                 timerText.className = 'timer';
                 timerText.dataset.timerDisplay = '';
@@ -1976,7 +2081,7 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
             }
 
             if (!isParentView) {
-                if (task.status === 'pending') {
+                if (statusForView === 'pending') {
                     if (task.photo_proof_required) {
                         const finishButton = document.createElement('button');
                         finishButton.type = 'button';
@@ -1984,6 +2089,9 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                         finishButton.dataset.taskProofOpen = '';
                         finishButton.dataset.taskId = String(task.id);
                         finishButton.dataset.taskTitle = task.title || '';
+                        if (isRecurring) {
+                            finishButton.dataset.dateKey = viewDateKey;
+                        }
                         finishButton.textContent = 'Finish Task';
                         card.appendChild(finishButton);
                     } else {
@@ -1994,6 +2102,13 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                         hidden.type = 'hidden';
                         hidden.name = 'task_id';
                         hidden.value = String(task.id);
+                        if (isRecurring) {
+                            const instanceInput = document.createElement('input');
+                            instanceInput.type = 'hidden';
+                            instanceInput.name = 'instance_date';
+                            instanceInput.value = viewDateKey;
+                            form.appendChild(instanceInput);
+                        }
                         const button = document.createElement('button');
                         button.type = 'submit';
                         button.name = 'complete_task';
@@ -2002,19 +2117,19 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                         form.appendChild(button);
                         card.appendChild(form);
                     }
-                } else if (task.status === 'completed') {
+                } else if (statusForView === 'completed') {
                     const waiting = document.createElement('p');
                     waiting.className = 'waiting-label';
                     waiting.textContent = 'Waiting for approval';
                     card.appendChild(waiting);
-                } else if (task.status === 'approved') {
+                } else if (statusForView === 'approved') {
                     const approved = document.createElement('p');
                     approved.className = 'completed';
                     approved.textContent = 'Approved!';
                     card.appendChild(approved);
                 }
             } else if (canManageTasks) {
-                if (task.status === 'pending') {
+                if (statusForView === 'pending') {
                     const actions = document.createElement('div');
                     actions.className = 'task-card-actions';
                     const editButton = document.createElement('button');
@@ -2055,7 +2170,7 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                     actions.appendChild(editButton);
                     actions.appendChild(deleteButton);
                     card.appendChild(actions);
-                } else if (task.status === 'completed') {
+                } else if (statusForView === 'completed') {
                     const approveForm = document.createElement('form');
                     approveForm.method = 'POST';
                     approveForm.action = 'task.php';
@@ -2063,6 +2178,13 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                     hidden.type = 'hidden';
                     hidden.name = 'task_id';
                     hidden.value = String(task.id);
+                    if (isRecurring) {
+                        const instanceInput = document.createElement('input');
+                        instanceInput.type = 'hidden';
+                        instanceInput.name = 'instance_date';
+                        instanceInput.value = viewDateKey;
+                        approveForm.appendChild(instanceInput);
+                    }
                     const approveButton = document.createElement('button');
                     approveButton.type = 'submit';
                     approveButton.name = 'approve_task';
@@ -2079,6 +2201,13 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                     rejectHidden.type = 'hidden';
                     rejectHidden.name = 'task_id';
                     rejectHidden.value = String(task.id);
+                    if (isRecurring) {
+                        const instanceInput = document.createElement('input');
+                        instanceInput.type = 'hidden';
+                        instanceInput.name = 'instance_date';
+                        instanceInput.value = viewDateKey;
+                        rejectForm.appendChild(instanceInput);
+                    }
                     const rejectFlag = document.createElement('input');
                     rejectFlag.type = 'hidden';
                     rejectFlag.name = 'reject_task';
@@ -2112,7 +2241,7 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                     rejectForm.appendChild(rejectNote);
                     rejectForm.appendChild(rejectActions);
                     card.appendChild(rejectForm);
-                } else if (task.status === 'approved') {
+                } else if (statusForView === 'approved') {
                     const approved = document.createElement('p');
                     approved.className = 'completed';
                     approved.textContent = 'Approved!';
@@ -2279,16 +2408,35 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                 <?php else: ?>
                     <?php foreach ($pending_tasks as $task): ?>
                         <?php
-                        // Debug overdue check
-                        $due_time = strtotime($task['due_date']);
-                        $current_time = time();
-                        if (empty($task['recurrence']) && ($task['time_of_day'] ?? 'anytime') === 'anytime') {
-                            $due_date_key = !empty($task['due_date']) ? date('Y-m-d', strtotime($task['due_date'])) : date('Y-m-d');
-                            $due_time = strtotime($due_date_key . ' 23:59:00');
+                        $today_key = date('Y-m-d');
+                        $instance_today = $taskInstancesByTask[(int) $task['id']][$today_key] ?? null;
+                        $instance_status = $instance_today['status'] ?? null;
+                        $today_day = date('D');
+                        $time_of_day = $task['time_of_day'] ?? 'anytime';
+                        $is_recurring = !empty($task['recurrence']);
+                        $is_overdue = false;
+                        $start_key = !empty($task['due_date']) ? date('Y-m-d', strtotime($task['due_date'])) : $today_key;
+                        $end_key = !empty($task['end_date']) ? $task['end_date'] : null;
+                        $within_range = $today_key >= $start_key && (!$end_key || $today_key <= $end_key);
+                        $day_matches = true;
+                        if ($task['recurrence'] === 'weekly') {
+                            $days = array_filter(array_map('trim', explode(',', (string)($task['recurrence_days'] ?? ''))));
+                            $day_matches = empty($days) ? true : in_array($today_day, $days, true);
                         }
-                        error_log("Task ID {$task['id']}: due_date={$task['due_date']}, due_time=$due_time, current_time=$current_time, overdue=" . ($due_time < $current_time ? 'true' : 'false'));
+                        if ($within_range && $day_matches) {
+                            if ($time_of_day === 'anytime') {
+                                $due_stamp = strtotime($today_key . ' 23:59:59');
+                            } else {
+                                $time_part = !empty($task['due_date']) ? date('H:i', strtotime($task['due_date'])) : '23:59';
+                                $due_stamp = strtotime($today_key . ' ' . $time_part . ':00');
+                            }
+                            $is_overdue = $due_stamp < time();
+                        }
+                        if ($instance_status) {
+                            $is_overdue = false;
+                        }
                         ?>
-                        <div class="task-card<?php if ($due_time < $current_time) { echo ' overdue'; } ?>" id="task-<?php echo (int) $task['id']; ?>" data-task-id="<?php echo $task['id']; ?>">
+                        <div class="task-card<?php if ($is_overdue) { echo ' overdue'; } ?>" id="task-<?php echo (int) $task['id']; ?>" data-task-id="<?php echo $task['id']; ?>">
                             <div class="task-card-header">
                                 <div class="task-card-title"><?php echo htmlspecialchars($task['title']); ?></div>
                                 <div class="task-pill"><?php echo (int)$task['points']; ?> pts</div>
@@ -2310,7 +2458,7 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                                     }
                                 ?>
                                 <div class="task-meta-row">
-                                    <span><span class="task-meta-label">Due:</span> <?php echo htmlspecialchars($dueDisplay); ?><?php if ($due_time < $current_time) { echo '<span class="overdue-label">Overdue!</span>'; } ?></span>
+                                    <span><span class="task-meta-label">Due:</span> <?php echo htmlspecialchars($dueDisplay); ?><?php if ($is_overdue) { echo '<span class="overdue-label">Overdue!</span>'; } ?></span>
                                 </div>
                                 <div class="task-meta-row">
                                     <span><span class="task-meta-label">Category:</span> <?php echo htmlspecialchars($task['category']); ?></span>
@@ -2360,11 +2508,27 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                                 </div>
                             <?php endif; ?>
                                 <?php if (!canCreateContent($_SESSION['user_id'])): ?>
-                                    <?php if (!empty($task['photo_proof_required'])): ?>
-                                        <button type="button" class="button" data-task-proof-open data-task-id="<?php echo (int) $task['id']; ?>" data-task-title="<?php echo htmlspecialchars($task['title'], ENT_QUOTES); ?>">Finish Task</button>
+                                    <?php if ($instance_status === 'completed'): ?>
+                                        <p class="waiting-label">Waiting for approval</p>
+                                    <?php elseif ($instance_status === 'approved'): ?>
+                                        <p class="completed">Approved!</p>
+                                    <?php elseif ($instance_status === 'rejected'): ?>
+                                        <p class="waiting-label">Rejected</p>
+                                    <?php elseif (!empty($task['photo_proof_required'])): ?>
+                                        <button type="button"
+                                                class="button"
+                                                data-task-proof-open
+                                                data-task-id="<?php echo (int) $task['id']; ?>"
+                                                data-task-title="<?php echo htmlspecialchars($task['title'], ENT_QUOTES); ?>"
+                                                <?php echo !empty($task['recurrence']) ? 'data-date-key="' . htmlspecialchars($today_key) . '"' : ''; ?>>
+                                            Finish Task
+                                        </button>
                                     <?php else: ?>
                                         <form method="POST" action="task.php">
                                             <input type="hidden" name="task_id" value="<?php echo (int) $task['id']; ?>">
+                                            <?php if (!empty($task['recurrence'])): ?>
+                                                <input type="hidden" name="instance_date" value="<?php echo htmlspecialchars($today_key); ?>">
+                                            <?php endif; ?>
                                             <button type="submit" name="complete_task">Finish Task</button>
                                         </form>
                                     <?php endif; ?>
@@ -2483,11 +2647,17 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                             <?php if (canCreateContent($_SESSION['user_id']) && canAddEditChild($_SESSION['user_id'])): ?>
                                 <form method="POST" action="task.php">
                                     <input type="hidden" name="task_id" value="<?php echo $task['id']; ?>">
+                                    <?php if (!empty($task['instance_date'])): ?>
+                                        <input type="hidden" name="instance_date" value="<?php echo htmlspecialchars($task['instance_date']); ?>">
+                                    <?php endif; ?>
                                     <button type="submit" name="approve_task">Approve Task</button>
                                 </form>
                                 <form method="POST" action="task.php" class="task-reject-form">
                                     <input type="hidden" name="task_id" value="<?php echo $task['id']; ?>">
                                     <input type="hidden" name="reject_task" value="1">
+                                    <?php if (!empty($task['instance_date'])): ?>
+                                        <input type="hidden" name="instance_date" value="<?php echo htmlspecialchars($task['instance_date']); ?>">
+                                    <?php endif; ?>
                                     <label for="reject_note_<?php echo (int) $task['id']; ?>">Rejection note (optional)</label>
                                     <textarea id="reject_note_<?php echo (int) $task['id']; ?>" name="reject_note" placeholder="Explain why this task was rejected."></textarea>
                                     <div class="task-reject-actions">
@@ -2726,6 +2896,7 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                     <p>Please upload a photo to complete this task.</p>
                     <form method="POST" action="task.php" enctype="multipart/form-data" data-task-proof-form>
                         <input type="hidden" name="task_id" value="">
+                        <input type="hidden" name="instance_date" value="">
                         <div class="form-group">
                             <label for="photo_proof">Photo Proof</label>
                             <input type="file" id="photo_proof" name="photo_proof" accept="image/*" capture="environment" required>

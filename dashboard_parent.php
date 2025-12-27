@@ -147,20 +147,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif (isset($_POST['approve_task_notification'])) {
         $task_id = filter_input(INPUT_POST, 'task_id', FILTER_VALIDATE_INT);
         $parent_notification_id = filter_input(INPUT_POST, 'parent_notification_id', FILTER_VALIDATE_INT);
+        $instance_date = filter_input(INPUT_POST, 'instance_date', FILTER_SANITIZE_STRING);
         if ($task_id) {
-            $taskStmt = $db->prepare("SELECT parent_user_id, status FROM tasks WHERE id = :id LIMIT 1");
+            $taskStmt = $db->prepare("SELECT parent_user_id, status, recurrence FROM tasks WHERE id = :id LIMIT 1");
             $taskStmt->execute([':id' => $task_id]);
             $taskRow = $taskStmt->fetch(PDO::FETCH_ASSOC);
-            if ($taskRow && (int) $taskRow['parent_user_id'] === (int) $main_parent_id && ($taskRow['status'] ?? '') === 'completed') {
-                if (approveTask($task_id)) {
-                    $message = "Task approved!";
-                    if ($parent_notification_id) {
-                        ensureParentNotificationsTable();
-                        $mark = $db->prepare("UPDATE parent_notifications SET is_read = 1 WHERE id = :id AND parent_user_id = :pid");
-                        $mark->execute([':id' => $parent_notification_id, ':pid' => $main_parent_id]);
+            if ($taskRow && (int) $taskRow['parent_user_id'] === (int) $main_parent_id) {
+                $taskIsRecurring = !empty($taskRow['recurrence']);
+                $instanceStatus = null;
+                $instanceDateToUse = $instance_date ?: null;
+                if ($taskIsRecurring) {
+                    if ($instanceDateToUse) {
+                        $instStmt = $db->prepare("SELECT status FROM task_instances WHERE task_id = :id AND date_key = :date_key LIMIT 1");
+                        $instStmt->execute([':id' => $task_id, ':date_key' => $instanceDateToUse]);
+                        $instanceStatus = $instStmt->fetchColumn();
+                    } else {
+                        $instStmt = $db->prepare("SELECT date_key, status FROM task_instances WHERE task_id = :id AND status = 'completed' ORDER BY completed_at DESC LIMIT 1");
+                        $instStmt->execute([':id' => $task_id]);
+                        $instRow = $instStmt->fetch(PDO::FETCH_ASSOC);
+                        $instanceStatus = $instRow['status'] ?? null;
+                        $instanceDateToUse = $instRow['date_key'] ?? null;
+                    }
+                }
+                $canApprove = $taskIsRecurring ? ($instanceStatus === 'completed') : (($taskRow['status'] ?? '') === 'completed');
+                if ($canApprove) {
+                    if (approveTask($task_id, $instanceDateToUse)) {
+                        $message = "Task approved!";
+                        if ($parent_notification_id) {
+                            ensureParentNotificationsTable();
+                            $mark = $db->prepare("UPDATE parent_notifications SET is_read = 1 WHERE id = :id AND parent_user_id = :pid");
+                            $mark->execute([':id' => $parent_notification_id, ':pid' => $main_parent_id]);
+                        }
+                    } else {
+                        $message = "Failed to approve task.";
                     }
                 } else {
-                    $message = "Failed to approve task.";
+                    $message = "Task is no longer waiting approval.";
                 }
             } else {
                 $message = "Task is no longer waiting approval.";
@@ -1244,6 +1266,7 @@ for ($i = 0; $i < 7; $i++) {
                                     <div><?php echo htmlspecialchars($note['message']); ?></div>
                                     <?php
                                         $taskIdFromLink = null;
+                                        $taskInstanceDate = null;
                                         $taskPhoto = null;
                                         $taskStatus = null;
                                         $taskApprovedAt = null;
@@ -1254,14 +1277,36 @@ for ($i = 0; $i < 7; $i++) {
                                                 if (!empty($queryVars['task_id'])) {
                                                     $taskIdFromLink = (int) $queryVars['task_id'];
                                                 }
+                                                if (!empty($queryVars['instance_date'])) {
+                                                    $taskInstanceDate = $queryVars['instance_date'];
+                                                }
+                                            }
+                                            if (!$taskIdFromLink && !empty($urlParts['fragment']) && preg_match('/task-(\d+)/', $urlParts['fragment'], $matches)) {
+                                                $taskIdFromLink = (int) $matches[1];
                                             }
                                             if ($taskIdFromLink) {
-                                                $taskPhotoStmt = $db->prepare("SELECT photo_proof, status, approved_at FROM tasks WHERE id = :id LIMIT 1");
+                                                $taskPhotoStmt = $db->prepare("SELECT photo_proof, status, approved_at, recurrence FROM tasks WHERE id = :id LIMIT 1");
                                                 $taskPhotoStmt->execute([':id' => $taskIdFromLink]);
                                                 $taskRow = $taskPhotoStmt->fetch(PDO::FETCH_ASSOC);
-                                                $taskPhoto = $taskRow['photo_proof'] ?? null;
-                                                $taskStatus = $taskRow['status'] ?? null;
-                                                $taskApprovedAt = $taskRow['approved_at'] ?? null;
+                                                $taskIsRecurring = !empty($taskRow['recurrence']);
+                                                if ($taskIsRecurring) {
+                                                    if ($taskInstanceDate) {
+                                                        $instStmt = $db->prepare("SELECT date_key, photo_proof, status, approved_at FROM task_instances WHERE task_id = :id AND date_key = :date_key LIMIT 1");
+                                                        $instStmt->execute([':id' => $taskIdFromLink, ':date_key' => $taskInstanceDate]);
+                                                    } else {
+                                                        $instStmt = $db->prepare("SELECT date_key, photo_proof, status, approved_at FROM task_instances WHERE task_id = :id ORDER BY completed_at DESC LIMIT 1");
+                                                        $instStmt->execute([':id' => $taskIdFromLink]);
+                                                    }
+                                                    $instRow = $instStmt->fetch(PDO::FETCH_ASSOC);
+                                                    $taskInstanceDate = $taskInstanceDate ?: ($instRow['date_key'] ?? null);
+                                                    $taskPhoto = $instRow['photo_proof'] ?? null;
+                                                    $taskStatus = $instRow['status'] ?? null;
+                                                    $taskApprovedAt = $instRow['approved_at'] ?? null;
+                                                } else {
+                                                    $taskPhoto = $taskRow['photo_proof'] ?? null;
+                                                    $taskStatus = $taskRow['status'] ?? null;
+                                                    $taskApprovedAt = $taskRow['approved_at'] ?? null;
+                                                }
                                             }
                                         }
                                     ?>
@@ -1286,7 +1331,15 @@ for ($i = 0; $i < 7; $i++) {
                                             $viewLink = 'dashboard_parent.php?highlight_redeemed=' . (int)$rewardIdFromLink . '#redeemed-reward-' . (int)$rewardIdFromLink;
                                         }
                                         if ($note['type'] === 'task_completed' && $taskIdFromLink) {
-                                            $viewLink = 'task.php#task-' . (int) $taskIdFromLink;
+                                            if (!empty($note['link_url'])) {
+                                                $viewLink = $note['link_url'];
+                                            } else {
+                                                $viewLink = 'task.php?task_id=' . (int) $taskIdFromLink;
+                                                if (!empty($taskInstanceDate)) {
+                                                    $viewLink .= '&instance_date=' . urlencode($taskInstanceDate);
+                                                }
+                                                $viewLink .= '#task-' . (int) $taskIdFromLink;
+                                            }
                                         }
                                         if ($viewLink) {
                                             echo ' | <a href="' . htmlspecialchars($viewLink) . '">View</a>';
@@ -1327,6 +1380,9 @@ for ($i = 0; $i < 7; $i++) {
                                             </div>
                                         <?php else: ?>
                                             <input type="hidden" name="task_id" value="<?php echo (int)$taskIdFromLink; ?>">
+                                            <?php if (!empty($taskInstanceDate)): ?>
+                                                <input type="hidden" name="instance_date" value="<?php echo htmlspecialchars($taskInstanceDate, ENT_QUOTES); ?>">
+                                            <?php endif; ?>
                                             <input type="hidden" name="parent_notification_id" value="<?php echo (int)$note['id']; ?>">
                                             <button type="submit" name="approve_task_notification" class="button approve-button">Approve Task Completed</button>
                                         <?php endif; ?>
@@ -1354,6 +1410,7 @@ for ($i = 0; $i < 7; $i++) {
                                     <div><?php echo htmlspecialchars($note['message']); ?></div>
                                     <?php
                                         $taskIdFromLink = null;
+                                        $taskInstanceDate = null;
                                         $taskPhoto = null;
                                         $taskStatus = null;
                                         $taskApprovedAt = null;
@@ -1364,14 +1421,36 @@ for ($i = 0; $i < 7; $i++) {
                                                 if (!empty($queryVars['task_id'])) {
                                                     $taskIdFromLink = (int) $queryVars['task_id'];
                                                 }
+                                                if (!empty($queryVars['instance_date'])) {
+                                                    $taskInstanceDate = $queryVars['instance_date'];
+                                                }
+                                            }
+                                            if (!$taskIdFromLink && !empty($urlParts['fragment']) && preg_match('/task-(\d+)/', $urlParts['fragment'], $matches)) {
+                                                $taskIdFromLink = (int) $matches[1];
                                             }
                                             if ($taskIdFromLink) {
-                                                $taskPhotoStmt = $db->prepare("SELECT photo_proof, status, approved_at FROM tasks WHERE id = :id LIMIT 1");
+                                                $taskPhotoStmt = $db->prepare("SELECT photo_proof, status, approved_at, recurrence FROM tasks WHERE id = :id LIMIT 1");
                                                 $taskPhotoStmt->execute([':id' => $taskIdFromLink]);
                                                 $taskRow = $taskPhotoStmt->fetch(PDO::FETCH_ASSOC);
-                                                $taskPhoto = $taskRow['photo_proof'] ?? null;
-                                                $taskStatus = $taskRow['status'] ?? null;
-                                                $taskApprovedAt = $taskRow['approved_at'] ?? null;
+                                                $taskIsRecurring = !empty($taskRow['recurrence']);
+                                                if ($taskIsRecurring) {
+                                                    if ($taskInstanceDate) {
+                                                        $instStmt = $db->prepare("SELECT date_key, photo_proof, status, approved_at FROM task_instances WHERE task_id = :id AND date_key = :date_key LIMIT 1");
+                                                        $instStmt->execute([':id' => $taskIdFromLink, ':date_key' => $taskInstanceDate]);
+                                                    } else {
+                                                        $instStmt = $db->prepare("SELECT date_key, photo_proof, status, approved_at FROM task_instances WHERE task_id = :id ORDER BY completed_at DESC LIMIT 1");
+                                                        $instStmt->execute([':id' => $taskIdFromLink]);
+                                                    }
+                                                    $instRow = $instStmt->fetch(PDO::FETCH_ASSOC);
+                                                    $taskInstanceDate = $taskInstanceDate ?: ($instRow['date_key'] ?? null);
+                                                    $taskPhoto = $instRow['photo_proof'] ?? null;
+                                                    $taskStatus = $instRow['status'] ?? null;
+                                                    $taskApprovedAt = $instRow['approved_at'] ?? null;
+                                                } else {
+                                                    $taskPhoto = $taskRow['photo_proof'] ?? null;
+                                                    $taskStatus = $taskRow['status'] ?? null;
+                                                    $taskApprovedAt = $taskRow['approved_at'] ?? null;
+                                                }
                                             }
                                         }
                                     ?>
@@ -1395,7 +1474,15 @@ for ($i = 0; $i < 7; $i++) {
                                                 $viewLink = 'dashboard_parent.php?highlight_redeemed=' . (int)$rewardIdFromLink . '#redeemed-reward-' . (int)$rewardIdFromLink;
                                             }
                                             if ($note['type'] === 'task_completed' && $taskIdFromLink) {
-                                                $viewLink = 'task.php#task-' . (int) $taskIdFromLink;
+                                                if (!empty($note['link_url'])) {
+                                                    $viewLink = $note['link_url'];
+                                                } else {
+                                                    $viewLink = 'task.php?task_id=' . (int) $taskIdFromLink;
+                                                    if (!empty($taskInstanceDate)) {
+                                                        $viewLink .= '&instance_date=' . urlencode($taskInstanceDate);
+                                                    }
+                                                    $viewLink .= '#task-' . (int) $taskIdFromLink;
+                                                }
                                             }
                                             if ($viewLink) {
                                                 echo ' | <a href="' . htmlspecialchars($viewLink) . '">View</a>';
@@ -1646,7 +1733,16 @@ for ($i = 0; $i < 7; $i++) {
                       <div class="child-info-content">
                       <?php
                           $historyItems = [];
-                          $taskHistoryStmt = $db->prepare("SELECT title, points, approved_at, completed_at FROM tasks WHERE child_user_id = :child_id AND approved_at IS NOT NULL");
+                          $taskHistoryStmt = $db->prepare("
+                              SELECT t.title, t.points, ti.approved_at, ti.completed_at
+                              FROM task_instances ti
+                              JOIN tasks t ON t.id = ti.task_id
+                              WHERE t.child_user_id = :child_id AND ti.status = 'approved'
+                              UNION ALL
+                              SELECT title, points, approved_at, completed_at
+                              FROM tasks
+                              WHERE child_user_id = :child_id AND approved_at IS NOT NULL AND (recurrence IS NULL OR recurrence = '')
+                          ");
                           $taskHistoryStmt->execute([':child_id' => $childId]);
                           foreach ($taskHistoryStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
                               $dateValue = $row['approved_at'] ?? $row['completed_at'] ?? null;

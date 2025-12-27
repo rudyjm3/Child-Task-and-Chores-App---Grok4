@@ -677,7 +677,16 @@ $notificationCount = is_array($notificationsNew) ? count($notificationsNew) : 0;
                }
             }
          $historyItems = [];
-        $taskHistoryStmt = $db->prepare("SELECT title, points, approved_at, completed_at FROM tasks WHERE child_user_id = :child_id AND approved_at IS NOT NULL");
+        $taskHistoryStmt = $db->prepare("
+            SELECT t.title, t.points, ti.approved_at, ti.completed_at
+            FROM task_instances ti
+            JOIN tasks t ON t.id = ti.task_id
+            WHERE t.child_user_id = :child_id AND ti.status = 'approved'
+            UNION ALL
+            SELECT title, points, approved_at, completed_at
+            FROM tasks
+            WHERE child_user_id = :child_id AND approved_at IS NOT NULL AND (recurrence IS NULL OR recurrence = '')
+        ");
          $taskHistoryStmt->execute([':child_id' => $_SESSION['user_id']]);
          foreach ($taskHistoryStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
                $dateValue = $row['approved_at'] ?? $row['completed_at'] ?? null;
