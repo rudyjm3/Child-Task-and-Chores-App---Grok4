@@ -170,13 +170,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $task_id = filter_input(INPUT_POST, 'task_id', FILTER_VALIDATE_INT);
         $instance_date = filter_input(INPUT_POST, 'instance_date', FILTER_SANITIZE_STRING);
         $photo_proof = null;
-        $taskInfoStmt = $db->prepare("SELECT parent_user_id, title, photo_proof_required FROM tasks WHERE id = :id AND child_user_id = :child_id");
-        $taskInfoStmt->execute([':id' => $task_id, ':child_id' => $_SESSION['user_id']]);
+        $taskInfoStmt = $db->prepare("SELECT parent_user_id, child_user_id, title, photo_proof_required FROM tasks WHERE id = :id");
+        $taskInfoStmt->execute([':id' => $task_id]);
         $taskInfo = $taskInfoStmt->fetch(PDO::FETCH_ASSOC);
-        if (!$taskInfo) {
+        $childIdForComplete = null;
+        if ($taskInfo) {
+            if (canCreateContent($_SESSION['user_id']) && canAddEditChild($_SESSION['user_id'])) {
+                if ((int) $taskInfo['parent_user_id'] === (int) $family_root_id) {
+                    $childIdForComplete = (int) $taskInfo['child_user_id'];
+                }
+            } elseif ((int) $taskInfo['child_user_id'] === (int) $_SESSION['user_id']) {
+                $childIdForComplete = (int) $_SESSION['user_id'];
+            }
+        }
+        $isParentCompleting = !empty($taskInfo)
+            && canCreateContent($_SESSION['user_id'])
+            && (int) $taskInfo['parent_user_id'] === (int) $family_root_id;
+        if (!$taskInfo || !$childIdForComplete) {
             $message = "Task not found.";
         } else {
-            $photoRequired = !empty($taskInfo['photo_proof_required']);
+            $photoRequired = !empty($taskInfo['photo_proof_required']) && !$isParentCompleting;
             $hasUpload = isset($_FILES['photo_proof']) && !empty($_FILES['photo_proof']['name']) && is_uploaded_file($_FILES['photo_proof']['tmp_name']);
             if ($photoRequired && !$hasUpload) {
                 $message = "Photo proof is required to complete this task.";
@@ -186,12 +199,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $ext = $ext ? '.' . strtolower($ext) : '';
                     $photo_proof = 'uploads/task_' . (int) $task_id . '_' . time() . $ext;
                 }
-                if (completeTask($task_id, $_SESSION['user_id'], $photo_proof, $instance_date)) {
+                if (completeTask($task_id, $childIdForComplete, $photo_proof, $instance_date)) {
                     if ($photo_proof && $hasUpload) {
                         move_uploaded_file($_FILES['photo_proof']['tmp_name'], $photo_proof);
                     }
                     $childName = $_SESSION['name'] ?? $_SESSION['username'] ?? 'Child';
-        if (!empty($taskInfo['parent_user_id'])) {
+        if (!empty($taskInfo['parent_user_id']) && (int) $taskInfo['parent_user_id'] !== (int) $_SESSION['user_id']) {
             $noteMessage = sprintf('%s completed task: %s', $childName, $taskInfo['title'] ?? 'Task');
             $linkInstanceDate = $instance_date ?: date('Y-m-d');
             $linkUrl = 'task.php?task_id=' . (int) $task_id;
@@ -201,7 +214,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $linkUrl .= '#task-' . (int) $task_id;
             addParentNotification((int) $taskInfo['parent_user_id'], 'task_completed', $noteMessage, $linkUrl);
         }
-                    $message = "Task marked as completed (awaiting approval).";
+                    if ($isParentCompleting) {
+                        if (approveTask($task_id, $instance_date)) {
+                            $message = "Task approved!";
+                        } else {
+                            $message = "Task completed, but approval failed.";
+                        }
+                    } else {
+                        $message = "Task marked as completed (awaiting approval).";
+                    }
                 } else {
                     $message = "Failed to complete task.";
                 }
@@ -1859,18 +1880,16 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
         function getTaskTimeInfo(task) {
             const timeOfDay = task.time_of_day || 'anytime';
             const timeParts = getTimeParts(task.due_date);
+            const hasExplicitTime = timeParts && (timeParts.hours !== 0 || timeParts.minutes !== 0);
+            const fallbackSort = timeOfDay === 'morning' ? '08:00' : (timeOfDay === 'afternoon' ? '13:00' : '18:00');
+            if (hasExplicitTime) {
+                const timeLabel = formatTime(timeParts.hours, timeParts.minutes);
+                return { label: timeLabel, sort: `${String(timeParts.hours).padStart(2, '0')}:${String(timeParts.minutes).padStart(2, '0')}` };
+            }
             if (timeOfDay === 'anytime') {
                 return { label: 'Anytime', sort: '99:99' };
             }
-            const fallbackSort = timeOfDay === 'morning' ? '08:00' : (timeOfDay === 'afternoon' ? '13:00' : '18:00');
-            if (!timeParts) {
-                return { label: capitalize(timeOfDay), sort: fallbackSort };
-            }
-            const timeLabel = formatTime(timeParts.hours, timeParts.minutes);
-            if (timeLabel === '12:00 AM') {
-                return { label: capitalize(timeOfDay), sort: fallbackSort };
-            }
-            return { label: timeLabel, sort: `${String(timeParts.hours).padStart(2, '0')}:${String(timeParts.minutes).padStart(2, '0')}` };
+            return { label: capitalize(timeOfDay), sort: fallbackSort };
         }
 
         function getTimeParts(dateString) {
@@ -1954,9 +1973,14 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
             let minutes = 59;
             let seconds = 59;
             const timeParts = getTimeParts(task.due_date);
-            if (timeParts && task.time_of_day !== 'anytime') {
+            const hasExplicitTime = timeParts && (timeParts.hours !== 0 || timeParts.minutes !== 0);
+            if (hasExplicitTime) {
                 hours = timeParts.hours;
                 minutes = timeParts.minutes;
+                seconds = 0;
+            } else if ((task.time_of_day || 'anytime') !== 'anytime') {
+                hours = task.time_of_day === 'morning' ? 8 : (task.time_of_day === 'afternoon' ? 13 : 18);
+                minutes = 0;
                 seconds = 0;
             }
             return new Date(parts[0], parts[1] - 1, parts[2], hours, minutes, seconds).getTime();
@@ -2130,6 +2154,27 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                 }
             } else if (canManageTasks) {
                 if (statusForView === 'pending') {
+                    const form = document.createElement('form');
+                    form.method = 'POST';
+                    form.action = 'task.php';
+                    const hidden = document.createElement('input');
+                    hidden.type = 'hidden';
+                    hidden.name = 'task_id';
+                    hidden.value = String(task.id);
+                    if (isRecurring) {
+                        const instanceInput = document.createElement('input');
+                        instanceInput.type = 'hidden';
+                        instanceInput.name = 'instance_date';
+                        instanceInput.value = viewDateKey;
+                        form.appendChild(instanceInput);
+                    }
+                    const button = document.createElement('button');
+                    button.type = 'submit';
+                    button.name = 'complete_task';
+                    button.textContent = 'Finish Task';
+                    form.appendChild(hidden);
+                    form.appendChild(button);
+                    card.appendChild(form);
                     const actions = document.createElement('div');
                     actions.className = 'task-card-actions';
                     const editButton = document.createElement('button');
@@ -2297,15 +2342,15 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
             if (isOnce) {
                 return task.due_date_formatted || 'No date set';
             }
+            const timeParts = getTimeParts(task.due_date);
+            const hasExplicitTime = timeParts && (timeParts.hours !== 0 || timeParts.minutes !== 0);
+            if (hasExplicitTime) {
+                return formatTime(timeParts.hours, timeParts.minutes);
+            }
             if (timeOfDay === 'anytime') {
                 return 'Anytime';
             }
-            const timeParts = getTimeParts(task.due_date);
-            if (!timeParts) {
-                return capitalize(timeOfDay);
-            }
-            const timeLabel = formatTime(timeParts.hours, timeParts.minutes);
-            return timeLabel === '12:00 AM' ? capitalize(timeOfDay) : timeLabel;
+            return capitalize(timeOfDay);
         }
 
         function capitalize(value) {
@@ -2424,11 +2469,15 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                             $day_matches = empty($days) ? true : in_array($today_day, $days, true);
                         }
                         if ($within_range && $day_matches) {
-                            if ($time_of_day === 'anytime') {
+                            $time_part = !empty($task['due_date']) ? date('H:i', strtotime($task['due_date'])) : '';
+                            $has_time = $time_part !== '' && $time_part !== '00:00';
+                            if ($has_time) {
+                                $due_stamp = strtotime($today_key . ' ' . $time_part . ':00');
+                            } elseif ($time_of_day === 'anytime') {
                                 $due_stamp = strtotime($today_key . ' 23:59:59');
                             } else {
-                                $time_part = !empty($task['due_date']) ? date('H:i', strtotime($task['due_date'])) : '23:59';
-                                $due_stamp = strtotime($today_key . ' ' . $time_part . ':00');
+                                $fallback_time = $time_of_day === 'morning' ? '08:00' : ($time_of_day === 'afternoon' ? '13:00' : '18:00');
+                                $due_stamp = strtotime($today_key . ' ' . $fallback_time . ':00');
                             }
                             $is_overdue = $due_stamp < time();
                         }
@@ -2447,14 +2496,18 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                                     $isOnce = empty($task['recurrence']);
                                     if ($isOnce) {
                                         $dueDisplay = $task['due_date_formatted'];
-                                    } elseif ($timeOfDay === 'anytime') {
-                                        $dueDisplay = 'Anytime';
                                     } else {
                                         $timeText = !empty($task['due_date']) ? date('g:i A', strtotime($task['due_date'])) : '';
                                         if ($timeText === '12:00 AM') {
                                             $timeText = '';
                                         }
-                                        $dueDisplay = $timeText !== '' ? $timeText : ucfirst($timeOfDay);
+                                        if ($timeText !== '') {
+                                            $dueDisplay = $timeText;
+                                        } elseif ($timeOfDay === 'anytime') {
+                                            $dueDisplay = 'Anytime';
+                                        } else {
+                                            $dueDisplay = ucfirst($timeOfDay);
+                                        }
                                     }
                                 ?>
                                 <div class="task-meta-row">
@@ -2498,39 +2551,12 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                                     <img src="<?php echo htmlspecialchars($task['photo_proof']); ?>" alt="Photo proof" class="task-photo-thumb" data-task-photo-src="<?php echo htmlspecialchars($task['photo_proof'], ENT_QUOTES); ?>">
                                 </div>
                             <?php endif; ?>
-                            <?php if ($task['timing_mode'] === 'timer' && !empty($task['timer_minutes'])): ?>
-                                <?php $timerMinutes = (int) $task['timer_minutes']; ?>
-                                <p class="timer" id="timer-<?php echo $task['id']; ?>" data-timer-display data-task-id="<?php echo $task['id']; ?>"><?php echo sprintf('%02d:00', $timerMinutes); ?></p>
-                                <div class="timer-controls">
-                                    <div class="pause-hold-countdown" id="pause-countdown-<?php echo $task['id']; ?>" data-timer-countdown data-task-id="<?php echo $task['id']; ?>" aria-live="polite"></div>
-                                    <button type="button" class="timer-button" data-timer-action="start" data-task-id="<?php echo $task['id']; ?>" data-limit="<?php echo $timerMinutes; ?>">Start Timer</button>
-                                    <button type="button" class="timer-cancel-button" data-timer-action="cancel" data-task-id="<?php echo $task['id']; ?>">Cancel</button>
-                                </div>
-                            <?php endif; ?>
                                 <?php if (!canCreateContent($_SESSION['user_id'])): ?>
                                     <?php if ($instance_status === 'completed'): ?>
                                         <p class="waiting-label">Waiting for approval</p>
                                     <?php elseif ($instance_status === 'approved'): ?>
-                                        <p class="completed">Approved!</p>
                                     <?php elseif ($instance_status === 'rejected'): ?>
                                         <p class="waiting-label">Rejected</p>
-                                    <?php elseif (!empty($task['photo_proof_required'])): ?>
-                                        <button type="button"
-                                                class="button"
-                                                data-task-proof-open
-                                                data-task-id="<?php echo (int) $task['id']; ?>"
-                                                data-task-title="<?php echo htmlspecialchars($task['title'], ENT_QUOTES); ?>"
-                                                <?php echo !empty($task['recurrence']) ? 'data-date-key="' . htmlspecialchars($today_key) . '"' : ''; ?>>
-                                            Finish Task
-                                        </button>
-                                    <?php else: ?>
-                                        <form method="POST" action="task.php">
-                                            <input type="hidden" name="task_id" value="<?php echo (int) $task['id']; ?>">
-                                            <?php if (!empty($task['recurrence'])): ?>
-                                                <input type="hidden" name="instance_date" value="<?php echo htmlspecialchars($today_key); ?>">
-                                            <?php endif; ?>
-                                            <button type="submit" name="complete_task">Finish Task</button>
-                                        </form>
                                     <?php endif; ?>
                                 <?php endif; ?>
                             <?php if (canCreateContent($_SESSION['user_id']) && canAddEditChild($_SESSION['user_id'])): ?>
