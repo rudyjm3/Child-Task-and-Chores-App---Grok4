@@ -1307,6 +1307,18 @@ margin-bottom: 20px;}
         .nav-links { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: center; margin-top: 8px; }
         .nav-button { display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; background: #eef4ff; border: 1px solid #d5def0; border-radius: 8px; color: #0d47a1; font-weight: 700; text-decoration: none; }
         .nav-button:hover { background: #dce8ff; }
+        .routine-action-bar { display: flex; justify-content: flex-end; align-items: center; gap: 10px; margin: 10px 0 18px; }
+        .routine-create-button { width: 52px; height: 52px; border-radius: 50%; border: none; background: #ff9800; color: #fff; display: inline-flex; align-items: center; justify-content: center; font-size: 1.4rem; cursor: pointer; box-shadow: 0 6px 14px rgba(255, 152, 0, 0.35); }
+        .routine-create-button:hover { background: #fb8c00; }
+        .routine-pref-button { border: none; background: transparent; color: #9f9f9f; font-size: 1.4rem; cursor: pointer; padding: 6px; }
+        .routine-pref-button:hover { color: #7a7a7a; }
+        .routine-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: none; align-items: center; justify-content: center; z-index: 4200; padding: 14px; }
+        .routine-modal.open { display: flex; }
+        .routine-modal-card { background: #fff; border-radius: 14px; max-width: 920px; width: min(920px, 100%); max-height: 90vh; overflow: hidden; box-shadow: 0 12px 32px rgba(0,0,0,0.25); display: grid; grid-template-rows: auto 1fr; }
+        .routine-modal-card header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid #e0e0e0; }
+        .routine-modal-card h2 { margin: 0; font-size: 1.1rem; }
+        .routine-modal-close { background: transparent; border: none; font-size: 1.3rem; cursor: pointer; color: #555; }
+        .routine-modal-body { padding: 12px 16px 18px; overflow-y: auto; }
         .help-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: none; align-items: center; justify-content: center; z-index: 4300; padding: 14px; }
         .help-modal.open { display: flex; }
         .help-card { background: #fff; border-radius: 12px; max-width: 720px; width: min(720px, 100%); max-height: 85vh; overflow: hidden; box-shadow: 0 12px 32px rgba(0,0,0,0.25); display: grid; grid-template-rows: auto 1fr; }
@@ -1351,191 +1363,208 @@ margin-bottom: 20px;}
         <?php endif; ?>
 
         <?php if ($isParentContext): ?>
-            <section class="routine-section">
-               <div class="routine-section-header">
-                  <h2>Routine Timer Preferences</h2>
-               </div>
-                
-                <form method="POST" class="form-grid" autocomplete="off">
-                    <div class="toggle-control">
-                        <label class="toggle-switch">
-                            <input type="checkbox" name="timer_warnings_enabled" value="1" <?php echo !empty($routinePreferences['timer_warnings_enabled']) ? 'checked' : ''; ?>>
-                            <span class="toggle-slider"></span>
-                        </label>
-                        <div class="toggle-copy">
-                            <span class="toggle-title">Timer Warnings</span>
-                            <span class="toggle-sub">Show reminder messages as the task timer nears its limit.</span>
-                        </div>
-                    </div>
-                    <div class="toggle-control">
-                        <label class="toggle-switch">
-                            <input type="checkbox" name="show_countdown" value="1" <?php echo !empty($routinePreferences['show_countdown']) ? 'checked' : ''; ?>>
-                            <span class="toggle-slider"></span>
-                        </label>
-                        <div class="toggle-copy">
-                            <span class="toggle-title">Show Countdown Timer</span>
-                            <span class="toggle-sub">Display remaining time inside the task progress bar.</span>
-                        </div>
-                    </div>
-                    <div class="toggle-control">
-                        <label class="toggle-switch">
-                            <input type="checkbox" name="sound_effects_enabled" value="1" <?php echo !empty($routinePreferences['sound_effects_enabled']) ? 'checked' : ''; ?>>
-                            <span class="toggle-slider"></span>
-                        </label>
-                        <div class="toggle-copy">
-                            <span class="toggle-title">Sound Effects</span>
-                            <span class="toggle-sub">Turn off to disable chimes and task reward sounds during routines.</span>
-                        </div>
-                    </div>
-                    <div class="toggle-control">
-                        <label class="toggle-switch">
-                            <input type="checkbox" name="background_music_enabled" value="1" <?php echo !empty($routinePreferences['background_music_enabled']) ? 'checked' : ''; ?>>
-                            <span class="toggle-slider"></span>
-                        </label>
-                        <div class="toggle-copy">
-                            <span class="toggle-title">Background Music</span>
-                            <span class="toggle-sub">Turn off to disable routine background music.</span>
-                        </div>
-                    </div>
-                    <div class="form-group">
-                        <label for="progress_style">Progress Timer Style</label>
-                        <select id="progress_style" name="progress_style">
-                            <?php
-                                $progressStyle = $routinePreferences['progress_style'] ?? 'bar';
-                                $options = [
-                                    'bar' => 'Horizontal Bar (default)',
-                                    'circle' => 'Circular Ring',
-                                    'pie' => 'Pie Fill'
-                                ];
-                                foreach ($options as $value => $label):
-                            ?>
-                                <option value="<?php echo $value; ?>" <?php echo $progressStyle === $value ? 'selected' : ''; ?>><?php echo $label; ?></option>
-                            <?php endforeach; ?>
-                        </select>
-                        <small>Choose how the timer animates during a task.</small>
-                    </div>
-                    <div class="form-actions">
-                        <button type="submit" name="save_routine_preferences" class="button">Save Preferences</button>
-                    </div>
-                </form>
-            </section>
+            <div class="routine-action-bar">
+                <button type="button" class="routine-pref-button" data-routine-pref-open aria-label="Routine timer preferences">
+                    <i class="fa-solid fa-gear"></i>
+                </button>
+                <button type="button" class="routine-create-button" data-routine-create-open aria-label="Create routine">
+                    <i class="fa-solid fa-plus"></i>
+                </button>
+            </div>
 
-            <section class="routine-section">
-               <div class="routine-section-header">
-                  <h2>Create Routine</h2>
-               </div>
-                
-                <?php if (empty($children)): ?>
-                    <p class="no-data">Add children to your family profile before creating routines.</p>
-                <?php else: ?>
-                    <form method="POST" autocomplete="off">
-                        <div class="form-grid">
-                            <div class="form-group child-select-group">
-                                <label>Assign to Child(ren)</label>
-                                <div class="child-select-grid">
-                                    <?php foreach ($children as $child): 
-                                        $cid = (int) $child['child_user_id'];
-                                        $checked = in_array($cid, $selectedCreateChildIds, true) ? 'checked' : '';
-                                        $avatar = !empty($child['child_avatar']) ? $child['child_avatar'] : 'images/default-avatar.png';
-                                    ?>
-                                        <?php
-                                            $childName = trim((string) ($child['child_name'] ?? ''));
-                                            $childParts = $childName === '' ? [] : preg_split('/\s+/', $childName);
-                                            $childFirst = $childParts[0] ?? $childName;
-                                        ?>
-                                        <label class="child-select-card">
-                                            <input type="checkbox" name="child_user_ids[]" value="<?php echo $cid; ?>" <?php echo $checked; ?>>
-                                            <img src="<?php echo htmlspecialchars($avatar); ?>" alt="<?php echo htmlspecialchars($child['child_name']); ?>">
-                                            <strong><?php echo htmlspecialchars($childFirst); ?></strong>
-                                        </label>
-                                    <?php endforeach; ?>
+            <div class="routine-modal" data-routine-pref-modal>
+                <div class="routine-modal-card" role="dialog" aria-modal="true" aria-labelledby="routine-pref-title">
+                    <header>
+                        <h2 id="routine-pref-title">Routine Timer Preferences</h2>
+                        <button type="button" class="routine-modal-close" data-routine-pref-close aria-label="Close preferences">&times;</button>
+                    </header>
+                    <div class="routine-modal-body">
+                        <form method="POST" class="form-grid" autocomplete="off">
+                            <div class="toggle-control">
+                                <label class="toggle-switch">
+                                    <input type="checkbox" name="timer_warnings_enabled" value="1" <?php echo !empty($routinePreferences['timer_warnings_enabled']) ? 'checked' : ''; ?>>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                                <div class="toggle-copy">
+                                    <span class="toggle-title">Timer Warnings</span>
+                                    <span class="toggle-sub">Show reminder messages as the task timer nears its limit.</span>
+                                </div>
+                            </div>
+                            <div class="toggle-control">
+                                <label class="toggle-switch">
+                                    <input type="checkbox" name="show_countdown" value="1" <?php echo !empty($routinePreferences['show_countdown']) ? 'checked' : ''; ?>>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                                <div class="toggle-copy">
+                                    <span class="toggle-title">Show Countdown Timer</span>
+                                    <span class="toggle-sub">Display remaining time inside the task progress bar.</span>
+                                </div>
+                            </div>
+                            <div class="toggle-control">
+                                <label class="toggle-switch">
+                                    <input type="checkbox" name="sound_effects_enabled" value="1" <?php echo !empty($routinePreferences['sound_effects_enabled']) ? 'checked' : ''; ?>>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                                <div class="toggle-copy">
+                                    <span class="toggle-title">Sound Effects</span>
+                                    <span class="toggle-sub">Turn off to disable chimes and task reward sounds during routines.</span>
+                                </div>
+                            </div>
+                            <div class="toggle-control">
+                                <label class="toggle-switch">
+                                    <input type="checkbox" name="background_music_enabled" value="1" <?php echo !empty($routinePreferences['background_music_enabled']) ? 'checked' : ''; ?>>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                                <div class="toggle-copy">
+                                    <span class="toggle-title">Background Music</span>
+                                    <span class="toggle-sub">Turn off to disable routine background music.</span>
                                 </div>
                             </div>
                             <div class="form-group">
-                                <label for="title">Routine Title</label>
-                                <input type="text" id="title" name="title" required <?php echo $createFormHasErrors ? 'value="' . htmlspecialchars($_POST['title'] ?? '', ENT_QUOTES) . '"' : ''; ?>>
-                            </div>
-                            <?php $createTimeOfDay = $createFormHasErrors ? ($_POST['time_of_day'] ?? 'anytime') : 'anytime'; ?>
-                            <div class="form-group">
-                                <label for="time_of_day">Time of Day</label>
-                                <select id="time_of_day" name="time_of_day">
-                                    <option value="anytime" <?php echo $createTimeOfDay === 'anytime' ? 'selected' : ''; ?>>Anytime</option>
-                                    <option value="morning" <?php echo $createTimeOfDay === 'morning' ? 'selected' : ''; ?>>Morning</option>
-                                    <option value="afternoon" <?php echo $createTimeOfDay === 'afternoon' ? 'selected' : ''; ?>>Afternoon</option>
-                                    <option value="evening" <?php echo $createTimeOfDay === 'evening' ? 'selected' : ''; ?>>Evening</option>
+                                <label for="progress_style">Progress Timer Style</label>
+                                <select id="progress_style" name="progress_style">
+                                    <?php
+                                        $progressStyle = $routinePreferences['progress_style'] ?? 'bar';
+                                        $options = [
+                                            'bar' => 'Horizontal Bar (default)',
+                                            'circle' => 'Circular Ring',
+                                            'pie' => 'Pie Fill'
+                                        ];
+                                        foreach ($options as $value => $label):
+                                    ?>
+                                        <option value="<?php echo $value; ?>" <?php echo $progressStyle === $value ? 'selected' : ''; ?>><?php echo $label; ?></option>
+                                    <?php endforeach; ?>
                                 </select>
+                                <small>Choose how the timer animates during a task.</small>
                             </div>
-                            <div class="form-group">
-                                <label for="start_time">Start Time</label>
-                                <input type="time" id="start_time" name="start_time" required <?php echo $createFormHasErrors ? 'value="' . htmlspecialchars($_POST['start_time'] ?? '', ENT_QUOTES) . '"' : ''; ?>>
+                            <div class="form-actions">
+                                <button type="submit" name="save_routine_preferences" class="button">Save Preferences</button>
                             </div>
-                            <div class="form-group">
-                                <label for="end_time">End Time</label>
-                                <input type="time" id="end_time" name="end_time" required <?php echo $createFormHasErrors ? 'value="' . htmlspecialchars($_POST['end_time'] ?? '', ENT_QUOTES) . '"' : ''; ?>>
-                            </div>
-                            <div class="form-group">
-                                <label for="bonus_points">Bonus Points</label>
-                                <input type="number" id="bonus_points" name="bonus_points" min="0" value="<?php echo (int) ($_POST['bonus_points'] ?? 0); ?>">
-                            </div>
-                            <div class="form-group">
-                                <label for="recurrence">Repeat</label>
-                                <select id="recurrence" name="recurrence">
-                                    <option value="" <?php echo empty($_POST['recurrence'] ?? '') ? 'selected' : ''; ?>>Once</option>
-                                    <option value="daily" <?php echo (($_POST['recurrence'] ?? '') === 'daily') ? 'selected' : ''; ?>>Every Day</option>
-                                    <option value="weekly" <?php echo (($_POST['recurrence'] ?? '') === 'weekly') ? 'selected' : ''; ?>>Specific Days</option>
-                                </select>
-                                <?php
-                                    $createRepeatDays = $createFormHasErrors ? ($_POST['recurrence_days'] ?? []) : [];
-                                    $createRepeatDays = array_values(array_filter(array_map('trim', (array) $createRepeatDays)));
-                                ?>
-                                <div class="repeat-days" data-create-recurrence-days>
-                                    <div class="repeat-days-label">Specific Days</div>
-                                    <div class="repeat-days-grid">
-                                        <label class="repeat-day"><input type="checkbox" name="recurrence_days[]" value="Sun" <?php echo in_array('Sun', $createRepeatDays, true) ? 'checked' : ''; ?>><span>Sun</span></label>
-                                        <label class="repeat-day"><input type="checkbox" name="recurrence_days[]" value="Mon" <?php echo in_array('Mon', $createRepeatDays, true) ? 'checked' : ''; ?>><span>Mon</span></label>
-                                        <label class="repeat-day"><input type="checkbox" name="recurrence_days[]" value="Tue" <?php echo in_array('Tue', $createRepeatDays, true) ? 'checked' : ''; ?>><span>Tue</span></label>
-                                        <label class="repeat-day"><input type="checkbox" name="recurrence_days[]" value="Wed" <?php echo in_array('Wed', $createRepeatDays, true) ? 'checked' : ''; ?>><span>Wed</span></label>
-                                        <label class="repeat-day"><input type="checkbox" name="recurrence_days[]" value="Thu" <?php echo in_array('Thu', $createRepeatDays, true) ? 'checked' : ''; ?>><span>Thu</span></label>
-                                        <label class="repeat-day"><input type="checkbox" name="recurrence_days[]" value="Fri" <?php echo in_array('Fri', $createRepeatDays, true) ? 'checked' : ''; ?>><span>Fri</span></label>
-                                        <label class="repeat-day"><input type="checkbox" name="recurrence_days[]" value="Sat" <?php echo in_array('Sat', $createRepeatDays, true) ? 'checked' : ''; ?>><span>Sat</span></label>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <div class="routine-modal<?php echo $createFormHasErrors ? ' open' : ''; ?>" data-routine-create-modal>
+                <div class="routine-modal-card" role="dialog" aria-modal="true" aria-labelledby="routine-create-title">
+                    <header>
+                        <h2 id="routine-create-title">Create Routine</h2>
+                        <button type="button" class="routine-modal-close" data-routine-create-close aria-label="Close create routine">&times;</button>
+                    </header>
+                    <div class="routine-modal-body">
+                        <?php if (empty($children)): ?>
+                            <p class="no-data">Add children to your family profile before creating routines.</p>
+                        <?php else: ?>
+                            <form method="POST" autocomplete="off">
+                                <div class="form-grid">
+                                    <div class="form-group child-select-group">
+                                        <label>Assign to Child(ren)</label>
+                                        <div class="child-select-grid">
+                                            <?php foreach ($children as $child): 
+                                                $cid = (int) $child['child_user_id'];
+                                                $checked = in_array($cid, $selectedCreateChildIds, true) ? 'checked' : '';
+                                                $avatar = !empty($child['child_avatar']) ? $child['child_avatar'] : 'images/default-avatar.png';
+                                            ?>
+                                                <?php
+                                                    $childName = trim((string) ($child['child_name'] ?? ''));
+                                                    $childParts = $childName === '' ? [] : preg_split('/\s+/', $childName);
+                                                    $childFirst = $childParts[0] ?? $childName;
+                                                ?>
+                                                <label class="child-select-card">
+                                                    <input type="checkbox" name="child_user_ids[]" value="<?php echo $cid; ?>" <?php echo $checked; ?>>
+                                                    <img src="<?php echo htmlspecialchars($avatar); ?>" alt="<?php echo htmlspecialchars($child['child_name']); ?>">
+                                                    <strong><?php echo htmlspecialchars($childFirst); ?></strong>
+                                                </label>
+                                            <?php endforeach; ?>
+                                        </div>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="title">Routine Title</label>
+                                        <input type="text" id="title" name="title" required <?php echo $createFormHasErrors ? 'value="' . htmlspecialchars($_POST['title'] ?? '', ENT_QUOTES) . '"' : ''; ?>>
+                                    </div>
+                                    <?php $createTimeOfDay = $createFormHasErrors ? ($_POST['time_of_day'] ?? 'anytime') : 'anytime'; ?>
+                                    <div class="form-group">
+                                        <label for="time_of_day">Time of Day</label>
+                                        <select id="time_of_day" name="time_of_day">
+                                            <option value="anytime" <?php echo $createTimeOfDay === 'anytime' ? 'selected' : ''; ?>>Anytime</option>
+                                            <option value="morning" <?php echo $createTimeOfDay === 'morning' ? 'selected' : ''; ?>>Morning</option>
+                                            <option value="afternoon" <?php echo $createTimeOfDay === 'afternoon' ? 'selected' : ''; ?>>Afternoon</option>
+                                            <option value="evening" <?php echo $createTimeOfDay === 'evening' ? 'selected' : ''; ?>>Evening</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="start_time">Start Time</label>
+                                        <input type="time" id="start_time" name="start_time" required <?php echo $createFormHasErrors ? 'value="' . htmlspecialchars($_POST['start_time'] ?? '', ENT_QUOTES) . '"' : ''; ?>>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="end_time">End Time</label>
+                                        <input type="time" id="end_time" name="end_time" required <?php echo $createFormHasErrors ? 'value="' . htmlspecialchars($_POST['end_time'] ?? '', ENT_QUOTES) . '"' : ''; ?>>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="bonus_points">Bonus Points</label>
+                                        <input type="number" id="bonus_points" name="bonus_points" min="0" value="<?php echo (int) ($_POST['bonus_points'] ?? 0); ?>">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="recurrence">Repeat</label>
+                                        <select id="recurrence" name="recurrence">
+                                            <option value="" <?php echo empty($_POST['recurrence'] ?? '') ? 'selected' : ''; ?>>Once</option>
+                                            <option value="daily" <?php echo (($_POST['recurrence'] ?? '') === 'daily') ? 'selected' : ''; ?>>Every Day</option>
+                                            <option value="weekly" <?php echo (($_POST['recurrence'] ?? '') === 'weekly') ? 'selected' : ''; ?>>Specific Days</option>
+                                        </select>
+                                        <?php
+                                            $createRepeatDays = $createFormHasErrors ? ($_POST['recurrence_days'] ?? []) : [];
+                                            $createRepeatDays = array_values(array_filter(array_map('trim', (array) $createRepeatDays)));
+                                        ?>
+                                        <div class="repeat-days" data-create-recurrence-days>
+                                            <div class="repeat-days-label">Specific Days</div>
+                                            <div class="repeat-days-grid">
+                                                <label class="repeat-day"><input type="checkbox" name="recurrence_days[]" value="Sun" <?php echo in_array('Sun', $createRepeatDays, true) ? 'checked' : ''; ?>><span>Sun</span></label>
+                                                <label class="repeat-day"><input type="checkbox" name="recurrence_days[]" value="Mon" <?php echo in_array('Mon', $createRepeatDays, true) ? 'checked' : ''; ?>><span>Mon</span></label>
+                                                <label class="repeat-day"><input type="checkbox" name="recurrence_days[]" value="Tue" <?php echo in_array('Tue', $createRepeatDays, true) ? 'checked' : ''; ?>><span>Tue</span></label>
+                                                <label class="repeat-day"><input type="checkbox" name="recurrence_days[]" value="Wed" <?php echo in_array('Wed', $createRepeatDays, true) ? 'checked' : ''; ?>><span>Wed</span></label>
+                                                <label class="repeat-day"><input type="checkbox" name="recurrence_days[]" value="Thu" <?php echo in_array('Thu', $createRepeatDays, true) ? 'checked' : ''; ?>><span>Thu</span></label>
+                                                <label class="repeat-day"><input type="checkbox" name="recurrence_days[]" value="Fri" <?php echo in_array('Fri', $createRepeatDays, true) ? 'checked' : ''; ?>><span>Fri</span></label>
+                                                <label class="repeat-day"><input type="checkbox" name="recurrence_days[]" value="Sat" <?php echo in_array('Sat', $createRepeatDays, true) ? 'checked' : ''; ?>><span>Sat</span></label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <?php
+                                        $createRoutineDate = $createFormHasErrors ? ($_POST['routine_date'] ?? '') : date('Y-m-d');
+                                    ?>
+                                    <div class="form-group" data-create-routine-date>
+                                        <label for="routine_date">Date</label>
+                                        <input type="date" id="routine_date" name="routine_date" value="<?php echo htmlspecialchars($createRoutineDate, ENT_QUOTES); ?>">
                                     </div>
                                 </div>
-                            </div>
-                            <?php
-                                $createRoutineDate = $createFormHasErrors ? ($_POST['routine_date'] ?? '') : date('Y-m-d');
-                            ?>
-                            <div class="form-group" data-create-routine-date>
-                                <label for="routine_date">Date</label>
-                                <input type="date" id="routine_date" name="routine_date" value="<?php echo htmlspecialchars($createRoutineDate, ENT_QUOTES); ?>">
-                            </div>
-                        </div>
-                        <div class="routine-builder" data-builder-id="create" data-start-input="#start_time" data-end-input="#end_time">
-                            <div class="builder-controls">
-                                <div class="form-group">
-                                    <label for="create-task-picker">Add Routine Task</label>
-                                    <select id="create-task-picker" data-role="task-picker">
-                                        <option value="">Select task...</option>
-                                        <?php foreach ($routine_tasks as $task): ?>
-                                            <option value="<?php echo (int) $task['id']; ?>"><?php echo htmlspecialchars($task['title']); ?> (<?php echo (int) $task['time_limit']; ?> min)</option>
-                                        <?php endforeach; ?>
-                                    </select>
+                                <div class="routine-builder" data-builder-id="create" data-start-input="#start_time" data-end-input="#end_time">
+                                    <div class="builder-controls">
+                                        <div class="form-group">
+                                            <label for="create-task-picker">Add Routine Task</label>
+                                            <select id="create-task-picker" data-role="task-picker">
+                                                <option value="">Select task...</option>
+                                                <?php foreach ($routine_tasks as $task): ?>
+                                                    <option value="<?php echo (int) $task['id']; ?>"><?php echo htmlspecialchars($task['title']); ?> (<?php echo (int) $task['time_limit']; ?> min)</option>
+                                                <?php endforeach; ?>
+                                            </select>
+                                        </div>
+                                        <button type="button" class="button secondary" data-role="add-task">Add Task</button>
+                                    </div>
+                                    <ul class="selected-task-list" data-role="selected-list"></ul>
+                                    <div class="summary-row">
+                                        <span>Total Task Time: <span data-role="total-minutes">0</span> min</span>
+                                        <span>Routine Duration: <span data-role="duration-minutes">--</span> min</span>
+                                        <span class="warning" data-role="warning"></span>
+                                    </div>
+                                    <input type="hidden" name="routine_structure" data-role="structure-input">
                                 </div>
-                                <button type="button" class="button secondary" data-role="add-task">Add Task</button>
-                            </div>
-                            <ul class="selected-task-list" data-role="selected-list"></ul>
-                            <div class="summary-row">
-                                <span>Total Task Time: <span data-role="total-minutes">0</span> min</span>
-                                <span>Routine Duration: <span data-role="duration-minutes">--</span> min</span>
-                                <span class="warning" data-role="warning"></span>
-                            </div>
-                            <input type="hidden" name="routine_structure" data-role="structure-input">
-                        </div>
-                        <div class="form-actions">
-                            <button type="submit" name="create_routine" class="button">Create Routine</button>
-                        </div>
-                    </form>
-                <?php endif; ?>
-            </section>
+                                <div class="form-actions">
+                                    <button type="submit" name="create_routine" class="button">Create Routine</button>
+                                </div>
+                            </form>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            </div>
 
             <section class="routine-section">
                 <div class="routine-section-header">
@@ -2083,6 +2112,35 @@ margin-bottom: 20px;}
                 if (helpClose) helpClose.addEventListener('click', closeHelp);
                 helpModal.addEventListener('click', (e) => { if (e.target === helpModal) closeHelp(); });
                 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeHelp(); });
+            }
+            const prefOpen = document.querySelector('[data-routine-pref-open]');
+            const prefModal = document.querySelector('[data-routine-pref-modal]');
+            const prefClose = prefModal ? prefModal.querySelector('[data-routine-pref-close]') : null;
+            const createOpen = document.querySelector('[data-routine-create-open]');
+            const createModal = document.querySelector('[data-routine-create-modal]');
+            const createClose = createModal ? createModal.querySelector('[data-routine-create-close]') : null;
+            const openRoutineModal = (modal) => {
+                if (!modal) return;
+                modal.classList.add('open');
+                document.body.classList.add('modal-open');
+            };
+            const closeRoutineModal = (modal) => {
+                if (!modal) return;
+                modal.classList.remove('open');
+                document.body.classList.remove('modal-open');
+            };
+            if (prefOpen && prefModal) {
+                prefOpen.addEventListener('click', () => openRoutineModal(prefModal));
+                if (prefClose) prefClose.addEventListener('click', () => closeRoutineModal(prefModal));
+                prefModal.addEventListener('click', (e) => { if (e.target === prefModal) closeRoutineModal(prefModal); });
+            }
+            if (createOpen && createModal) {
+                createOpen.addEventListener('click', () => openRoutineModal(createModal));
+                if (createClose) createClose.addEventListener('click', () => closeRoutineModal(createModal));
+                createModal.addEventListener('click', (e) => { if (e.target === createModal) closeRoutineModal(createModal); });
+            }
+            if (createModal && createModal.classList.contains('open')) {
+                document.body.classList.add('modal-open');
             }
 
             function decodeHtmlEntities(value) {
