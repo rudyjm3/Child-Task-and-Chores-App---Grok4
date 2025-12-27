@@ -3,7 +3,7 @@
 // Purpose: Display child dashboard with progress and task/reward links
 // Inputs: Session data
 // Outputs: Dashboard interface
-// Version: 3.15.0 (Notifications moved to header-triggered modal, Font Awesome icons)
+// Version: 3.16.7 (Notifications moved to header-triggered modal, Font Awesome icons)
 
 require_once __DIR__ . '/includes/functions.php';
 
@@ -99,7 +99,7 @@ $notificationCount = is_array($notificationsNew) ? count($notificationsNew) : 0;
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Child Dashboard</title>
-   <link rel="stylesheet" href="css/main.css?v=3.15.0">
+   <link rel="stylesheet" href="css/main.css?v=3.16.7">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" integrity="Evv84Mr4kqVGRNSgIGL/F/aIDqQb7xQ2vcrdIwxfjThSH8CSR7PBEakCr51Ck+w+/U6swU2Im1vVX0SVk9ABhg==" crossorigin="anonymous" referrerpolicy="no-referrer">
     <style>
         .dashboard { padding: 20px; max-width: 720px; margin: 0 auto; text-align: center; }
@@ -151,6 +151,7 @@ $notificationCount = is_array($notificationsNew) ? count($notificationsNew) : 0;
         .notification-badge { position: absolute; top: -6px; right: -8px; background: #d32f2f; color: #fff; border-radius: 12px; padding: 2px 6px; font-size: 0.75rem; font-weight: 700; min-width: 22px; text-align: center; }
         .avatar-notification { position: absolute; top: 0; right: 0; transform: translate(35%, -35%); }
         .week-item-badge { display: inline-flex; align-items: center; gap: 4px; margin-left: 8px; padding: 2px 8px; border-radius: 999px; font-size: 0.7rem; font-weight: 700; background: #2e7d32; color: #fff; text-transform: uppercase; }
+        .week-item-badge.overdue { background: #d9534f; }
         .nav-links { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: center; margin-top: 8px; }
         .nav-button { display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; background: #eef4ff; border: 1px solid #d5def0; border-radius: 8px; color: #0d47a1; font-weight: 700; text-decoration: none; }
         .nav-button:hover { background: #dce8ff; }
@@ -307,9 +308,12 @@ $notificationCount = is_array($notificationsNew) ? count($notificationsNew) : 0;
                     { key: 'evening', label: 'Evening' }
                 ];
                 const buildItem = (item) => {
-                    const badge = item.completed
-                        ? '<span class="week-item-badge"><i class="fa-solid fa-check"></i>Done</span>'
-                        : '';
+                    let badge = '';
+                    if (item.completed) {
+                        badge = '<span class="week-item-badge"><i class="fa-solid fa-check"></i>Done</span>';
+                    } else if (item.overdue) {
+                        badge = '<span class="week-item-badge overdue"><i class="fa-solid fa-triangle-exclamation"></i>Overdue</span>';
+                    }
                     return '<div class="week-item">' +
                         '<div class="week-item-main">' +
                         '<i class="' + item.icon + ' week-item-icon"></i>' +
@@ -576,21 +580,75 @@ $notificationCount = is_array($notificationsNew) ? count($notificationsNew) : 0;
             $scheduleByDay[$dateKey] = [];
             $weekCursor->modify('+1 day');
          }
-         $taskWeekStmt = $db->prepare("SELECT title, points, due_date, end_date, recurrence, recurrence_days, time_of_day FROM tasks WHERE child_user_id = :child_id AND due_date IS NOT NULL AND DATE(due_date) <= :end ORDER BY due_date");
+         $nowTs = time();
+         $todayKey = date('Y-m-d');
+         $getScheduleDueStamp = static function ($dateKey, $timeOfDay, $timeValue) {
+            if (empty($dateKey)) {
+               return null;
+            }
+            $timeValue = trim((string) $timeValue);
+            $hasTime = $timeValue !== '' && $timeValue !== '00:00';
+            if ($hasTime) {
+               $stamp = strtotime($dateKey . ' ' . $timeValue . ':00');
+               return $stamp === false ? null : $stamp;
+            }
+            if (($timeOfDay ?? 'anytime') !== 'anytime') {
+               $fallback = $timeOfDay === 'morning' ? '08:00' : ($timeOfDay === 'afternoon' ? '13:00' : '18:00');
+               $stamp = strtotime($dateKey . ' ' . $fallback . ':00');
+               return $stamp === false ? null : $stamp;
+            }
+            $stamp = strtotime($dateKey . ' 23:59:59');
+            return $stamp === false ? null : $stamp;
+         };
+         $taskWeekStmt = $db->prepare("SELECT id, title, points, due_date, end_date, recurrence, recurrence_days, time_of_day, status FROM tasks WHERE child_user_id = :child_id AND due_date IS NOT NULL AND DATE(due_date) <= :end ORDER BY due_date");
          $taskWeekStmt->execute([
             ':child_id' => $_SESSION['user_id'],
             ':end' => $weekEnd->format('Y-m-d')
          ]);
-         foreach ($taskWeekStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+         $taskRows = $taskWeekStmt->fetchAll(PDO::FETCH_ASSOC);
+         $taskInstanceMap = [];
+         if (!empty($taskRows)) {
+            $taskIds = array_values(array_filter(array_map(static function ($row) {
+               return (int) ($row['id'] ?? 0);
+            }, $taskRows)));
+            if (!empty($taskIds)) {
+               $placeholders = implode(',', array_fill(0, count($taskIds), '?'));
+               $instanceStmt = $db->prepare("SELECT task_id, date_key, status FROM task_instances WHERE task_id IN ($placeholders) AND date_key BETWEEN ? AND ?");
+               $params = $taskIds;
+               $params[] = $weekStart->format('Y-m-d');
+               $params[] = $weekEnd->format('Y-m-d');
+               $instanceStmt->execute($params);
+               foreach ($instanceStmt->fetchAll(PDO::FETCH_ASSOC) as $instanceRow) {
+                  $tid = (int) $instanceRow['task_id'];
+                  $dateKey = $instanceRow['date_key'];
+                  if (!$dateKey) {
+                     continue;
+                  }
+                  if (!isset($taskInstanceMap[$tid])) {
+                     $taskInstanceMap[$tid] = [];
+                  }
+                  $taskInstanceMap[$tid][$dateKey] = $instanceRow['status'] ?? null;
+               }
+            }
+         }
+         foreach ($taskRows as $row) {
             $timeOfDay = $row['time_of_day'] ?? 'anytime';
             $dueDate = $row['due_date'];
+            $dueTimeValue = !empty($dueDate) ? date('H:i', strtotime($dueDate)) : '';
             $startDateKey = date('Y-m-d', strtotime($dueDate));
             $endDateKey = !empty($row['end_date']) ? $row['end_date'] : null;
-            $timeSort = date('H:i', strtotime($dueDate));
-            $timeLabel = date('g:i A', strtotime($dueDate));
-            if ($timeOfDay === 'anytime') {
-               $timeSort = '99:99';
-               $timeLabel = 'Anytime';
+            $timeSort = !empty($dueDate) ? date('H:i', strtotime($dueDate)) : '99:99';
+            $timeLabel = !empty($dueDate) ? date('g:i A', strtotime($dueDate)) : '';
+            if ($timeLabel === '12:00 AM') {
+               $timeLabel = '';
+            }
+            if ($timeLabel === '') {
+               if ($timeOfDay === 'anytime') {
+                  $timeSort = '99:99';
+                  $timeLabel = 'Anytime';
+               } else {
+                  $timeLabel = ucfirst($timeOfDay);
+               }
             }
             $repeat = $row['recurrence'] ?? '';
             $repeatDays = array_filter(array_map('trim', explode(',', (string)($row['recurrence_days'] ?? ''))));
@@ -614,14 +672,33 @@ $notificationCount = is_array($notificationsNew) ? count($notificationsNew) : 0;
                      continue;
                   }
                }
+               $instanceStatus = $taskInstanceMap[(int) ($row['id'] ?? 0)][$dateKey] ?? null;
+               $completedFlag = false;
+               $rejectedFlag = false;
+               if (empty($repeat)) {
+                  $completedFlag = in_array(($row['status'] ?? ''), ['completed', 'approved'], true);
+               } elseif ($instanceStatus) {
+                  $completedFlag = in_array($instanceStatus, ['completed', 'approved'], true);
+                  $rejectedFlag = $instanceStatus === 'rejected';
+               }
+               $overdueFlag = false;
+               if (!$completedFlag && !$rejectedFlag) {
+                  $dueStamp = $getScheduleDueStamp($dateKey, $timeOfDay, $dueTimeValue);
+                  if ($dueStamp !== null && $dueStamp < $nowTs && $dateKey <= $todayKey) {
+                     $overdueFlag = true;
+                  }
+               }
                $scheduleByDay[$dateKey][] = [
+                  'id' => (int) ($row['id'] ?? 0),
                   'title' => $row['title'],
                   'type' => 'Task',
                   'points' => (int)($row['points'] ?? 0),
                   'time' => $timeSort,
                   'time_label' => $timeLabel,
                   'time_of_day' => $timeOfDay,
-                  'icon' => 'fa-solid fa-list-check'
+                  'icon' => 'fa-solid fa-list-check',
+                  'completed' => $completedFlag,
+                  'overdue' => $overdueFlag
                ];
             }
          }
@@ -636,11 +713,19 @@ $notificationCount = is_array($notificationsNew) ? count($notificationsNew) : 0;
                $routinePointsTotal += (int) ($task['point_value'] ?? 0);
             }
             $totalPoints = $routinePointsTotal + (int) ($routine['bonus_points'] ?? 0);
+            $startTimeValue = !empty($routine['start_time']) ? date('H:i', strtotime($routine['start_time'])) : '';
             $timeSort = !empty($routine['start_time']) ? date('H:i', strtotime($routine['start_time'])) : '99:99';
-            $timeLabel = !empty($routine['start_time']) ? date('g:i A', strtotime($routine['start_time'])) : 'Anytime';
-            if ($timeOfDay === 'anytime') {
-               $timeSort = '99:99';
-               $timeLabel = 'Anytime';
+            $timeLabel = !empty($routine['start_time']) ? date('g:i A', strtotime($routine['start_time'])) : '';
+            if ($timeLabel === '12:00 AM') {
+               $timeLabel = '';
+            }
+            if ($timeLabel === '') {
+               if ($timeOfDay === 'anytime') {
+                  $timeSort = '99:99';
+                  $timeLabel = 'Anytime';
+               } else {
+                  $timeLabel = ucfirst($timeOfDay);
+               }
             }
                foreach ($weekDates as $day) {
                   $dateKey = $day['date'];
@@ -658,12 +743,19 @@ $notificationCount = is_array($notificationsNew) ? count($notificationsNew) : 0;
                         continue;
                      }
                   }
-               } else {
+                  } else {
                      if (!$routineDateKey || $dateKey !== $routineDateKey) {
                         continue;
                      }
                   }
                   $completedFlag = $isRoutineCompletedOnDate($routine, $dateKey);
+                  $overdueFlag = false;
+                  if (!$completedFlag) {
+                     $dueStamp = $getScheduleDueStamp($dateKey, $timeOfDay, $startTimeValue);
+                     if ($dueStamp !== null && $dueStamp < $nowTs && $dateKey <= $todayKey) {
+                        $overdueFlag = true;
+                     }
+                  }
                   $scheduleByDay[$dateKey][] = [
                      'title' => $routine['title'],
                      'type' => 'Routine',
@@ -672,7 +764,8 @@ $notificationCount = is_array($notificationsNew) ? count($notificationsNew) : 0;
                      'time_label' => $timeLabel,
                      'time_of_day' => $timeOfDay,
                      'icon' => 'fa-solid fa-repeat',
-                     'completed' => $completedFlag
+                     'completed' => $completedFlag,
+                     'overdue' => $overdueFlag
                   ];
                }
             }
@@ -897,7 +990,7 @@ $notificationCount = is_array($notificationsNew) ? count($notificationsNew) : 0;
       </div>
    </main>
    <footer>
-   <p>Child Task and Chore App - Ver 3.15.0</p>
+   <p>Child Task and Chore App - Ver 3.16.7</p>
 </footer>
   <script src="js/number-stepper.js" defer></script>
 </body>

@@ -3,7 +3,7 @@
 // Purpose: Allow parents to create/edit/delete/reactivate goals and children to view/request completion
 // Inputs: POST for create/update/delete/reactivate, goal ID for request completion
 // Outputs: Goal management interface
-// Version: 3.15.0
+// Version: 3.16.7
 
 session_start();
 require_once __DIR__ . '/includes/functions.php';
@@ -238,7 +238,7 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Goal Management</title>
-    <link rel="stylesheet" href="css/main.css?v=3.15.0">
+    <link rel="stylesheet" href="css/main.css?v=3.16.7">
     <style>
         .goal-form, .goal-list {
             padding: 20px;
@@ -472,7 +472,7 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
         </div>
     </main>
     <footer>
-        <p>Child Task and Chore App - Ver 3.15.0</p>
+        <p>Child Task and Chore App - Ver 3.16.7</p>
     </footer>
   <script src="js/number-stepper.js" defer></script>
 </body>

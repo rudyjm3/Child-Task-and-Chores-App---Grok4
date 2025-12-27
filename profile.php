@@ -1,7 +1,7 @@
 <?php
 // profile.php - User profile management
 // Purpose: Edit profile details based on role (child: avatar/password; parent: family)
-// Version: 3.15.0
+// Version: 3.16.7
 
 require_once __DIR__ . '/includes/functions.php';
 
@@ -331,7 +331,7 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Profile - Child Task and Chore App</title>
-    <link rel="stylesheet" href="css/main.css?v=3.15.0">
+    <link rel="stylesheet" href="css/main.css?v=3.16.7">
     <style>
         .profile { padding: 20px; max-width: 600px; margin: 0 auto; text-align: center; }
         .profile-form { background: #f5f5f5; padding: 20px; border-radius: 8px; }

@@ -3,7 +3,7 @@
 // Purpose: Display parent dashboard with child overview and management links
 // Inputs: Session data
 // Outputs: Dashboard interface
-// Version: 3.15.0 (Notifications moved to header-triggered modal, Font Awesome icons, routine/reward updates)
+// Version: 3.16.7 (Notifications moved to header-triggered modal, Font Awesome icons, routine/reward updates)
 
 require_once __DIR__ . '/includes/functions.php';
 
@@ -463,6 +463,26 @@ for ($i = 0; $i < 7; $i++) {
     $weekDates[] = $weekCursor->format('Y-m-d');
     $weekCursor->modify('+1 day');
 }
+$nowTs = time();
+$todayKey = date('Y-m-d');
+$getScheduleDueStamp = static function ($dateKey, $timeOfDay, $timeValue) {
+    if (empty($dateKey)) {
+        return null;
+    }
+    $timeValue = trim((string) $timeValue);
+    $hasTime = $timeValue !== '' && $timeValue !== '00:00';
+    if ($hasTime) {
+        $stamp = strtotime($dateKey . ' ' . $timeValue . ':00');
+        return $stamp === false ? null : $stamp;
+    }
+    if (($timeOfDay ?? 'anytime') !== 'anytime') {
+        $fallback = $timeOfDay === 'morning' ? '08:00' : ($timeOfDay === 'afternoon' ? '13:00' : '18:00');
+        $stamp = strtotime($dateKey . ' ' . $fallback . ':00');
+        return $stamp === false ? null : $stamp;
+    }
+    $stamp = strtotime($dateKey . ' 23:59:59');
+    return $stamp === false ? null : $stamp;
+};
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -470,7 +490,7 @@ for ($i = 0; $i < 7; $i++) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Parent Dashboard</title>
-    <link rel="stylesheet" href="css/main.css?v=3.15.0">
+    <link rel="stylesheet" href="css/main.css?v=3.16.7">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" integrity="Evv84Mr4kqVGRNSgIGL/F/aIDqQb7xQ2vcrdIwxfjThSH8CSR7PBEakCr51Ck+w+/U6swU2Im1vVX0SVk9ABhg==" crossorigin="anonymous" referrerpolicy="no-referrer">
     <style>
         .dashboard { padding: 20px; max-width: 900px; margin: 0 auto; }
@@ -530,6 +550,7 @@ for ($i = 0; $i < 7; $i++) {
         .child-schedule-time { color: #6d4c41; font-size: 0.9rem; }
         .child-schedule-points { font-weight: 700; color: #2e7d32; white-space: nowrap; }
         .child-schedule-badge { display: inline-flex; align-items: center; gap: 4px; margin-left: 8px; padding: 2px 8px; border-radius: 999px; font-size: 0.7rem; font-weight: 700; background: #2e7d32; color: #fff; text-transform: uppercase; }
+        .child-schedule-badge.overdue { background: #d9534f; }
         .view-week-button { justify-self: start; padding: 6px 12px; font-size: 0.9rem; background: #eef4ff; border: 1px solid #d5def0; color: #0d47a1; border-radius: 8px; cursor: pointer; }
         .week-modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.55); display: none; align-items: center; justify-content: center; z-index: 3200; padding: 14px; }
         .week-modal-backdrop.open { display: flex; }
@@ -930,9 +951,12 @@ for ($i = 0; $i < 7; $i++) {
                             { key: 'evening', label: 'Evening' }
                         ];
                     const buildItem = (item) => {
-                        const badge = item.completed
-                            ? '<span class="child-schedule-badge"><i class="fa-solid fa-check"></i>Done</span>'
-                            : '';
+                        let badge = '';
+                        if (item.completed) {
+                            badge = '<span class="child-schedule-badge"><i class="fa-solid fa-check"></i>Done</span>';
+                        } else if (item.overdue) {
+                            badge = '<span class="child-schedule-badge overdue"><i class="fa-solid fa-triangle-exclamation"></i>Overdue</span>';
+                        }
                         return '<li class="child-schedule-item">' +
                             '<div class="child-schedule-main">' +
                             '<i class="' + item.icon + '"></i>' +
@@ -1579,21 +1603,55 @@ for ($i = 0; $i < 7; $i++) {
                      foreach ($weekDates as $dateKey) {
                         $weekSchedule[$dateKey] = [];
                      }
-                     $taskStmt = $db->prepare("SELECT title, points, due_date, end_date, recurrence, recurrence_days, time_of_day FROM tasks WHERE child_user_id = :child_id AND due_date IS NOT NULL AND DATE(due_date) <= :end");
+                     $taskStmt = $db->prepare("SELECT id, title, points, due_date, end_date, recurrence, recurrence_days, time_of_day, status FROM tasks WHERE child_user_id = :child_id AND due_date IS NOT NULL AND DATE(due_date) <= :end");
                      $taskStmt->execute([
                         ':child_id' => $childId,
                         ':end' => $weekEnd->format('Y-m-d')
                      ]);
-                     foreach ($taskStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                     $taskRows = $taskStmt->fetchAll(PDO::FETCH_ASSOC);
+                     $taskInstanceMap = [];
+                     if (!empty($taskRows)) {
+                        $taskIds = array_values(array_filter(array_map(static function ($row) {
+                           return (int) ($row['id'] ?? 0);
+                        }, $taskRows)));
+                        if (!empty($taskIds)) {
+                           $placeholders = implode(',', array_fill(0, count($taskIds), '?'));
+                           $instanceStmt = $db->prepare("SELECT task_id, date_key, status FROM task_instances WHERE task_id IN ($placeholders) AND date_key BETWEEN ? AND ?");
+                           $params = $taskIds;
+                           $params[] = $weekStart->format('Y-m-d');
+                           $params[] = $weekEnd->format('Y-m-d');
+                           $instanceStmt->execute($params);
+                           foreach ($instanceStmt->fetchAll(PDO::FETCH_ASSOC) as $instanceRow) {
+                              $tid = (int) $instanceRow['task_id'];
+                              $dateKey = $instanceRow['date_key'];
+                              if (!$dateKey) {
+                                 continue;
+                              }
+                              if (!isset($taskInstanceMap[$tid])) {
+                                 $taskInstanceMap[$tid] = [];
+                              }
+                              $taskInstanceMap[$tid][$dateKey] = $instanceRow['status'] ?? null;
+                           }
+                        }
+                     }
+                     foreach ($taskRows as $row) {
                         $timeOfDay = $row['time_of_day'] ?? 'anytime';
                         $dueDate = $row['due_date'];
+                        $dueTimeValue = !empty($dueDate) ? date('H:i', strtotime($dueDate)) : '';
                         $startDateKey = date('Y-m-d', strtotime($dueDate));
                         $endDateKey = !empty($row['end_date']) ? $row['end_date'] : null;
-                        $timeSort = date('H:i', strtotime($dueDate));
-                        $timeLabel = date('g:i A', strtotime($dueDate));
-                        if ($timeOfDay === 'anytime') {
-                           $timeSort = '99:99';
-                           $timeLabel = 'Anytime';
+                        $timeSort = !empty($dueDate) ? date('H:i', strtotime($dueDate)) : '99:99';
+                        $timeLabel = !empty($dueDate) ? date('g:i A', strtotime($dueDate)) : '';
+                        if ($timeLabel === '12:00 AM') {
+                           $timeLabel = '';
+                        }
+                        if ($timeLabel === '') {
+                           if ($timeOfDay === 'anytime') {
+                              $timeSort = '99:99';
+                              $timeLabel = 'Anytime';
+                           } else {
+                              $timeLabel = ucfirst($timeOfDay);
+                           }
                         }
                         $repeat = $row['recurrence'] ?? '';
                         $repeatDays = array_filter(array_map('trim', explode(',', (string)($row['recurrence_days'] ?? ''))));
@@ -1616,14 +1674,33 @@ for ($i = 0; $i < 7; $i++) {
                                  continue;
                               }
                            }
+                           $instanceStatus = $taskInstanceMap[(int) ($row['id'] ?? 0)][$dateKey] ?? null;
+                           $completedFlag = false;
+                           $rejectedFlag = false;
+                           if (empty($repeat)) {
+                              $completedFlag = in_array(($row['status'] ?? ''), ['completed', 'approved'], true);
+                           } elseif ($instanceStatus) {
+                              $completedFlag = in_array($instanceStatus, ['completed', 'approved'], true);
+                              $rejectedFlag = $instanceStatus === 'rejected';
+                           }
+                           $overdueFlag = false;
+                           if (!$completedFlag && !$rejectedFlag) {
+                              $dueStamp = $getScheduleDueStamp($dateKey, $timeOfDay, $dueTimeValue);
+                              if ($dueStamp !== null && $dueStamp < $nowTs && $dateKey <= $todayKey) {
+                                 $overdueFlag = true;
+                              }
+                           }
                            $weekSchedule[$dateKey][] = [
+                              'id' => (int) ($row['id'] ?? 0),
                               'title' => $row['title'],
                               'type' => 'Task',
                               'points' => (int) ($row['points'] ?? 0),
                               'time' => $timeSort,
                               'time_label' => $timeLabel,
                               'time_of_day' => $timeOfDay,
-                              'icon' => 'fa-solid fa-list-check'
+                              'icon' => 'fa-solid fa-list-check',
+                              'completed' => $completedFlag,
+                              'overdue' => $overdueFlag
                            ];
                         }
                      }
@@ -1639,11 +1716,19 @@ for ($i = 0; $i < 7; $i++) {
                            $routinePointsTotal += (int) ($task['point_value'] ?? 0);
                         }
                         $totalPoints = $routinePointsTotal + (int) ($routine['bonus_points'] ?? 0);
+                        $startTimeValue = !empty($routine['start_time']) ? date('H:i', strtotime($routine['start_time'])) : '';
                         $timeSort = !empty($routine['start_time']) ? date('H:i', strtotime($routine['start_time'])) : '99:99';
-                        $timeLabel = !empty($routine['start_time']) ? date('g:i A', strtotime($routine['start_time'])) : 'Anytime';
-                        if ($timeOfDay === 'anytime') {
-                           $timeSort = '99:99';
-                           $timeLabel = 'Anytime';
+                        $timeLabel = !empty($routine['start_time']) ? date('g:i A', strtotime($routine['start_time'])) : '';
+                        if ($timeLabel === '12:00 AM') {
+                           $timeLabel = '';
+                        }
+                        if ($timeLabel === '') {
+                           if ($timeOfDay === 'anytime') {
+                              $timeSort = '99:99';
+                              $timeLabel = 'Anytime';
+                           } else {
+                              $timeLabel = ucfirst($timeOfDay);
+                           }
                         }
                        foreach ($weekDates as $dateKey) {
                           if ($recurrence === 'daily') {
@@ -1660,12 +1745,19 @@ for ($i = 0; $i < 7; $i++) {
                                     continue;
                                  }
                               }
-                           } else {
+                          } else {
                              if (!$routineDateKey || $dateKey !== $routineDateKey) {
                                 continue;
                              }
                           }
                           $completedFlag = $isRoutineCompletedOnDate($routine, $dateKey);
+                          $overdueFlag = false;
+                          if (!$completedFlag) {
+                             $dueStamp = $getScheduleDueStamp($dateKey, $timeOfDay, $startTimeValue);
+                             if ($dueStamp !== null && $dueStamp < $nowTs && $dateKey <= $todayKey) {
+                                $overdueFlag = true;
+                             }
+                          }
                           $weekSchedule[$dateKey][] = [
                              'title' => $routine['title'],
                              'type' => 'Routine',
@@ -1674,7 +1766,8 @@ for ($i = 0; $i < 7; $i++) {
                              'time_label' => $timeLabel,
                              'time_of_day' => $timeOfDay,
                               'icon' => 'fa-solid fa-repeat',
-                              'completed' => $completedFlag
+                              'completed' => $completedFlag,
+                              'overdue' => $overdueFlag
                           ];
                        }
                     }
@@ -1883,7 +1976,14 @@ for ($i = 0; $i < 7; $i++) {
                                               <div class="child-schedule-main">
                                                  <i class="<?php echo htmlspecialchars($item['icon']); ?>"></i>
                                                  <div>
-                                                    <div class="child-schedule-title"><?php echo htmlspecialchars($item['title']); ?><?php if (!empty($item['completed'])): ?><span class="child-schedule-badge"><i class="fa-solid fa-check"></i>Done</span><?php endif; ?></div>
+                                                    <div class="child-schedule-title">
+                                                       <?php echo htmlspecialchars($item['title']); ?>
+                                                       <?php if (!empty($item['completed'])): ?>
+                                                          <span class="child-schedule-badge"><i class="fa-solid fa-check"></i>Done</span>
+                                                       <?php elseif (!empty($item['overdue'])): ?>
+                                                          <span class="child-schedule-badge overdue"><i class="fa-solid fa-triangle-exclamation"></i>Overdue</span>
+                                                       <?php endif; ?>
+                                                    </div>
                                                     <div class="child-schedule-time"><?php echo htmlspecialchars($item['time_label']); ?></div>
                                                  </div>
                                               </div>
@@ -2406,7 +2506,7 @@ for ($i = 0; $i < 7; $i++) {
         </div>
     </div>
     <footer>
-     <p>Child Task and Chores App - Ver 3.15.0</p>
+     <p>Child Task and Chores App - Ver 3.16.7</p>
    </footer>
 </body>
 <div class="child-remove-backdrop" data-child-remove-modal aria-hidden="true">
