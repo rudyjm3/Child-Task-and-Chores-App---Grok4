@@ -3,7 +3,7 @@
 // Purpose: Display parent dashboard with child overview and management links
 // Inputs: Session data
 // Outputs: Dashboard interface
-// Version: 3.16.7 (Notifications moved to header-triggered modal, Font Awesome icons, routine/reward updates)
+// Version: 3.17.4 (Notifications moved to header-triggered modal, Font Awesome icons, routine/reward updates)
 
 require_once __DIR__ . '/includes/functions.php';
 
@@ -500,7 +500,7 @@ $getScheduleDueStamp = static function ($dateKey, $timeOfDay, $timeValue) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Parent Dashboard</title>
-    <link rel="stylesheet" href="css/main.css?v=3.16.7">
+    <link rel="stylesheet" href="css/main.css?v=3.17.4">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" integrity="Evv84Mr4kqVGRNSgIGL/F/aIDqQb7xQ2vcrdIwxfjThSH8CSR7PBEakCr51Ck+w+/U6swU2Im1vVX0SVk9ABhg==" crossorigin="anonymous" referrerpolicy="no-referrer">
     <style>
         .dashboard { padding: 20px; /*max-width: 900px;*/ max-width: 100%; margin: 0 auto; }
@@ -2568,7 +2568,7 @@ $getScheduleDueStamp = static function ($dateKey, $timeOfDay, $timeValue) {
       </div>
    </div>
     <footer>
-     <p>Child Task and Chores App - Ver 3.16.7</p>
+     <p>Child Task and Chores App - Ver 3.17.4</p>
    </footer>
 </body>
 <div class="child-remove-backdrop" data-child-remove-modal aria-hidden="true">
@@ -2588,6 +2588,7 @@ $getScheduleDueStamp = static function ($dateKey, $timeOfDay, $timeValue) {
   <script src="js/number-stepper.js" defer></script>
 </body>
 </html>
+
 
 
 

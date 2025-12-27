@@ -104,3 +104,4 @@ document.addEventListener('DOMContentLoaded', () => {
     bindHold(plus, 1);
   });
 });
+
