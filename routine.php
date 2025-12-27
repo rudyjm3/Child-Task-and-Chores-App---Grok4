@@ -1307,6 +1307,15 @@ margin-bottom: 20px;}
         .nav-links { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: center; margin-top: 8px; }
         .nav-button { display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; background: #eef4ff; border: 1px solid #d5def0; border-radius: 8px; color: #0d47a1; font-weight: 700; text-decoration: none; }
         .nav-button:hover { background: #dce8ff; }
+        .help-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: none; align-items: center; justify-content: center; z-index: 4300; padding: 14px; }
+        .help-modal.open { display: flex; }
+        .help-card { background: #fff; border-radius: 12px; max-width: 720px; width: min(720px, 100%); max-height: 85vh; overflow: hidden; box-shadow: 0 12px 32px rgba(0,0,0,0.25); display: grid; grid-template-rows: auto 1fr; }
+        .help-card header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid #e0e0e0; }
+        .help-card h2 { margin: 0; font-size: 1.1rem; }
+        .help-close { background: transparent; border: none; font-size: 1.3rem; cursor: pointer; color: #555; }
+        .help-body { padding: 12px 16px 16px; overflow-y: auto; display: grid; gap: 12px; }
+        .help-section h3 { margin: 0 0 6px; font-size: 1rem; color: #37474f; }
+        .help-section ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; color: #455a64; }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
 </head>
@@ -1327,6 +1336,7 @@ margin-bottom: 20px;}
             <a class="nav-button" href="rewards.php">Rewards</a>
             <a class="nav-button" href="profile.php?self=1">Profile</a>
             <a class="nav-button" href="logout.php">Logout</a>
+            <button type="button" class="nav-button" data-help-open>Help</button>
         </div>
     </header>
     <main class="routine-layout">
@@ -2006,6 +2016,35 @@ margin-bottom: 20px;}
             <?php endif; ?>
         </section>
     </main>
+    <div class="help-modal" data-help-modal>
+        <div class="help-card" role="dialog" aria-modal="true" aria-labelledby="help-title">
+            <header>
+                <h2 id="help-title">Routine Help</h2>
+                <button type="button" class="help-close" data-help-close aria-label="Close help">&times;</button>
+            </header>
+            <div class="help-body">
+                <?php if ($isParentContext): ?>
+                    <section class="help-section">
+                        <h3>Parent view</h3>
+                        <ul>
+                            <li>Create routines with tasks, bonuses, and schedule rules.</li>
+                            <li>Use the routine builder to set order and time limits.</li>
+                            <li>Track completion in dashboards and approve as needed.</li>
+                        </ul>
+                    </section>
+                <?php else: ?>
+                    <section class="help-section">
+                        <h3>Child view</h3>
+                        <ul>
+                            <li>Start a routine and follow tasks in order.</li>
+                            <li>Timers and progress bars help track each task.</li>
+                            <li>Completed routines show up as done in your schedule.</li>
+                        </ul>
+                    </section>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
     <footer>
         <p>Child Task and Chore App - Ver 3.16.7</p>
     </footer>
@@ -2026,6 +2065,25 @@ margin-bottom: 20px;}
             document.body.classList.toggle('countdown-disabled', !countdownEnabled);
             const taskLookup = new Map((Array.isArray(page.tasks) ? page.tasks : []).map(task => [String(task.id), task]));
             const htmlDecodeField = document.createElement('textarea');
+            const helpOpen = document.querySelector('[data-help-open]');
+            const helpModal = document.querySelector('[data-help-modal]');
+            const helpClose = helpModal ? helpModal.querySelector('[data-help-close]') : null;
+            const openHelp = () => {
+                if (!helpModal) return;
+                helpModal.classList.add('open');
+                document.body.classList.add('modal-open');
+            };
+            const closeHelp = () => {
+                if (!helpModal) return;
+                helpModal.classList.remove('open');
+                document.body.classList.remove('modal-open');
+            };
+            if (helpOpen && helpModal) {
+                helpOpen.addEventListener('click', openHelp);
+                if (helpClose) helpClose.addEventListener('click', closeHelp);
+                helpModal.addEventListener('click', (e) => { if (e.target === helpModal) closeHelp(); });
+                document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeHelp(); });
+            }
 
             function decodeHtmlEntities(value) {
                 if (typeof value !== 'string') {
