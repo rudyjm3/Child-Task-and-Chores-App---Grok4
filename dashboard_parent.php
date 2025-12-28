@@ -231,10 +231,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif (isset($_POST['create_goal'])) {
         $child_user_id = filter_input(INPUT_POST, 'child_user_id', FILTER_VALIDATE_INT);
         $title = filter_input(INPUT_POST, 'goal_title', FILTER_SANITIZE_STRING);
+        $description = trim((string) filter_input(INPUT_POST, 'goal_description', FILTER_SANITIZE_STRING));
+        if ($description === '') {
+            $description = null;
+        }
         $start_date = filter_input(INPUT_POST, 'start_date', FILTER_SANITIZE_STRING);
         $end_date = filter_input(INPUT_POST, 'end_date', FILTER_SANITIZE_STRING);
         $reward_id = filter_input(INPUT_POST, 'reward_id', FILTER_VALIDATE_INT, FILTER_NULL_ON_FAILURE);
-        $message = createGoal($main_parent_id, $child_user_id, $title, $start_date, $end_date, $reward_id, $_SESSION['user_id'])
+        $message = createGoal($main_parent_id, $child_user_id, $title, $start_date, $end_date, $reward_id, $_SESSION['user_id'], ['description' => $description])
             ? "Goal created successfully!"
             : "Failed to create goal. Check date range or reward ID.";
     } elseif (isset($_POST['adjust_child_points'])) {

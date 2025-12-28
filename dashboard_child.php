@@ -149,6 +149,7 @@ $notificationCount = is_array($notificationsNew) ? count($notificationsNew) : 0;
         .goal-item { background: #fff7e6; border: 1px solid #ffd28a; border-radius: 10px; padding: 10px; display: grid; gap: 6px; text-align: left; }
         .goal-item-title { font-weight: 700; color: #3e2723; }
         .goal-item-meta { font-size: 0.85rem; color: #6d4c41; }
+        .goal-item-desc { font-size: 0.85rem; color: #5d4037; }
         .goal-progress-bar { height: 20px; border-radius: 999px; background: #ffe9c6; overflow: hidden; border: 1px dashed #ffb74d; }
         .goal-progress-bar span { display: block; height: 100%; background: linear-gradient(90deg, #ff6f61, #ffd54f, #4caf50); background-size: 200% 100%; width: 0; transition: width 300ms ease; animation: goal-spark 2.4s linear infinite; box-shadow: 0 0 8px rgba(255, 111, 97, 0.35); }
         .goal-progress-bar.complete span { background: #4caf50; animation: none; box-shadow: none; }
@@ -1038,6 +1039,9 @@ $notificationCount = is_array($notificationsNew) ? count($notificationsNew) : 0;
                    ?>
                    <div class="goal-item">
                       <div class="goal-item-title"><?php echo htmlspecialchars($goal['title']); ?></div>
+                      <?php if (!empty($goal['description'])): ?>
+                         <div class="goal-item-desc"><?php echo nl2br(htmlspecialchars($goal['description'])); ?></div>
+                      <?php endif; ?>
                       <div class="goal-item-meta"><?php echo htmlspecialchars($typeLabel); ?> • <?php echo (int) $progress['current']; ?> / <?php echo (int) $progress['target']; ?></div>
                       <div class="goal-progress-bar">
                          <span style="width: <?php echo (int) $progress['percent']; ?>%;"></span>

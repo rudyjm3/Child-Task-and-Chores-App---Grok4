@@ -24,6 +24,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['create_goal']) && isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
         $child_user_id = filter_input(INPUT_POST, 'child_user_id', FILTER_VALIDATE_INT);
         $title = filter_input(INPUT_POST, 'title', FILTER_SANITIZE_STRING);
+        $description = trim((string) filter_input(INPUT_POST, 'description', FILTER_SANITIZE_STRING));
+        if ($description === '') {
+            $description = null;
+        }
         $start_date = filter_input(INPUT_POST, 'start_date', FILTER_SANITIZE_STRING);
         $end_date = filter_input(INPUT_POST, 'end_date', FILTER_SANITIZE_STRING);
         $reward_id = filter_input(INPUT_POST, 'reward_id', FILTER_VALIDATE_INT, FILTER_NULL_ON_FAILURE);
@@ -47,6 +51,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $task_target_ids = array_values(array_filter(array_map('intval', $_POST['task_target_ids'] ?? [])));
 
         $options = [
+            'description' => $description,
             'goal_type' => $goal_type,
             'routine_id' => $routine_id,
             'task_category' => $task_category,
@@ -72,6 +77,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $goal_id = filter_input(INPUT_POST, 'goal_id', FILTER_VALIDATE_INT);
         $child_user_id = filter_input(INPUT_POST, 'child_user_id', FILTER_VALIDATE_INT);
         $title = filter_input(INPUT_POST, 'title', FILTER_SANITIZE_STRING);
+        $description = trim((string) filter_input(INPUT_POST, 'description', FILTER_SANITIZE_STRING));
+        if ($description === '') {
+            $description = null;
+        }
         $start_date = filter_input(INPUT_POST, 'start_date', FILTER_SANITIZE_STRING);
         $end_date = filter_input(INPUT_POST, 'end_date', FILTER_SANITIZE_STRING);
         $reward_id = filter_input(INPUT_POST, 'reward_id', FILTER_VALIDATE_INT, FILTER_NULL_ON_FAILURE);
@@ -96,6 +105,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $options = [
             'child_user_id' => $child_user_id,
+            'description' => $description,
             'goal_type' => $goal_type,
             'routine_id' => $routine_id,
             'task_category' => $task_category,
@@ -171,6 +181,7 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                              g.id, 
                              g.child_user_id,
                              g.title, 
+                             g.description,
                              g.start_date, 
                              g.end_date, 
                              g.status, 
@@ -218,6 +229,7 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                              g.id, 
                              g.child_user_id,
                              g.title, 
+                             g.description,
                              g.start_date, 
                              g.end_date, 
                              g.status, 
@@ -280,6 +292,7 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                              g.id, 
                              g.child_user_id,
                              g.title, 
+                             g.description,
                              g.start_date, 
                              g.end_date, 
                              g.status, 
@@ -500,6 +513,9 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
             display: grid;
             gap: 6px;
         }
+        .form-group.full-span {
+            grid-column: 1 / -1;
+        }
         .form-group input,
         .form-group select,
         .form-group textarea {
@@ -623,6 +639,7 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
         .goal-next-needed { font-size: 0.92rem; color: #455a64; }
         .goal-meta { display: grid; gap: 6px; color: #5f6c76; font-size: 0.92rem; margin-top: 8px; }
         .goal-detail-pill { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; background: #eef4ff; color: #0d47a1; font-weight: 700; font-size: 0.85rem; }
+        .goal-description { margin: 6px 0 0; color: #546e7a; }
         .goal-task-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; max-height: 180px; overflow: auto; padding: 6px; border: 1px solid #e0e0e0; border-radius: 10px; background: #fafafa; }
         .goal-task-card { border: 1px solid #d5def0; border-radius: 10px; padding: 8px; display: grid; gap: 6px; background: #fff; }
         .goal-task-card input { margin-right: 6px; }
@@ -778,6 +795,7 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                                     'id' => (int) $goal['id'],
                                     'child_user_id' => (int) ($goal['child_user_id'] ?? 0),
                                     'title' => $goal['title'] ?? '',
+                                    'description' => $goal['description'] ?? '',
                                     'start_date' => !empty($goal['start_date']) ? date('Y-m-d\\TH:i', strtotime($goal['start_date'])) : '',
                                     'end_date' => !empty($goal['end_date']) ? date('Y-m-d\\TH:i', strtotime($goal['end_date'])) : '',
                                     'reward_id' => (int) ($goal['reward_id'] ?? 0),
@@ -800,6 +818,9 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                                 ?>
                                 <div class="goal-card">
                                     <p>Title: <?php echo htmlspecialchars($goal['title']); ?></p>
+                                    <?php if (!empty($goal['description'])): ?>
+                                        <p class="goal-description"><?php echo nl2br(htmlspecialchars($goal['description'])); ?></p>
+                                    <?php endif; ?>
                                     <p>Period: <?php echo htmlspecialchars($goal['start_date_formatted']); ?> to <?php echo htmlspecialchars($goal['end_date_formatted']); ?></p>
                                     <p>Reward: <?php echo htmlspecialchars($goal['reward_title'] ?? 'None'); ?></p>
                                     <?php if (!empty($goal['creator_display_name'])): ?>
@@ -901,6 +922,9 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                         ?>
                         <div class="goal-card">
                             <p>Title: <?php echo htmlspecialchars($goal['title']); ?></p>
+                            <?php if (!empty($goal['description'])): ?>
+                                <p class="goal-description"><?php echo nl2br(htmlspecialchars($goal['description'])); ?></p>
+                            <?php endif; ?>
                             <p>Period: <?php echo htmlspecialchars($goal['start_date_formatted']); ?> to <?php echo htmlspecialchars($goal['end_date_formatted']); ?></p>
                             <p>Reward: <?php echo htmlspecialchars($goal['reward_title'] ?? 'None'); ?></p>
                             <p>Status: Completed</p>
@@ -935,6 +959,9 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                             <?php foreach ($rejected_goals as $goal): ?>
                                 <div class="goal-card rejected-card">
                                     <p>Title: <?php echo htmlspecialchars($goal['title']); ?></p>
+                                    <?php if (!empty($goal['description'])): ?>
+                                        <p class="goal-description"><?php echo nl2br(htmlspecialchars($goal['description'])); ?></p>
+                                    <?php endif; ?>
                                     <p>Period: <?php echo htmlspecialchars($goal['start_date_formatted']); ?> to <?php echo htmlspecialchars($goal['end_date_formatted']); ?></p>
                                     <p>Reward: <?php echo htmlspecialchars($goal['reward_title'] ?? 'None'); ?></p>
                                     <?php if (!empty($goal['creator_display_name'])): ?>
@@ -1007,6 +1034,10 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                             <div class="form-group">
                                 <label for="goal_title">Title</label>
                                 <input type="text" id="goal_title" name="title" required>
+                            </div>
+                            <div class="form-group full-span">
+                                <label for="goal_description">Description</label>
+                                <textarea id="goal_description" name="description" rows="3" placeholder="Optional details about the goal"></textarea>
                             </div>
                             <div class="form-group">
                                 <label for="goal_start_date">Start Date/Time</label>
@@ -1176,6 +1207,10 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                             <div class="form-group">
                                 <label for="edit_goal_title">Title</label>
                                 <input type="text" id="edit_goal_title" name="title" required>
+                            </div>
+                            <div class="form-group full-span">
+                                <label for="edit_goal_description">Description</label>
+                                <textarea id="edit_goal_description" name="description" rows="3" placeholder="Optional details about the goal"></textarea>
                             </div>
                             <div class="form-group">
                                 <label for="edit_goal_start_date">Start Date/Time</label>
@@ -1468,6 +1503,7 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
 
           goalEditForm.querySelector('[name="goal_id"]').value = payload.id || '';
           goalEditForm.querySelector('[name="title"]').value = payload.title || '';
+          goalEditForm.querySelector('[name="description"]').value = payload.description || '';
           goalEditForm.querySelector('[name="start_date"]').value = payload.start_date || '';
           goalEditForm.querySelector('[name="end_date"]').value = payload.end_date || '';
           goalEditForm.querySelector('[name="goal_type"]').value = payload.goal_type || 'manual';

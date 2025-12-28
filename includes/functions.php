@@ -1536,6 +1536,10 @@ function fulfillReward($reward_id, $parent_user_id, $actor_user_id) {
 // Create goal
 function createGoal($parent_user_id, $child_user_id, $title, $start_date, $end_date, $reward_id = null, $creator_user_id = null, array $options = []) {
     global $db;
+    $description = isset($options['description']) ? trim((string) $options['description']) : null;
+    if ($description === '') {
+        $description = null;
+    }
     $goalType = $options['goal_type'] ?? 'manual';
     $routineId = !empty($options['routine_id']) ? (int) $options['routine_id'] : null;
     $taskCategory = $options['task_category'] ?? null;
@@ -1551,12 +1555,13 @@ function createGoal($parent_user_id, $child_user_id, $title, $start_date, $end_d
     $requiresApproval = array_key_exists('requires_parent_approval', $options) ? (!empty($options['requires_parent_approval']) ? 1 : 0) : 1;
     $taskTargets = $options['task_target_ids'] ?? [];
 
-    $stmt = $db->prepare("INSERT INTO goals (parent_user_id, child_user_id, title, target_points, start_date, end_date, reward_id, goal_type, routine_id, task_category, target_count, streak_required, time_window_type, time_window_days, fixed_window_start, fixed_window_end, require_on_time, points_awarded, award_mode, requires_parent_approval, created_by)
-                          VALUES (:parent_id, :child_id, :title, :target_points, :start_date, :end_date, :reward_id, :goal_type, :routine_id, :task_category, :target_count, :streak_required, :time_window_type, :time_window_days, :fixed_window_start, :fixed_window_end, :require_on_time, :points_awarded, :award_mode, :requires_parent_approval, :created_by)");
+    $stmt = $db->prepare("INSERT INTO goals (parent_user_id, child_user_id, title, description, target_points, start_date, end_date, reward_id, goal_type, routine_id, task_category, target_count, streak_required, time_window_type, time_window_days, fixed_window_start, fixed_window_end, require_on_time, points_awarded, award_mode, requires_parent_approval, created_by)
+                          VALUES (:parent_id, :child_id, :title, :description, :target_points, :start_date, :end_date, :reward_id, :goal_type, :routine_id, :task_category, :target_count, :streak_required, :time_window_type, :time_window_days, :fixed_window_start, :fixed_window_end, :require_on_time, :points_awarded, :award_mode, :requires_parent_approval, :created_by)");
     $ok = $stmt->execute([
         ':parent_id' => $parent_user_id,
         ':child_id' => $child_user_id,
         ':title' => $title,
+        ':description' => $description,
         ':target_points' => 0,
         ':start_date' => $start_date,
         ':end_date' => $end_date,
@@ -1596,6 +1601,10 @@ function updateGoal($goal_id, $parent_user_id, $title, $start_date, $end_date, $
         return false;
     }
 
+    $description = array_key_exists('description', $options) ? trim((string) ($options['description'] ?? '')) : ($existing['description'] ?? null);
+    if ($description === '') {
+        $description = null;
+    }
     $childId = array_key_exists('child_user_id', $options) ? (int) $options['child_user_id'] : (int) ($existing['child_user_id'] ?? 0);
     $goalType = $options['goal_type'] ?? ($existing['goal_type'] ?? 'manual');
     $routineId = array_key_exists('routine_id', $options) ? (!empty($options['routine_id']) ? (int) $options['routine_id'] : null) : ($existing['routine_id'] ?? null);
@@ -1626,6 +1635,7 @@ function updateGoal($goal_id, $parent_user_id, $title, $start_date, $end_date, $
     $stmt = $db->prepare("UPDATE goals 
                          SET child_user_id = :child_id,
                              title = :title, 
+                             description = :description,
                              target_points = 0, 
                              start_date = :start_date, 
                              end_date = :end_date, 
@@ -1650,6 +1660,7 @@ function updateGoal($goal_id, $parent_user_id, $title, $start_date, $end_date, $
         ':parent_id' => $parent_user_id,
         ':child_id' => $childId,
         ':title' => $title,
+        ':description' => $description,
         ':start_date' => $start_date,
         ':end_date' => $end_date,
         ':reward_id' => $reward_id,
@@ -3010,6 +3021,7 @@ try {
       id INT AUTO_INCREMENT PRIMARY KEY,
       parent_user_id INT NOT NULL,
       title VARCHAR(100) NOT NULL,
+      description TEXT DEFAULT NULL,
       description TEXT,
       point_cost INT NOT NULL,
       created_by INT NULL,
@@ -3070,6 +3082,7 @@ try {
       parent_user_id INT NOT NULL,
       child_user_id INT NOT NULL,
       title VARCHAR(100) NOT NULL,
+      description TEXT DEFAULT NULL,
       target_points INT NOT NULL DEFAULT 0,
       start_date DATETIME,
       end_date DATETIME,
@@ -3105,6 +3118,7 @@ try {
   // Add created_by to existing goals if not exists
   $db->exec("ALTER TABLE goals ADD COLUMN IF NOT EXISTS created_by INT NULL");
   error_log("Added/verified created_by in goals");
+  $db->exec("ALTER TABLE goals ADD COLUMN IF NOT EXISTS description TEXT DEFAULT NULL");
   $db->exec("ALTER TABLE goals ADD COLUMN IF NOT EXISTS goal_type VARCHAR(24) DEFAULT 'manual'");
   $db->exec("ALTER TABLE goals ADD COLUMN IF NOT EXISTS routine_id INT NULL");
   $db->exec("ALTER TABLE goals ADD COLUMN IF NOT EXISTS task_category VARCHAR(50) DEFAULT NULL");
