@@ -1750,11 +1750,16 @@ function getGoalRoutineTargetIds($goal_id) {
     return array_values(array_filter(array_map('intval', $stmt->fetchAll(PDO::FETCH_COLUMN))));
 }
 
-function getRoutineCompletionDates(array $routine_ids, $child_id, $require_on_time, $start_date = null, $end_date = null) {
+function getRoutineCompletionSummary(array $routine_ids, $child_id, $require_on_time, $start_date = null, $end_date = null) {
     global $db;
     $routine_ids = array_values(array_filter(array_map('intval', $routine_ids)));
     if (empty($routine_ids)) {
-        return [];
+        return [
+            'routine_counts' => [],
+            'routine_dates' => [],
+            'all_dates' => [],
+            'any_dates' => []
+        ];
     }
 
     $placeholders = implode(',', array_fill(0, count($routine_ids), '?'));
@@ -1773,25 +1778,24 @@ function getRoutineCompletionDates(array $routine_ids, $child_id, $require_on_ti
                           ORDER BY date_key ASC");
     $stmt->execute($params);
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
-    $pointsByDate = [];
+    $routineDates = [];
     foreach ($rows as $row) {
         $dateKey = $row['date_key'] ?? null;
         $routineId = (int) ($row['routine_id'] ?? 0);
         if ($dateKey && $routineId) {
-            if (!isset($pointsByDate[$dateKey])) {
-                $pointsByDate[$dateKey] = [];
+            if (!isset($routineDates[$routineId])) {
+                $routineDates[$routineId] = [];
             }
-            $pointsByDate[$dateKey][$routineId] = true;
+            $routineDates[$routineId][$dateKey] = true;
         }
     }
-    if (empty($pointsByDate)) {
-        return [];
-    }
-
-    if (!$require_on_time) {
-        $dates = array_keys($pointsByDate);
-        sort($dates);
-        return $dates;
+    if (empty($routineDates)) {
+        return [
+            'routine_counts' => [],
+            'routine_dates' => [],
+            'all_dates' => [],
+            'any_dates' => []
+        ];
     }
 
     $otParams = $routine_ids;
@@ -1819,21 +1823,61 @@ function getRoutineCompletionDates(array $routine_ids, $child_id, $require_on_ti
         }
     }
 
-    $dates = [];
-    foreach ($pointsByDate as $dateKey => $routineMap) {
-        $hasOnTime = false;
-        foreach (array_keys($routineMap) as $routineId) {
-            if (empty($overtimeByRoutineDate[$routineId][$dateKey])) {
-                $hasOnTime = true;
-                break;
+    if ($require_on_time) {
+        foreach ($routineDates as $routineId => $dates) {
+            foreach (array_keys($dates) as $dateKey) {
+                if (!empty($overtimeByRoutineDate[$routineId][$dateKey])) {
+                    unset($routineDates[$routineId][$dateKey]);
+                }
+            }
+            if (empty($routineDates[$routineId])) {
+                unset($routineDates[$routineId]);
             }
         }
-        if ($hasOnTime) {
-            $dates[] = $dateKey;
+        if (empty($routineDates)) {
+            return [
+                'routine_counts' => [],
+                'routine_dates' => [],
+                'all_dates' => [],
+                'any_dates' => []
+            ];
         }
     }
-    sort($dates);
-    return $dates;
+
+    $routineCounts = [];
+    foreach ($routineDates as $routineId => $dates) {
+        $routineCounts[$routineId] = count($dates);
+    }
+
+    $anyDates = [];
+    foreach ($routineDates as $dates) {
+        foreach (array_keys($dates) as $dateKey) {
+            $anyDates[$dateKey] = true;
+        }
+    }
+
+    $allDates = null;
+    foreach ($routine_ids as $routineId) {
+        $dates = array_keys($routineDates[$routineId] ?? []);
+        if ($allDates === null) {
+            $allDates = $dates;
+            continue;
+        }
+        $allDates = array_values(array_intersect($allDates, $dates));
+    }
+    if ($allDates === null) {
+        $allDates = [];
+    }
+    sort($allDates);
+
+    $anyList = array_keys($anyDates);
+    sort($anyList);
+    return [
+        'routine_counts' => $routineCounts,
+        'routine_dates' => $routineDates,
+        'all_dates' => $allDates,
+        'any_dates' => $anyList
+    ];
 }
 function awardGoalReward($goal, $child_id) {
     global $db;
@@ -1963,6 +2007,7 @@ function calculateGoalProgress(array $goal, $child_id) {
     $status = $goal['status'] ?? 'active';
     $title = $goal['title'] ?? 'Goal';
     $requireOnTime = !empty($goal['require_on_time']);
+    $routineCounts = [];
     $target = 1;
     $current = 0;
     $currentStreak = 0;
@@ -1979,7 +2024,9 @@ function calculateGoalProgress(array $goal, $child_id) {
             }
         }
         if (!empty($routineIds)) {
-            $dates = getRoutineCompletionDates($routineIds, $child_id, $requireOnTime);
+            $summary = getRoutineCompletionSummary($routineIds, $child_id, $requireOnTime);
+            $routineCounts = $summary['routine_counts'] ?? [];
+            $dates = $summary['all_dates'] ?? [];
             if (!empty($dates)) {
                 $lastDate = end($dates);
                 $lastProgressDate = $lastDate;
@@ -2005,7 +2052,9 @@ function calculateGoalProgress(array $goal, $child_id) {
             } elseif ($lastProgressDate === date('Y-m-d', strtotime('-1 day'))) {
                 $nextHint = "Complete it today for day " . ($currentStreak + 1) . ".";
             } else {
-                $nextHint = "Complete the routine today to start your streak.";
+                $nextHint = count($routineIds) > 1
+                    ? "Complete all routines today to start your streak."
+                    : "Complete the routine today to start your streak.";
             }
         }
     } elseif ($goalType === 'routine_count') {
@@ -2019,21 +2068,24 @@ function calculateGoalProgress(array $goal, $child_id) {
         }
         if (!empty($routineIds)) {
             [$start, $end] = getGoalWindowRange($goal);
-            $dates = getRoutineCompletionDates(
+            $summary = getRoutineCompletionSummary(
                 $routineIds,
                 $child_id,
                 $requireOnTime,
                 $start->format('Y-m-d'),
                 $end->format('Y-m-d')
             );
+            $routineCounts = $summary['routine_counts'] ?? [];
+            $dates = $summary['all_dates'] ?? [];
             $current = count($dates);
             $lastProgressDate = !empty($dates) ? max($dates) : null;
             $remaining = max(0, $target - $current);
             if ($remaining > 0) {
+                $routineLabel = count($routineIds) > 1 ? 'all routines' : 'the routine';
                 if (($goal['time_window_type'] ?? 'rolling') === 'fixed') {
-                    $nextHint = "Complete it {$remaining} more time(s) by " . $end->format('m/d');
+                    $nextHint = "Complete {$routineLabel} {$remaining} more time(s) by " . $end->format('m/d');
                 } else {
-                    $nextHint = "Complete it {$remaining} more time(s) in the next " . ($goal['time_window_days'] ?: 7) . " days.";
+                    $nextHint = "Complete {$routineLabel} {$remaining} more time(s) in the next " . ($goal['time_window_days'] ?: 7) . " days.";
                 }
             }
         }
@@ -2146,7 +2198,8 @@ function calculateGoalProgress(array $goal, $child_id) {
         'percent' => $percent,
         'last_progress_date' => $lastProgressDate,
         'next_needed' => $nextHint,
-        'is_met' => $isMet
+        'is_met' => $isMet,
+        'routine_counts' => $routineCounts
     ];
 }
 

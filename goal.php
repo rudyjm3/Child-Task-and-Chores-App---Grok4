@@ -105,12 +105,18 @@ function hydrateGoalRoutineData(array $goals) {
         }
         $goal['routine_target_ids'] = $targetIds;
         $titles = [];
+        $targets = [];
         foreach ($targetIds as $routineId) {
             if (isset($routineTitleMap[$routineId])) {
                 $titles[] = $routineTitleMap[$routineId];
+                $targets[] = [
+                    'id' => $routineId,
+                    'title' => $routineTitleMap[$routineId]
+                ];
             }
         }
         $goal['routine_title_display'] = implode(', ', $titles);
+        $goal['routine_targets'] = $targets;
     }
     unset($goal);
     return $goals;
@@ -807,6 +813,9 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
         .goal-next-needed { font-size: 0.92rem; color: #455a64; }
         .goal-meta { display: grid; gap: 6px; color: #5f6c76; font-size: 0.92rem; margin-top: 8px; }
         .goal-detail-pill { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; background: #eef4ff; color: #0d47a1; font-weight: 700; font-size: 0.85rem; }
+        .goal-routine-badges { display: flex; flex-wrap: wrap; gap: 6px; }
+        .goal-routine-badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; background: #f2f5f9; color: #37474f; font-weight: 700; font-size: 0.82rem; }
+        .goal-routine-count { display: inline-flex; align-items: center; justify-content: center; min-width: 22px; padding: 2px 8px; border-radius: 999px; background: #1565c0; color: #fff; font-weight: 700; font-size: 0.78rem; }
         .goal-description { margin: 6px 0 0; color: #546e7a; }
         .goal-task-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; max-height: 180px; overflow: auto; padding: 6px; border: 1px solid #e0e0e0; border-radius: 10px; background: #fafafa; }
         .goal-task-card { border: 1px solid #d5def0; border-radius: 10px; padding: 8px; display: grid; gap: 6px; background: #fff; }
@@ -1012,8 +1021,16 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                                             <div class="goal-next-needed">Next: <?php echo htmlspecialchars($goalProgress['next_needed']); ?></div>
                                         <?php endif; ?>
                                         <div class="goal-meta">
-                                            <?php if (!empty($goal['routine_title_display'])): ?>
-                                                <span class="goal-detail-pill">Routine: <?php echo htmlspecialchars($goal['routine_title_display']); ?></span>
+                                            <?php if (!empty($goal['routine_targets'])): ?>
+                                                <div class="goal-routine-badges" aria-label="Routine completion counts">
+                                                    <?php foreach ($goal['routine_targets'] as $routine): ?>
+                                                        <?php $routineCount = $goalProgress['routine_counts'][$routine['id']] ?? 0; ?>
+                                                        <span class="goal-routine-badge">
+                                                            <?php echo htmlspecialchars($routine['title']); ?>
+                                                            <span class="goal-routine-count"><?php echo (int) $routineCount; ?></span>
+                                                        </span>
+                                                    <?php endforeach; ?>
+                                                </div>
                                             <?php endif; ?>
                                             <?php if (!empty($goal['task_category'])): ?>
                                                 <span class="goal-detail-pill">Category: <?php echo htmlspecialchars(ucfirst($goal['task_category'])); ?></span>
