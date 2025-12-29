@@ -2534,7 +2534,7 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                             $is_overdue = false;
                         }
                         ?>
-                        <div class="task-card<?php if ($is_overdue) { echo ' overdue'; } ?>" id="task-<?php echo (int) $task['id']; ?>" data-task-id="<?php echo $task['id']; ?>">
+                        <div class="task-card" id="task-<?php echo (int) $task['id']; ?>" data-task-id="<?php echo $task['id']; ?>">
                             <div class="task-card-header">
                                 <div class="task-card-title"><?php echo htmlspecialchars($task['title']); ?></div>
                                 <div class="task-pill"><?php echo (int)$task['points']; ?> pts</div>
@@ -2560,8 +2560,13 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                                     }
                                 ?>
                                 <div class="task-meta-row">
-                                    <span><span class="task-meta-label">Due:</span> <?php echo htmlspecialchars($dueDisplay); ?><?php if ($is_overdue) { echo '<span class="overdue-label">Overdue!</span>'; } ?></span>
+                                    <span><span class="task-meta-label">Due:</span> <?php echo htmlspecialchars($dueDisplay); ?></span>
                                 </div>
+                                <?php if (!empty($task['end_date'])): ?>
+                                    <div class="task-meta-row">
+                                        <span><span class="task-meta-label">End Date:</span> <?php echo htmlspecialchars(date('m/d/Y', strtotime($task['end_date']))); ?></span>
+                                    </div>
+                                <?php endif; ?>
                                 <div class="task-meta-row">
                                     <span><span class="task-meta-label">Category:</span> <?php echo htmlspecialchars($task['category']); ?></span>
                                     <span><span class="task-meta-label">Timing:</span> <?php echo htmlspecialchars($task['timing_mode'] === 'no_limit' ? 'None' : ucfirst($task['timing_mode'])); ?></span>
@@ -2688,6 +2693,11 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                                 <div class="task-meta-row">
                                     <span><span class="task-meta-label">Due:</span> <?php echo htmlspecialchars($dueDisplay); ?></span>
                                 </div>
+                                <?php if (!empty($task['end_date'])): ?>
+                                    <div class="task-meta-row">
+                                        <span><span class="task-meta-label">End Date:</span> <?php echo htmlspecialchars(date('m/d/Y', strtotime($task['end_date']))); ?></span>
+                                    </div>
+                                <?php endif; ?>
                                 <div class="task-meta-row">
                                     <span><span class="task-meta-label">Category:</span> <?php echo htmlspecialchars($task['category']); ?></span>
                                     <span><span class="task-meta-label">Timing:</span> <?php echo htmlspecialchars($task['timing_mode'] === 'no_limit' ? 'None' : ucfirst($task['timing_mode'])); ?></span>
@@ -2791,6 +2801,11 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                                 <div class="task-meta-row">
                                     <span><span class="task-meta-label">Due:</span> <?php echo htmlspecialchars($dueDisplay); ?></span>
                                 </div>
+                                <?php if (!empty($task['end_date'])): ?>
+                                    <div class="task-meta-row">
+                                        <span><span class="task-meta-label">End Date:</span> <?php echo htmlspecialchars(date('m/d/Y', strtotime($task['end_date']))); ?></span>
+                                    </div>
+                                <?php endif; ?>
                                 <div class="task-meta-row">
                                     <span><span class="task-meta-label">Category:</span> <?php echo htmlspecialchars($task['category']); ?></span>
                                     <span><span class="task-meta-label">Timing:</span> <?php echo htmlspecialchars($task['timing_mode'] === 'no_limit' ? 'None' : ucfirst($task['timing_mode'])); ?></span>
