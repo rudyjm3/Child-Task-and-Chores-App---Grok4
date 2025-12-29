@@ -665,9 +665,20 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
             transform: none;
         }
         .tooltip.tooltip-right .tooltip-text {
-            right: 0;
+            right: -80px;
             left: auto;
             transform: none;
+        }
+        .tooltip.tooltip-shift-left .tooltip-text {
+            left: -80px;
+            right: auto;
+            transform: none;
+        }
+        @media (max-width: 700px) {
+            .tooltip.tooltip-shift-left .tooltip-text {
+                left: 0;
+                right: auto;
+            }
         }
         .tooltip.open .tooltip-text {
             opacity: 1;
@@ -1121,7 +1132,7 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                             </div>
                             <div class="form-group">
                                 <label for="goal_type">Goal Type
-                                    <span class="tooltip tooltip-left" tabindex="0" aria-label="Choose how progress is tracked and which fields are required.">
+                                    <span class="tooltip tooltip-shift-left" tabindex="0" aria-label="Choose how progress is tracked and which fields are required.">
                                         <i class="fa-solid fa-circle-info"></i>
                                         <span class="tooltip-text">Choose how progress is tracked and which fields are required.</span>
                                     </span>
