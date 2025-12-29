@@ -631,6 +631,53 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
         .toggle-switch input:checked + .toggle-slider { background: #4caf50; }
         .toggle-switch input:checked + .toggle-slider::after { transform: translateX(20px); }
         .toggle-label { font-weight: 600; }
+        .tooltip {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            margin-left: 6px;
+            color: #607d8b;
+            cursor: help;
+        }
+        .tooltip i { font-size: 0.9rem; }
+        .tooltip .tooltip-text {
+            position: absolute;
+            left: 50%;
+            top: calc(100% + 6px);
+            transform: translateX(-50%);
+            background: #263238;
+            color: #fff;
+            padding: 8px 10px;
+            border-radius: 8px;
+            font-size: 0.82rem;
+            width: 240px;
+            max-width: min(240px, 80vw);
+            line-height: 1.35;
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+            transition: opacity 150ms ease;
+            z-index: 5;
+        }
+        .tooltip.tooltip-left .tooltip-text {
+            left: 0;
+            transform: none;
+        }
+        .tooltip.tooltip-right .tooltip-text {
+            right: 0;
+            left: auto;
+            transform: none;
+        }
+        .tooltip.open .tooltip-text {
+            opacity: 1;
+            visibility: visible;
+        }
+        .tooltip:focus .tooltip-text,
+        .tooltip:hover .tooltip-text {
+            opacity: 1;
+            visibility: visible;
+        }
         .goal-progress { margin-top: 12px; display: grid; gap: 6px; }
         .goal-progress-header { display: flex; align-items: center; justify-content: space-between; font-weight: 700; color: #37474f; }
         .goal-progress-bar { height: 30px; border-radius: 999px; background: #edf1f7; overflow: hidden; border: 1px solid #dfe6ee; }
@@ -1014,7 +1061,12 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                         ?>
                         <div class="form-grid">
                             <div class="form-group">
-                                <label>Child</label>
+                                <label>Child
+                                    <span class="tooltip tooltip-left" tabindex="0" aria-label="Pick the child this goal is for. This filters routines and tasks.">
+                                        <i class="fa-solid fa-circle-info"></i>
+                                        <span class="tooltip-text">Pick the child this goal is for. This filters routines and tasks.</span>
+                                    </span>
+                                </label>
                                 <div class="child-select-grid">
                                     <?php if (!empty($children)): ?>
                                         <?php foreach ($children as $child):
@@ -1032,23 +1084,48 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                                 </div>
                             </div>
                             <div class="form-group">
-                                <label for="goal_title">Title</label>
+                                <label for="goal_title">Title
+                                    <span class="tooltip" tabindex="0" aria-label="Short name shown on goal cards and notifications.">
+                                        <i class="fa-solid fa-circle-info"></i>
+                                        <span class="tooltip-text">Short name shown on goal cards and notifications.</span>
+                                    </span>
+                                </label>
                                 <input type="text" id="goal_title" name="title" required>
                             </div>
                             <div class="form-group full-span">
-                                <label for="goal_description">Description</label>
+                                <label for="goal_description">Description
+                                    <span class="tooltip tooltip-left" tabindex="0" aria-label="Optional details or requirements shown on goal cards and the child dashboard.">
+                                        <i class="fa-solid fa-circle-info"></i>
+                                        <span class="tooltip-text">Optional details or requirements shown on goal cards and the child dashboard.</span>
+                                    </span>
+                                </label>
                                 <textarea id="goal_description" name="description" rows="3" placeholder="Optional details about the goal"></textarea>
                             </div>
                             <div class="form-group">
-                                <label for="goal_start_date">Start Date/Time</label>
+                                <label for="goal_start_date">Start Date/Time
+                                    <span class="tooltip" tabindex="0" aria-label="When the goal becomes active. Progress before this does not count.">
+                                        <i class="fa-solid fa-circle-info"></i>
+                                        <span class="tooltip-text">When the goal becomes active. Progress before this does not count.</span>
+                                    </span>
+                                </label>
                                 <input type="datetime-local" id="goal_start_date" name="start_date" required>
                             </div>
                             <div class="form-group">
-                                <label for="goal_end_date">End Date/Time</label>
+                                <label for="goal_end_date">End Date/Time
+                                    <span class="tooltip" tabindex="0" aria-label="Deadline. Progress after this does not count.">
+                                        <i class="fa-solid fa-circle-info"></i>
+                                        <span class="tooltip-text">Deadline. Progress after this does not count.</span>
+                                    </span>
+                                </label>
                                 <input type="datetime-local" id="goal_end_date" name="end_date" required>
                             </div>
                             <div class="form-group">
-                                <label for="goal_type">Goal Type</label>
+                                <label for="goal_type">Goal Type
+                                    <span class="tooltip tooltip-right" tabindex="0" aria-label="Choose how progress is tracked and which fields are required.">
+                                        <i class="fa-solid fa-circle-info"></i>
+                                        <span class="tooltip-text">Choose how progress is tracked and which fields are required.</span>
+                                    </span>
+                                </label>
                                 <select id="goal_type" name="goal_type" data-goal-type>
                                     <option value="manual" selected>Manual (Parent approval)</option>
                                     <option value="routine_streak">Routine streak</option>
@@ -1057,7 +1134,12 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                                 </select>
                             </div>
                             <div class="form-group" data-goal-routine>
-                                <label for="goal_routine_id">Routine</label>
+                                <label for="goal_routine_id">Routine
+                                    <span class="tooltip" tabindex="0" aria-label="Required for routine goals. Only routines for the selected child are listed.">
+                                        <i class="fa-solid fa-circle-info"></i>
+                                        <span class="tooltip-text">Required for routine goals. Only routines for the selected child are listed.</span>
+                                    </span>
+                                </label>
                                 <select id="goal_routine_id" name="routine_id" data-goal-routine-select>
                                     <option value="">Select routine</option>
                                     <?php foreach ($routines as $routine): ?>
@@ -1068,7 +1150,12 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                                 </select>
                             </div>
                             <div class="form-group" data-goal-task>
-                                <label for="goal_task_category">Task Category</label>
+                                <label for="goal_task_category">Task Category
+                                    <span class="tooltip" tabindex="0" aria-label="Optional filter. Leave blank to count any category.">
+                                        <i class="fa-solid fa-circle-info"></i>
+                                        <span class="tooltip-text">Optional filter. Leave blank to count any category.</span>
+                                    </span>
+                                </label>
                                 <select id="goal_task_category" name="task_category">
                                     <option value="">Any category</option>
                                     <option value="hygiene">Hygiene</option>
@@ -1077,7 +1164,12 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                                 </select>
                             </div>
                             <div class="form-group" data-goal-task>
-                                <label>Specific Tasks (optional)</label>
+                                <label>Specific Tasks (optional)
+                                    <span class="tooltip" tabindex="0" aria-label="Optional. If selected, only these tasks count; otherwise any matching tasks count.">
+                                        <i class="fa-solid fa-circle-info"></i>
+                                        <span class="tooltip-text">Optional. If selected, only these tasks count; otherwise any matching tasks count.</span>
+                                    </span>
+                                </label>
                                 <div class="goal-task-grid" data-goal-task-grid>
                                     <?php if (!empty($goalTasks)): ?>
                                         <?php foreach ($goalTasks as $task): ?>
@@ -1095,34 +1187,69 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                                 </div>
                             </div>
                             <div class="form-group" data-goal-count>
-                                <label for="target_count">Target Count</label>
+                                <label for="target_count">Target Count
+                                    <span class="tooltip" tabindex="0" aria-label="How many completions are needed.">
+                                        <i class="fa-solid fa-circle-info"></i>
+                                        <span class="tooltip-text">How many completions are needed.</span>
+                                    </span>
+                                </label>
                                 <input type="number" id="target_count" name="target_count" min="1" value="3">
                             </div>
                             <div class="form-group" data-goal-streak>
-                                <label for="streak_required">Streak Length (days)</label>
+                                <label for="streak_required">Streak Length (days)
+                                    <span class="tooltip" tabindex="0" aria-label="Consecutive days required.">
+                                        <i class="fa-solid fa-circle-info"></i>
+                                        <span class="tooltip-text">Consecutive days required.</span>
+                                    </span>
+                                </label>
                                 <input type="number" id="streak_required" name="streak_required" min="2" value="3">
                             </div>
                             <div class="form-group" data-goal-window>
-                                <label for="time_window_type">Time Window</label>
+                                <label for="time_window_type">Time Window
+                                    <span class="tooltip" tabindex="0" aria-label="Rolling counts the last X days. Fixed uses the start/end dates below.">
+                                        <i class="fa-solid fa-circle-info"></i>
+                                        <span class="tooltip-text">Rolling counts the last X days. Fixed uses the start/end dates below.</span>
+                                    </span>
+                                </label>
                                 <select id="time_window_type" name="time_window_type" data-goal-window-type>
                                     <option value="rolling" selected>Rolling window</option>
                                     <option value="fixed">Fixed dates</option>
                                 </select>
                             </div>
                             <div class="form-group" data-goal-window-rolling>
-                                <label for="time_window_days">Rolling Days</label>
+                                <label for="time_window_days">Rolling Days
+                                    <span class="tooltip" tabindex="0" aria-label="Size of the rolling window in days.">
+                                        <i class="fa-solid fa-circle-info"></i>
+                                        <span class="tooltip-text">Size of the rolling window in days.</span>
+                                    </span>
+                                </label>
                                 <input type="number" id="time_window_days" name="time_window_days" min="1" value="7">
                             </div>
                             <div class="form-group" data-goal-window-fixed>
-                                <label for="fixed_window_start">Fixed Start Date</label>
+                                <label for="fixed_window_start">Fixed Start Date
+                                    <span class="tooltip" tabindex="0" aria-label="Start of the fixed counting window.">
+                                        <i class="fa-solid fa-circle-info"></i>
+                                        <span class="tooltip-text">Start of the fixed counting window.</span>
+                                    </span>
+                                </label>
                                 <input type="date" id="fixed_window_start" name="fixed_window_start">
                             </div>
                             <div class="form-group" data-goal-window-fixed>
-                                <label for="fixed_window_end">Fixed End Date</label>
+                                <label for="fixed_window_end">Fixed End Date
+                                    <span class="tooltip" tabindex="0" aria-label="End of the fixed counting window.">
+                                        <i class="fa-solid fa-circle-info"></i>
+                                        <span class="tooltip-text">End of the fixed counting window.</span>
+                                    </span>
+                                </label>
                                 <input type="date" id="fixed_window_end" name="fixed_window_end">
                             </div>
                             <div class="form-group toggle-field" data-goal-toggle>
-                                <span class="toggle-label">Require On-Time Completion</span>
+                                <span class="toggle-label">Require On-Time Completion
+                                    <span class="tooltip" tabindex="0" aria-label="Only count items finished within their time limits.">
+                                        <i class="fa-solid fa-circle-info"></i>
+                                        <span class="tooltip-text">Only count items finished within their time limits.</span>
+                                    </span>
+                                </span>
                                 <label class="toggle-row">
                                     <span class="toggle-switch">
                                         <input type="checkbox" name="require_on_time" value="1">
@@ -1131,11 +1258,21 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                                 </label>
                             </div>
                             <div class="form-group">
-                                <label for="points_awarded">Points Awarded</label>
+                                <label for="points_awarded">Points Awarded
+                                    <span class="tooltip" tabindex="0" aria-label="Points added when the goal is completed.">
+                                        <i class="fa-solid fa-circle-info"></i>
+                                        <span class="tooltip-text">Points added when the goal is completed.</span>
+                                    </span>
+                                </label>
                                 <input type="number" id="points_awarded" name="points_awarded" min="0" value="0" data-goal-points>
                             </div>
                             <div class="form-group">
-                                <label for="award_mode">Award Mode</label>
+                                <label for="award_mode">Award Mode
+                                    <span class="tooltip" tabindex="0" aria-label="Choose points, reward, or both. Required fields change.">
+                                        <i class="fa-solid fa-circle-info"></i>
+                                        <span class="tooltip-text">Choose points, reward, or both. Required fields change.</span>
+                                    </span>
+                                </label>
                                 <select id="award_mode" name="award_mode" data-award-mode>
                                     <option value="both" selected>Points + Reward</option>
                                     <option value="points">Points only</option>
@@ -1143,7 +1280,12 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                                 </select>
                             </div>
                             <div class="form-group">
-                                <label for="goal_reward_id">Reward (optional)</label>
+                                <label for="goal_reward_id">Reward (optional)
+                                    <span class="tooltip" tabindex="0" aria-label="Reward to grant on completion. Required if reward is part of the award mode.">
+                                        <i class="fa-solid fa-circle-info"></i>
+                                        <span class="tooltip-text">Reward to grant on completion. Required if reward is part of the award mode.</span>
+                                    </span>
+                                </label>
                                 <select id="goal_reward_id" name="reward_id" data-goal-reward>
                                     <option value="">None</option>
                                     <?php foreach ($goalRewards as $reward): ?>
@@ -1152,7 +1294,12 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                                 </select>
                             </div>
                             <div class="form-group toggle-field">
-                                <span class="toggle-label">Parent Approval Required</span>
+                                <span class="toggle-label">Parent Approval Required
+                                    <span class="tooltip" tabindex="0" aria-label="If on, the goal goes to pending approval even when progress is met.">
+                                        <i class="fa-solid fa-circle-info"></i>
+                                        <span class="tooltip-text">If on, the goal goes to pending approval even when progress is met.</span>
+                                    </span>
+                                </span>
                                 <label class="toggle-row">
                                     <span class="toggle-switch">
                                         <input type="checkbox" name="requires_parent_approval" value="1" checked>
@@ -1187,7 +1334,12 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                         ?>
                         <div class="form-grid">
                             <div class="form-group">
-                                <label>Child</label>
+                                <label>Child
+                                    <span class="tooltip tooltip-left" tabindex="0" aria-label="Pick the child this goal is for. This filters routines and tasks.">
+                                        <i class="fa-solid fa-circle-info"></i>
+                                        <span class="tooltip-text">Pick the child this goal is for. This filters routines and tasks.</span>
+                                    </span>
+                                </label>
                                 <div class="child-select-grid">
                                     <?php if (!empty($children)): ?>
                                         <?php foreach ($children as $child):
@@ -1205,23 +1357,48 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                                 </div>
                             </div>
                             <div class="form-group">
-                                <label for="edit_goal_title">Title</label>
+                                <label for="edit_goal_title">Title
+                                    <span class="tooltip" tabindex="0" aria-label="Short name shown on goal cards and notifications.">
+                                        <i class="fa-solid fa-circle-info"></i>
+                                        <span class="tooltip-text">Short name shown on goal cards and notifications.</span>
+                                    </span>
+                                </label>
                                 <input type="text" id="edit_goal_title" name="title" required>
                             </div>
                             <div class="form-group full-span">
-                                <label for="edit_goal_description">Description</label>
+                                <label for="edit_goal_description">Description
+                                    <span class="tooltip tooltip-left" tabindex="0" aria-label="Optional details or requirements shown on goal cards and the child dashboard.">
+                                        <i class="fa-solid fa-circle-info"></i>
+                                        <span class="tooltip-text">Optional details or requirements shown on goal cards and the child dashboard.</span>
+                                    </span>
+                                </label>
                                 <textarea id="edit_goal_description" name="description" rows="3" placeholder="Optional details about the goal"></textarea>
                             </div>
                             <div class="form-group">
-                                <label for="edit_goal_start_date">Start Date/Time</label>
+                                <label for="edit_goal_start_date">Start Date/Time
+                                    <span class="tooltip" tabindex="0" aria-label="When the goal becomes active. Progress before this does not count.">
+                                        <i class="fa-solid fa-circle-info"></i>
+                                        <span class="tooltip-text">When the goal becomes active. Progress before this does not count.</span>
+                                    </span>
+                                </label>
                                 <input type="datetime-local" id="edit_goal_start_date" name="start_date" required>
                             </div>
                             <div class="form-group">
-                                <label for="edit_goal_end_date">End Date/Time</label>
+                                <label for="edit_goal_end_date">End Date/Time
+                                    <span class="tooltip" tabindex="0" aria-label="Deadline. Progress after this does not count.">
+                                        <i class="fa-solid fa-circle-info"></i>
+                                        <span class="tooltip-text">Deadline. Progress after this does not count.</span>
+                                    </span>
+                                </label>
                                 <input type="datetime-local" id="edit_goal_end_date" name="end_date" required>
                             </div>
                             <div class="form-group">
-                                <label for="edit_goal_type">Goal Type</label>
+                                <label for="edit_goal_type">Goal Type
+                                    <span class="tooltip tooltip-right" tabindex="0" aria-label="Choose how progress is tracked and which fields are required.">
+                                        <i class="fa-solid fa-circle-info"></i>
+                                        <span class="tooltip-text">Choose how progress is tracked and which fields are required.</span>
+                                    </span>
+                                </label>
                                 <select id="edit_goal_type" name="goal_type" data-goal-type>
                                     <option value="manual">Manual (Parent approval)</option>
                                     <option value="routine_streak">Routine streak</option>
@@ -1230,7 +1407,12 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                                 </select>
                             </div>
                             <div class="form-group" data-goal-routine>
-                                <label for="edit_goal_routine_id">Routine</label>
+                                <label for="edit_goal_routine_id">Routine
+                                    <span class="tooltip" tabindex="0" aria-label="Required for routine goals. Only routines for the selected child are listed.">
+                                        <i class="fa-solid fa-circle-info"></i>
+                                        <span class="tooltip-text">Required for routine goals. Only routines for the selected child are listed.</span>
+                                    </span>
+                                </label>
                                 <select id="edit_goal_routine_id" name="routine_id" data-goal-routine-select>
                                     <option value="">Select routine</option>
                                     <?php foreach ($routines as $routine): ?>
@@ -1241,7 +1423,12 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                                 </select>
                             </div>
                             <div class="form-group" data-goal-task>
-                                <label for="edit_goal_task_category">Task Category</label>
+                                <label for="edit_goal_task_category">Task Category
+                                    <span class="tooltip" tabindex="0" aria-label="Optional filter. Leave blank to count any category.">
+                                        <i class="fa-solid fa-circle-info"></i>
+                                        <span class="tooltip-text">Optional filter. Leave blank to count any category.</span>
+                                    </span>
+                                </label>
                                 <select id="edit_goal_task_category" name="task_category">
                                     <option value="">Any category</option>
                                     <option value="hygiene">Hygiene</option>
@@ -1250,7 +1437,12 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                                 </select>
                             </div>
                             <div class="form-group" data-goal-task>
-                                <label>Specific Tasks (optional)</label>
+                                <label>Specific Tasks (optional)
+                                    <span class="tooltip" tabindex="0" aria-label="Optional. If selected, only these tasks count; otherwise any matching tasks count.">
+                                        <i class="fa-solid fa-circle-info"></i>
+                                        <span class="tooltip-text">Optional. If selected, only these tasks count; otherwise any matching tasks count.</span>
+                                    </span>
+                                </label>
                                 <div class="goal-task-grid" data-goal-task-grid>
                                     <?php if (!empty($goalTasks)): ?>
                                         <?php foreach ($goalTasks as $task): ?>
@@ -1268,34 +1460,69 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                                 </div>
                             </div>
                             <div class="form-group" data-goal-count>
-                                <label for="edit_target_count">Target Count</label>
+                                <label for="edit_target_count">Target Count
+                                    <span class="tooltip" tabindex="0" aria-label="How many completions are needed.">
+                                        <i class="fa-solid fa-circle-info"></i>
+                                        <span class="tooltip-text">How many completions are needed.</span>
+                                    </span>
+                                </label>
                                 <input type="number" id="edit_target_count" name="target_count" min="1" value="3">
                             </div>
                             <div class="form-group" data-goal-streak>
-                                <label for="edit_streak_required">Streak Length (days)</label>
+                                <label for="edit_streak_required">Streak Length (days)
+                                    <span class="tooltip" tabindex="0" aria-label="Consecutive days required.">
+                                        <i class="fa-solid fa-circle-info"></i>
+                                        <span class="tooltip-text">Consecutive days required.</span>
+                                    </span>
+                                </label>
                                 <input type="number" id="edit_streak_required" name="streak_required" min="2" value="3">
                             </div>
                             <div class="form-group" data-goal-window>
-                                <label for="edit_time_window_type">Time Window</label>
+                                <label for="edit_time_window_type">Time Window
+                                    <span class="tooltip" tabindex="0" aria-label="Rolling counts the last X days. Fixed uses the start/end dates below.">
+                                        <i class="fa-solid fa-circle-info"></i>
+                                        <span class="tooltip-text">Rolling counts the last X days. Fixed uses the start/end dates below.</span>
+                                    </span>
+                                </label>
                                 <select id="edit_time_window_type" name="time_window_type" data-goal-window-type>
                                     <option value="rolling">Rolling window</option>
                                     <option value="fixed">Fixed dates</option>
                                 </select>
                             </div>
                             <div class="form-group" data-goal-window-rolling>
-                                <label for="edit_time_window_days">Rolling Days</label>
+                                <label for="edit_time_window_days">Rolling Days
+                                    <span class="tooltip" tabindex="0" aria-label="Size of the rolling window in days.">
+                                        <i class="fa-solid fa-circle-info"></i>
+                                        <span class="tooltip-text">Size of the rolling window in days.</span>
+                                    </span>
+                                </label>
                                 <input type="number" id="edit_time_window_days" name="time_window_days" min="1" value="7">
                             </div>
                             <div class="form-group" data-goal-window-fixed>
-                                <label for="edit_fixed_window_start">Fixed Start Date</label>
+                                <label for="edit_fixed_window_start">Fixed Start Date
+                                    <span class="tooltip" tabindex="0" aria-label="Start of the fixed counting window.">
+                                        <i class="fa-solid fa-circle-info"></i>
+                                        <span class="tooltip-text">Start of the fixed counting window.</span>
+                                    </span>
+                                </label>
                                 <input type="date" id="edit_fixed_window_start" name="fixed_window_start">
                             </div>
                             <div class="form-group" data-goal-window-fixed>
-                                <label for="edit_fixed_window_end">Fixed End Date</label>
+                                <label for="edit_fixed_window_end">Fixed End Date
+                                    <span class="tooltip" tabindex="0" aria-label="End of the fixed counting window.">
+                                        <i class="fa-solid fa-circle-info"></i>
+                                        <span class="tooltip-text">End of the fixed counting window.</span>
+                                    </span>
+                                </label>
                                 <input type="date" id="edit_fixed_window_end" name="fixed_window_end">
                             </div>
                             <div class="form-group toggle-field" data-goal-toggle>
-                                <span class="toggle-label">Require On-Time Completion</span>
+                                <span class="toggle-label">Require On-Time Completion
+                                    <span class="tooltip" tabindex="0" aria-label="Only count items finished within their time limits.">
+                                        <i class="fa-solid fa-circle-info"></i>
+                                        <span class="tooltip-text">Only count items finished within their time limits.</span>
+                                    </span>
+                                </span>
                                 <label class="toggle-row">
                                     <span class="toggle-switch">
                                         <input type="checkbox" name="require_on_time" value="1">
@@ -1304,11 +1531,21 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                                 </label>
                             </div>
                             <div class="form-group">
-                                <label for="edit_points_awarded">Points Awarded</label>
+                                <label for="edit_points_awarded">Points Awarded
+                                    <span class="tooltip" tabindex="0" aria-label="Points added when the goal is completed.">
+                                        <i class="fa-solid fa-circle-info"></i>
+                                        <span class="tooltip-text">Points added when the goal is completed.</span>
+                                    </span>
+                                </label>
                                 <input type="number" id="edit_points_awarded" name="points_awarded" min="0" value="0" data-goal-points>
                             </div>
                             <div class="form-group">
-                                <label for="edit_award_mode">Award Mode</label>
+                                <label for="edit_award_mode">Award Mode
+                                    <span class="tooltip" tabindex="0" aria-label="Choose points, reward, or both. Required fields change.">
+                                        <i class="fa-solid fa-circle-info"></i>
+                                        <span class="tooltip-text">Choose points, reward, or both. Required fields change.</span>
+                                    </span>
+                                </label>
                                 <select id="edit_award_mode" name="award_mode" data-award-mode>
                                     <option value="both">Points + Reward</option>
                                     <option value="points">Points only</option>
@@ -1316,7 +1553,12 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                                 </select>
                             </div>
                             <div class="form-group">
-                                <label for="edit_goal_reward_id">Reward (optional)</label>
+                                <label for="edit_goal_reward_id">Reward (optional)
+                                    <span class="tooltip" tabindex="0" aria-label="Reward to grant on completion. Required if reward is part of the award mode.">
+                                        <i class="fa-solid fa-circle-info"></i>
+                                        <span class="tooltip-text">Reward to grant on completion. Required if reward is part of the award mode.</span>
+                                    </span>
+                                </label>
                                 <select id="edit_goal_reward_id" name="reward_id" data-goal-reward>
                                     <option value="">None</option>
                                     <?php foreach ($goalRewards as $reward): ?>
@@ -1325,7 +1567,12 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                                 </select>
                             </div>
                             <div class="form-group toggle-field">
-                                <span class="toggle-label">Parent Approval Required</span>
+                                <span class="toggle-label">Parent Approval Required
+                                    <span class="tooltip" tabindex="0" aria-label="If on, the goal goes to pending approval even when progress is met.">
+                                        <i class="fa-solid fa-circle-info"></i>
+                                        <span class="tooltip-text">If on, the goal goes to pending approval even when progress is met.</span>
+                                    </span>
+                                </span>
                                 <label class="toggle-row">
                                     <span class="toggle-switch">
                                         <input type="checkbox" name="requires_parent_approval" value="1" checked>
@@ -1387,6 +1634,15 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
           const routineSelect = scope.querySelector('[data-goal-routine-select]');
           const taskGrid = scope.querySelector('[data-goal-task-grid]');
 
+          const setStepperDisabled = (disabled) => {
+              if (!pointsInput) return;
+              const stepper = pointsInput.closest('.number-stepper');
+              if (!stepper) return;
+              stepper.querySelectorAll('.stepper-btn').forEach(btn => {
+                  btn.disabled = disabled;
+              });
+          };
+
           const setGoalTypeVisibility = () => {
               const type = goalTypeSelect ? goalTypeSelect.value : 'manual';
               const showRoutine = type === 'routine_streak' || type === 'routine_count';
@@ -1410,7 +1666,10 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                   rewardSelect.disabled = mode === 'points';
               }
               if (pointsInput) {
+                  const lockPoints = mode === 'points';
+                  pointsInput.readOnly = lockPoints;
                   pointsInput.disabled = mode === 'reward';
+                  setStepperDisabled(lockPoints || pointsInput.disabled);
               }
           };
 
@@ -1463,6 +1722,11 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
 
       const createFormApi = setupGoalForm(goalCreateModal);
       const editFormApi = setupGoalForm(goalEditModal);
+
+      document.addEventListener('DOMContentLoaded', () => {
+          createFormApi?.setAwardModeVisibility();
+          editFormApi?.setAwardModeVisibility();
+      });
 
       const closeGoalCreate = () => {
           if (!goalCreateModal) return;
@@ -1571,7 +1835,23 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
           if (event.key === 'Escape') {
               closeGoalCreate();
               closeGoalEdit();
+              document.querySelectorAll('.tooltip.open').forEach(el => el.classList.remove('open'));
           }
+      });
+
+      document.querySelectorAll('.tooltip').forEach(tooltip => {
+          tooltip.addEventListener('click', (event) => {
+              event.stopPropagation();
+              const isOpen = tooltip.classList.contains('open');
+              document.querySelectorAll('.tooltip.open').forEach(el => {
+                  if (el !== tooltip) el.classList.remove('open');
+              });
+              tooltip.classList.toggle('open', !isOpen);
+          });
+      });
+
+      document.addEventListener('click', () => {
+          document.querySelectorAll('.tooltip.open').forEach(el => el.classList.remove('open'));
       });
 
       const validateGoalForm = (scope, errorEl) => {
