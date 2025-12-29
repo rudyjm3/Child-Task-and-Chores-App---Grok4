@@ -48,6 +48,74 @@ function resolveGoalRewardId($parent_id, $child_id, $reward_selection) {
     return ($reward_id && $reward_id > 0) ? $reward_id : null;
 }
 
+function hydrateGoalRoutineData(array $goals) {
+    global $db;
+    if (empty($goals)) {
+        return $goals;
+    }
+    $goalIds = array_values(array_unique(array_filter(array_map('intval', array_column($goals, 'id')))));
+    if (empty($goalIds)) {
+        return $goals;
+    }
+
+    $placeholders = implode(',', array_fill(0, count($goalIds), '?'));
+    $stmt = $db->prepare("SELECT goal_id, routine_id FROM goal_routine_targets WHERE goal_id IN ($placeholders)");
+    $stmt->execute($goalIds);
+    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    $goalTargets = [];
+    $routineIds = [];
+    foreach ($rows as $row) {
+        $goalId = (int) ($row['goal_id'] ?? 0);
+        $routineId = (int) ($row['routine_id'] ?? 0);
+        if ($goalId && $routineId) {
+            if (!isset($goalTargets[$goalId])) {
+                $goalTargets[$goalId] = [];
+            }
+            $goalTargets[$goalId][] = $routineId;
+            $routineIds[] = $routineId;
+        }
+    }
+
+    foreach ($goals as $goal) {
+        $goalId = (int) ($goal['id'] ?? 0);
+        $existingRoutineId = (int) ($goal['routine_id'] ?? 0);
+        if ($goalId && empty($goalTargets[$goalId]) && $existingRoutineId > 0) {
+            $routineIds[] = $existingRoutineId;
+        }
+    }
+    $routineIds = array_values(array_unique(array_filter($routineIds)));
+    $routineTitleMap = [];
+    if (!empty($routineIds)) {
+        $routinePlaceholders = implode(',', array_fill(0, count($routineIds), '?'));
+        $routineStmt = $db->prepare("SELECT id, title FROM routines WHERE id IN ($routinePlaceholders)");
+        $routineStmt->execute($routineIds);
+        foreach (($routineStmt->fetchAll(PDO::FETCH_ASSOC) ?: []) as $row) {
+            $routineTitleMap[(int) $row['id']] = $row['title'] ?? '';
+        }
+    }
+
+    foreach ($goals as &$goal) {
+        $goalId = (int) ($goal['id'] ?? 0);
+        $targetIds = $goalTargets[$goalId] ?? [];
+        if (empty($targetIds)) {
+            $existingRoutineId = (int) ($goal['routine_id'] ?? 0);
+            if ($existingRoutineId > 0) {
+                $targetIds = [$existingRoutineId];
+            }
+        }
+        $goal['routine_target_ids'] = $targetIds;
+        $titles = [];
+        foreach ($targetIds as $routineId) {
+            if (isset($routineTitleMap[$routineId])) {
+                $titles[] = $routineTitleMap[$routineId];
+            }
+        }
+        $goal['routine_title_display'] = implode(', ', $titles);
+    }
+    unset($goal);
+    return $goals;
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['create_goal']) && isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
         $child_user_id = filter_input(INPUT_POST, 'child_user_id', FILTER_VALIDATE_INT);
@@ -65,7 +133,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!in_array($goal_type, $allowed_types, true)) {
             $goal_type = 'manual';
         }
-        $routine_id = filter_input(INPUT_POST, 'routine_id', FILTER_VALIDATE_INT, FILTER_NULL_ON_FAILURE);
+        $routine_ids = array_values(array_filter(array_map('intval', $_POST['routine_ids'] ?? [])));
         $task_category = filter_input(INPUT_POST, 'task_category', FILTER_SANITIZE_STRING);
         $target_count = filter_input(INPUT_POST, 'target_count', FILTER_VALIDATE_INT);
         $streak_required = filter_input(INPUT_POST, 'streak_required', FILTER_VALIDATE_INT);
@@ -79,10 +147,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $requires_parent_approval = isset($_POST['requires_parent_approval']) ? 1 : 0;
         $task_target_ids = array_values(array_filter(array_map('intval', $_POST['task_target_ids'] ?? [])));
 
+        if (!in_array($goal_type, ['routine_streak', 'routine_count'], true)) {
+            $routine_ids = [];
+        }
+        $routine_id = !empty($routine_ids) ? $routine_ids[0] : null;
         $options = [
             'description' => $description,
             'goal_type' => $goal_type,
             'routine_id' => $routine_id,
+            'routine_target_ids' => $routine_ids,
             'task_category' => $task_category,
             'target_count' => max(0, (int) ($target_count ?? 0)),
             'streak_required' => max(0, (int) ($streak_required ?? 0)),
@@ -119,7 +192,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!in_array($goal_type, $allowed_types, true)) {
             $goal_type = 'manual';
         }
-        $routine_id = filter_input(INPUT_POST, 'routine_id', FILTER_VALIDATE_INT, FILTER_NULL_ON_FAILURE);
+        $routine_ids = array_values(array_filter(array_map('intval', $_POST['routine_ids'] ?? [])));
         $task_category = filter_input(INPUT_POST, 'task_category', FILTER_SANITIZE_STRING);
         $target_count = filter_input(INPUT_POST, 'target_count', FILTER_VALIDATE_INT);
         $streak_required = filter_input(INPUT_POST, 'streak_required', FILTER_VALIDATE_INT);
@@ -133,11 +206,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $requires_parent_approval = isset($_POST['requires_parent_approval']) ? 1 : 0;
         $task_target_ids = array_values(array_filter(array_map('intval', $_POST['task_target_ids'] ?? [])));
 
+        if (!in_array($goal_type, ['routine_streak', 'routine_count'], true)) {
+            $routine_ids = [];
+        }
+        $routine_id = !empty($routine_ids) ? $routine_ids[0] : null;
         $options = [
             'child_user_id' => $child_user_id,
             'description' => $description,
             'goal_type' => $goal_type,
             'routine_id' => $routine_id,
+            'routine_target_ids' => $routine_ids,
             'task_category' => $task_category,
             'target_count' => max(0, (int) ($target_count ?? 0)),
             'streak_required' => max(0, (int) ($streak_required ?? 0)),
@@ -299,6 +377,8 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
     error_log("Child goals fetched: " . print_r($goals, true)); // Debugging log
 }
 
+$goals = hydrateGoalRoutineData($goals);
+
 // Format dates for all goals
 foreach ($goals as &$goal) {
     $goal['start_date_formatted'] = date('m/d/Y h:i A', strtotime($goal['start_date']));
@@ -365,6 +445,8 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                          ORDER BY g.start_date ASC");
     $stmt->execute([':parent_id' => $family_root_id]);
     $all_goals = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    $all_goals = hydrateGoalRoutineData($all_goals);
 
     // Format dates for all goals in parent view
     foreach ($all_goals as &$goal) {
@@ -877,6 +959,10 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                                 if ($goal['status'] === 'active' && !empty($goalProgress['is_met'])) {
                                     $displayStatus = !empty($goal['requires_parent_approval']) ? 'pending_approval' : 'completed';
                                 }
+                                $routineTargetIds = $goal['routine_target_ids'] ?? [];
+                                if (empty($routineTargetIds) && !empty($goal['routine_id'])) {
+                                    $routineTargetIds = [(int) $goal['routine_id']];
+                                }
                                 $goalPayload = [
                                     'id' => (int) $goal['id'],
                                     'child_user_id' => (int) ($goal['child_user_id'] ?? 0),
@@ -887,6 +973,7 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                                     'reward_id' => (int) ($goal['reward_id'] ?? 0),
                                     'goal_type' => $goal['goal_type'] ?? 'manual',
                                     'routine_id' => (int) ($goal['routine_id'] ?? 0),
+                                    'routine_ids' => array_values(array_filter(array_map('intval', $routineTargetIds))),
                                     'task_category' => $goal['task_category'] ?? '',
                                     'target_count' => (int) ($goal['target_count'] ?? 0),
                                     'streak_required' => (int) ($goal['streak_required'] ?? 0),
@@ -925,8 +1012,8 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                                             <div class="goal-next-needed">Next: <?php echo htmlspecialchars($goalProgress['next_needed']); ?></div>
                                         <?php endif; ?>
                                         <div class="goal-meta">
-                                            <?php if (!empty($goal['routine_title'])): ?>
-                                                <span class="goal-detail-pill">Routine: <?php echo htmlspecialchars($goal['routine_title']); ?></span>
+                                            <?php if (!empty($goal['routine_title_display'])): ?>
+                                                <span class="goal-detail-pill">Routine: <?php echo htmlspecialchars($goal['routine_title_display']); ?></span>
                                             <?php endif; ?>
                                             <?php if (!empty($goal['task_category'])): ?>
                                                 <span class="goal-detail-pill">Category: <?php echo htmlspecialchars(ucfirst($goal['task_category'])); ?></span>
@@ -1173,13 +1260,13 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                                 </select>
                             </div>
                             <div class="form-group" data-goal-routine>
-                                <label for="goal_routine_id">Routine
-                                    <span class="tooltip" tabindex="0" aria-label="Required for routine goals. Only routines for the selected child are listed.">
+                                <label for="goal_routine_id">Routine(s)
+                                    <span class="tooltip" tabindex="0" aria-label="Required for routine goals. Select one or more routines for routine streak/count goals.">
                                         <i class="fa-solid fa-circle-info"></i>
-                                        <span class="tooltip-text">Required for routine goals. Only routines for the selected child are listed.</span>
+                                        <span class="tooltip-text">Required for routine goals. Select one or more routines for routine streak/count goals.</span>
                                     </span>
                                 </label>
-                                <select id="goal_routine_id" name="routine_id" data-goal-routine-select>
+                                <select id="goal_routine_id" name="routine_ids[]" data-goal-routine-select>
                                     <option value="">Select routine</option>
                                     <?php foreach ($routines as $routine): ?>
                                         <option value="<?php echo (int) $routine['id']; ?>" data-child-id="<?php echo (int) $routine['child_user_id']; ?>">
@@ -1448,13 +1535,13 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                                 </select>
                             </div>
                             <div class="form-group" data-goal-routine>
-                                <label for="edit_goal_routine_id">Routine
-                                    <span class="tooltip" tabindex="0" aria-label="Required for routine goals. Only routines for the selected child are listed.">
+                                <label for="edit_goal_routine_id">Routine(s)
+                                    <span class="tooltip" tabindex="0" aria-label="Required for routine goals. Select one or more routines for routine streak/count goals.">
                                         <i class="fa-solid fa-circle-info"></i>
-                                        <span class="tooltip-text">Required for routine goals. Only routines for the selected child are listed.</span>
+                                        <span class="tooltip-text">Required for routine goals. Select one or more routines for routine streak/count goals.</span>
                                     </span>
                                 </label>
-                                <select id="edit_goal_routine_id" name="routine_id" data-goal-routine-select>
+                                <select id="edit_goal_routine_id" name="routine_ids[]" data-goal-routine-select>
                                     <option value="">Select routine</option>
                                     <?php foreach ($routines as $routine): ?>
                                         <option value="<?php echo (int) $routine['id']; ?>" data-child-id="<?php echo (int) $routine['child_user_id']; ?>">
@@ -1693,6 +1780,19 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
               const showCount = type === 'routine_count' || type === 'task_quota';
               const showStreak = type === 'routine_streak';
               const showWindow = type === 'routine_count' || type === 'task_quota';
+              const allowMultiple = type === 'routine_streak' || type === 'routine_count';
+              if (routineSelect) {
+                  routineSelect.multiple = allowMultiple;
+                  if (!allowMultiple) {
+                      const selected = Array.from(routineSelect.selectedOptions).filter(opt => opt.value !== '');
+                      if (selected.length > 1) {
+                          routineSelect.value = selected[0].value;
+                          selected.slice(1).forEach(opt => {
+                              opt.selected = false;
+                          });
+                      }
+                  }
+              }
               scope.querySelectorAll('[data-goal-routine]').forEach(el => el.style.display = showRoutine ? 'grid' : 'none');
               scope.querySelectorAll('[data-goal-task]').forEach(el => el.style.display = showTask ? 'grid' : 'none');
               scope.querySelectorAll('[data-goal-count]').forEach(el => el.style.display = showCount ? 'grid' : 'none');
@@ -1722,10 +1822,16 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
               if (routineSelect) {
                   const options = routineSelect.querySelectorAll('option[data-child-id]');
                   options.forEach(opt => {
-                      opt.hidden = childId !== '' && opt.getAttribute('data-child-id') !== childId;
+                      const hidden = childId !== '' && opt.getAttribute('data-child-id') !== childId;
+                      opt.hidden = hidden;
+                      if (hidden && opt.selected) {
+                          opt.selected = false;
+                      }
                   });
-                  if (routineSelect.value && routineSelect.querySelector(`option[value="${routineSelect.value}"]`)?.hidden) {
-                      routineSelect.value = '';
+                  if (!routineSelect.multiple) {
+                      if (routineSelect.value && routineSelect.querySelector(`option[value="${routineSelect.value}"]`)?.hidden) {
+                          routineSelect.value = '';
+                      }
                   }
               }
               if (taskGrid) {
@@ -1814,7 +1920,6 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
           goalEditForm.querySelector('[name="start_date"]').value = payload.start_date || '';
           goalEditForm.querySelector('[name="end_date"]').value = payload.end_date || '';
           goalEditForm.querySelector('[name="goal_type"]').value = payload.goal_type || 'manual';
-          goalEditForm.querySelector('[name="routine_id"]').value = payload.routine_id || '';
           goalEditForm.querySelector('[name="task_category"]').value = payload.task_category || '';
           goalEditForm.querySelector('[name="target_count"]').value = payload.target_count || 0;
           goalEditForm.querySelector('[name="streak_required"]').value = payload.streak_required || 0;
@@ -1845,6 +1950,20 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
           if (editFormApi) {
               editFormApi.setGoalTypeVisibility();
               editFormApi.setAwardModeVisibility();
+          }
+
+          const routineSelect = goalEditForm.querySelector('[data-goal-routine-select]');
+          const routineIds = Array.isArray(payload.routine_ids) ? payload.routine_ids.map(String) : [];
+          if (!routineIds.length && payload.routine_id) {
+              routineIds.push(String(payload.routine_id));
+          }
+          if (routineSelect) {
+              Array.from(routineSelect.options).forEach(option => {
+                  option.selected = routineIds.includes(option.value);
+              });
+          }
+
+          if (editFormApi) {
               editFormApi.filterByChild();
           }
           goalEditModal.classList.add('open');
@@ -1909,7 +2028,7 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
           const startInput = scope.querySelector('[name="start_date"]');
           const endInput = scope.querySelector('[name="end_date"]');
           const goalType = scope.querySelector('[name="goal_type"]')?.value || 'manual';
-          const routineSelect = scope.querySelector('[name="routine_id"]');
+          const routineSelect = scope.querySelector('[data-goal-routine-select]');
           const targetCountInput = scope.querySelector('[name="target_count"]');
           const streakInput = scope.querySelector('[name="streak_required"]');
           const windowTypeSelect = scope.querySelector('[name="time_window_type"]');
@@ -1934,7 +2053,8 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
           if (!endInput?.value) markMissing(endInput, 'End date');
 
           if (goalType === 'routine_streak' || goalType === 'routine_count') {
-              if (!routineSelect?.value) markMissing(routineSelect, 'Routine');
+              const routineSelected = routineSelect ? Array.from(routineSelect.selectedOptions).some(opt => opt.value !== '') : false;
+              if (!routineSelected) markMissing(routineSelect, 'Routine');
           }
           if (goalType === 'routine_streak') {
               if (!streakInput?.value || parseInt(streakInput.value, 10) <= 0) {

@@ -1554,6 +1554,7 @@ function createGoal($parent_user_id, $child_user_id, $title, $start_date, $end_d
     $awardMode = $options['award_mode'] ?? 'both';
     $requiresApproval = array_key_exists('requires_parent_approval', $options) ? (!empty($options['requires_parent_approval']) ? 1 : 0) : 1;
     $taskTargets = $options['task_target_ids'] ?? [];
+    $routineTargets = $options['routine_target_ids'] ?? [];
 
     $stmt = $db->prepare("INSERT INTO goals (parent_user_id, child_user_id, title, description, target_points, start_date, end_date, reward_id, goal_type, routine_id, task_category, target_count, streak_required, time_window_type, time_window_days, fixed_window_start, fixed_window_end, require_on_time, points_awarded, award_mode, requires_parent_approval, created_by)
                           VALUES (:parent_id, :child_id, :title, :description, :target_points, :start_date, :end_date, :reward_id, :goal_type, :routine_id, :task_category, :target_count, :streak_required, :time_window_type, :time_window_days, :fixed_window_start, :fixed_window_end, :require_on_time, :points_awarded, :award_mode, :requires_parent_approval, :created_by)");
@@ -1588,6 +1589,9 @@ function createGoal($parent_user_id, $child_user_id, $title, $start_date, $end_d
     if ($goalId && !empty($taskTargets)) {
         saveGoalTaskTargets($goalId, $taskTargets);
     }
+    if ($goalId && !empty($routineTargets)) {
+        saveGoalRoutineTargets($goalId, $routineTargets);
+    }
     return true;
 }
 
@@ -1619,6 +1623,7 @@ function updateGoal($goal_id, $parent_user_id, $title, $start_date, $end_date, $
     $pointsAwarded = array_key_exists('points_awarded', $options) ? (int) $options['points_awarded'] : (int) ($existing['points_awarded'] ?? 0);
     $awardMode = array_key_exists('award_mode', $options) ? ($options['award_mode'] ?? 'both') : ($existing['award_mode'] ?? 'both');
     $requiresApproval = array_key_exists('requires_parent_approval', $options) ? (!empty($options['requires_parent_approval']) ? 1 : 0) : (int) ($existing['requires_parent_approval'] ?? 1);
+    $routineTargets = array_key_exists('routine_target_ids', $options) ? $options['routine_target_ids'] : null;
 
     if (array_key_exists('goal_type', $options) && $goalType === 'manual') {
         $routineId = null;
@@ -1630,6 +1635,11 @@ function updateGoal($goal_id, $parent_user_id, $title, $start_date, $end_date, $
         $fixedStart = null;
         $fixedEnd = null;
         $requireOnTime = 0;
+        $routineTargets = [];
+    }
+    if (array_key_exists('goal_type', $options) && $goalType === 'task_quota') {
+        $routineId = null;
+        $routineTargets = [];
     }
 
     $stmt = $db->prepare("UPDATE goals 
@@ -1684,6 +1694,9 @@ function updateGoal($goal_id, $parent_user_id, $title, $start_date, $end_date, $
     if (array_key_exists('task_target_ids', $options)) {
         saveGoalTaskTargets($goal_id, $options['task_target_ids'] ?? []);
     }
+    if ($routineTargets !== null) {
+        saveGoalRoutineTargets($goal_id, $routineTargets);
+    }
     $updated = $db->prepare("SELECT * FROM goals WHERE id = :goal_id");
     $updated->execute([':goal_id' => $goal_id]);
     $goalRow = $updated->fetch(PDO::FETCH_ASSOC);
@@ -1708,6 +1721,21 @@ function saveGoalTaskTargets($goal_id, array $task_ids) {
     return true;
 }
 
+function saveGoalRoutineTargets($goal_id, array $routine_ids) {
+    global $db;
+    $goal_id = (int) $goal_id;
+    $routine_ids = array_values(array_filter(array_map('intval', $routine_ids)));
+    $db->prepare("DELETE FROM goal_routine_targets WHERE goal_id = :goal_id")->execute([':goal_id' => $goal_id]);
+    if (empty($routine_ids)) {
+        return true;
+    }
+    $stmt = $db->prepare("INSERT INTO goal_routine_targets (goal_id, routine_id) VALUES (:goal_id, :routine_id)");
+    foreach ($routine_ids as $routine_id) {
+        $stmt->execute([':goal_id' => $goal_id, ':routine_id' => $routine_id]);
+    }
+    return true;
+}
+
 function getGoalTaskTargetIds($goal_id) {
     global $db;
     $stmt = $db->prepare("SELECT task_id FROM goal_task_targets WHERE goal_id = :goal_id");
@@ -1715,6 +1743,98 @@ function getGoalTaskTargetIds($goal_id) {
     return array_values(array_filter(array_map('intval', $stmt->fetchAll(PDO::FETCH_COLUMN))));
 }
 
+function getGoalRoutineTargetIds($goal_id) {
+    global $db;
+    $stmt = $db->prepare("SELECT routine_id FROM goal_routine_targets WHERE goal_id = :goal_id");
+    $stmt->execute([':goal_id' => (int) $goal_id]);
+    return array_values(array_filter(array_map('intval', $stmt->fetchAll(PDO::FETCH_COLUMN))));
+}
+
+function getRoutineCompletionDates(array $routine_ids, $child_id, $require_on_time, $start_date = null, $end_date = null) {
+    global $db;
+    $routine_ids = array_values(array_filter(array_map('intval', $routine_ids)));
+    if (empty($routine_ids)) {
+        return [];
+    }
+
+    $placeholders = implode(',', array_fill(0, count($routine_ids), '?'));
+    $params = $routine_ids;
+    $params[] = (int) $child_id;
+    $dateFilterSql = '';
+    if ($start_date && $end_date) {
+        $dateFilterSql = " AND DATE(created_at) BETWEEN ? AND ?";
+        $params[] = $start_date;
+        $params[] = $end_date;
+    }
+    $stmt = $db->prepare("SELECT routine_id, DATE(created_at) AS date_key
+                          FROM routine_points_logs
+                          WHERE routine_id IN ($placeholders) AND child_user_id = ?{$dateFilterSql}
+                          GROUP BY routine_id, DATE(created_at)
+                          ORDER BY date_key ASC");
+    $stmt->execute($params);
+    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    $pointsByDate = [];
+    foreach ($rows as $row) {
+        $dateKey = $row['date_key'] ?? null;
+        $routineId = (int) ($row['routine_id'] ?? 0);
+        if ($dateKey && $routineId) {
+            if (!isset($pointsByDate[$dateKey])) {
+                $pointsByDate[$dateKey] = [];
+            }
+            $pointsByDate[$dateKey][$routineId] = true;
+        }
+    }
+    if (empty($pointsByDate)) {
+        return [];
+    }
+
+    if (!$require_on_time) {
+        $dates = array_keys($pointsByDate);
+        sort($dates);
+        return $dates;
+    }
+
+    $otParams = $routine_ids;
+    $otParams[] = (int) $child_id;
+    $otDateFilterSql = '';
+    if ($start_date && $end_date) {
+        $otDateFilterSql = " AND DATE(occurred_at) BETWEEN ? AND ?";
+        $otParams[] = $start_date;
+        $otParams[] = $end_date;
+    }
+    $otStmt = $db->prepare("SELECT DISTINCT routine_id, DATE(occurred_at) AS date_key
+                            FROM routine_overtime_logs
+                            WHERE routine_id IN ($placeholders) AND child_user_id = ?{$otDateFilterSql}");
+    $otStmt->execute($otParams);
+    $overtimeRows = $otStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    $overtimeByRoutineDate = [];
+    foreach ($overtimeRows as $row) {
+        $routineId = (int) ($row['routine_id'] ?? 0);
+        $dateKey = $row['date_key'] ?? null;
+        if ($routineId && $dateKey) {
+            if (!isset($overtimeByRoutineDate[$routineId])) {
+                $overtimeByRoutineDate[$routineId] = [];
+            }
+            $overtimeByRoutineDate[$routineId][$dateKey] = true;
+        }
+    }
+
+    $dates = [];
+    foreach ($pointsByDate as $dateKey => $routineMap) {
+        $hasOnTime = false;
+        foreach (array_keys($routineMap) as $routineId) {
+            if (empty($overtimeByRoutineDate[$routineId][$dateKey])) {
+                $hasOnTime = true;
+                break;
+            }
+        }
+        if ($hasOnTime) {
+            $dates[] = $dateKey;
+        }
+    }
+    sort($dates);
+    return $dates;
+}
 function awardGoalReward($goal, $child_id) {
     global $db;
     $rewardId = isset($goal['reward_id']) ? (int) $goal['reward_id'] : 0;
@@ -1851,25 +1971,15 @@ function calculateGoalProgress(array $goal, $child_id) {
 
     if ($goalType === 'routine_streak') {
         $target = max(1, (int) ($goal['streak_required'] ?? 0));
-        $routineId = (int) ($goal['routine_id'] ?? 0);
-        if ($routineId > 0) {
-            $stmt = $db->prepare("SELECT DATE(created_at) AS date_key
-                                  FROM routine_points_logs
-                                  WHERE routine_id = :routine_id AND child_user_id = :child_id
-                                  GROUP BY DATE(created_at)
-                                  ORDER BY date_key ASC");
-            $stmt->execute([':routine_id' => $routineId, ':child_id' => (int) $child_id]);
-            $dates = $stmt->fetchAll(PDO::FETCH_COLUMN) ?: [];
-            if ($requireOnTime && !empty($dates)) {
-                $otStmt = $db->prepare("SELECT DISTINCT DATE(occurred_at) AS date_key
-                                        FROM routine_overtime_logs
-                                        WHERE routine_id = :routine_id AND child_user_id = :child_id");
-                $otStmt->execute([':routine_id' => $routineId, ':child_id' => (int) $child_id]);
-                $overtimeDates = array_flip($otStmt->fetchAll(PDO::FETCH_COLUMN) ?: []);
-                $dates = array_values(array_filter($dates, static function ($date) use ($overtimeDates) {
-                    return !isset($overtimeDates[$date]);
-                }));
+        $routineIds = getGoalRoutineTargetIds((int) ($goal['id'] ?? 0));
+        if (empty($routineIds)) {
+            $routineId = (int) ($goal['routine_id'] ?? 0);
+            if ($routineId > 0) {
+                $routineIds = [$routineId];
             }
+        }
+        if (!empty($routineIds)) {
+            $dates = getRoutineCompletionDates($routineIds, $child_id, $requireOnTime);
             if (!empty($dates)) {
                 $lastDate = end($dates);
                 $lastProgressDate = $lastDate;
@@ -1900,32 +2010,22 @@ function calculateGoalProgress(array $goal, $child_id) {
         }
     } elseif ($goalType === 'routine_count') {
         $target = max(1, (int) ($goal['target_count'] ?? 0));
-        $routineId = (int) ($goal['routine_id'] ?? 0);
-        if ($routineId > 0) {
-            [$start, $end] = getGoalWindowRange($goal);
-            $stmt = $db->prepare("SELECT DATE(created_at) AS date_key
-                                  FROM routine_points_logs
-                                  WHERE routine_id = :routine_id
-                                    AND child_user_id = :child_id
-                                    AND DATE(created_at) BETWEEN :start_date AND :end_date
-                                  GROUP BY DATE(created_at)");
-            $stmt->execute([
-                ':routine_id' => $routineId,
-                ':child_id' => (int) $child_id,
-                ':start_date' => $start->format('Y-m-d'),
-                ':end_date' => $end->format('Y-m-d')
-            ]);
-            $dates = $stmt->fetchAll(PDO::FETCH_COLUMN) ?: [];
-            if ($requireOnTime && !empty($dates)) {
-                $otStmt = $db->prepare("SELECT DISTINCT DATE(occurred_at) AS date_key
-                                        FROM routine_overtime_logs
-                                        WHERE routine_id = :routine_id AND child_user_id = :child_id");
-                $otStmt->execute([':routine_id' => $routineId, ':child_id' => (int) $child_id]);
-                $overtimeDates = array_flip($otStmt->fetchAll(PDO::FETCH_COLUMN) ?: []);
-                $dates = array_values(array_filter($dates, static function ($date) use ($overtimeDates) {
-                    return !isset($overtimeDates[$date]);
-                }));
+        $routineIds = getGoalRoutineTargetIds((int) ($goal['id'] ?? 0));
+        if (empty($routineIds)) {
+            $routineId = (int) ($goal['routine_id'] ?? 0);
+            if ($routineId > 0) {
+                $routineIds = [$routineId];
             }
+        }
+        if (!empty($routineIds)) {
+            [$start, $end] = getGoalWindowRange($goal);
+            $dates = getRoutineCompletionDates(
+                $routineIds,
+                $child_id,
+                $requireOnTime,
+                $start->format('Y-m-d'),
+                $end->format('Y-m-d')
+            );
             $current = count($dates);
             $lastProgressDate = !empty($dates) ? max($dates) : null;
             $remaining = max(0, $target - $current);
@@ -2095,7 +2195,13 @@ function refreshTaskGoalsForChild($child_id) {
 
 function refreshRoutineGoalsForChild($child_id, $routine_id) {
     global $db;
-    $stmt = $db->prepare("SELECT * FROM goals WHERE child_user_id = :child_id AND status = 'active' AND goal_type IN ('routine_streak', 'routine_count') AND routine_id = :routine_id");
+    $stmt = $db->prepare("SELECT DISTINCT g.*
+                          FROM goals g
+                          LEFT JOIN goal_routine_targets grt ON g.id = grt.goal_id
+                          WHERE g.child_user_id = :child_id
+                            AND g.status = 'active'
+                            AND g.goal_type IN ('routine_streak', 'routine_count')
+                            AND (g.routine_id = :routine_id OR grt.routine_id = :routine_id)");
     $stmt->execute([
         ':child_id' => (int) $child_id,
         ':routine_id' => (int) $routine_id
@@ -3184,6 +3290,17 @@ try {
    )";
    $db->exec($sql);
    error_log("Created/verified routines table successfully");
+
+  $sql = "CREATE TABLE IF NOT EXISTS goal_routine_targets (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      goal_id INT NOT NULL,
+      routine_id INT NOT NULL,
+      UNIQUE KEY uniq_goal_routine (goal_id, routine_id),
+      FOREIGN KEY (goal_id) REFERENCES goals(id) ON DELETE CASCADE,
+      FOREIGN KEY (routine_id) REFERENCES routines(id) ON DELETE CASCADE
+  )";
+  $db->exec($sql);
+  error_log("Created/verified goal_routine_targets table successfully");
 
    // Add created_by to existing routines if not exists
    $db->exec("ALTER TABLE routines ADD COLUMN IF NOT EXISTS created_by INT NULL");
