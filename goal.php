@@ -1085,7 +1085,7 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                             </div>
                             <div class="form-group">
                                 <label for="goal_title">Title
-                                    <span class="tooltip" tabindex="0" aria-label="Short name shown on goal cards and notifications.">
+                                    <span class="tooltip tooltip-left" tabindex="0" aria-label="Short name shown on goal cards and notifications.">
                                         <i class="fa-solid fa-circle-info"></i>
                                         <span class="tooltip-text">Short name shown on goal cards and notifications.</span>
                                     </span>
@@ -1121,7 +1121,7 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                             </div>
                             <div class="form-group">
                                 <label for="goal_type">Goal Type
-                                    <span class="tooltip tooltip-right" tabindex="0" aria-label="Choose how progress is tracked and which fields are required.">
+                                    <span class="tooltip tooltip-left" tabindex="0" aria-label="Choose how progress is tracked and which fields are required.">
                                         <i class="fa-solid fa-circle-info"></i>
                                         <span class="tooltip-text">Choose how progress is tracked and which fields are required.</span>
                                     </span>
@@ -1281,7 +1281,7 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                             </div>
                             <div class="form-group">
                                 <label for="goal_reward_id">Reward (optional)
-                                    <span class="tooltip" tabindex="0" aria-label="Reward to grant on completion. Required if reward is part of the award mode.">
+                                    <span class="tooltip tooltip-right" tabindex="0" aria-label="Reward to grant on completion. Required if reward is part of the award mode.">
                                         <i class="fa-solid fa-circle-info"></i>
                                         <span class="tooltip-text">Reward to grant on completion. Required if reward is part of the award mode.</span>
                                     </span>
@@ -1358,7 +1358,7 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                             </div>
                             <div class="form-group">
                                 <label for="edit_goal_title">Title
-                                    <span class="tooltip" tabindex="0" aria-label="Short name shown on goal cards and notifications.">
+                                    <span class="tooltip tooltip-left" tabindex="0" aria-label="Short name shown on goal cards and notifications.">
                                         <i class="fa-solid fa-circle-info"></i>
                                         <span class="tooltip-text">Short name shown on goal cards and notifications.</span>
                                     </span>
@@ -1394,7 +1394,7 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                             </div>
                             <div class="form-group">
                                 <label for="edit_goal_type">Goal Type
-                                    <span class="tooltip tooltip-right" tabindex="0" aria-label="Choose how progress is tracked and which fields are required.">
+                                    <span class="tooltip tooltip-left" tabindex="0" aria-label="Choose how progress is tracked and which fields are required.">
                                         <i class="fa-solid fa-circle-info"></i>
                                         <span class="tooltip-text">Choose how progress is tracked and which fields are required.</span>
                                     </span>
@@ -1554,7 +1554,7 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                             </div>
                             <div class="form-group">
                                 <label for="edit_goal_reward_id">Reward (optional)
-                                    <span class="tooltip" tabindex="0" aria-label="Reward to grant on completion. Required if reward is part of the award mode.">
+                                    <span class="tooltip tooltip-right" tabindex="0" aria-label="Reward to grant on completion. Required if reward is part of the award mode.">
                                         <i class="fa-solid fa-circle-info"></i>
                                         <span class="tooltip-text">Reward to grant on completion. Required if reward is part of the award mode.</span>
                                     </span>
