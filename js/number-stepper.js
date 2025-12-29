@@ -93,6 +93,7 @@ document.addEventListener('DOMContentLoaded', () => {
       button.addEventListener('mousedown', () => startHold(direction));
       button.addEventListener('touchstart', (event) => {
         event.preventDefault();
+        updateValue(direction);
         startHold(direction);
       }, { passive: false });
       ['mouseup', 'mouseleave', 'touchend', 'touchcancel'].forEach((evt) => {
