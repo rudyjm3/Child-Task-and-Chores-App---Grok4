@@ -20,6 +20,34 @@ if (!isset($_SESSION['name'])) {
 
 $family_root_id = getFamilyRootId($_SESSION['user_id']);
 
+function resolveGoalRewardId($parent_id, $child_id, $reward_selection) {
+    global $db;
+    $reward_selection = trim((string) $reward_selection);
+    if ($reward_selection === '') {
+        return null;
+    }
+
+    if (preg_match('/^template:(\d+)$/', $reward_selection, $matches)) {
+        $template_id = (int) $matches[1];
+        $child_id = (int) $child_id;
+        if ($template_id <= 0 || $child_id <= 0) {
+            return null;
+        }
+        assignTemplateToChildren($parent_id, $template_id, [$child_id]);
+        $stmt = $db->prepare("SELECT id FROM rewards WHERE parent_user_id = :parent_id AND child_user_id = :child_id AND template_id = :template_id AND status = 'available' ORDER BY created_on DESC LIMIT 1");
+        $stmt->execute([
+            ':parent_id' => $parent_id,
+            ':child_id' => $child_id,
+            ':template_id' => $template_id
+        ]);
+        $reward_id = (int) $stmt->fetchColumn();
+        return $reward_id > 0 ? $reward_id : null;
+    }
+
+    $reward_id = filter_var($reward_selection, FILTER_VALIDATE_INT);
+    return ($reward_id && $reward_id > 0) ? $reward_id : null;
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['create_goal']) && isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
         $child_user_id = filter_input(INPUT_POST, 'child_user_id', FILTER_VALIDATE_INT);
@@ -30,7 +58,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         $start_date = filter_input(INPUT_POST, 'start_date', FILTER_SANITIZE_STRING);
         $end_date = filter_input(INPUT_POST, 'end_date', FILTER_SANITIZE_STRING);
-        $reward_id = filter_input(INPUT_POST, 'reward_id', FILTER_VALIDATE_INT, FILTER_NULL_ON_FAILURE);
+        $reward_selection = $_POST['reward_id'] ?? '';
+        $reward_id = resolveGoalRewardId($family_root_id, $child_user_id, $reward_selection);
         $goal_type = filter_input(INPUT_POST, 'goal_type', FILTER_SANITIZE_STRING) ?: 'manual';
         $allowed_types = ['manual', 'routine_streak', 'routine_count', 'task_quota'];
         if (!in_array($goal_type, $allowed_types, true)) {
@@ -83,7 +112,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         $start_date = filter_input(INPUT_POST, 'start_date', FILTER_SANITIZE_STRING);
         $end_date = filter_input(INPUT_POST, 'end_date', FILTER_SANITIZE_STRING);
-        $reward_id = filter_input(INPUT_POST, 'reward_id', FILTER_VALIDATE_INT, FILTER_NULL_ON_FAILURE);
+        $reward_selection = $_POST['reward_id'] ?? '';
+        $reward_id = resolveGoalRewardId($family_root_id, $child_user_id, $reward_selection);
         $goal_type = filter_input(INPUT_POST, 'goal_type', FILTER_SANITIZE_STRING) ?: 'manual';
         $allowed_types = ['manual', 'routine_streak', 'routine_count', 'task_quota'];
         if (!in_array($goal_type, $allowed_types, true)) {
@@ -382,15 +412,13 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
     $taskStmt->execute([':parent_id' => $family_root_id]);
     $goalTasks = $taskStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
-    $rewardStmt = $db->prepare("SELECT id, title FROM rewards WHERE parent_user_id = :parent_id AND status = 'available'");
-    $rewardStmt->execute([':parent_id' => $family_root_id]);
-    $goalRewards = $rewardStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    $goalRewardTemplates = getRewardTemplates($family_root_id);
 
     $goalFormData = [
         'children' => $goalChildren,
         'routines' => $goalRoutines,
         'tasks' => $goalTasks,
-        'rewards' => $goalRewards
+        'reward_templates' => $goalRewardTemplates
     ];
 }
 ?>
@@ -1068,7 +1096,7 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                         $autoSelectChildId = count($children) === 1 ? (int) $children[0]['child_user_id'] : null;
                         $routines = $goalFormData['routines'] ?? [];
                         $goalTasks = $goalFormData['tasks'] ?? [];
-                        $goalRewards = $goalFormData['rewards'] ?? [];
+                        $goalRewardTemplates = $goalFormData['reward_templates'] ?? [];
                         ?>
                         <div class="form-grid">
                             <div class="form-group">
@@ -1299,8 +1327,10 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                                 </label>
                                 <select id="goal_reward_id" name="reward_id" data-goal-reward>
                                     <option value="">None</option>
-                                    <?php foreach ($goalRewards as $reward): ?>
-                                        <option value="<?php echo $reward['id']; ?>"><?php echo htmlspecialchars($reward['title']); ?></option>
+                                    <?php foreach ($goalRewardTemplates as $template): ?>
+                                        <option value="template:<?php echo (int) $template['id']; ?>">
+                                            <?php echo htmlspecialchars($template['title']); ?> (<?php echo (int) $template['point_cost']; ?> pts)
+                                        </option>
                                     <?php endforeach; ?>
                                 </select>
                             </div>
@@ -1341,7 +1371,7 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                         $autoSelectChildId = count($children) === 1 ? (int) $children[0]['child_user_id'] : null;
                         $routines = $goalFormData['routines'] ?? [];
                         $goalTasks = $goalFormData['tasks'] ?? [];
-                        $goalRewards = $goalFormData['rewards'] ?? [];
+                        $goalRewardTemplates = $goalFormData['reward_templates'] ?? [];
                         ?>
                         <div class="form-grid">
                             <div class="form-group">
@@ -1572,8 +1602,10 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                                 </label>
                                 <select id="edit_goal_reward_id" name="reward_id" data-goal-reward>
                                     <option value="">None</option>
-                                    <?php foreach ($goalRewards as $reward): ?>
-                                        <option value="<?php echo $reward['id']; ?>"><?php echo htmlspecialchars($reward['title']); ?></option>
+                                    <?php foreach ($goalRewardTemplates as $template): ?>
+                                        <option value="template:<?php echo (int) $template['id']; ?>">
+                                            <?php echo htmlspecialchars($template['title']); ?> (<?php echo (int) $template['point_cost']; ?> pts)
+                                        </option>
                                     <?php endforeach; ?>
                                 </select>
                             </div>
