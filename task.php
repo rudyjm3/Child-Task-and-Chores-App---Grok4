@@ -1585,6 +1585,16 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closePreview(); });
             }
 
+            const urlParams = new URLSearchParams(window.location.search);
+            const taskParam = urlParams.get('task_id');
+            if (taskParam && openTaskPreview) {
+                const taskId = parseInt(taskParam, 10);
+                if (!Number.isNaN(taskId)) {
+                    const instanceDate = urlParams.get('instance_date');
+                    openTaskPreview(taskId, instanceDate || null);
+                }
+            }
+
             const createModal = document.querySelector('[data-task-create-modal]');
             const createOpen = document.querySelector('[data-task-create-open]');
             const createClose = createModal ? createModal.querySelector('[data-task-create-close]') : null;

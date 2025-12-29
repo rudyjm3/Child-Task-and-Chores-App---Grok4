@@ -558,7 +558,8 @@ $getScheduleDueStamp = static function ($dateKey, $timeOfDay, $timeValue) {
         .child-schedule-section { display: grid; gap: 6px; }
         .child-schedule-section-title { font-weight: 700; color: #37474f; font-size: 0.95rem; }
         .child-schedule-section-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
-        .child-schedule-item { display: flex; align-items: center; justify-content: space-between; gap: 10px; background: #f9f9f9; border-radius: 8px; padding: 8px 10px; }
+        .child-schedule-item { display: flex; align-items: center; justify-content: space-between; gap: 10px; background: #f9f9f9; border-radius: 8px; padding: 8px 10px; text-decoration: none; color: inherit; cursor: pointer; width: 100%; }
+        .child-schedule-item:hover { background: #f0f0f0; }
         .child-schedule-main { display: flex; align-items: center; gap: 8px; }
         .child-schedule-title { font-weight: 600; color: #3e2723; }
         .child-schedule-time { color: #6d4c41; font-size: 0.9rem; }
@@ -982,7 +983,12 @@ $getScheduleDueStamp = static function ($dateKey, $timeOfDay, $timeValue) {
                         } else if (item.overdue) {
                             badge = '<span class="child-schedule-badge overdue"><i class="fa-solid fa-triangle-exclamation"></i>Overdue</span>';
                         }
-                        return '<li class="child-schedule-item">' +
+                        const wrapperStart = item.link
+                            ? '<a class="child-schedule-item" href="' + item.link + '">'
+                            : '<div class="child-schedule-item">';
+                        const wrapperEnd = item.link ? '</a>' : '</div>';
+                        return '<li>' +
+                            wrapperStart +
                             '<div class="child-schedule-main">' +
                             '<i class="' + item.icon + '"></i>' +
                             '<div>' +
@@ -991,6 +997,7 @@ $getScheduleDueStamp = static function ($dateKey, $timeOfDay, $timeValue) {
                             '</div>' +
                             '</div>' +
                             '<div class="child-schedule-points">' + item.points + ' pts</div>' +
+                            wrapperEnd +
                             '</li>';
                     };
                         const sectionsHtml = sections.map((section) => {
@@ -1744,6 +1751,7 @@ $getScheduleDueStamp = static function ($dateKey, $timeOfDay, $timeValue) {
                               'time' => $timeSort,
                               'time_label' => $timeLabel,
                               'time_of_day' => $timeOfDay,
+                              'link' => 'task.php?task_id=' . (int) ($row['id'] ?? 0) . '&instance_date=' . $dateKey . '#task-' . (int) ($row['id'] ?? 0),
                               'icon' => 'fa-solid fa-list-check',
                               'completed' => $completedFlag,
                               'overdue' => $overdueFlag
@@ -1805,12 +1813,14 @@ $getScheduleDueStamp = static function ($dateKey, $timeOfDay, $timeValue) {
                              }
                           }
                           $weekSchedule[$dateKey][] = [
+                             'id' => (int) ($routine['id'] ?? 0),
                              'title' => $routine['title'],
                              'type' => 'Routine',
                              'points' => $totalPoints,
                              'time' => $timeSort,
                              'time_label' => $timeLabel,
                              'time_of_day' => $timeOfDay,
+                              'link' => 'routine.php?start=' . (int) ($routine['id'] ?? 0),
                               'icon' => 'fa-solid fa-repeat',
                               'completed' => $completedFlag,
                               'overdue' => $overdueFlag
@@ -2018,22 +2028,33 @@ $getScheduleDueStamp = static function ($dateKey, $timeOfDay, $timeValue) {
                                      <div class="child-schedule-section-title"><?php echo $label; ?></div>
                                      <ul class="child-schedule-section-list">
                                         <?php foreach ($sectionedToday[$key] as $item): ?>
-                                           <li class="child-schedule-item">
-                                              <div class="child-schedule-main">
-                                                 <i class="<?php echo htmlspecialchars($item['icon']); ?>"></i>
-                                                 <div>
-                                                    <div class="child-schedule-title">
-                                                       <?php echo htmlspecialchars($item['title']); ?>
-                                                       <?php if (!empty($item['completed'])): ?>
-                                                          <span class="child-schedule-badge"><i class="fa-solid fa-check"></i>Done</span>
-                                                       <?php elseif (!empty($item['overdue'])): ?>
-                                                          <span class="child-schedule-badge overdue"><i class="fa-solid fa-triangle-exclamation"></i>Overdue</span>
-                                                       <?php endif; ?>
+                                           <?php $itemLink = $item['link'] ?? ''; ?>
+                                           <li>
+                                              <?php if (!empty($itemLink)): ?>
+                                                 <a class="child-schedule-item" href="<?php echo htmlspecialchars($itemLink); ?>">
+                                              <?php else: ?>
+                                                 <div class="child-schedule-item">
+                                              <?php endif; ?>
+                                                 <div class="child-schedule-main">
+                                                    <i class="<?php echo htmlspecialchars($item['icon']); ?>"></i>
+                                                    <div>
+                                                       <div class="child-schedule-title">
+                                                          <?php echo htmlspecialchars($item['title']); ?>
+                                                          <?php if (!empty($item['completed'])): ?>
+                                                             <span class="child-schedule-badge"><i class="fa-solid fa-check"></i>Done</span>
+                                                          <?php elseif (!empty($item['overdue'])): ?>
+                                                             <span class="child-schedule-badge overdue"><i class="fa-solid fa-triangle-exclamation"></i>Overdue</span>
+                                                          <?php endif; ?>
+                                                       </div>
+                                                       <div class="child-schedule-time"><?php echo htmlspecialchars($item['time_label']); ?></div>
                                                     </div>
-                                                    <div class="child-schedule-time"><?php echo htmlspecialchars($item['time_label']); ?></div>
                                                  </div>
-                                              </div>
-                                              <div class="child-schedule-points"><?php echo (int)$item['points']; ?> pts</div>
+                                                 <div class="child-schedule-points"><?php echo (int)$item['points']; ?> pts</div>
+                                              <?php if (!empty($itemLink)): ?>
+                                                 </a>
+                                              <?php else: ?>
+                                                 </div>
+                                              <?php endif; ?>
                                            </li>
                                         <?php endforeach; ?>
                                      </ul>
