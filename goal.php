@@ -3,7 +3,7 @@
 // Purpose: Allow parents to create/edit/delete/reactivate goals and children to view/request completion
 // Inputs: POST for create/update/delete/reactivate, goal ID for request completion
 // Outputs: Goal management interface
-// Version: 3.17.4
+// Version: 3.17.5
 
 session_start();
 require_once __DIR__ . '/includes/functions.php';
@@ -400,7 +400,7 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Goal Management</title>
-    <link rel="stylesheet" href="css/main.css?v=3.17.4">
+    <link rel="stylesheet" href="css/main.css?v=3.17.5">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" integrity="Evv84Mr4kqVGRNSgIGL/F/aIDqQb7xQ2vcrdIwxfjThSH8CSR7PBEakCr51Ck+w+/U6swU2Im1vVX0SVk9ABhg==" crossorigin="anonymous" referrerpolicy="no-referrer">
     <style>
         .goal-list {
@@ -1609,7 +1609,7 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
         </script>
     <?php endif; ?>
     <footer>
-        <p>Child Task and Chore App - Ver 3.17.4</p>
+        <p>Child Task and Chore App - Ver 3.17.5</p>
     </footer>
   <script src="js/number-stepper.js" defer></script>
   <script>
@@ -2000,6 +2000,7 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
   </script>
 </body>
 </html>
+
 
 
 

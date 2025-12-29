@@ -3,7 +3,7 @@
 // Purpose: Centralize common operations for maintainability
 // Inputs: None initially
 // Outputs: Functions for app logic
-// Version: 3.17.4 (Family-wide role support and linked management enhancements)
+// Version: 3.17.5 (Family-wide role support and linked management enhancements)
 
 require_once __DIR__ . '/db_connect.php';
 
@@ -3372,5 +3372,6 @@ $sql = "ALTER TABLE child_profiles
 $db->exec($sql);
 
 ?>
+
 
 
