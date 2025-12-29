@@ -174,7 +174,8 @@ $notificationCount = is_array($notificationsNew) ? count($notificationsNew) : 0;
         .week-section { display: grid; gap: 6px; }
         .week-section-title { font-weight: 700; color: #37474f; font-size: 0.95rem; }
         .week-section-list { display: grid; gap: 8px; }
-        .week-item { display: flex; align-items: center; justify-content: space-between; gap: 10px; background: #fff7e6; border: 1px solid #ffd28a; border-radius: 10px; padding: 8px 10px; }
+        .week-item { display: flex; align-items: center; justify-content: space-between; gap: 10px; background: #fff7e6; border: 1px solid #ffd28a; border-radius: 10px; padding: 8px 10px; text-decoration: none; color: inherit; cursor: pointer; }
+        .week-item:hover { background: #ffefcc; }
         .week-item-main { display: flex; align-items: center; gap: 8px; }
         .week-item-icon { color: #ef6c00; }
         .week-item-title { font-weight: 700; color: #3e2723; }
@@ -409,7 +410,11 @@ $notificationCount = is_array($notificationsNew) ? count($notificationsNew) : 0;
                     } else if (item.overdue) {
                         badge = '<span class="week-item-badge overdue"><i class="fa-solid fa-triangle-exclamation"></i>Overdue</span>';
                     }
-                    return '<div class="week-item">' +
+                    const wrapperStart = item.link
+                        ? '<a class="week-item" href="' + item.link + '">'
+                        : '<div class="week-item">';
+                    const wrapperEnd = item.link ? '</a>' : '</div>';
+                    return wrapperStart +
                         '<div class="week-item-main">' +
                         '<i class="' + item.icon + ' week-item-icon"></i>' +
                         '<div>' +
@@ -418,7 +423,7 @@ $notificationCount = is_array($notificationsNew) ? count($notificationsNew) : 0;
                         '</div>' +
                         '</div>' +
                         '<div class="week-item-points">' + item.points + ' pts</div>' +
-                        '</div>';
+                        wrapperEnd;
                 };
                 const sectionHtml = sections.map(section => {
                     const sectionItems = items.filter(item => item.time_of_day === section.key);
@@ -833,6 +838,7 @@ $notificationCount = is_array($notificationsNew) ? count($notificationsNew) : 0;
                   'time' => $timeSort,
                   'time_label' => $timeLabel,
                   'time_of_day' => $timeOfDay,
+                  'link' => 'task.php?task_id=' . (int) ($row['id'] ?? 0) . '&instance_date=' . $dateKey . '#task-' . (int) ($row['id'] ?? 0),
                   'icon' => 'fa-solid fa-list-check',
                   'completed' => $completedFlag,
                   'overdue' => $overdueFlag
@@ -894,12 +900,14 @@ $notificationCount = is_array($notificationsNew) ? count($notificationsNew) : 0;
                      }
                   }
                   $scheduleByDay[$dateKey][] = [
+                     'id' => (int) ($routine['id'] ?? 0),
                      'title' => $routine['title'],
                      'type' => 'Routine',
                      'points' => $totalPoints,
                      'time' => $timeSort,
                      'time_label' => $timeLabel,
                      'time_of_day' => $timeOfDay,
+                     'link' => 'routine.php?start=' . (int) ($routine['id'] ?? 0),
                      'icon' => 'fa-solid fa-repeat',
                      'completed' => $completedFlag,
                      'overdue' => $overdueFlag
