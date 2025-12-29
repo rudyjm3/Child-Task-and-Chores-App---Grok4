@@ -1014,7 +1014,7 @@ margin-bottom: 20px;}
         .library-task-actions { margin-top: auto; display: flex; flex-direction: column; gap: 8px; }
         .routine-card { border: 1px solid #e0e0e0; border-radius: 12px; padding: 18px; margin-bottom: 20px; background: linear-gradient(145deg, #ffffff, #f5f5f5); box-shadow: 0 3px 8px rgba(0,0,0,0.08); }
         .routine-card.child-view { background: linear-gradient(160deg, #e3f2fd, #e8f5e9); border-color: #bbdefb; }
-        .routine-card header { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; }
+        .routine-card header { display: flex; gap: 4px; margin-bottom: 12px; }
         .routine-card h3 { margin: 0; font-size: 1.25rem; }
         .routine-details { font-size: 0.9rem; color: #455a64; display: grid; gap: 4px; }
         .routine-assignee { display: inline-flex; align-items: center; gap: 8px; font-size: 0.9rem; color: #37474f; }
@@ -1025,6 +1025,11 @@ margin-bottom: 20px;}
         .card-actions { margin-top: 16px; display: flex; flex-wrap: wrap; gap: 12px; }
         .routine-card-actions { margin-top: 16px; display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: center; }
         .routine-card-actions .button { flex: 1 1 45%; min-width: 0; text-align: center; }
+        .routine-action-icons { display: inline-flex; gap: 8px; align-items: center; }
+        .icon-button { width: 36px; height: 36px; border: none; background: transparent; color: #9f9f9f; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+        .icon-button:hover { background: rgba(0,0,0,0.06); color: #9f9f9f; }
+        .icon-button.danger { color: #9f9f9f; }
+        .icon-button.danger:hover { background: rgba(0,0,0,0.06); }
         .collapsible-card { border: none; margin: 12px 0 0; padding: 0; }
         .collapsible-card summary { list-style: none; }
         .collapsible-card summary::-webkit-details-marker,
@@ -1318,9 +1323,9 @@ margin-bottom: 20px;}
         .routine-modal.open { display: flex; }
         body.modal-open { overflow: hidden; }
         .routine-modal-card { background: #fff; border-radius: 14px; max-width: 920px; width: min(920px, 100%); max-height: 90vh; overflow: hidden; box-shadow: 0 12px 32px rgba(0,0,0,0.25); display: grid; grid-template-rows: auto 1fr; }
-        .routine-modal-card header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid #e0e0e0; }
+        .routine-modal-card header { display: flex; align-items: center; justify-content: space-between; font-weight: 600; padding: 12px 16px; border-bottom: 1px solid #e0e0e0; }
         .routine-modal-card h2 { margin: 0; font-size: 1.1rem; }
-        .routine-modal-close { background: transparent; border: none; font-size: 1.3rem; cursor: pointer; color: #555; }
+        .routine-modal-close { background: transparent; border: none; font-size: 1.3rem; font-weight: 600; cursor: pointer; color: #555; }
         .routine-modal-body { padding: 12px 16px 18px; overflow-y: auto; }
         .help-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: none; align-items: center; justify-content: center; z-index: 4300; padding: 14px; }
         .help-modal.open { display: flex; }
@@ -1785,6 +1790,17 @@ margin-bottom: 20px;}
                             <button type="button" class="button secondary view-details-button" data-toggle-details="<?php echo $detailsId; ?>" aria-expanded="false">View Routine Details</button>
                             <?php if ($isParentContext): ?>
                                 <button type="submit" class="button" name="parent_complete_routine" form="parent-complete-form-<?php echo (int) $routine['id']; ?>">Complete Routine</button>
+                                <div class="routine-action-icons">
+                                    <button type="button" class="icon-button" data-routine-edit-open data-routine-id="<?php echo (int) $routine['id']; ?>" aria-label="Edit routine">
+                                        <i class="fa-solid fa-pen"></i>
+                                    </button>
+                                    <form method="POST" action="routine.php">
+                                        <input type="hidden" name="routine_id" value="<?php echo (int) $routine['id']; ?>">
+                                        <button type="submit" name="delete_routine" class="icon-button danger" aria-label="Delete routine" onclick="return confirm('Delete this routine?');">
+                                            <i class="fa-solid fa-trash"></i>
+                                        </button>
+                                    </form>
+                                </div>
                             <?php endif; ?>
                         </div>
                         <details id="<?php echo $detailsId; ?>" class="collapsible-card" data-role="collapsible-wrapper">
@@ -1941,106 +1957,112 @@ margin-bottom: 20px;}
                                     <input type="hidden" name="routine_id" value="<?php echo (int) $routine['id']; ?>">
                                     <p class="parent-complete-note">Check the tasks completed to award points. Bonus points apply only when all tasks are checked.</p>
                                 </form>
-                                <details class="routine-section" style="margin-top: 16px; background: rgba(250,250,250,0.9);">
-                                    <summary><strong>Edit Routine</strong></summary>
-                                    <?php
-                                        $rid = (int) $routine['id'];
-                                        $override = $editFieldOverrides[$rid] ?? null;
-                                        $titleValue = htmlspecialchars($override['title'] ?? $routine['title'], ENT_QUOTES);
-                                        $startRaw = $override['start_time'] ?? $routine['start_time'];
-                                        $endRaw = $override['end_time'] ?? $routine['end_time'];
-                                        $startValue = htmlspecialchars(substr($startRaw, 0, 5), ENT_QUOTES);
-                                        $endValue = htmlspecialchars(substr($endRaw, 0, 5), ENT_QUOTES);
-                                        $bonusValue = (int) ($override['bonus_points'] ?? $routine['bonus_points']);
-                                        $recurrenceValue = $override['recurrence'] ?? $routine['recurrence'];
-                                        $timeOfDayValue = $override['time_of_day'] ?? ($routine['time_of_day'] ?? 'anytime');
-                                        $recurrenceDaysRaw = $override['recurrence_days'] ?? ($routine['recurrence_days'] ?? '');
-                                        $recurrenceDays = array_values(array_filter(array_map('trim', explode(',', (string) $recurrenceDaysRaw))));
-                                        $routineDateValue = $override['routine_date'] ?? ($routine['routine_date'] ?? '');
-                                        if ($routineDateValue === '' && !empty($routine['created_at'])) {
-                                            $routineDateValue = date('Y-m-d', strtotime($routine['created_at']));
-                                        }
-                                    ?>
-                                    <form method="POST" autocomplete="off">
-                                        <input type="hidden" name="routine_id" value="<?php echo (int) $routine['id']; ?>">
-                                        <div class="form-grid">
-                                            <div class="form-group">
-                                                <label>Title</label>
-                                                <input type="text" name="title" value="<?php echo $titleValue; ?>" required>
-                                            </div>
-                                            <div class="form-group">
-                                                <label>Time of Day</label>
-                                                <select name="time_of_day">
-                                                    <option value="anytime" <?php echo $timeOfDayValue === 'anytime' ? 'selected' : ''; ?>>Anytime</option>
-                                                    <option value="morning" <?php echo $timeOfDayValue === 'morning' ? 'selected' : ''; ?>>Morning</option>
-                                                    <option value="afternoon" <?php echo $timeOfDayValue === 'afternoon' ? 'selected' : ''; ?>>Afternoon</option>
-                                                    <option value="evening" <?php echo $timeOfDayValue === 'evening' ? 'selected' : ''; ?>>Evening</option>
-                                                </select>
-                                            </div>
-                                            <div class="form-group">
-                                                <label>Start Time</label>
-                                                <input type="time" name="start_time" value="<?php echo $startValue; ?>" required>
-                                            </div>
-                                            <div class="form-group">
-                                                <label>End Time</label>
-                                                <input type="time" name="end_time" value="<?php echo $endValue; ?>" required>
-                                            </div>
-                                            <div class="form-group">
-                                                <label>Bonus Points</label>
-                                                <input type="number" name="bonus_points" min="0" value="<?php echo $bonusValue; ?>">
-                                            </div>
-                                            <div class="form-group">
-                                                <label>Repeat</label>
-                                                <select name="recurrence">
-                                                    <option value="" <?php echo empty($recurrenceValue) ? 'selected' : ''; ?>>Once</option>
-                                                    <option value="daily" <?php echo ($recurrenceValue === 'daily') ? 'selected' : ''; ?>>Every Day</option>
-                                                    <option value="weekly" <?php echo ($recurrenceValue === 'weekly') ? 'selected' : ''; ?>>Specific Days</option>
-                                                </select>
-                                                <div class="repeat-days" data-recurrence-days-wrapper>
-                                                    <div class="repeat-days-label">Specific Days</div>
-                                                    <div class="repeat-days-grid">
-                                                        <label class="repeat-day"><input type="checkbox" name="recurrence_days[]" value="Sun" <?php echo in_array('Sun', $recurrenceDays, true) ? 'checked' : ''; ?>><span>Sun</span></label>
-                                                        <label class="repeat-day"><input type="checkbox" name="recurrence_days[]" value="Mon" <?php echo in_array('Mon', $recurrenceDays, true) ? 'checked' : ''; ?>><span>Mon</span></label>
-                                                        <label class="repeat-day"><input type="checkbox" name="recurrence_days[]" value="Tue" <?php echo in_array('Tue', $recurrenceDays, true) ? 'checked' : ''; ?>><span>Tue</span></label>
-                                                        <label class="repeat-day"><input type="checkbox" name="recurrence_days[]" value="Wed" <?php echo in_array('Wed', $recurrenceDays, true) ? 'checked' : ''; ?>><span>Wed</span></label>
-                                                        <label class="repeat-day"><input type="checkbox" name="recurrence_days[]" value="Thu" <?php echo in_array('Thu', $recurrenceDays, true) ? 'checked' : ''; ?>><span>Thu</span></label>
-                                                        <label class="repeat-day"><input type="checkbox" name="recurrence_days[]" value="Fri" <?php echo in_array('Fri', $recurrenceDays, true) ? 'checked' : ''; ?>><span>Fri</span></label>
-                                                        <label class="repeat-day"><input type="checkbox" name="recurrence_days[]" value="Sat" <?php echo in_array('Sat', $recurrenceDays, true) ? 'checked' : ''; ?>><span>Sat</span></label>
+                                <?php
+                                    $rid = (int) $routine['id'];
+                                    $override = $editFieldOverrides[$rid] ?? null;
+                                    $titleValue = htmlspecialchars($override['title'] ?? $routine['title'], ENT_QUOTES);
+                                    $startRaw = $override['start_time'] ?? $routine['start_time'];
+                                    $endRaw = $override['end_time'] ?? $routine['end_time'];
+                                    $startValue = htmlspecialchars(substr($startRaw, 0, 5), ENT_QUOTES);
+                                    $endValue = htmlspecialchars(substr($endRaw, 0, 5), ENT_QUOTES);
+                                    $bonusValue = (int) ($override['bonus_points'] ?? $routine['bonus_points']);
+                                    $recurrenceValue = $override['recurrence'] ?? $routine['recurrence'];
+                                    $timeOfDayValue = $override['time_of_day'] ?? ($routine['time_of_day'] ?? 'anytime');
+                                    $recurrenceDaysRaw = $override['recurrence_days'] ?? ($routine['recurrence_days'] ?? '');
+                                    $recurrenceDays = array_values(array_filter(array_map('trim', explode(',', (string) $recurrenceDaysRaw))));
+                                    $routineDateValue = $override['routine_date'] ?? ($routine['routine_date'] ?? '');
+                                    if ($routineDateValue === '' && !empty($routine['created_at'])) {
+                                        $routineDateValue = date('Y-m-d', strtotime($routine['created_at']));
+                                    }
+                                ?>
+                                <div class="routine-modal routine-edit-modal" data-routine-edit-modal="<?php echo (int) $routine['id']; ?>">
+                                    <div class="routine-modal-card" role="dialog" aria-modal="true" aria-labelledby="routine-edit-title-<?php echo (int) $routine['id']; ?>">
+                                        <header>
+                                            <h2 id="routine-edit-title-<?php echo (int) $routine['id']; ?>">Edit Routine</h2>
+                                            <button type="button" class="routine-modal-close" data-routine-edit-close aria-label="Close edit routine">&times;</button>
+                                        </header>
+                                        <div class="routine-modal-body">
+                                            <form method="POST" autocomplete="off">
+                                                <input type="hidden" name="routine_id" value="<?php echo (int) $routine['id']; ?>">
+                                                <div class="form-grid">
+                                                    <div class="form-group">
+                                                        <label>Title</label>
+                                                        <input type="text" name="title" value="<?php echo $titleValue; ?>" required>
+                                                    </div>
+                                                    <div class="form-group">
+                                                        <label>Time of Day</label>
+                                                        <select name="time_of_day">
+                                                            <option value="anytime" <?php echo $timeOfDayValue === 'anytime' ? 'selected' : ''; ?>>Anytime</option>
+                                                            <option value="morning" <?php echo $timeOfDayValue === 'morning' ? 'selected' : ''; ?>>Morning</option>
+                                                            <option value="afternoon" <?php echo $timeOfDayValue === 'afternoon' ? 'selected' : ''; ?>>Afternoon</option>
+                                                            <option value="evening" <?php echo $timeOfDayValue === 'evening' ? 'selected' : ''; ?>>Evening</option>
+                                                        </select>
+                                                    </div>
+                                                    <div class="form-group">
+                                                        <label>Start Time</label>
+                                                        <input type="time" name="start_time" value="<?php echo $startValue; ?>" required>
+                                                    </div>
+                                                    <div class="form-group">
+                                                        <label>End Time</label>
+                                                        <input type="time" name="end_time" value="<?php echo $endValue; ?>" required>
+                                                    </div>
+                                                    <div class="form-group">
+                                                        <label>Bonus Points</label>
+                                                        <input type="number" name="bonus_points" min="0" value="<?php echo $bonusValue; ?>">
+                                                    </div>
+                                                    <div class="form-group">
+                                                        <label>Repeat</label>
+                                                        <select name="recurrence">
+                                                            <option value="" <?php echo empty($recurrenceValue) ? 'selected' : ''; ?>>Once</option>
+                                                            <option value="daily" <?php echo ($recurrenceValue === 'daily') ? 'selected' : ''; ?>>Every Day</option>
+                                                            <option value="weekly" <?php echo ($recurrenceValue === 'weekly') ? 'selected' : ''; ?>>Specific Days</option>
+                                                        </select>
+                                                        <div class="repeat-days" data-recurrence-days-wrapper>
+                                                            <div class="repeat-days-label">Specific Days</div>
+                                                            <div class="repeat-days-grid">
+                                                                <label class="repeat-day"><input type="checkbox" name="recurrence_days[]" value="Sun" <?php echo in_array('Sun', $recurrenceDays, true) ? 'checked' : ''; ?>><span>Sun</span></label>
+                                                                <label class="repeat-day"><input type="checkbox" name="recurrence_days[]" value="Mon" <?php echo in_array('Mon', $recurrenceDays, true) ? 'checked' : ''; ?>><span>Mon</span></label>
+                                                                <label class="repeat-day"><input type="checkbox" name="recurrence_days[]" value="Tue" <?php echo in_array('Tue', $recurrenceDays, true) ? 'checked' : ''; ?>><span>Tue</span></label>
+                                                                <label class="repeat-day"><input type="checkbox" name="recurrence_days[]" value="Wed" <?php echo in_array('Wed', $recurrenceDays, true) ? 'checked' : ''; ?>><span>Wed</span></label>
+                                                                <label class="repeat-day"><input type="checkbox" name="recurrence_days[]" value="Thu" <?php echo in_array('Thu', $recurrenceDays, true) ? 'checked' : ''; ?>><span>Thu</span></label>
+                                                                <label class="repeat-day"><input type="checkbox" name="recurrence_days[]" value="Fri" <?php echo in_array('Fri', $recurrenceDays, true) ? 'checked' : ''; ?>><span>Fri</span></label>
+                                                                <label class="repeat-day"><input type="checkbox" name="recurrence_days[]" value="Sat" <?php echo in_array('Sat', $recurrenceDays, true) ? 'checked' : ''; ?>><span>Sat</span></label>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <div class="form-group" data-routine-date-wrapper>
+                                                        <label>Date</label>
+                                                        <input type="date" name="routine_date" value="<?php echo htmlspecialchars($routineDateValue, ENT_QUOTES); ?>">
                                                     </div>
                                                 </div>
-                                            </div>
-                                            <div class="form-group" data-routine-date-wrapper>
-                                                <label>Date</label>
-                                                <input type="date" name="routine_date" value="<?php echo htmlspecialchars($routineDateValue, ENT_QUOTES); ?>">
-                                            </div>
-                                        </div>
-                                        <div class="routine-builder" data-builder-id="edit-<?php echo (int) $routine['id']; ?>" data-start-input="input[name='start_time']" data-end-input="input[name='end_time']">
-                                            <div class="builder-controls">
-                                                <div class="form-group">
-                                                    <label>Add Routine Task</label>
-                                                    <select data-role="task-picker">
-                                                        <option value="">Select task...</option>
-                                                        <?php foreach ($routine_tasks as $task): ?>
-                                                            <option value="<?php echo (int) $task['id']; ?>"><?php echo htmlspecialchars($task['title']); ?> (<?php echo (int) $task['time_limit']; ?> min)</option>
-                                                        <?php endforeach; ?>
-                                                    </select>
+                                                <div class="routine-builder" data-builder-id="edit-<?php echo (int) $routine['id']; ?>" data-start-input="input[name='start_time']" data-end-input="input[name='end_time']">
+                                                    <div class="builder-controls">
+                                                        <div class="form-group">
+                                                            <label>Add Routine Task</label>
+                                                            <select data-role="task-picker">
+                                                                <option value="">Select task...</option>
+                                                                <?php foreach ($routine_tasks as $task): ?>
+                                                                    <option value="<?php echo (int) $task['id']; ?>"><?php echo htmlspecialchars($task['title']); ?> (<?php echo (int) $task['time_limit']; ?> min)</option>
+                                                                <?php endforeach; ?>
+                                                            </select>
+                                                        </div>
+                                                        <button type="button" class="button secondary" data-role="add-task">Add Task</button>
+                                                    </div>
+                                                    <ul class="selected-task-list" data-role="selected-list"></ul>
+                                                    <div class="summary-row">
+                                                        <span>Total Task Time: <span data-role="total-minutes">0</span> min</span>
+                                                        <span>Routine Duration: <span data-role="duration-minutes">--</span> min</span>
+                                                        <span class="warning" data-role="warning"></span>
+                                                    </div>
+                                                    <input type="hidden" name="routine_structure" data-role="structure-input">
                                                 </div>
-                                                <button type="button" class="button secondary" data-role="add-task">Add Task</button>
-                                            </div>
-                                            <ul class="selected-task-list" data-role="selected-list"></ul>
-                                            <div class="summary-row">
-                                                <span>Total Task Time: <span data-role="total-minutes">0</span> min</span>
-                                                <span>Routine Duration: <span data-role="duration-minutes">--</span> min</span>
-                                                <span class="warning" data-role="warning"></span>
-                                            </div>
-                                            <input type="hidden" name="routine_structure" data-role="structure-input">
+                                                <div class="form-actions">
+                                                    <button type="submit" name="update_routine" class="button">Save Changes</button>
+                                                </div>
+                                            </form>
                                         </div>
-                                        <div class="form-actions">
-                                            <button type="submit" name="update_routine" class="button">Save Changes</button>
-                                            <button type="submit" name="delete_routine" class="button danger" onclick="return confirm('Delete this routine?');">Delete Routine</button>
-                                        </div>
-                                </form>
-                            </details>
+                                    </div>
+                                </div>
                         <?php endif; ?>
                     </article>
                 <?php endforeach; ?>
@@ -2137,6 +2159,18 @@ margin-bottom: 20px;}
                 if (prefClose) prefClose.addEventListener('click', () => closeRoutineModal(prefModal));
                 prefModal.addEventListener('click', (e) => { if (e.target === prefModal) closeRoutineModal(prefModal); });
             }
+            document.querySelectorAll('[data-routine-edit-open]').forEach((btn) => {
+                const routineId = btn.getAttribute('data-routine-id');
+                if (!routineId) return;
+                const modal = document.querySelector(`[data-routine-edit-modal="${routineId}"]`);
+                if (!modal) return;
+                const closeBtn = modal.querySelector('[data-routine-edit-close]');
+                btn.addEventListener('click', () => openRoutineModal(modal));
+                if (closeBtn) {
+                    closeBtn.addEventListener('click', () => closeRoutineModal(modal));
+                }
+                modal.addEventListener('click', (e) => { if (e.target === modal) closeRoutineModal(modal); });
+            });
             if (createOpen && createModal) {
                 createOpen.addEventListener('click', () => openRoutineModal(createModal));
                 if (createClose) createClose.addEventListener('click', () => closeRoutineModal(createModal));
@@ -2144,6 +2178,14 @@ margin-bottom: 20px;}
             }
             if (createModal && createModal.classList.contains('open')) {
                 document.body.classList.add('modal-open');
+            }
+            if (Array.isArray(page.editFormErrors) && page.editFormErrors.length) {
+                page.editFormErrors.forEach((rid) => {
+                    const modal = document.querySelector(`[data-routine-edit-modal="${rid}"]`);
+                    if (modal) {
+                        openRoutineModal(modal);
+                    }
+                });
             }
 
             function decodeHtmlEntities(value) {
