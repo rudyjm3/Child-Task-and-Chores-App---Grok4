@@ -807,9 +807,31 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
         }
         .goal-progress { margin-top: 12px; display: grid; gap: 6px; }
         .goal-progress-header { display: flex; align-items: center; justify-content: space-between; font-weight: 700; color: #37474f; }
-        .goal-progress-bar { height: 30px; border-radius: 999px; background: #edf1f7; overflow: hidden; border: 1px solid #dfe6ee; }
+        .goal-progress-bar { 
+            height: 30px;
+            border-radius: 999px;
+            background: #edf1f7;
+            overflow: hidden;
+            border: 1.5px solid #e2e2e2;
+            position: relative;
+            --goal-progress-steps: 1;
+            --goal-progress-tick-width: 1.5px;
+            --goal-progress-tick-color: #e2e2e2;
+        }
         .goal-progress-bar span { display: block; height: 100%; background: linear-gradient(90deg, #00bcd4, #4caf50); width: 0; transition: width 300ms ease; box-shadow: 0 0 8px rgba(0, 188, 212, 0.35); }
         .goal-progress-bar.complete span { background: #4caf50; animation: none; box-shadow: none; }
+        body:not(.child-theme) .goal-progress-bar span { transform-origin: left center; animation: goal-fill 650ms ease-out 1; }
+        .goal-progress-bar::after { content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; }
+        .goal-progress-bar.has-steps::after {
+            background-image: repeating-linear-gradient(
+                to right,
+                transparent,
+                transparent calc(100% / var(--goal-progress-steps) - var(--goal-progress-tick-width)),
+                var(--goal-progress-tick-color) calc(100% / var(--goal-progress-steps) - var(--goal-progress-tick-width)),
+                var(--goal-progress-tick-color) calc(100% / var(--goal-progress-steps))
+            );
+            opacity: 1;
+        }
         .goal-next-needed { font-size: 0.92rem; color: #455a64; }
         .goal-meta { display: grid; gap: 6px; color: #5f6c76; font-size: 0.92rem; margin-top: 8px; }
         .goal-detail-pill { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; background: #eef4ff; color: #0d47a1; font-weight: 700; font-size: 0.85rem; }
@@ -827,9 +849,19 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
         .icon-button:hover { background: rgba(0,0,0,0.06); color: #37474f; }
         .icon-button.danger { color: #d32f2f; }
         .icon-button.danger:hover { background: rgba(211,47,47,0.12); }
-        .child-theme .goal-progress-bar { height: 30px; background: #ffe9c6; border: 1px dashed #ffb74d; }
+        .child-theme .goal-progress-bar {
+            height: 30px;
+            background: #ffe9c6;
+            border: 2px solid #ffb74d;
+            --goal-progress-tick-width: 1px;
+            --goal-progress-tick-color: #ffb74d;
+        }
         .child-theme .goal-progress-bar span { background: linear-gradient(90deg, #ff6f61, #ffd54f, #4caf50); background-size: 200% 100%; animation: goal-spark 2.4s linear infinite; box-shadow: 0 0 8px rgba(255, 111, 97, 0.35); }
         .child-theme .goal-progress-bar.complete span { background: #4caf50; animation: none; box-shadow: none; }
+        @keyframes goal-fill {
+            from { transform: scaleX(0); }
+            to { transform: scaleX(1); }
+        }
         @keyframes goal-spark {
             0% { background-position: 200% 50%; }
             100% { background-position: 0% 50%; }
@@ -964,9 +996,27 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                                     'task_quota' => 'Task quota'
                                 ][$goalProgress['goal_type']] ?? 'Goal';
                                 $progressValue = $goalProgress['current'] . ' / ' . $goalProgress['target'];
+                                $progressPercent = (int) ($goalProgress['percent'] ?? 0);
+                                $progressSteps = 0;
                                 $displayStatus = $goal['status'];
                                 if ($goal['status'] === 'active' && !empty($goalProgress['is_met'])) {
                                     $displayStatus = !empty($goal['requires_parent_approval']) ? 'pending_approval' : 'completed';
+                                }
+                                $routineTargets = $goal['routine_targets'] ?? [];
+                                if (count($routineTargets) > 1 && in_array(($goalProgress['goal_type'] ?? ''), ['routine_streak', 'routine_count'], true)) {
+                                    $routineCounts = $goalProgress['routine_counts'] ?? [];
+                                    $totalUnits = count($routineTargets) * max(1, (int) ($goalProgress['target'] ?? 0));
+                                    if ($totalUnits > 0) {
+                                        $completedUnits = 0;
+                                        foreach ($routineTargets as $routine) {
+                                            $completedUnits += (int) ($routineCounts[$routine['id']] ?? 0);
+                                        }
+                                        if ($completedUnits > $totalUnits) {
+                                            $completedUnits = $totalUnits;
+                                        }
+                                        $progressPercent = (int) round(($completedUnits / $totalUnits) * 100);
+                                        $progressSteps = min(14, $totalUnits);
+                                    }
                                 }
                                 $routineTargetIds = $goal['routine_target_ids'] ?? [];
                                 if (empty($routineTargetIds) && !empty($goal['routine_id'])) {
@@ -1014,8 +1064,8 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                                             <span><?php echo htmlspecialchars($goalTypeLabel); ?></span>
                                             <span><?php echo htmlspecialchars($progressValue); ?></span>
                                         </div>
-                                        <div class="goal-progress-bar">
-                                            <span style="width: <?php echo (int) $goalProgress['percent']; ?>%;"></span>
+                                        <div class="goal-progress-bar<?php echo $progressSteps > 0 ? ' has-steps' : ''; ?>"<?php echo $progressSteps > 0 ? ' style="--goal-progress-steps: ' . (int) $progressSteps . ';"' : ''; ?>>
+                                            <span style="width: <?php echo (int) $progressPercent; ?>%;"></span>
                                         </div>
                                         <?php if (!empty($goalProgress['next_needed'])): ?>
                                             <div class="goal-next-needed">Next: <?php echo htmlspecialchars($goalProgress['next_needed']); ?></div>
