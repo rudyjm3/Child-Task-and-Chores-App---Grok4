@@ -2687,6 +2687,16 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                             <?php
                                 $timeOfDay = $task['time_of_day'] ?? 'anytime';
                                 $isOnce = empty($task['recurrence']);
+                                $completedStamp = $task['completed_at'] ?? null;
+                                if (!$completedStamp && !empty($task['instance_date'])) {
+                                    $completedStamp = $task['instance_date'];
+                                }
+                                $completedLabel = '';
+                                if (!empty($completedStamp)) {
+                                    $completedLabel = !empty($task['completed_at'])
+                                        ? date('m/d/Y h:i A', strtotime($completedStamp))
+                                        : date('m/d/Y', strtotime($completedStamp));
+                                }
                                 if ($isOnce) {
                                     $dueDisplay = $task['due_date_formatted'];
                                 } elseif ($timeOfDay === 'anytime') {
@@ -2700,6 +2710,11 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                                 }
                             ?>
                             <div class="task-meta">
+                                <?php if ($completedLabel !== ''): ?>
+                                    <div class="task-meta-row">
+                                        <span><span class="task-meta-label">Completed:</span> <?php echo htmlspecialchars($completedLabel); ?></span>
+                                    </div>
+                                <?php endif; ?>
                                 <div class="task-meta-row">
                                     <span><span class="task-meta-label">Due:</span> <?php echo htmlspecialchars($dueDisplay); ?></span>
                                 </div>

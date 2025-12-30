@@ -168,7 +168,9 @@ $notificationCount = is_array($notificationsNew) ? count($notificationsNew) : 0;
         .week-days { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
         .week-day { background: #f5f5f5; border: 1px solid #d5def0; border-radius: 10px; padding: 8px 0; display: grid; gap: 2px; justify-items: center; font-weight: 700; color: #37474f; cursor: pointer; }
         .week-day.active { background: #ffe0b2; border-color: #ffd28a; }
-        .week-day-name { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; }
+        .week-day-name-full,
+        .week-day-name-initial { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; }
+        .week-day-name-initial { display: none; }
         .week-day-num { font-size: 1rem; }
         .week-schedule { margin-top: 10px; display: grid; gap: 8px; }
         .week-section { display: grid; gap: 6px; }
@@ -185,6 +187,10 @@ $notificationCount = is_array($notificationsNew) ? count($notificationsNew) : 0;
         .redeem-button { background-color: #2196f3; }
         
         .trash-button { border: none; background: transparent; cursor: pointer; font-size: 1.1rem; padding: 4px; color: #b71c1c; }
+        @media (max-width: 900px) {
+            .week-day-name-full { display: none; }
+            .week-day-name-initial { display: inline; }
+        }
         @media (max-width: 768px) { .dashboard { padding: 10px; } .button { width: 100%; } }
         @media (max-width: 600px) {
             .points-summary { flex-direction: column; align-items: center; text-align: center; }
@@ -1068,7 +1074,8 @@ $notificationCount = is_array($notificationsNew) ? count($notificationsNew) : 0;
             <div class="week-days" aria-label="Current week">
                <?php foreach ($weekDates as $day): ?>
                   <button type="button" class="week-day<?php echo $day['date'] === $todayDate ? ' active' : ''; ?>" data-week-date="<?php echo htmlspecialchars($day['date']); ?>">
-                     <span class="week-day-name"><?php echo htmlspecialchars($day['day']); ?></span>
+                     <span class="week-day-name-full"><?php echo htmlspecialchars($day['day']); ?></span>
+                     <span class="week-day-name-initial"><?php echo htmlspecialchars(strtoupper(substr((string) $day['day'], 0, 1))); ?></span>
                      <span class="week-day-num"><?php echo htmlspecialchars($day['num']); ?></span>
                   </button>
                <?php endforeach; ?>
