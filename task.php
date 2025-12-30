@@ -788,6 +788,15 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
             const show = selectEl.value === 'weekly';
             wrapper.style.display = show ? 'block' : 'none';
         };
+        const updateOnceDateVisibility = (wrapper, selectEl) => {
+            if (!wrapper || !selectEl) return;
+            const show = selectEl.value === '';
+            wrapper.style.display = show ? 'block' : 'none';
+            const input = wrapper.querySelector('input[type="date"]');
+            if (input) {
+                input.required = show;
+            }
+        };
         const updateDueTimeVisibility = (wrapper, selectEl) => {
             if (!wrapper || !selectEl) return;
             const show = selectEl.value !== 'anytime';
@@ -844,6 +853,16 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
             );
             updateRepeatDays(
                 modalForm.querySelector('[data-recurrence-days-wrapper]'),
+                modalForm.querySelector('[name="recurrence"]')
+            );
+            updateEndToggleVisibility(
+                modalForm.querySelector('[data-end-toggle-field]'),
+                modalForm.querySelector('[data-end-date-toggle]'),
+                modalForm.querySelector('[data-end-date-wrapper]'),
+                modalForm.querySelector('[name="recurrence"]')
+            );
+            updateOnceDateVisibility(
+                modalForm.querySelector('[data-once-date-wrapper]'),
                 modalForm.querySelector('[name="recurrence"]')
             );
             updateEndDate(
@@ -956,6 +975,7 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
         const createTimerWrapper = document.querySelector('[data-create-timer-minutes]');
         const createRepeatSelect = document.querySelector('#recurrence');
         const createRepeatWrapper = document.querySelector('[data-create-recurrence-days]');
+        const createOnceDateWrapper = document.querySelector('[data-once-date-wrapper]');
         const createForm = document.querySelector('[data-create-task-form]');
         const createEndToggle = document.querySelector('[data-end-date-toggle]');
         const createEndWrapper = document.querySelector('[data-create-end-date]');
@@ -969,6 +989,10 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
         if (createRepeatSelect && createRepeatWrapper) {
             updateRepeatDays(createRepeatWrapper, createRepeatSelect);
             createRepeatSelect.addEventListener('change', () => updateRepeatDays(createRepeatWrapper, createRepeatSelect));
+        }
+        if (createRepeatSelect && createOnceDateWrapper) {
+            updateOnceDateVisibility(createOnceDateWrapper, createRepeatSelect);
+            createRepeatSelect.addEventListener('change', () => updateOnceDateVisibility(createOnceDateWrapper, createRepeatSelect));
         }
         if (createTimeOfDay && createDueTimeWrapper) {
             updateDueTimeVisibility(createDueTimeWrapper, createTimeOfDay);
@@ -1002,8 +1026,18 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
             if (modalRepeat && modalRepeatWrapper) {
                 modalRepeat.addEventListener('change', () => updateRepeatDays(modalRepeatWrapper, modalRepeat));
             }
-            const modalEndToggle = modalForm.querySelector('[name="end_date_enabled"]');
+            const modalEndToggleField = modalForm.querySelector('[data-end-toggle-field]');
+            const modalEndToggle = modalForm.querySelector('[data-end-date-toggle]');
             const modalEndWrapper = modalForm.querySelector('[data-end-date-wrapper]');
+            if (modalRepeat && modalEndToggleField && modalEndToggle && modalEndWrapper) {
+                modalRepeat.addEventListener('change', () => updateEndToggleVisibility(modalEndToggleField, modalEndToggle, modalEndWrapper, modalRepeat));
+                updateEndToggleVisibility(modalEndToggleField, modalEndToggle, modalEndWrapper, modalRepeat);
+            }
+            const modalOnceWrapper = modalForm.querySelector('[data-once-date-wrapper]');
+            if (modalRepeat && modalOnceWrapper) {
+                modalRepeat.addEventListener('change', () => updateOnceDateVisibility(modalOnceWrapper, modalRepeat));
+                updateOnceDateVisibility(modalOnceWrapper, modalRepeat);
+            }
             if (modalEndToggle && modalEndWrapper) {
                 modalEndToggle.addEventListener('change', () => updateEndDate(modalEndWrapper, modalEndToggle));
             }
@@ -2877,7 +2911,6 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                     <div class="task-modal-body">
                         <form method="POST" action="task.php" data-task-edit-form>
                             <input type="hidden" name="task_id" value="">
-                            <input type="hidden" name="start_date" value="">
                             <div class="form-grid">
                                 <div class="form-group">
                                     <label>Child</label>
@@ -2911,6 +2944,10 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                                         <option value="weekly">Specific Days</option>
                                     </select>
                                 </div>
+                                <div class="form-group" data-once-date-wrapper>
+                                    <label>Task Date</label>
+                                    <input type="date" name="start_date" value="">
+                                </div>
                                 <div class="form-group" data-recurrence-days-wrapper>
                                     <div class="repeat-days-label">Specific Days</div>
                                     <div class="repeat-days-grid">
@@ -2932,11 +2969,11 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                                         <option value="evening">Evening</option>
                                     </select>
                                 </div>
-                                <div class="form-group toggle-field">
+                                <div class="form-group toggle-field" data-end-toggle-field>
                                     <span class="toggle-label">End Date</span>
                                     <label class="toggle-row">
                                         <span class="toggle-switch">
-                                            <input type="checkbox" name="end_date_enabled">
+                                            <input type="checkbox" name="end_date_enabled" data-end-date-toggle>
                                             <span class="toggle-slider"></span>
                                         </span>
                                     </label>
@@ -3114,7 +3151,6 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                 <div class="task-create-body">
                     <form method="POST" action="task.php" enctype="multipart/form-data" data-create-task-form>
                         <?php $autoSelectChildId = count($children) === 1 ? (int) $children[0]['child_user_id'] : null; ?>
-                        <input type="hidden" name="start_date" value="<?php echo date('Y-m-d'); ?>">
                         <div class="form-grid">
                             <div class="form-group">
                                 <label>Child</label>
@@ -3159,6 +3195,10 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                                         <label class="repeat-day"><input type="checkbox" name="recurrence_days[]" value="Sat"><span>Sat</span></label>
                                     </div>
                                 </div>
+                            </div>
+                            <div class="form-group" data-once-date-wrapper>
+                                <label for="start_date">Task Date</label>
+                                <input type="date" id="start_date" name="start_date" value="<?php echo date('Y-m-d'); ?>">
                             </div>
                             <div class="form-group">
                                 <label for="time_of_day">Time of Day</label>
