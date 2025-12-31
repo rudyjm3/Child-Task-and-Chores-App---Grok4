@@ -615,6 +615,7 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
          background-color: rgba(0, 0, 0, 0.0);
          color: #9f9f9f; /*background: #f5f5f5; border-color: #d5def0; color: #757575;*/ }
         .task-card-actions { margin-top: 10px; display: flex; gap: 8px; }
+        .task-card-actions.right { justify-content: flex-end; }
         .task-reject-form { margin-top: 12px; display: grid; gap: 8px; }
         .task-reject-form textarea { width: 100%; min-height: 70px; resize: vertical; }
         .task-reject-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
@@ -737,38 +738,11 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
         let openTaskPreview = null;
         let openEditTaskModal = null;
         let openDeleteTaskModal = null;
+        let openCreateTaskModal = null;
         let openProofTaskModal = null;
         let openPhotoViewer = null;
         let activePreviewDateKey = null;
         let floatingTaskDateKey = null;
-
-        document.addEventListener('DOMContentLoaded', () => {
-        bindTimerControls(document);
-
-        const editButtons = document.querySelectorAll('[data-task-edit-open]');
-        const deleteButtons = document.querySelectorAll('[data-task-delete-open]');
-        const modal = document.querySelector('[data-task-edit-modal]');
-        const modalCloses = modal ? modal.querySelectorAll('[data-task-edit-close]') : [];
-        const modalForm = modal ? modal.querySelector('[data-task-edit-form]') : null;
-        const deleteModal = document.querySelector('[data-task-delete-modal]');
-        const deleteCloses = deleteModal ? deleteModal.querySelectorAll('[data-task-delete-close]') : [];
-        const deleteForm = deleteModal ? deleteModal.querySelector('[data-task-delete-form]') : null;
-        const deleteCopy = deleteModal ? deleteModal.querySelector('[data-task-delete-copy]') : null;
-        const proofButtons = document.querySelectorAll('[data-task-proof-open]');
-        const proofModal = document.querySelector('[data-task-proof-modal]');
-        const proofCloses = proofModal ? proofModal.querySelectorAll('[data-task-proof-close]') : [];
-        const proofForm = proofModal ? proofModal.querySelector('[data-task-proof-form]') : null;
-        const proofFileInput = proofModal ? proofModal.querySelector('input[name="photo_proof"]') : null;
-        const photoThumbs = document.querySelectorAll('[data-task-photo-src]');
-        const photoModal = document.querySelector('[data-task-photo-modal]');
-        const photoCloses = photoModal ? photoModal.querySelectorAll('[data-task-photo-close]') : [];
-        const photoPreview = photoModal ? photoModal.querySelector('[data-task-photo-preview]') : null;
-        floatingTimerEl = document.querySelector('[data-floating-timer]');
-        floatingTitleEl = floatingTimerEl ? floatingTimerEl.querySelector('[data-floating-title]') : null;
-        floatingPointsEl = floatingTimerEl ? floatingTimerEl.querySelector('[data-floating-points]') : null;
-        floatingOpenBtn = floatingTimerEl ? floatingTimerEl.querySelector('[data-floating-open]') : null;
-        floatingCloseBtn = floatingTimerEl ? floatingTimerEl.querySelector('[data-floating-close]') : null;
-        floatingFinishBtn = floatingTimerEl ? floatingTimerEl.querySelector('[data-floating-finish]') : null;
 
         const updateTimerField = (wrapper, selectEl) => {
             if (!wrapper || !selectEl) return;
@@ -821,6 +795,35 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                 updateEndDate(endWrapper, toggle);
             }
         };
+
+        document.addEventListener('DOMContentLoaded', () => {
+        bindTimerControls(document);
+
+        const editButtons = document.querySelectorAll('[data-task-edit-open]');
+        const deleteButtons = document.querySelectorAll('[data-task-delete-open]');
+        const modal = document.querySelector('[data-task-edit-modal]');
+        const modalCloses = modal ? modal.querySelectorAll('[data-task-edit-close]') : [];
+        const modalForm = modal ? modal.querySelector('[data-task-edit-form]') : null;
+        const deleteModal = document.querySelector('[data-task-delete-modal]');
+        const deleteCloses = deleteModal ? deleteModal.querySelectorAll('[data-task-delete-close]') : [];
+        const deleteForm = deleteModal ? deleteModal.querySelector('[data-task-delete-form]') : null;
+        const deleteCopy = deleteModal ? deleteModal.querySelector('[data-task-delete-copy]') : null;
+        const proofButtons = document.querySelectorAll('[data-task-proof-open]');
+        const proofModal = document.querySelector('[data-task-proof-modal]');
+        const proofCloses = proofModal ? proofModal.querySelectorAll('[data-task-proof-close]') : [];
+        const proofForm = proofModal ? proofModal.querySelector('[data-task-proof-form]') : null;
+        const proofFileInput = proofModal ? proofModal.querySelector('input[name="photo_proof"]') : null;
+        const photoThumbs = document.querySelectorAll('[data-task-photo-src]');
+        const photoModal = document.querySelector('[data-task-photo-modal]');
+        const photoCloses = photoModal ? photoModal.querySelectorAll('[data-task-photo-close]') : [];
+        const photoPreview = photoModal ? photoModal.querySelector('[data-task-photo-preview]') : null;
+        floatingTimerEl = document.querySelector('[data-floating-timer]');
+        floatingTitleEl = floatingTimerEl ? floatingTimerEl.querySelector('[data-floating-title]') : null;
+        floatingPointsEl = floatingTimerEl ? floatingTimerEl.querySelector('[data-floating-points]') : null;
+        floatingOpenBtn = floatingTimerEl ? floatingTimerEl.querySelector('[data-floating-open]') : null;
+        floatingCloseBtn = floatingTimerEl ? floatingTimerEl.querySelector('[data-floating-close]') : null;
+        floatingFinishBtn = floatingTimerEl ? floatingTimerEl.querySelector('[data-floating-finish]') : null;
+
         const openModal = (data) => {
             if (!modal || !modalForm) return;
             const previewModalEl = document.querySelector('[data-task-preview-modal]');
@@ -971,16 +974,16 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
             modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
             document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeModal(); });
         }
-        const createTimingSelect = document.querySelector('#timing_mode');
-        const createTimerWrapper = document.querySelector('[data-create-timer-minutes]');
-        const createRepeatSelect = document.querySelector('#recurrence');
-        const createRepeatWrapper = document.querySelector('[data-create-recurrence-days]');
-        const createOnceDateWrapper = document.querySelector('[data-once-date-wrapper]');
         const createForm = document.querySelector('[data-create-task-form]');
-        const createEndToggle = document.querySelector('[data-end-date-toggle]');
-        const createEndWrapper = document.querySelector('[data-create-end-date]');
-        const createEndToggleField = document.querySelector('[data-create-end-toggle]');
-        const createTimeOfDay = document.querySelector('#time_of_day');
+        const createTimingSelect = createForm ? createForm.querySelector('[name="timing_mode"]') : null;
+        const createTimerWrapper = createForm ? createForm.querySelector('[data-create-timer-minutes]') : null;
+        const createRepeatSelect = createForm ? createForm.querySelector('[name="recurrence"]') : null;
+        const createRepeatWrapper = createForm ? createForm.querySelector('[data-create-recurrence-days]') : null;
+        const createOnceDateWrapper = createForm ? createForm.querySelector('[data-once-date-wrapper]') : null;
+        const createEndToggle = createForm ? createForm.querySelector('[data-end-date-toggle]') : null;
+        const createEndWrapper = createForm ? createForm.querySelector('[data-create-end-date]') : null;
+        const createEndToggleField = createForm ? createForm.querySelector('[data-create-end-toggle]') : null;
+        const createTimeOfDay = createForm ? createForm.querySelector('[name="time_of_day"]') : null;
         const createDueTimeWrapper = createForm ? createForm.querySelector('[data-due-time-wrapper]') : null;
         if (createTimingSelect && createTimerWrapper) {
             updateTimerField(createTimerWrapper, createTimingSelect);
@@ -1308,6 +1311,29 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
 
         function bindTaskEditDeleteButtons(container) {
             if (!container) return;
+            container.querySelectorAll('[data-task-duplicate-open]').forEach((btn) => {
+                if (btn.dataset.taskDuplicateBound) return;
+                btn.dataset.taskDuplicateBound = '1';
+                btn.addEventListener('click', () => {
+                    if (!openCreateTaskModal) return;
+                    openCreateTaskModal({
+                        childId: btn.dataset.childId,
+                        title: btn.dataset.title,
+                        description: btn.dataset.description,
+                        startDate: btn.dataset.startDate,
+                        dueTime: btn.dataset.dueTime,
+                        endDate: btn.dataset.endDate,
+                        points: btn.dataset.points,
+                        recurrence: btn.dataset.recurrence,
+                        category: btn.dataset.category,
+                        timingMode: btn.dataset.timingMode,
+                        timerMinutes: btn.dataset.timerMinutes,
+                        timeOfDay: btn.dataset.timeOfDay,
+                        recurrenceDays: btn.dataset.recurrenceDays,
+                        photoRequired: btn.dataset.photoRequired === '1'
+                    });
+                });
+            });
             container.querySelectorAll('[data-task-edit-open]').forEach((btn) => {
                 if (btn.dataset.taskEditBound) return;
                 btn.dataset.taskEditBound = '1';
@@ -1632,8 +1658,9 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
             const createModal = document.querySelector('[data-task-create-modal]');
             const createOpen = document.querySelector('[data-task-create-open]');
             const createClose = createModal ? createModal.querySelector('[data-task-create-close]') : null;
+            const createForm = createModal ? createModal.querySelector('[data-create-task-form]') : null;
 
-            if (createModal && createOpen) {
+            if (createModal && createOpen && createForm) {
                 const closeCreate = () => {
                     createModal.classList.remove('open');
                     document.body.classList.remove('no-scroll');
@@ -1641,6 +1668,63 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                 const openCreate = () => {
                     createModal.classList.add('open');
                     document.body.classList.add('no-scroll');
+                };
+                const setCreateFormDefaults = (data) => {
+                    if (!createForm) return;
+                    createForm.reset();
+                    const createTimingSelect = createForm.querySelector('[name="timing_mode"]');
+                    const createTimerWrapper = createForm.querySelector('[data-create-timer-minutes]');
+                    const createRepeatSelect = createForm.querySelector('[name="recurrence"]');
+                    const createRepeatWrapper = createForm.querySelector('[data-create-recurrence-days]');
+                    const createOnceDateWrapper = createForm.querySelector('[data-once-date-wrapper]');
+                    const createEndToggle = createForm.querySelector('[data-end-date-toggle]');
+                    const createEndWrapper = createForm.querySelector('[data-create-end-date]');
+                    const createEndToggleField = createForm.querySelector('[data-create-end-toggle]');
+                    const createTimeOfDay = createForm.querySelector('[name="time_of_day"]');
+                    const createDueTimeWrapper = createForm.querySelector('[data-due-time-wrapper]');
+                    const childBoxes = createForm.querySelectorAll('input[name="child_user_ids[]"]');
+                    childBoxes.forEach((box) => {
+                        box.checked = String(box.value) === String(data.childId || '');
+                    });
+                    if (!Array.from(childBoxes).some((box) => box.checked) && childBoxes.length === 1) {
+                        childBoxes[0].checked = true;
+                    }
+                    createForm.querySelector('[name="title"]').value = data.title || '';
+                    createForm.querySelector('[name="description"]').value = data.description || '';
+                    createForm.querySelector('[name="points"]').value = data.points || '';
+                    createForm.querySelector('[name="recurrence"]').value = data.recurrence || '';
+                    createForm.querySelector('[name="time_of_day"]').value = data.timeOfDay || 'anytime';
+                    createForm.querySelector('[name="category"]').value = data.category || 'household';
+                    createForm.querySelector('[name="timing_mode"]').value = data.timingMode || 'no_limit';
+                    createForm.querySelector('[name="timer_minutes"]').value = data.timerMinutes || '';
+                    createForm.querySelector('[name="start_date"]').value = data.startDate || formatDateKey(new Date());
+                    createForm.querySelector('[name="due_time"]').value = data.dueTime || '';
+                    const endDateInput = createForm.querySelector('[name="end_date"]');
+                    if (endDateInput) {
+                        endDateInput.value = data.endDate || '';
+                    }
+                    const endToggle = createForm.querySelector('[data-end-date-toggle]');
+                    if (endToggle) {
+                        endToggle.checked = !!data.endDate;
+                    }
+                    const photoToggle = createForm.querySelector('[name="photo_proof_required"]');
+                    if (photoToggle) {
+                        photoToggle.checked = !!data.photoRequired;
+                    }
+                    const days = (data.recurrenceDays || '').split(',').filter(Boolean);
+                    createForm.querySelectorAll('[name="recurrence_days[]"]').forEach((box) => {
+                        box.checked = days.includes(box.value);
+                    });
+                    updateTimerField(createTimerWrapper, createTimingSelect);
+                    updateRepeatDays(createRepeatWrapper, createRepeatSelect);
+                    updateOnceDateVisibility(createOnceDateWrapper, createRepeatSelect);
+                    updateDueTimeVisibility(createDueTimeWrapper, createTimeOfDay);
+                    updateEndToggleVisibility(createEndToggleField, createEndToggle, createEndWrapper, createRepeatSelect);
+                    updateEndDate(createEndWrapper, createEndToggle);
+                };
+                openCreateTaskModal = (data) => {
+                    setCreateFormDefaults(data || {});
+                    openCreate();
                 };
                 createOpen.addEventListener('click', openCreate);
                 if (createClose) {
@@ -2082,6 +2166,36 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
             const instance = isRecurring ? getTaskInstance(task, viewDateKey) : null;
             const statusForView = isRecurring ? (instance ? instance.status : 'pending') : (task.status || 'pending');
             const proofSrc = instance && instance.photo_proof ? instance.photo_proof : task.photo_proof;
+            const startDateValue = getDateKeyFromString(task.due_date) || '';
+            let dueTimeValue = '';
+            const timeParts = getTimeParts(task.due_date);
+            if (timeParts) {
+                dueTimeValue = `${String(timeParts.hours).padStart(2, '0')}:${String(timeParts.minutes).padStart(2, '0')}`;
+            }
+            const buildDuplicateButton = () => {
+                const duplicateButton = document.createElement('button');
+                duplicateButton.type = 'button';
+                duplicateButton.className = 'icon-button';
+                duplicateButton.setAttribute('aria-label', 'Duplicate task');
+                duplicateButton.dataset.taskDuplicateOpen = '';
+                duplicateButton.dataset.taskId = String(task.id);
+                duplicateButton.dataset.childId = String(task.child_user_id || '');
+                duplicateButton.dataset.title = task.title || '';
+                duplicateButton.dataset.description = task.description || '';
+                duplicateButton.dataset.startDate = startDateValue;
+                duplicateButton.dataset.dueTime = dueTimeValue;
+                duplicateButton.dataset.endDate = task.end_date || '';
+                duplicateButton.dataset.points = String(task.points || 0);
+                duplicateButton.dataset.timeOfDay = task.time_of_day || 'anytime';
+                duplicateButton.dataset.recurrence = task.recurrence || '';
+                duplicateButton.dataset.recurrenceDays = task.recurrence_days || '';
+                duplicateButton.dataset.category = task.category || '';
+                duplicateButton.dataset.timingMode = task.timing_mode || '';
+                duplicateButton.dataset.timerMinutes = String(task.timer_minutes || 0);
+                duplicateButton.dataset.photoRequired = task.photo_proof_required ? '1' : '0';
+                duplicateButton.innerHTML = '<i class="fa-solid fa-clone"></i>';
+                return duplicateButton;
+            };
 
             const header = document.createElement('div');
             header.className = 'task-card-header';
@@ -2264,7 +2378,7 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                     form.appendChild(button);
                     card.appendChild(form);
                     const actions = document.createElement('div');
-                    actions.className = 'task-card-actions';
+                    actions.className = 'task-card-actions right';
                     const editButton = document.createElement('button');
                     editButton.type = 'button';
                     editButton.className = 'icon-button';
@@ -2274,13 +2388,8 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                     editButton.dataset.childId = String(task.child_user_id || '');
                     editButton.dataset.title = task.title || '';
                     editButton.dataset.description = task.description || '';
-                    editButton.dataset.startDate = getDateKeyFromString(task.due_date) || '';
-                    if (getTimeParts(task.due_date)) {
-                        const timeParts = getTimeParts(task.due_date);
-                        editButton.dataset.dueTime = `${String(timeParts.hours).padStart(2, '0')}:${String(timeParts.minutes).padStart(2, '0')}`;
-                    } else {
-                        editButton.dataset.dueTime = '';
-                    }
+                    editButton.dataset.startDate = startDateValue;
+                    editButton.dataset.dueTime = dueTimeValue;
                     editButton.dataset.endDate = task.end_date || '';
                     editButton.dataset.points = String(task.points || 0);
                     editButton.dataset.timeOfDay = task.time_of_day || 'anytime';
@@ -2302,6 +2411,7 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                     deleteButton.innerHTML = '<i class="fa-solid fa-trash"></i>';
                     actions.appendChild(editButton);
                     actions.appendChild(deleteButton);
+                    actions.appendChild(buildDuplicateButton());
                     card.appendChild(actions);
                 } else if (statusForView === 'completed') {
                     const approveForm = document.createElement('form');
@@ -2374,6 +2484,10 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                     rejectForm.appendChild(rejectNote);
                     rejectForm.appendChild(rejectActions);
                     card.appendChild(rejectForm);
+                    const actions = document.createElement('div');
+                    actions.className = 'task-card-actions right';
+                    actions.appendChild(buildDuplicateButton());
+                    card.appendChild(actions);
                 } else if (statusForView === 'approved') {
                     const approved = document.createElement('p');
                     approved.className = 'completed';
@@ -2658,7 +2772,7 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                                     <?php endif; ?>
                                 <?php endif; ?>
                             <?php if (canCreateContent($_SESSION['user_id']) && canAddEditChild($_SESSION['user_id'])): ?>
-                                <div class="task-card-actions">
+                                <div class="task-card-actions right">
                                     <?php $childName = $childNameById[(int)$task['child_user_id']] ?? 'Child'; ?>
                                     <?php
                                         $dueDateValue = !empty($task['due_date']) ? date('Y-m-d', strtotime($task['due_date'])) : date('Y-m-d');
@@ -2696,6 +2810,28 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                                             data-title="<?php echo htmlspecialchars($task['title'], ENT_QUOTES); ?>">
                                         <i class="fa-solid fa-trash"></i>
                                     </button>
+                                    <button type="button"
+                                            class="icon-button"
+                                            aria-label="Duplicate task"
+                                            data-task-duplicate-open
+                                            data-task-id="<?php echo $task['id']; ?>"
+                                            data-child-id="<?php echo (int)$task['child_user_id']; ?>"
+                                            data-child-name="<?php echo htmlspecialchars($childName, ENT_QUOTES); ?>"
+                                            data-title="<?php echo htmlspecialchars($task['title'], ENT_QUOTES); ?>"
+                                            data-description="<?php echo htmlspecialchars($task['description'], ENT_QUOTES); ?>"
+                                            data-start-date="<?php echo htmlspecialchars($dueDateValue, ENT_QUOTES); ?>"
+                                            data-due-time="<?php echo htmlspecialchars($dueTimeValue, ENT_QUOTES); ?>"
+                                            data-end-date="<?php echo !empty($task['end_date']) ? htmlspecialchars($task['end_date'], ENT_QUOTES) : ''; ?>"
+                                            data-points="<?php echo (int)$task['points']; ?>"
+                                            data-time-of-day="<?php echo htmlspecialchars($task['time_of_day'] ?? 'anytime', ENT_QUOTES); ?>"
+                                            data-recurrence="<?php echo htmlspecialchars($repeatValue, ENT_QUOTES); ?>"
+                                            data-recurrence-days="<?php echo htmlspecialchars($task['recurrence_days'] ?? '', ENT_QUOTES); ?>"
+                                            data-category="<?php echo htmlspecialchars($task['category'] ?? '', ENT_QUOTES); ?>"
+                                            data-timing-mode="<?php echo htmlspecialchars($task['timing_mode'] ?? '', ENT_QUOTES); ?>"
+                                            data-timer-minutes="<?php echo (int)($task['timer_minutes'] ?? 0); ?>"
+                                            data-photo-required="<?php echo (int)($task['photo_proof_required'] ?? 0); ?>">
+                                        <i class="fa-solid fa-clone"></i>
+                                    </button>
                                 </div>
                             <?php endif; ?>
                         </div>
@@ -2731,6 +2867,10 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                                         ? date('m/d/Y h:i A', strtotime($completedStamp))
                                         : date('m/d/Y', strtotime($completedStamp));
                                 }
+                                $childName = $childNameById[(int)$task['child_user_id']] ?? 'Child';
+                                $dueDateValue = !empty($task['due_date']) ? date('Y-m-d', strtotime($task['due_date'])) : date('Y-m-d');
+                                $dueTimeValue = !empty($task['due_date']) ? date('H:i', strtotime($task['due_date'])) : '';
+                                $repeatValue = $task['recurrence'] === 'daily' ? 'daily' : ($task['recurrence'] === 'weekly' ? 'weekly' : '');
                                 if ($isOnce) {
                                     $dueDisplay = $task['due_date_formatted'];
                                 } elseif ($timeOfDay === 'anytime') {
@@ -2811,6 +2951,30 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                                         <button type="submit" name="reject_action" value="close" class="button danger">Reject &amp; Close</button>
                                     </div>
                                 </form>
+                                <div class="task-card-actions right">
+                                    <button type="button"
+                                            class="icon-button"
+                                            aria-label="Duplicate task"
+                                            data-task-duplicate-open
+                                            data-task-id="<?php echo $task['id']; ?>"
+                                            data-child-id="<?php echo (int)$task['child_user_id']; ?>"
+                                            data-child-name="<?php echo htmlspecialchars($childName, ENT_QUOTES); ?>"
+                                            data-title="<?php echo htmlspecialchars($task['title'], ENT_QUOTES); ?>"
+                                            data-description="<?php echo htmlspecialchars($task['description'], ENT_QUOTES); ?>"
+                                            data-start-date="<?php echo htmlspecialchars($dueDateValue, ENT_QUOTES); ?>"
+                                            data-due-time="<?php echo htmlspecialchars($dueTimeValue, ENT_QUOTES); ?>"
+                                            data-end-date="<?php echo !empty($task['end_date']) ? htmlspecialchars($task['end_date'], ENT_QUOTES) : ''; ?>"
+                                            data-points="<?php echo (int)$task['points']; ?>"
+                                            data-time-of-day="<?php echo htmlspecialchars($task['time_of_day'] ?? 'anytime', ENT_QUOTES); ?>"
+                                            data-recurrence="<?php echo htmlspecialchars($repeatValue, ENT_QUOTES); ?>"
+                                            data-recurrence-days="<?php echo htmlspecialchars($task['recurrence_days'] ?? '', ENT_QUOTES); ?>"
+                                            data-category="<?php echo htmlspecialchars($task['category'] ?? '', ENT_QUOTES); ?>"
+                                            data-timing-mode="<?php echo htmlspecialchars($task['timing_mode'] ?? '', ENT_QUOTES); ?>"
+                                            data-timer-minutes="<?php echo (int)($task['timer_minutes'] ?? 0); ?>"
+                                            data-photo-required="<?php echo (int)($task['photo_proof_required'] ?? 0); ?>">
+                                        <i class="fa-solid fa-clone"></i>
+                                    </button>
+                                </div>
                             <?php else: ?>
                                 <p class="waiting-label">Waiting for approval</p>
                             <?php endif; ?>
