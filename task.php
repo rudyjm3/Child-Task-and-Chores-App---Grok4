@@ -584,7 +584,7 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
         .task-modal.open { display: flex; }
         .task-modal[data-task-delete-modal] { z-index: 4200; }
         .task-modal-card { background: #fff; border-radius: 12px; max-width: 760px; width: min(760px, 100%); max-height: 85vh; overflow: hidden; box-shadow: 0 12px 32px rgba(0,0,0,0.25); display: grid; grid-template-rows: auto 1fr; }
-        .task-create-fab { position: sticky; top: 0; z-index: 5; display: flex; justify-content: flex-end; margin: 10px 0 0; }
+        .task-create-fab { position: sticky; top: 0; z-index: 5; display: flex; justify-content: flex-end; padding: 10px 20px; margin: 10px 0 0; }
         .task-create-button { width: 52px; height: 52px; border-radius: 50%; border: none; background: #4caf50; color: #fff; display: inline-flex; align-items: center; justify-content: center; font-size: 1.4rem; cursor: pointer; box-shadow: 0 6px 14px rgba(76, 175, 80, 0.35); }
         .task-create-button:hover { background: #43a047; }
         .task-create-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: none; align-items: center; justify-content: center; z-index: 4100; padding: 14px; }

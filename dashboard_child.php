@@ -647,57 +647,57 @@ $notificationCount = is_array($notificationsNew) ? count($notificationsNew) : 0;
             }
             return true;
          };
-         $routineCount = 0;
-         foreach ($routines as $routineEntry) {
-            if ($isRoutineScheduledOnDate($routineEntry, $todayDate) && !$isRoutineCompletedOnDate($routineEntry, $todayDate)) {
-               $routineCount++;
-            }
-         }
-         $taskCount = 0;
-         $taskCountStmt = $db->prepare("SELECT due_date, end_date, recurrence, recurrence_days, status, completed_at, approved_at FROM tasks WHERE child_user_id = :child_id");
-         $taskCountStmt->execute([':child_id' => $_SESSION['user_id']]);
-         foreach ($taskCountStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
-            $dueDate = $row['due_date'] ?? null;
-            if (empty($dueDate)) {
-               continue;
-            }
-            $startKey = date('Y-m-d', strtotime($dueDate));
-            $endKey = !empty($row['end_date']) ? $row['end_date'] : null;
-            if ($todayDate < $startKey) {
-               continue;
-            }
-            if ($endKey && $todayDate > $endKey) {
-               continue;
-            }
-            $repeat = $row['recurrence'] ?? '';
-            $repeatDays = array_filter(array_map('trim', explode(',', (string) ($row['recurrence_days'] ?? ''))));
-            if ($repeat === 'daily') {
-               // keep
-            } elseif ($repeat === 'weekly') {
-               if (!in_array($todayDay, $repeatDays, true)) {
-                  continue;
-               }
-            } else {
-               if ($todayDate !== $startKey) {
-                  continue;
-               }
-            }
-            $status = $row['status'] ?? 'pending';
-            $completedAt = $row['completed_at'] ?? null;
-            $approvedAt = $row['approved_at'] ?? null;
-            $completedToday = false;
-            if (!empty($approvedAt)) {
-               $approvedDate = date('Y-m-d', strtotime($approvedAt));
-               $completedToday = $approvedDate === $todayDate;
-            } elseif (!empty($completedAt)) {
-               $completedDate = date('Y-m-d', strtotime($completedAt));
-               $completedToday = $completedDate === $todayDate;
-            }
-            if ($completedToday) {
-               continue;
-            }
-            $taskCount++;
-         }
+$routineCount = 0;
+foreach ($routines as $routineEntry) {
+   if ($isRoutineScheduledOnDate($routineEntry, $todayDate) && !$isRoutineCompletedOnDate($routineEntry, $todayDate)) {
+      $routineCount++;
+   }
+}
+$taskCount = 0;
+$taskCountStmt = $db->prepare("SELECT due_date, end_date, recurrence, recurrence_days, status, completed_at, approved_at FROM tasks WHERE child_user_id = :child_id");
+$taskCountStmt->execute([':child_id' => $_SESSION['user_id']]);
+foreach ($taskCountStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+   $dueDate = $row['due_date'] ?? null;
+   if (empty($dueDate)) {
+      continue;
+   }
+   $startKey = date('Y-m-d', strtotime($dueDate));
+   $endKey = !empty($row['end_date']) ? $row['end_date'] : null;
+   if ($todayDate < $startKey) {
+      continue;
+   }
+   if ($endKey && $todayDate > $endKey) {
+      continue;
+   }
+   $repeat = $row['recurrence'] ?? '';
+   $repeatDays = array_filter(array_map('trim', explode(',', (string) ($row['recurrence_days'] ?? ''))));
+   if ($repeat === 'daily') {
+      // keep
+   } elseif ($repeat === 'weekly') {
+      if (!in_array($todayDay, $repeatDays, true)) {
+         continue;
+      }
+   } else {
+      if ($todayDate !== $startKey) {
+         continue;
+      }
+   }
+   $status = $row['status'] ?? 'pending';
+   $completedAt = $row['completed_at'] ?? null;
+   $approvedAt = $row['approved_at'] ?? null;
+   $completedToday = false;
+   if (!empty($approvedAt)) {
+      $approvedDate = date('Y-m-d', strtotime($approvedAt));
+      $completedToday = $approvedDate === $todayDate;
+   } elseif (!empty($completedAt)) {
+      $completedDate = date('Y-m-d', strtotime($completedAt));
+      $completedToday = $completedDate === $todayDate;
+   }
+   if ($completedToday) {
+      continue;
+   }
+   $taskCount++;
+}
          $goalCount = count($dashboardGoals);
          $rewardCount = isset($data['rewards']) && is_array($data['rewards']) ? count($data['rewards']) : 0;
          $redeemedRewards = isset($data['redeemed_rewards']) && is_array($data['redeemed_rewards']) ? $data['redeemed_rewards'] : [];
