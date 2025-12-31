@@ -899,7 +899,7 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
         .goal-status-badge.completed { background-color: #607d8b; }
         .goal-status-badge.rejected { background-color: #d32f2f; }
         .goal-info-row { display: flex; flex-wrap: wrap; gap: 6px; }
-        .goal-info-label { font-weight: 700; color: #8e8e8e; }
+        .goal-info-label { font-weight: 700; color: #919191; display: inline-flex; align-items: center; margin-right: 6px; }
         .goal-assignee { text-align: center; margin-top: 10px; }
         .goal-description { text-align: left; }
         .goal-info-row { text-align: left; }
@@ -911,10 +911,11 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
         .input-error { border-color: #d32f2f !important; box-shadow: 0 0 0 2px rgba(211, 47, 47, 0.2); }
         .form-error { color: #d32f2f; font-weight: 700; margin-bottom: 8px; }
         .child-select-grid.input-error { outline: 2px solid #d32f2f; border-radius: 12px; padding: 6px; }
-        .icon-button { width: 36px; height: 36px; border: none; background: transparent; color: #607d8b; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
-        .icon-button:hover { background: rgba(0,0,0,0.06); color: #37474f; }
-        .icon-button.danger { color: #d32f2f; }
-        .icon-button.danger:hover { background: rgba(211,47,47,0.12); }
+        .icon-button { width: 36px; height: 36px; border: none; background: transparent; color: #9f9f9f; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+        /* .icon-button:hover { background: rgba(0,0,0,0.06); color: #37474f; } */
+        .icon-button:hover {color: #7a7a7a; }
+        /* .icon-button.danger { color: #d32f2f; }
+        .icon-button.danger:hover { background: rgba(211,47,47,0.12); } */
         .child-theme .goal-progress-bar {
             height: 30px;
             background: #ffe9c6;
@@ -1128,12 +1129,12 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                                         <?php endif; ?>
                                     </div>
                                     <?php if (!empty($goal['description'])): ?>
-                                        <p class="goal-description"><span class="goal-info-label">Description:</span> <?php echo nl2br(htmlspecialchars($goal['description'])); ?></p>
+                                        <p class="goal-description"><span class="goal-info-label"><i class="fa-solid fa-align-center"></i></span><?php echo nl2br(htmlspecialchars($goal['description'])); ?></p>
                                     <?php endif; ?>
-                                    <p class="goal-info-row"><span class="goal-info-label">Period:</span> <?php echo htmlspecialchars($goal['start_date_formatted']); ?> to <?php echo htmlspecialchars($goal['end_date_formatted']); ?></p>
-                                    <p class="goal-info-row"><span class="goal-info-label">Reward:</span> <?php echo htmlspecialchars($goal['reward_title'] ?? 'None'); ?></p>
+                                    <p class="goal-info-row"><span class="goal-info-label"><i class="fa-regular fa-calendar-days"></i></span><?php echo htmlspecialchars($goal['start_date_formatted']); ?> to <?php echo htmlspecialchars($goal['end_date_formatted']); ?></p>
+                                    <p class="goal-info-row"><span class="goal-info-label"><i class="fa-solid fa-gift"></i></span><?php echo htmlspecialchars($goal['reward_title'] ?? 'None'); ?></p>
                                     <?php if (!empty($goal['creator_display_name'])): ?>
-                                        <p class="goal-info-row"><span class="goal-info-label">Created by:</span> <?php echo htmlspecialchars($goal['creator_display_name']); ?></p>
+                                        <p class="goal-info-row"><span class="goal-info-label"><i class="fa-solid fa-user-pen"></i></span><?php echo htmlspecialchars($goal['creator_display_name']); ?></p>
                                     <?php endif; ?>
                                     <div class="goal-progress">
                                         <div class="goal-progress-header">
@@ -1148,7 +1149,7 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                                         <?php endif; ?>
                                         <?php if (!empty($goal['task_targets'])): ?>
                                             <div class="goal-task-tracked">
-                                                <span class="goal-info-label">Task Tracked:</span>
+                                                <span class="goal-info-label"><i class="fa-solid fa-list-check"></i></span>
                                                 <?php echo htmlspecialchars(implode(', ', $goal['task_targets'])); ?>
                                             </div>
                                         <?php endif; ?>
@@ -1181,7 +1182,7 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                                         </div>
                                     </div>
                                     <?php if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])): ?>
-                                        <p class="goal-assignee">Assigned to: <?php echo htmlspecialchars($goal['child_display_name']); ?></p>
+                                        <p class="goal-assignee"><span class="goal-info-label"><i class="fa-solid fa-user"></i></span><?php echo htmlspecialchars($goal['child_display_name']); ?></p>
                                         <?php if ($goal['status'] === 'pending_approval'): ?>
                                             <form method="POST" action="goal.php">
                                                 <input type="hidden" name="goal_id" value="<?php echo $goal['id']; ?>">
@@ -1248,12 +1249,12 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                                 <span class="goal-status-badge completed">Completed</span>
                             </div>
                             <?php if (!empty($goal['description'])): ?>
-                                <p class="goal-description"><span class="goal-info-label">Description:</span> <?php echo nl2br(htmlspecialchars($goal['description'])); ?></p>
+                                <p class="goal-description"><span class="goal-info-label"><i class="fa-solid fa-align-center"></i></span><?php echo nl2br(htmlspecialchars($goal['description'])); ?></p>
                             <?php endif; ?>
-                            <p class="goal-info-row"><span class="goal-info-label">Period:</span> <?php echo htmlspecialchars($goal['start_date_formatted']); ?> to <?php echo htmlspecialchars($goal['end_date_formatted']); ?></p>
-                            <p class="goal-info-row"><span class="goal-info-label">Reward:</span> <?php echo htmlspecialchars($goal['reward_title'] ?? 'None'); ?></p>
+                            <p class="goal-info-row"><span class="goal-info-label"><i class="fa-regular fa-calendar-days"></i></span><?php echo htmlspecialchars($goal['start_date_formatted']); ?> to <?php echo htmlspecialchars($goal['end_date_formatted']); ?></p>
+                            <p class="goal-info-row"><span class="goal-info-label"><i class="fa-solid fa-gift"></i></span><?php echo htmlspecialchars($goal['reward_title'] ?? 'None'); ?></p>
                             <?php if (!empty($goal['creator_display_name'])): ?>
-                                <p class="goal-info-row"><span class="goal-info-label">Created by:</span> <?php echo htmlspecialchars($goal['creator_display_name']); ?></p>
+                                <p class="goal-info-row"><span class="goal-info-label"><i class="fa-solid fa-user-pen"></i></span><?php echo htmlspecialchars($goal['creator_display_name']); ?></p>
                             <?php endif; ?>
                             <div class="goal-progress">
                                 <div class="goal-progress-header">
@@ -1265,7 +1266,7 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                             </div>
                             </div>
                             <?php if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])): ?>
-                                <p class="goal-assignee">Assigned to: <?php echo htmlspecialchars($goal['child_display_name']); ?></p>
+                                <p class="goal-assignee"><span class="goal-info-label"><i class="fa-solid fa-user"></i></span><?php echo htmlspecialchars($goal['child_display_name']); ?></p>
                             <?php endif; ?>
                         </div>
                     <?php endforeach; ?>
@@ -1287,17 +1288,17 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                                         <span class="goal-status-badge rejected">Rejected</span>
                                     </div>
                                     <?php if (!empty($goal['description'])): ?>
-                                        <p class="goal-description"><span class="goal-info-label">Description:</span> <?php echo nl2br(htmlspecialchars($goal['description'])); ?></p>
+                                        <p class="goal-description"><span class="goal-info-label"><i class="fa-solid fa-align-center"></i></span><?php echo nl2br(htmlspecialchars($goal['description'])); ?></p>
                                     <?php endif; ?>
-                                    <p class="goal-info-row"><span class="goal-info-label">Period:</span> <?php echo htmlspecialchars($goal['start_date_formatted']); ?> to <?php echo htmlspecialchars($goal['end_date_formatted']); ?></p>
-                                    <p class="goal-info-row"><span class="goal-info-label">Reward:</span> <?php echo htmlspecialchars($goal['reward_title'] ?? 'None'); ?></p>
+                                    <p class="goal-info-row"><span class="goal-info-label"><i class="fa-regular fa-calendar-days"></i></span><?php echo htmlspecialchars($goal['start_date_formatted']); ?> to <?php echo htmlspecialchars($goal['end_date_formatted']); ?></p>
+                                    <p class="goal-info-row"><span class="goal-info-label"><i class="fa-solid fa-gift"></i></span><?php echo htmlspecialchars($goal['reward_title'] ?? 'None'); ?></p>
                                     <?php if (!empty($goal['creator_display_name'])): ?>
-                                        <p class="goal-info-row"><span class="goal-info-label">Created by:</span> <?php echo htmlspecialchars($goal['creator_display_name']); ?></p>
+                                        <p class="goal-info-row"><span class="goal-info-label"><i class="fa-solid fa-user-pen"></i></span><?php echo htmlspecialchars($goal['creator_display_name']); ?></p>
                                     <?php endif; ?>
-                                    <p class="goal-info-row"><span class="goal-info-label">Rejected on:</span> <?php echo htmlspecialchars($goal['rejected_at_formatted']); ?></p>
-                                    <p class="goal-info-row"><span class="goal-info-label">Comment:</span> <?php echo htmlspecialchars($goal['rejection_comment'] ?? 'No comments available.'); ?></p>
+                                    <p class="goal-info-row"><span class="goal-info-label"><i class="fa-regular fa-calendar-days"></i></span><?php echo htmlspecialchars($goal['rejected_at_formatted']); ?></p>
+                                    <p class="goal-info-row"><span class="goal-info-label"><i class="fa-solid fa-comment"></i></span><?php echo htmlspecialchars($goal['rejection_comment'] ?? 'No comments available.'); ?></p>
                                     <?php if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])): ?>
-                                        <p class="goal-assignee">Assigned to: <?php echo htmlspecialchars($goal['child_display_name']); ?></p>
+                                        <p class="goal-assignee"><span class="goal-info-label"><i class="fa-solid fa-user"></i></span><?php echo htmlspecialchars($goal['child_display_name']); ?></p>
                                         <form method="POST" action="goal.php">
                                             <input type="hidden" name="goal_id" value="<?php echo $goal['id']; ?>">
                                             <button type="submit" name="reactivate_goal" class="button">Reactivate</button>

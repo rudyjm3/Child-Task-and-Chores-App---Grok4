@@ -564,7 +564,7 @@ $getScheduleDueStamp = static function ($dateKey, $timeOfDay, $timeValue) {
         .child-schedule-title { font-weight: 600; color: #3e2723; }
         .child-schedule-time { color: #6d4c41; font-size: 0.9rem; }
         .child-schedule-points { font-weight: 700; color: #2e7d32; white-space: nowrap; }
-        .child-schedule-badge { display: inline-flex; align-items: center; gap: 4px; margin-left: 8px; padding: 2px 8px; border-radius: 999px; font-size: 0.7rem; font-weight: 700; background: #2e7d32; color: #fff; text-transform: uppercase; }
+        .child-schedule-badge { display: inline-flex; align-items: center; gap: 4px; margin-left: 8px; padding: 2px 8px; border-radius: 999px; font-size: 0.7rem; font-weight: 700; background: #4caf50; color: #fff; text-transform: uppercase; }
         .child-schedule-badge.overdue { background: #d9534f; }
         .week-day-group.is-today { border: 1px solid #ffd28a; background: #ffe0b2; border-radius: 10px; padding: 10px; }
         .view-week-button { justify-self: start; padding: 6px 12px; font-size: 0.9rem; background: #eef4ff; border: 1px solid #d5def0; color: #0d47a1; border-radius: 8px; cursor: pointer; }

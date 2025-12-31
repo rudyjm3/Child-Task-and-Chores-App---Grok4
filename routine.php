@@ -1014,11 +1014,13 @@ margin-bottom: 20px;}
         .library-task-actions { margin-top: auto; display: flex; flex-direction: column; gap: 8px; }
         .routine-card { border: 1px solid #e0e0e0; border-radius: 12px; padding: 18px; margin-bottom: 20px; background: linear-gradient(145deg, #ffffff, #f5f5f5); box-shadow: 0 3px 8px rgba(0,0,0,0.08); }
         .routine-card.child-view { background: linear-gradient(160deg, #e3f2fd, #e8f5e9); border-color: #bbdefb; }
-        .routine-card header { display: flex; gap: 4px; margin-bottom: 12px; }
+        .routine-card header { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; }
         .routine-card h3 { margin: 0; font-size: 1.25rem; }
         .routine-details { font-size: 0.9rem; color: #455a64; display: grid; gap: 4px; }
+        .routine-details span { display: flex; align-items: center; gap: 6px; }
+        .routine-meta-icon { color: #919191; }
         .routine-assignee { display: inline-flex; align-items: center; gap: 8px; font-size: 0.9rem; color: #37474f; }
-        .routine-assignee img { width: 52px; height: 52px; border-radius: 50%; object-fit: cover; border: 2px solid rgba(0,0,0,0.05); }
+        .routine-assignee img { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; border: 2px solid rgba(0,0,0,0.05); }
         .task-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
         .task-list li { background: rgba(255,255,255,0.85); border-radius: 8px; padding: 10px 12px; border-left: 4px solid #64b5f6; }
         .task-list li .dependency { font-size: 0.8rem; color: #6d4c41; }
@@ -1769,19 +1771,19 @@ margin-bottom: 20px;}
                         <header>
                             <h3><?php echo htmlspecialchars($routine['title']); ?></h3>
                             <div class="routine-details">
-                                <?php if (!empty($routine['child_display_name'])): ?>
-                                    <span class="routine-assignee">
-                                        <img src="<?php echo htmlspecialchars($routine['child_avatar'] ?: 'images/default-avatar.png'); ?>" alt="<?php echo htmlspecialchars($routine['child_display_name']); ?>">
-                                        Assigned to: <?php echo htmlspecialchars($routine['child_display_name']); ?>
-                                    </span>
-                                <?php endif; ?>
-                                <span>Timeframe: <?php echo date('g:i A', strtotime($routine['start_time'])) . ' - ' . date('g:i A', strtotime($routine['end_time'])); ?></span>
-                                <span>Routine: <?php echo $totalRoutinePoints; ?> pts - Bonus: <?php echo (int) $routine['bonus_points']; ?> pts</span>
-                                <span>Recurrence: <?php echo htmlspecialchars($routine['recurrence'] ?: 'None'); ?></span>
-                                <?php if (!empty($routine['creator_display_name'])): ?>
-                                    <span>Created by: <?php echo htmlspecialchars($routine['creator_display_name']); ?></span>
-                                <?php endif; ?>
-                            </div>
+                                  <?php if (!empty($routine['child_display_name']) && !$isChildView): ?>
+                                      <span class="routine-assignee">
+                                          <img src="<?php echo htmlspecialchars($routine['child_avatar'] ?: 'images/default-avatar.png'); ?>" alt="<?php echo htmlspecialchars($routine['child_display_name']); ?>">
+                                          <?php echo htmlspecialchars($routine['child_display_name']); ?>
+                                      </span>
+                                  <?php endif; ?>
+                                  <span><i class="fa-solid fa-clock routine-meta-icon"></i><?php echo date('g:i A', strtotime($routine['start_time'])) . ' - ' . date('g:i A', strtotime($routine['end_time'])); ?></span>
+                                  <span><i class="fa-solid fa-list-check routine-meta-icon"></i><?php echo $totalRoutinePoints; ?> pts - Bonus: <?php echo (int) $routine['bonus_points']; ?> pts</span>
+                                  <span><i class="fa-regular fa-calendar-days routine-meta-icon"></i><?php echo htmlspecialchars($routine['recurrence'] ?: 'None'); ?></span>
+                                  <?php if (!empty($routine['creator_display_name'])): ?>
+                                      <span><i class="fa-solid fa-user-pen routine-meta-icon"></i><?php echo htmlspecialchars($routine['creator_display_name']); ?></span>
+                                  <?php endif; ?>
+                              </div>
                         </header>
                         <div class="routine-card-actions">
                             <?php if ($isChildView): ?>
