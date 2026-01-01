@@ -316,6 +316,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $mark = $db->prepare("UPDATE parent_notifications SET is_read = 1 WHERE id = :id AND parent_user_id = :pid");
             $mark->execute([':id' => $parent_notification_id, ':pid' => $main_parent_id]);
         }
+    } elseif (isset($_POST['deny_reward'])) {
+        $reward_id = filter_input(INPUT_POST, 'reward_id', FILTER_VALIDATE_INT);
+        if (!$reward_id && isset($_POST['deny_reward'])) {
+            $reward_id = filter_input(INPUT_POST, 'deny_reward', FILTER_VALIDATE_INT);
+        }
+        $parent_notification_id = filter_input(INPUT_POST, 'parent_notification_id', FILTER_VALIDATE_INT);
+        $deny_note = trim(filter_input(INPUT_POST, 'deny_reward_note', FILTER_SANITIZE_STRING) ?? '');
+        $message = ($reward_id && denyReward($reward_id, $main_parent_id, $_SESSION['user_id'], $deny_note))
+            ? "Reward request denied."
+            : "Unable to deny reward request.";
+        if ($message === "Reward request denied." && $parent_notification_id) {
+            ensureParentNotificationsTable();
+            $mark = $db->prepare("UPDATE parent_notifications SET is_read = 1 WHERE id = :id AND parent_user_id = :pid");
+            $mark->execute([':id' => $parent_notification_id, ':pid' => $main_parent_id]);
+        }
     } elseif (isset($_POST['add_child'])) {
         if (!canAddEditChild($_SESSION['user_id'])) {
             $message = "You do not have permission to add children.";
@@ -877,9 +892,9 @@ if (isset($_GET['week_schedule'])) {
         .week-modal .week-list-day.is-today { border-color: #ffd28a; background: #ffe0b2; }
         .week-modal .week-list-day.is-today .week-list-day-name,
         .week-modal .week-list-day.is-today .week-list-day-date { color: #ef6c00; }
-        .week-modal .week-list-day-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-weight: 700; color: #d5d5d5; background: #3e5b90ff; margin: -12px -12px 8px; padding: 10px 12px; border-radius: 12px 12px 0 0; }
-        .week-modal .week-list-day-name { text-transform: uppercase; letter-spacing: 0.04em; font-size: 0.8rem; color: #d5d5d5; }
-        .week-modal .week-list-day-date { color: #d5d5d5; }
+        .week-modal .week-list-day-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-weight: 700; color: #f9f9f9; background: #595959; margin: -12px -12px 8px; padding: 10px 12px; border-radius: 12px 12px 0 0; }
+        .week-modal .week-list-day-name { text-transform: uppercase; letter-spacing: 0.04em; font-size: 0.8rem; color: #f9f9f9; }
+        .week-modal .week-list-day-date { color: #f9f9f9; }
         .week-modal .week-list-sections { display: grid; gap: 10px; }
         .week-modal .week-list-section-title { font-weight: 700; color: #37474f; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; }
         .week-modal .week-list-items { display: grid; gap: 8px; }
@@ -2049,13 +2064,18 @@ if (isset($_GET['week_schedule'])) {
                                                 by <?php echo htmlspecialchars($fulfillName); ?>
                                             <?php endif; ?>
                                         </div>
-                                    <?php else: ?>
-                                        <div class="inline-form" style="margin-top:6px;">
-                                            <input type="hidden" name="parent_notification_id" value="<?php echo (int)$note['id']; ?>">
-                                            <button type="submit" name="fulfill_reward" value="<?php echo (int)$rewardIdFromLink; ?>" class="button approve-button">Fulfill</button>
-                                        </div>
-                                    <?php endif; ?>
-                                <?php endif; ?>
+                                      <?php else: ?>
+                                          <div class="inline-form" style="margin-top:6px;">
+                                              <input type="hidden" name="parent_notification_id" value="<?php echo (int)$note['id']; ?>">
+                                              <button type="submit" name="fulfill_reward" value="<?php echo (int)$rewardIdFromLink; ?>" class="button approve-button">Fulfill</button>
+                                          </div>
+                                          <div class="inline-form" style="margin-top:6px;">
+                                              <input type="hidden" name="parent_notification_id" value="<?php echo (int)$note['id']; ?>">
+                                              <textarea name="deny_reward_note" rows="2" placeholder="Optional deny note" style="width:100%; max-width:360px;"></textarea>
+                                              <button type="submit" name="deny_reward" value="<?php echo (int)$rewardIdFromLink; ?>" class="button secondary">Deny</button>
+                                          </div>
+                                      <?php endif; ?>
+                                  <?php endif; ?>
                                 <?php if ($note['type'] === 'task_completed' && $taskIdFromLink): ?>
                                     <div class="inline-form" style="margin-top:6px;">
                                         <?php if ($taskStatus === 'approved'): ?>
@@ -2191,13 +2211,18 @@ if (isset($_GET['week_schedule'])) {
                                                     by <?php echo htmlspecialchars($fulfillName); ?>
                                                 <?php endif; ?>
                                             </div>
-                                        <?php else: ?>
-                                            <div class="inline-form" style="margin-top:6px;">
-                                                <input type="hidden" name="parent_notification_id" value="<?php echo (int)$note['id']; ?>">
-                                                <button type="submit" name="fulfill_reward" value="<?php echo (int)$rewardIdFromLink; ?>" class="button approve-button">Fulfill</button>
-                                            </div>
-                                        <?php endif; ?>
-                                    <?php endif; ?>
+                                          <?php else: ?>
+                                              <div class="inline-form" style="margin-top:6px;">
+                                                  <input type="hidden" name="parent_notification_id" value="<?php echo (int)$note['id']; ?>">
+                                                  <button type="submit" name="fulfill_reward" value="<?php echo (int)$rewardIdFromLink; ?>" class="button approve-button">Fulfill</button>
+                                              </div>
+                                              <div class="inline-form" style="margin-top:6px;">
+                                                  <input type="hidden" name="parent_notification_id" value="<?php echo (int)$note['id']; ?>">
+                                                  <textarea name="deny_reward_note" rows="2" placeholder="Optional deny note" style="width:100%; max-width:360px;"></textarea>
+                                                  <button type="submit" name="deny_reward" value="<?php echo (int)$rewardIdFromLink; ?>" class="button secondary">Deny</button>
+                                              </div>
+                                          <?php endif; ?>
+                                      <?php endif; ?>
                                 </div>
                                 <button type="submit" name="trash_parent_single" value="<?php echo (int)$note['id']; ?>" class="parent-trash-button" aria-label="Move to trash"><i class="fa-solid fa-trash"></i></button>
                             </li>

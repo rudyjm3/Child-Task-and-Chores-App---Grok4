@@ -1533,6 +1533,75 @@ function fulfillReward($reward_id, $parent_user_id, $actor_user_id) {
     return $updated;
 }
 
+function denyReward($reward_id, $parent_user_id, $actor_user_id, $note = null) {
+    global $db;
+    $db->beginTransaction();
+    try {
+        $fetch = $db->prepare("SELECT redeemed_by, point_cost, title
+                               FROM rewards
+                               WHERE id = :reward_id
+                                 AND parent_user_id = :parent_id
+                                 AND status = 'redeemed'
+                                 AND fulfilled_on IS NULL");
+        $fetch->execute([
+            ':reward_id' => $reward_id,
+            ':parent_id' => $parent_user_id
+        ]);
+        $row = $fetch->fetch(PDO::FETCH_ASSOC);
+        $childId = (int) ($row['redeemed_by'] ?? 0);
+        $pointCost = (int) ($row['point_cost'] ?? 0);
+        if ($childId <= 0 || $pointCost <= 0) {
+            if ($db->inTransaction()) {
+                $db->rollBack();
+            }
+            return false;
+        }
+        $noteValue = trim((string) $note);
+        if ($noteValue === '') {
+            $noteValue = null;
+        }
+        $stmt = $db->prepare("
+            UPDATE rewards
+            SET status = 'available',
+                redeemed_by = NULL,
+                redeemed_on = NULL,
+                fulfilled_on = NULL,
+                fulfilled_by = NULL,
+                denied_on = NOW(),
+                denied_by = :actor_id,
+                denied_note = :note
+            WHERE id = :reward_id
+              AND parent_user_id = :parent_id
+        ");
+        $stmt->execute([
+            ':actor_id' => $actor_user_id,
+            ':note' => $noteValue,
+            ':reward_id' => $reward_id,
+            ':parent_id' => $parent_user_id
+        ]);
+        if ($stmt->rowCount() <= 0) {
+            if ($db->inTransaction()) {
+                $db->rollBack();
+            }
+            return false;
+        }
+        updateChildPoints($childId, $pointCost);
+        $title = $row['title'] ?? 'Reward';
+        $message = 'Reward request denied: ' . $title;
+        if ($noteValue) {
+            $message .= ' | Reason: ' . $noteValue;
+        }
+        addChildNotification($childId, 'reward_denied', $message, 'dashboard_child.php');
+        $db->commit();
+        return true;
+    } catch (Exception $e) {
+        if ($db->inTransaction()) {
+            $db->rollBack();
+        }
+        return false;
+    }
+}
+
 // Create goal
 function createGoal($parent_user_id, $child_user_id, $title, $start_date, $end_date, $reward_id = null, $creator_user_id = null, array $options = []) {
     global $db;
@@ -3220,10 +3289,13 @@ try {
    // Add created_by to existing rewards if not exists
    $db->exec("ALTER TABLE rewards ADD COLUMN IF NOT EXISTS created_by INT NULL");
    error_log("Added/verified created_by in rewards");
-   $db->exec("ALTER TABLE rewards ADD COLUMN IF NOT EXISTS fulfilled_on DATETIME NULL");
-   $db->exec("ALTER TABLE rewards ADD COLUMN IF NOT EXISTS fulfilled_by INT NULL");
-   $db->exec("ALTER TABLE rewards ADD COLUMN IF NOT EXISTS child_user_id INT NULL");
-   $db->exec("ALTER TABLE rewards ADD COLUMN IF NOT EXISTS template_id INT NULL");
+  $db->exec("ALTER TABLE rewards ADD COLUMN IF NOT EXISTS fulfilled_on DATETIME NULL");
+  $db->exec("ALTER TABLE rewards ADD COLUMN IF NOT EXISTS fulfilled_by INT NULL");
+  $db->exec("ALTER TABLE rewards ADD COLUMN IF NOT EXISTS denied_on DATETIME NULL");
+  $db->exec("ALTER TABLE rewards ADD COLUMN IF NOT EXISTS denied_by INT NULL");
+  $db->exec("ALTER TABLE rewards ADD COLUMN IF NOT EXISTS denied_note VARCHAR(255) NULL");
+  $db->exec("ALTER TABLE rewards ADD COLUMN IF NOT EXISTS child_user_id INT NULL");
+  $db->exec("ALTER TABLE rewards ADD COLUMN IF NOT EXISTS template_id INT NULL");
    try {
        $db->exec("ALTER TABLE rewards ADD CONSTRAINT fk_rewards_child_user FOREIGN KEY (child_user_id) REFERENCES users(id) ON DELETE CASCADE");
    } catch (PDOException $e) {
