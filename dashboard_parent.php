@@ -502,6 +502,271 @@ $getScheduleDueStamp = static function ($dateKey, $timeOfDay, $timeValue) {
     $stamp = strtotime($dateKey . ' 23:59:59');
     return $stamp === false ? null : $stamp;
 };
+$buildWeekSchedule = static function (int $childId, DateTime $weekStart, DateTime $weekEnd, array $weekDates) use ($db, $getScheduleDueStamp, $nowTs, $todayKey, $isRoutineCompletedOnDate): array {
+    ensureRoutinePointsLogsTable();
+    $routineCompletionByDate = [];
+    $routineLogStmt = $db->prepare("SELECT routine_id, DATE(created_at) AS date_key, MAX(created_at) AS completed_at
+        FROM routine_points_logs
+        WHERE child_user_id = :child_id
+        GROUP BY routine_id, DATE(created_at)");
+    $routineLogStmt->execute([':child_id' => $childId]);
+    foreach ($routineLogStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+        $rid = (int) ($row['routine_id'] ?? 0);
+        $dateKey = $row['date_key'] ?? null;
+        if ($rid > 0 && $dateKey) {
+            if (!isset($routineCompletionByDate[$rid])) {
+                $routineCompletionByDate[$rid] = [];
+            }
+            $routineCompletionByDate[$rid][$dateKey] = $row['completed_at'];
+        }
+    }
+
+    $weekSchedule = [];
+    foreach ($weekDates as $dateKey) {
+        $weekSchedule[$dateKey] = [];
+    }
+
+    $taskStmt = $db->prepare("SELECT id, title, points, due_date, end_date, recurrence, recurrence_days, time_of_day, status, completed_at, approved_at FROM tasks WHERE child_user_id = :child_id AND due_date IS NOT NULL AND DATE(due_date) <= :end");
+    $taskStmt->execute([
+        ':child_id' => $childId,
+        ':end' => $weekEnd->format('Y-m-d')
+    ]);
+    $taskRows = $taskStmt->fetchAll(PDO::FETCH_ASSOC);
+    $taskInstanceMap = [];
+    if (!empty($taskRows)) {
+        $taskIds = array_values(array_filter(array_map(static function ($row) {
+            return (int) ($row['id'] ?? 0);
+        }, $taskRows)));
+        if (!empty($taskIds)) {
+            $placeholders = implode(',', array_fill(0, count($taskIds), '?'));
+            $instanceStmt = $db->prepare("SELECT task_id, date_key, status, completed_at FROM task_instances WHERE task_id IN ($placeholders) AND date_key BETWEEN ? AND ?");
+            $params = $taskIds;
+            $params[] = $weekStart->format('Y-m-d');
+            $params[] = $weekEnd->format('Y-m-d');
+            $instanceStmt->execute($params);
+            foreach ($instanceStmt->fetchAll(PDO::FETCH_ASSOC) as $instanceRow) {
+                $tid = (int) $instanceRow['task_id'];
+                $dateKey = $instanceRow['date_key'];
+                if (!$dateKey) {
+                    continue;
+                }
+                if (!isset($taskInstanceMap[$tid])) {
+                    $taskInstanceMap[$tid] = [];
+                }
+                $taskInstanceMap[$tid][$dateKey] = [
+                    'status' => $instanceRow['status'] ?? null,
+                    'completed_at' => $instanceRow['completed_at'] ?? null
+                ];
+            }
+        }
+    }
+
+    foreach ($taskRows as $row) {
+        $timeOfDay = $row['time_of_day'] ?? 'anytime';
+        $dueDate = $row['due_date'];
+        $dueTimeValue = !empty($dueDate) ? date('H:i', strtotime($dueDate)) : '';
+        $startDateKey = date('Y-m-d', strtotime($dueDate));
+        $endDateKey = !empty($row['end_date']) ? $row['end_date'] : null;
+        $timeSort = !empty($dueDate) ? date('H:i', strtotime($dueDate)) : '99:99';
+        $timeLabel = !empty($dueDate) ? date('g:i A', strtotime($dueDate)) : '';
+        if ($timeLabel === '12:00 AM') {
+            $timeLabel = '';
+        }
+        if ($timeLabel === '') {
+            if ($timeOfDay === 'anytime') {
+                $timeSort = '99:99';
+                $timeLabel = 'Anytime';
+            } else {
+                $timeLabel = ucfirst($timeOfDay);
+            }
+        }
+        $repeat = $row['recurrence'] ?? '';
+        $repeatDays = array_filter(array_map('trim', explode(',', (string) ($row['recurrence_days'] ?? ''))));
+        foreach ($weekDates as $dateKey) {
+            if ($dateKey < $startDateKey) {
+                continue;
+            }
+            if ($endDateKey && $dateKey > $endDateKey) {
+                continue;
+            }
+            if ($repeat === 'daily') {
+                // include every day
+            } elseif ($repeat === 'weekly') {
+                $dayName = date('D', strtotime($dateKey));
+                if (!in_array($dayName, $repeatDays, true)) {
+                    continue;
+                }
+            } elseif ($repeat) {
+                continue;
+            } else {
+                if ($dateKey !== $startDateKey) {
+                    continue;
+                }
+            }
+            $instanceData = $taskInstanceMap[(int) ($row['id'] ?? 0)][$dateKey] ?? null;
+            $instanceStatus = is_array($instanceData) ? ($instanceData['status'] ?? null) : $instanceData;
+            $instanceCompletedAt = is_array($instanceData) ? ($instanceData['completed_at'] ?? null) : null;
+            $completedFlag = false;
+            $rejectedFlag = false;
+            $completedStamp = null;
+            if (empty($repeat)) {
+                $completedFlag = in_array(($row['status'] ?? ''), ['completed', 'approved'], true);
+                $completedStamp = $row['completed_at'] ?? $row['approved_at'] ?? null;
+            } elseif ($instanceStatus) {
+                $completedFlag = in_array($instanceStatus, ['completed', 'approved'], true);
+                $rejectedFlag = $instanceStatus === 'rejected';
+                $completedStamp = $instanceCompletedAt;
+            }
+            $overdueFlag = false;
+            $dueStamp = $getScheduleDueStamp($dateKey, $timeOfDay, $dueTimeValue);
+            if ($completedFlag) {
+                if ($completedStamp && $dueStamp !== null && strtotime($completedStamp) > $dueStamp) {
+                    $overdueFlag = true;
+                }
+            } elseif (!$rejectedFlag) {
+                if ($dueStamp !== null && $dueStamp < $nowTs && $dateKey <= $todayKey) {
+                    $overdueFlag = true;
+                }
+            }
+            $weekSchedule[$dateKey][] = [
+                'id' => (int) ($row['id'] ?? 0),
+                'title' => $row['title'],
+                'type' => 'Task',
+                'points' => (int) ($row['points'] ?? 0),
+                'time' => $timeSort,
+                'time_label' => $timeLabel,
+                'time_of_day' => $timeOfDay,
+                'link' => 'task.php?task_id=' . (int) ($row['id'] ?? 0) . '&instance_date=' . $dateKey . '#task-' . (int) ($row['id'] ?? 0),
+                'icon' => 'fa-solid fa-list-check',
+                'completed' => $completedFlag,
+                'overdue' => $overdueFlag
+            ];
+        }
+    }
+
+    $childRoutines = getRoutines($childId);
+    foreach ($childRoutines as $routine) {
+        $timeOfDay = $routine['time_of_day'] ?? 'anytime';
+        $recurrence = $routine['recurrence'] ?? '';
+        $routineWeekday = !empty($routine['created_at']) ? (int) date('N', strtotime($routine['created_at'])) : null;
+        $routineDays = array_values(array_filter(array_map('trim', explode(',', (string) ($routine['recurrence_days'] ?? '')))));
+        $routineDateKey = !empty($routine['routine_date']) ? $routine['routine_date'] : (!empty($routine['created_at']) ? date('Y-m-d', strtotime($routine['created_at'])) : null);
+        $routinePointsTotal = 0;
+        foreach (($routine['tasks'] ?? []) as $task) {
+            $routinePointsTotal += (int) ($task['point_value'] ?? 0);
+        }
+        $totalPoints = $routinePointsTotal + (int) ($routine['bonus_points'] ?? 0);
+        $startTimeValue = !empty($routine['start_time']) ? date('H:i', strtotime($routine['start_time'])) : '';
+        $timeSort = !empty($routine['start_time']) ? date('H:i', strtotime($routine['start_time'])) : '99:99';
+        $timeLabel = !empty($routine['start_time']) ? date('g:i A', strtotime($routine['start_time'])) : '';
+        if ($timeLabel === '12:00 AM') {
+            $timeLabel = '';
+        }
+        if ($timeLabel === '') {
+            if ($timeOfDay === 'anytime') {
+                $timeSort = '99:99';
+                $timeLabel = 'Anytime';
+            } else {
+                $timeLabel = ucfirst($timeOfDay);
+            }
+        }
+        foreach ($weekDates as $dateKey) {
+            if ($recurrence === 'daily') {
+                // include every day
+            } elseif ($recurrence === 'weekly') {
+                if (!empty($routineDays)) {
+                    $dayName = date('D', strtotime($dateKey));
+                    if (!in_array($dayName, $routineDays, true)) {
+                        continue;
+                    }
+                } elseif ($routineWeekday) {
+                    $dayNumber = (int) date('N', strtotime($dateKey));
+                    if ($dayNumber !== $routineWeekday) {
+                        continue;
+                    }
+                }
+            } elseif ($recurrence) {
+                continue;
+            } else {
+                if (!$routineDateKey || $dateKey !== $routineDateKey) {
+                    continue;
+                }
+            }
+            $routineId = (int) ($routine['id'] ?? 0);
+            $completedStamp = $routineCompletionByDate[$routineId][$dateKey] ?? null;
+            $completedFlag = $completedStamp ? true : $isRoutineCompletedOnDate($routine, $dateKey, $routineCompletionByDate);
+            $overdueFlag = false;
+            if (!$completedFlag) {
+                $dueStamp = $getScheduleDueStamp($dateKey, $timeOfDay, $startTimeValue);
+                if ($dueStamp !== null && $dueStamp < $nowTs && $dateKey <= $todayKey) {
+                    $overdueFlag = true;
+                }
+            } else {
+                $dueStamp = $getScheduleDueStamp($dateKey, $timeOfDay, $startTimeValue);
+                if ($completedStamp && $dueStamp !== null && strtotime($completedStamp) > $dueStamp) {
+                    $overdueFlag = true;
+                }
+            }
+            $weekSchedule[$dateKey][] = [
+                'id' => (int) ($routine['id'] ?? 0),
+                'title' => $routine['title'],
+                'type' => 'Routine',
+                'points' => $totalPoints,
+                'time' => $timeSort,
+                'time_label' => $timeLabel,
+                'time_of_day' => $timeOfDay,
+                'link' => 'routine.php?start=' . (int) ($routine['id'] ?? 0),
+                'icon' => 'fa-solid fa-repeat',
+                'completed' => $completedFlag,
+                'overdue' => $overdueFlag
+            ];
+        }
+    }
+
+    foreach ($weekSchedule as &$items) {
+        usort($items, static function ($a, $b) {
+            return ($a['time'] ?? '99:99') <=> ($b['time'] ?? '99:99');
+        });
+    }
+    unset($items);
+
+    return $weekSchedule;
+};
+if (isset($_GET['week_schedule'])) {
+    header('Content-Type: application/json');
+    $childId = filter_input(INPUT_GET, 'child_id', FILTER_VALIDATE_INT);
+    $weekStartRaw = trim((string) ($_GET['week_start'] ?? ''));
+    $weekStartDate = DateTime::createFromFormat('Y-m-d', $weekStartRaw);
+    if (!$childId || !$weekStartDate) {
+        http_response_code(400);
+        echo json_encode(['error' => 'Invalid request.']);
+        exit;
+    }
+    $allowedChildIds = array_map(static function ($row) {
+        return (int) ($row['child_user_id'] ?? 0);
+    }, $data['children'] ?? []);
+    if (!in_array($childId, $allowedChildIds, true)) {
+        http_response_code(403);
+        echo json_encode(['error' => 'Forbidden.']);
+        exit;
+    }
+    $weekStartDate->setTime(0, 0, 0);
+    $weekEndDate = clone $weekStartDate;
+    $weekEndDate->modify('+6 days');
+    $weekEndDate->setTime(23, 59, 59);
+    $weekDates = [];
+    $cursor = clone $weekStartDate;
+    for ($i = 0; $i < 7; $i++) {
+        $weekDates[] = $cursor->format('Y-m-d');
+        $cursor->modify('+1 day');
+    }
+    $weekSchedule = $buildWeekSchedule($childId, $weekStartDate, $weekEndDate, $weekDates);
+    echo json_encode([
+        'week_dates' => $weekDates,
+        'week_schedule' => $weekSchedule
+    ]);
+    exit;
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -1071,6 +1336,7 @@ $getScheduleDueStamp = static function ($dateKey, $timeOfDay, $timeValue) {
             const openWeekModal = (btn) => {
                 if (!weekModal || !weekModalBody) return;
                 const childName = btn.getAttribute('data-child-name') || 'Child';
+                const childId = parseInt(btn.getAttribute('data-child-id'), 10);
                 const scheduleRaw = btn.getAttribute('data-week-schedule') || '{}';
                 let schedule = {};
                 try {
@@ -1323,17 +1589,43 @@ $getScheduleDueStamp = static function ($dateKey, $timeOfDay, $timeValue) {
                         setView(view);
                     });
                 });
+                const fetchWeekSchedule = async (startDate) => {
+                    if (!childId || Number.isNaN(childId)) return schedule;
+                    const weekStartKey = formatDateKey(startDate);
+                    const params = new URLSearchParams({
+                        week_schedule: '1',
+                        child_id: String(childId),
+                        week_start: weekStartKey
+                    });
+                    const response = await fetch(`dashboard_parent.php?${params.toString()}`, { credentials: 'same-origin' });
+                    if (!response.ok) {
+                        throw new Error('Failed to load week schedule.');
+                    }
+                    const payload = await response.json();
+                    return payload.week_schedule || {};
+                };
+                const loadWeekSchedule = async () => {
+                    try {
+                        const newSchedule = await fetchWeekSchedule(currentWeekStart);
+                        if (newSchedule) {
+                            schedule = newSchedule;
+                        }
+                    } catch (e) {
+                        // Keep existing schedule on failure.
+                    }
+                    renderWeek();
+                };
                 navButtons.forEach((btn) => {
                     btn.addEventListener('click', () => {
                         const delta = parseInt(btn.getAttribute('data-week-nav'), 10);
                         if (Number.isNaN(delta)) return;
                         currentWeekStart = addDays(currentWeekStart, delta * 7);
-                        renderWeek();
+                        loadWeekSchedule();
                     });
                 });
 
                 setView(currentView);
-                renderWeek();
+                loadWeekSchedule();
                 weekModal.classList.add('open');
                 document.body.classList.add('modal-open');
             };
@@ -1965,223 +2257,8 @@ $getScheduleDueStamp = static function ($dateKey, $timeOfDay, $timeValue) {
                <div class="children-overview-grid">
                <?php foreach ($data['children'] as $child): ?>
                   <?php
-                   $childId = (int) ($child['child_user_id'] ?? 0);
-                   $routineCompletionByDate = [];
-                   $routineLogStmt = $db->prepare("SELECT routine_id, DATE(created_at) AS date_key, MAX(created_at) AS completed_at
-                       FROM routine_points_logs
-                       WHERE child_user_id = :child_id
-                       GROUP BY routine_id, DATE(created_at)");
-                   $routineLogStmt->execute([':child_id' => $childId]);
-                   foreach ($routineLogStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
-                      $rid = (int) ($row['routine_id'] ?? 0);
-                      $dateKey = $row['date_key'] ?? null;
-                      if ($rid > 0 && $dateKey) {
-                         if (!isset($routineCompletionByDate[$rid])) {
-                            $routineCompletionByDate[$rid] = [];
-                         }
-                         $routineCompletionByDate[$rid][$dateKey] = $row['completed_at'];
-                      }
-                   }
-                   $weekSchedule = [];
-                   foreach ($weekDates as $dateKey) {
-                     $weekSchedule[$dateKey] = [];
-                     }
-                      $taskStmt = $db->prepare("SELECT id, title, points, due_date, end_date, recurrence, recurrence_days, time_of_day, status, completed_at, approved_at FROM tasks WHERE child_user_id = :child_id AND due_date IS NOT NULL AND DATE(due_date) <= :end");
-                     $taskStmt->execute([
-                        ':child_id' => $childId,
-                        ':end' => $weekEnd->format('Y-m-d')
-                     ]);
-                     $taskRows = $taskStmt->fetchAll(PDO::FETCH_ASSOC);
-                     $taskInstanceMap = [];
-                     if (!empty($taskRows)) {
-                        $taskIds = array_values(array_filter(array_map(static function ($row) {
-                           return (int) ($row['id'] ?? 0);
-                        }, $taskRows)));
-                         if (!empty($taskIds)) {
-                            $placeholders = implode(',', array_fill(0, count($taskIds), '?'));
-                            $instanceStmt = $db->prepare("SELECT task_id, date_key, status, completed_at FROM task_instances WHERE task_id IN ($placeholders) AND date_key BETWEEN ? AND ?");
-                            $params = $taskIds;
-                            $params[] = $weekStart->format('Y-m-d');
-                            $params[] = $weekEnd->format('Y-m-d');
-                            $instanceStmt->execute($params);
-                            foreach ($instanceStmt->fetchAll(PDO::FETCH_ASSOC) as $instanceRow) {
-                               $tid = (int) $instanceRow['task_id'];
-                               $dateKey = $instanceRow['date_key'];
-                               if (!$dateKey) {
-                                  continue;
-                               }
-                               if (!isset($taskInstanceMap[$tid])) {
-                                  $taskInstanceMap[$tid] = [];
-                               }
-                               $taskInstanceMap[$tid][$dateKey] = [
-                                  'status' => $instanceRow['status'] ?? null,
-                                  'completed_at' => $instanceRow['completed_at'] ?? null
-                               ];
-                            }
-                         }
-                     }
-                     foreach ($taskRows as $row) {
-                        $timeOfDay = $row['time_of_day'] ?? 'anytime';
-                        $dueDate = $row['due_date'];
-                        $dueTimeValue = !empty($dueDate) ? date('H:i', strtotime($dueDate)) : '';
-                        $startDateKey = date('Y-m-d', strtotime($dueDate));
-                        $endDateKey = !empty($row['end_date']) ? $row['end_date'] : null;
-                        $timeSort = !empty($dueDate) ? date('H:i', strtotime($dueDate)) : '99:99';
-                        $timeLabel = !empty($dueDate) ? date('g:i A', strtotime($dueDate)) : '';
-                        if ($timeLabel === '12:00 AM') {
-                           $timeLabel = '';
-                        }
-                        if ($timeLabel === '') {
-                           if ($timeOfDay === 'anytime') {
-                              $timeSort = '99:99';
-                              $timeLabel = 'Anytime';
-                           } else {
-                              $timeLabel = ucfirst($timeOfDay);
-                           }
-                        }
-                        $repeat = $row['recurrence'] ?? '';
-                        $repeatDays = array_filter(array_map('trim', explode(',', (string)($row['recurrence_days'] ?? ''))));
-                        foreach ($weekDates as $dateKey) {
-                           if ($dateKey < $startDateKey) {
-                              continue;
-                           }
-                           if ($endDateKey && $dateKey > $endDateKey) {
-                              continue;
-                           }
-                           if ($repeat === 'daily') {
-                              // include every day on/after start date
-                           } elseif ($repeat === 'weekly') {
-                              $dayName = date('D', strtotime($dateKey));
-                              if (!in_array($dayName, $repeatDays, true)) {
-                                 continue;
-                              }
-                           } else {
-                              if ($dateKey !== $startDateKey) {
-                                 continue;
-                              }
-                           }
-                           $instanceData = $taskInstanceMap[(int) ($row['id'] ?? 0)][$dateKey] ?? null;
-                           $instanceStatus = is_array($instanceData) ? ($instanceData['status'] ?? null) : $instanceData;
-                           $instanceCompletedAt = is_array($instanceData) ? ($instanceData['completed_at'] ?? null) : null;
-                           $completedFlag = false;
-                           $rejectedFlag = false;
-                           $completedStamp = null;
-                           if (empty($repeat)) {
-                              $completedFlag = in_array(($row['status'] ?? ''), ['completed', 'approved'], true);
-                              $completedStamp = $row['completed_at'] ?? $row['approved_at'] ?? null;
-                           } elseif ($instanceStatus) {
-                              $completedFlag = in_array($instanceStatus, ['completed', 'approved'], true);
-                              $rejectedFlag = $instanceStatus === 'rejected';
-                              $completedStamp = $instanceCompletedAt;
-                           }
-                           $overdueFlag = false;
-                           $dueStamp = $getScheduleDueStamp($dateKey, $timeOfDay, $dueTimeValue);
-                           if ($completedFlag) {
-                              if ($completedStamp && $dueStamp !== null && strtotime($completedStamp) > $dueStamp) {
-                                 $overdueFlag = true;
-                              }
-                           } elseif (!$rejectedFlag) {
-                              if ($dueStamp !== null && $dueStamp < $nowTs && $dateKey <= $todayKey) {
-                                 $overdueFlag = true;
-                              }
-                           }
-                           $weekSchedule[$dateKey][] = [
-                              'id' => (int) ($row['id'] ?? 0),
-                              'title' => $row['title'],
-                              'type' => 'Task',
-                              'points' => (int) ($row['points'] ?? 0),
-                              'time' => $timeSort,
-                              'time_label' => $timeLabel,
-                              'time_of_day' => $timeOfDay,
-                              'link' => 'task.php?task_id=' . (int) ($row['id'] ?? 0) . '&instance_date=' . $dateKey . '#task-' . (int) ($row['id'] ?? 0),
-                              'icon' => 'fa-solid fa-list-check',
-                              'completed' => $completedFlag,
-                              'overdue' => $overdueFlag
-                           ];
-                        }
-                     }
-                     $childRoutines = getRoutines($childId);
-                     foreach ($childRoutines as $routine) {
-                        $timeOfDay = $routine['time_of_day'] ?? 'anytime';
-                        $recurrence = $routine['recurrence'] ?? '';
-                        $routineWeekday = !empty($routine['created_at']) ? (int) date('N', strtotime($routine['created_at'])) : null;
-                        $routineDays = array_values(array_filter(array_map('trim', explode(',', (string) ($routine['recurrence_days'] ?? '')))));
-                        $routineDateKey = !empty($routine['routine_date']) ? $routine['routine_date'] : (!empty($routine['created_at']) ? date('Y-m-d', strtotime($routine['created_at'])) : null);
-                        $routinePointsTotal = 0;
-                        foreach (($routine['tasks'] ?? []) as $task) {
-                           $routinePointsTotal += (int) ($task['point_value'] ?? 0);
-                        }
-                        $totalPoints = $routinePointsTotal + (int) ($routine['bonus_points'] ?? 0);
-                        $startTimeValue = !empty($routine['start_time']) ? date('H:i', strtotime($routine['start_time'])) : '';
-                        $timeSort = !empty($routine['start_time']) ? date('H:i', strtotime($routine['start_time'])) : '99:99';
-                        $timeLabel = !empty($routine['start_time']) ? date('g:i A', strtotime($routine['start_time'])) : '';
-                        if ($timeLabel === '12:00 AM') {
-                           $timeLabel = '';
-                        }
-                        if ($timeLabel === '') {
-                           if ($timeOfDay === 'anytime') {
-                              $timeSort = '99:99';
-                              $timeLabel = 'Anytime';
-                           } else {
-                              $timeLabel = ucfirst($timeOfDay);
-                           }
-                        }
-                       foreach ($weekDates as $dateKey) {
-                          if ($recurrence === 'daily') {
-                             // include every day
-                          } elseif ($recurrence === 'weekly') {
-                              if (!empty($routineDays)) {
-                                 $dayName = date('D', strtotime($dateKey));
-                                 if (!in_array($dayName, $routineDays, true)) {
-                                    continue;
-                                 }
-                              } elseif ($routineWeekday) {
-                                 $dayWeek = (int) date('N', strtotime($dateKey));
-                                 if ($dayWeek !== $routineWeekday) {
-                                    continue;
-                                 }
-                              }
-                          } else {
-                             if (!$routineDateKey || $dateKey !== $routineDateKey) {
-                                continue;
-                             }
-                          }
-                           $routineId = (int) ($routine['id'] ?? 0);
-                           $completedStamp = $routineCompletionByDate[$routineId][$dateKey] ?? null;
-                           $completedFlag = $completedStamp ? true : $isRoutineCompletedOnDate($routine, $dateKey, $routineCompletionByDate);
-                           $overdueFlag = false;
-                           if (!$completedFlag) {
-                              $dueStamp = $getScheduleDueStamp($dateKey, $timeOfDay, $startTimeValue);
-                              if ($dueStamp !== null && $dueStamp < $nowTs && $dateKey <= $todayKey) {
-                                 $overdueFlag = true;
-                              }
-                           } else {
-                              $dueStamp = $getScheduleDueStamp($dateKey, $timeOfDay, $startTimeValue);
-                              if ($completedStamp && $dueStamp !== null && strtotime($completedStamp) > $dueStamp) {
-                                 $overdueFlag = true;
-                              }
-                           }
-                          $weekSchedule[$dateKey][] = [
-                             'id' => (int) ($routine['id'] ?? 0),
-                             'title' => $routine['title'],
-                             'type' => 'Routine',
-                             'points' => $totalPoints,
-                             'time' => $timeSort,
-                             'time_label' => $timeLabel,
-                             'time_of_day' => $timeOfDay,
-                              'link' => 'routine.php?start=' . (int) ($routine['id'] ?? 0),
-                              'icon' => 'fa-solid fa-repeat',
-                              'completed' => $completedFlag,
-                              'overdue' => $overdueFlag
-                          ];
-                       }
-                    }
-                     foreach ($weekSchedule as &$items) {
-                        usort($items, static function ($a, $b) {
-                           return ($a['time'] ?? '99:99') <=> ($b['time'] ?? '99:99');
-                        });
-                     }
-                     unset($items);
+                     $childId = (int) ($child['child_user_id'] ?? 0);
+                     $weekSchedule = $buildWeekSchedule($childId, $weekStart, $weekEnd, $weekDates);
                      $todayItems = $weekSchedule[$todayDate] ?? [];
                      $weekScheduleJson = htmlspecialchars(json_encode($weekSchedule, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT), ENT_QUOTES);
                   ?>
@@ -2419,11 +2496,12 @@ $getScheduleDueStamp = static function ($dateKey, $timeOfDay, $timeValue) {
                             <div class="child-schedule-time">No tasks or routines today.</div>
                          <?php endif; ?>
                       </div>
-                      <button type="button"
-                              class="view-week-button"
-                              data-week-view
-                              data-child-name="<?php echo htmlspecialchars($child['child_name'], ENT_QUOTES); ?>"
-                              data-week-schedule="<?php echo $weekScheduleJson; ?>">
+                        <button type="button"
+                                class="view-week-button"
+                                data-week-view
+                                data-child-id="<?php echo (int) $childId; ?>"
+                                data-child-name="<?php echo htmlspecialchars($child['child_name'], ENT_QUOTES); ?>"
+                                data-week-schedule="<?php echo $weekScheduleJson; ?>">
                           View Week
                       </button>
                    </div>
