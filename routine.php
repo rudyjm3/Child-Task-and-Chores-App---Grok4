@@ -1049,7 +1049,25 @@ display: flex; flex-wrap: wrap; align-items: center; justify-content: space-betw
   color: #5b5b5b;
 margin-bottom: 20px;}
         .routine-section-header h2 { margin: 0; /*color: #f5f7fa;*/ font-size: 1.2rem; letter-spacing: 0.02em; }
+        .routine-header-actions { display: inline-flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+        .routine-view-toggle { display: inline-flex; align-items: center; gap: 6px; padding: 4px; border-radius: 999px; border: 1px solid #d5def0; background: #f5f7fb; }
+        .routine-view-button { width: 36px; height: 36px; border: none; border-radius: 50%; background: transparent; color: #607d8b; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
+        .routine-view-button.active { background: #0d47a1; color: #fff; box-shadow: 0 4px 10px rgba(13, 71, 161, 0.2); }
+        .routine-filters { display: grid; gap: 12px; margin-bottom: 16px; }
+        .routine-filter-header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+        .routine-filter-title { font-weight: 700; color: #37474f; }
+        .routine-select-all { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; color: #37474f; }
+        .routine-select-all input { width: 18px; height: 18px; }
+        .routine-child-grid { display: flex; flex-wrap: wrap; gap: 14px; }
+        .routine-child-card { border: none; border-radius: 50%; padding: 0; background: transparent; display: grid; justify-items: center; gap: 6px; cursor: pointer; position: relative; }
+        .routine-child-card input[type="checkbox"] { position: absolute; opacity: 0; width: 0; height: 0; pointer-events: none; }
+        .routine-child-card img { width: 56px; height: 56px; border-radius: 50%; object-fit: cover; box-shadow: 0 2px 6px rgba(0,0,0,0.15); transition: box-shadow 150ms ease, transform 150ms ease; }
+        .routine-child-card span { font-size: 13px; text-align: center; transition: color 150ms ease, text-shadow 150ms ease; }
+        .routine-child-card input[type="checkbox"]:checked + img { box-shadow: 0 0 0 4px rgba(100,181,246,0.8), 0 0 14px rgba(100,181,246,0.8); transform: translateY(-2px); }
+        .routine-child-card input[type="checkbox"]:checked + img + span { color: #0d47a1; text-shadow: 0 1px 8px rgba(100,181,246,0.8); }
         .routine-card-grid { display: grid; gap: 20px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .routine-card-grid.list-view { grid-template-columns: 1fr; }
+        .routine-card.is-hidden { display: none; }
         @media (max-width: 768px) {
             .routine-card-grid { grid-template-columns: 1fr; }
         }
@@ -1120,11 +1138,10 @@ margin-bottom: 20px;}
         .card-actions { margin-top: 16px; display: flex; flex-wrap: wrap; gap: 12px; }
         .routine-card-actions { margin-top: 16px; display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: center; }
         .routine-card-actions .button { flex: 1 1 45%; min-width: 0; text-align: center; }
+        .routine-card-title-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
         .routine-action-icons { display: inline-flex; gap: 8px; align-items: center; }
         .icon-button { width: 36px; height: 36px; border: none; background: transparent; color: #9f9f9f; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
-        .icon-button:hover { background: rgba(0,0,0,0.06); color: #9f9f9f; }
         .icon-button.danger { color: #9f9f9f; }
-        .icon-button.danger:hover { background: rgba(0,0,0,0.06); }
         .collapsible-card { border: none; margin: 12px 0 0; padding: 0; }
         .collapsible-card summary { list-style: none; }
         .collapsible-card summary::-webkit-details-marker,
@@ -1831,20 +1848,62 @@ margin-bottom: 20px;}
 
         <?php endif; ?>
 
-        <section class="routine-section">
+        <section class="routine-section" data-routine-section>
          <div class="routine-section-header">
-            <h2><?php echo ($isParentContext ? 'Family Routines' : 'My Routines'); ?></h2>
-         </div>
+             <h2><?php echo ($isParentContext ? 'Family Routines' : 'My Routines'); ?></h2>
+             <?php if ($isParentContext): ?>
+                <div class="routine-header-actions">
+                    <div class="routine-view-toggle" role="group" aria-label="Routine view">
+                        <button type="button" class="routine-view-button active" data-routine-view="card" aria-pressed="true" title="Card view">
+                            <i class="fa-solid fa-table-cells"></i>
+                        </button>
+                        <button type="button" class="routine-view-button" data-routine-view="list" aria-pressed="false" title="List view">
+                            <i class="fa-solid fa-list"></i>
+                        </button>
+                    </div>
+                </div>
+             <?php endif; ?>
+          </div>
+          <?php if ($isParentContext && !empty($children)): ?>
+              <div class="routine-filters" data-routine-filters>
+                  <div class="routine-filter-header">
+                      <div class="routine-filter-title">Filter by child</div>
+                      <label class="routine-select-all">
+                          <input type="checkbox" data-routine-select-all checked>
+                          Select all
+                      </label>
+                  </div>
+                  <div class="routine-child-grid">
+                      <?php foreach ($children as $child): ?>
+                          <?php
+                              $cid = (int) ($child['child_user_id'] ?? 0);
+                              $avatar = !empty($child['child_avatar']) ? $child['child_avatar'] : 'images/default-avatar.png';
+                              $childName = trim((string) ($child['child_name'] ?? ''));
+                              $childParts = $childName === '' ? [] : preg_split('/\s+/', $childName);
+                              $childFirst = $childParts[0] ?? $childName;
+                          ?>
+                          <label class="routine-child-card">
+                              <input type="checkbox" data-routine-child value="<?php echo $cid; ?>" checked>
+                              <img src="<?php echo htmlspecialchars($avatar); ?>" alt="<?php echo htmlspecialchars($childName); ?>">
+                              <span><?php echo htmlspecialchars($childFirst); ?></span>
+                          </label>
+                      <?php endforeach; ?>
+                  </div>
+              </div>
+          <?php endif; ?>
             
             <?php if (empty($routines)): ?>
                 <p class="no-data">No routines available.</p>
             <?php else: ?>
-               <div class="routine-card-grid">
-                <?php foreach ($routines as $routine): ?>
-                    <?php
-                        $isChildView = (getEffectiveRole($_SESSION['user_id']) === 'child');
-                        $cardClasses = 'routine-card' . ($isChildView ? ' child-view' : '');
-                    ?>
+                <div class="routine-card-grid" data-routine-grid>
+                  <?php foreach ($routines as $routine): ?>
+                      <?php
+                          $isChildView = (getEffectiveRole($_SESSION['user_id']) === 'child');
+                          $cardClasses = 'routine-card' . ($isChildView ? ' child-view' : '');
+                          $timeOfDay = $routine['time_of_day'] ?? 'anytime';
+                          $startTimeValue = !empty($routine['start_time']) ? date('H:i', strtotime($routine['start_time'])) : '99:99';
+                          $routineChildId = (int) ($routine['child_user_id'] ?? 0);
+                      ?>
                     <?php
         $timerWarningAttr = isset($routine['timer_warnings_enabled'])
             ? (int) $routine['timer_warnings_enabled']
@@ -1861,17 +1920,35 @@ margin-bottom: 20px;}
                         }
                         $detailsId = 'routine-details-' . (int) $routine['id'];
                     ?>
-                    <article class="<?php echo $cardClasses; ?>"
-                        data-routine-id="<?php echo (int) $routine['id']; ?>"
-                        data-timer-warnings="<?php echo $timerWarningAttr; ?>"
-                        data-show-countdown="<?php echo $countdownAttr; ?>">
+                      <article class="<?php echo $cardClasses; ?>"
+                          data-routine-id="<?php echo (int) $routine['id']; ?>"
+                          data-time-of-day="<?php echo htmlspecialchars($timeOfDay); ?>"
+                          data-start-time="<?php echo htmlspecialchars($startTimeValue); ?>"
+                          data-child-id="<?php echo $routineChildId; ?>"
+                          data-timer-warnings="<?php echo $timerWarningAttr; ?>"
+                          data-show-countdown="<?php echo $countdownAttr; ?>">
                         <header>
-                            <h3><?php echo htmlspecialchars($routine['title']); ?></h3>
+                            <div class="routine-card-title-row">
+                                <h3><?php echo htmlspecialchars($routine['title']); ?></h3>
+                                <?php if ($isParentContext): ?>
+                                    <div class="routine-action-icons">
+                                        <button type="button" class="icon-button" data-routine-edit-open data-routine-id="<?php echo (int) $routine['id']; ?>" aria-label="Edit routine">
+                                            <i class="fa-solid fa-pen"></i>
+                                        </button>
+                                        <form method="POST" action="routine.php">
+                                            <input type="hidden" name="routine_id" value="<?php echo (int) $routine['id']; ?>">
+                                            <button type="submit" name="delete_routine" class="icon-button danger" aria-label="Delete routine" onclick="return confirm('Delete this routine?');">
+                                                <i class="fa-solid fa-trash"></i>
+                                            </button>
+                                        </form>
+                                    </div>
+                                <?php endif; ?>
+                            </div>
                             <div class="routine-details">
-                                  <?php if (!empty($routine['child_display_name']) && !$isChildView): ?>
-                                      <span class="routine-assignee">
-                                          <img src="<?php echo htmlspecialchars($routine['child_avatar'] ?: 'images/default-avatar.png'); ?>" alt="<?php echo htmlspecialchars($routine['child_display_name']); ?>">
-                                          <?php echo htmlspecialchars($routine['child_display_name']); ?>
+                                <?php if (!empty($routine['child_display_name']) && !$isChildView): ?>
+                                    <span class="routine-assignee">
+                                        <img src="<?php echo htmlspecialchars($routine['child_avatar'] ?: 'images/default-avatar.png'); ?>" alt="<?php echo htmlspecialchars($routine['child_display_name']); ?>">
+                                        <?php echo htmlspecialchars($routine['child_display_name']); ?>
                                       </span>
                                   <?php endif; ?>
                                   <span><i class="fa-solid fa-clock routine-meta-icon"></i><?php echo date('g:i A', strtotime($routine['start_time'])) . ' - ' . date('g:i A', strtotime($routine['end_time'])); ?></span>
@@ -1886,21 +1963,10 @@ margin-bottom: 20px;}
                             <?php if ($isChildView): ?>
                                 <button type="button" class="button start-next-button" data-action="open-flow">Start Routine</button>
                             <?php endif; ?>
-                            <button type="button" class="button secondary view-details-button" data-toggle-details="<?php echo $detailsId; ?>" aria-expanded="false">View Routine Details</button>
-                            <?php if ($isParentContext): ?>
-                                <button type="submit" class="button" name="parent_complete_routine" form="parent-complete-form-<?php echo (int) $routine['id']; ?>">Complete Routine</button>
-                                <div class="routine-action-icons">
-                                    <button type="button" class="icon-button" data-routine-edit-open data-routine-id="<?php echo (int) $routine['id']; ?>" aria-label="Edit routine">
-                                        <i class="fa-solid fa-pen"></i>
-                                    </button>
-                                    <form method="POST" action="routine.php">
-                                        <input type="hidden" name="routine_id" value="<?php echo (int) $routine['id']; ?>">
-                                        <button type="submit" name="delete_routine" class="icon-button danger" aria-label="Delete routine" onclick="return confirm('Delete this routine?');">
-                                            <i class="fa-solid fa-trash"></i>
-                                        </button>
-                                    </form>
-                                </div>
-                            <?php endif; ?>
+                              <button type="button" class="button secondary view-details-button" data-toggle-details="<?php echo $detailsId; ?>" aria-expanded="false">View Routine Details</button>
+                              <?php if ($isParentContext): ?>
+                                  <button type="submit" class="button" name="parent_complete_routine" form="parent-complete-form-<?php echo (int) $routine['id']; ?>">Complete Routine</button>
+                              <?php endif; ?>
                         </div>
                         <details id="<?php echo $detailsId; ?>" class="collapsible-card" data-role="collapsible-wrapper">
                             <summary class="sr-only">View Routine Details</summary>
@@ -4233,6 +4299,79 @@ margin-bottom: 20px;}
                     routinePlayers.push({ id: String(routine.id), player });
                 }
             });
+
+            const routineSection = document.querySelector('[data-routine-section]');
+            const routineGrid = routineSection ? routineSection.querySelector('[data-routine-grid]') : null;
+            if (routineGrid) {
+                const routineCards = Array.from(routineGrid.querySelectorAll('.routine-card'));
+                const orderMap = { morning: 0, afternoon: 1, evening: 2, anytime: 3 };
+                routineCards.sort((a, b) => {
+                    const orderA = orderMap[a.dataset.timeOfDay] ?? 3;
+                    const orderB = orderMap[b.dataset.timeOfDay] ?? 3;
+                    if (orderA !== orderB) return orderA - orderB;
+                    const timeA = a.dataset.startTime || '99:99';
+                    const timeB = b.dataset.startTime || '99:99';
+                    const timeCompare = timeA.localeCompare(timeB);
+                    if (timeCompare !== 0) return timeCompare;
+                    const titleA = a.querySelector('h3')?.textContent || '';
+                    const titleB = b.querySelector('h3')?.textContent || '';
+                    return titleA.localeCompare(titleB);
+                });
+                routineCards.forEach(card => routineGrid.appendChild(card));
+
+                const viewButtons = Array.from(routineSection.querySelectorAll('[data-routine-view]'));
+                const setView = (view) => {
+                    const isList = view === 'list';
+                    routineGrid.classList.toggle('list-view', isList);
+                    viewButtons.forEach((btn) => {
+                        const active = btn.getAttribute('data-routine-view') === (isList ? 'list' : 'card');
+                        btn.classList.toggle('active', active);
+                        btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+                    });
+                };
+                viewButtons.forEach((btn) => {
+                    btn.addEventListener('click', () => setView(btn.getAttribute('data-routine-view')));
+                });
+
+                const childFilters = Array.from(routineSection.querySelectorAll('[data-routine-child]'));
+                const selectAll = routineSection.querySelector('[data-routine-select-all]');
+                const updateSelectAllState = () => {
+                    if (!selectAll || !childFilters.length) return;
+                    const allChecked = childFilters.every((input) => input.checked);
+                    const anyChecked = childFilters.some((input) => input.checked);
+                    selectAll.checked = allChecked;
+                    selectAll.indeterminate = !allChecked && anyChecked;
+                };
+                const applyChildFilter = () => {
+                    if (!childFilters.length) return;
+                    const selectedIds = childFilters
+                        .filter((input) => input.checked)
+                        .map((input) => input.value);
+                    routineCards.forEach((card) => {
+                        const cardChildId = card.dataset.childId || '';
+                        const visible = selectedIds.length ? selectedIds.includes(cardChildId) : false;
+                        card.classList.toggle('is-hidden', !visible);
+                    });
+                };
+                childFilters.forEach((input) => {
+                    input.addEventListener('change', () => {
+                        updateSelectAllState();
+                        applyChildFilter();
+                    });
+                });
+                if (selectAll) {
+                    selectAll.addEventListener('change', () => {
+                        const checked = selectAll.checked;
+                        childFilters.forEach((input) => {
+                            input.checked = checked;
+                        });
+                        updateSelectAllState();
+                        applyChildFilter();
+                    });
+                    updateSelectAllState();
+                }
+                applyChildFilter();
+            }
 
             document.querySelectorAll('[data-toggle-details]').forEach(button => {
                 const targetId = button.getAttribute('data-toggle-details');
