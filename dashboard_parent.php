@@ -877,9 +877,9 @@ if (isset($_GET['week_schedule'])) {
         .week-modal .week-list-day.is-today { border-color: #ffd28a; background: #ffe0b2; }
         .week-modal .week-list-day.is-today .week-list-day-name,
         .week-modal .week-list-day.is-today .week-list-day-date { color: #ef6c00; }
-        .week-modal .week-list-day-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-weight: 700; color: #37474f; }
-        .week-modal .week-list-day-name { text-transform: uppercase; letter-spacing: 0.04em; font-size: 0.8rem; color: #607d8b; }
-        .week-modal .week-list-day-date { color: #0d47a1; }
+        .week-modal .week-list-day-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-weight: 700; color: #d5d5d5; background: #3e5b90ff; margin: -12px -12px 8px; padding: 10px 12px; border-radius: 12px 12px 0 0; }
+        .week-modal .week-list-day-name { text-transform: uppercase; letter-spacing: 0.04em; font-size: 0.8rem; color: #d5d5d5; }
+        .week-modal .week-list-day-date { color: #d5d5d5; }
         .week-modal .week-list-sections { display: grid; gap: 10px; }
         .week-modal .week-list-section-title { font-weight: 700; color: #37474f; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; }
         .week-modal .week-list-items { display: grid; gap: 8px; }
