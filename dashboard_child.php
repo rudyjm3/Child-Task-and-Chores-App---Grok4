@@ -202,6 +202,7 @@ $notificationCount = is_array($notificationsNew) ? count($notificationsNew) : 0;
         .avatar-notification { position: absolute; top: 0; right: 0; transform: translate(35%, -35%); }
         .week-item-badge { display: inline-flex; align-items: center; gap: 4px; margin-left: 8px; padding: 2px 8px; border-radius: 999px; font-size: 0.7rem; font-weight: 700; background: #4caf50; color: #fff; text-transform: uppercase; }
         .week-item-badge.overdue { background: #d9534f; }
+        .week-item-badge.done-overdue { background: linear-gradient(-70deg, #d9534f 0%, #d9534f 48%, #4caf50 52%, #4caf50 100%); }
         .nav-links { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: center; margin-top: 8px; }
         .nav-button { display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; background: #eef4ff; border: 1px solid #d5def0; border-radius: 8px; color: #0d47a1; font-weight: 700; text-decoration: none; }
         .nav-button:hover { background: #dce8ff; }
@@ -411,7 +412,9 @@ $notificationCount = is_array($notificationsNew) ? count($notificationsNew) : 0;
                 ];
                 const buildItem = (item) => {
                     let badge = '';
-                    if (item.completed) {
+                    if (item.completed && item.overdue) {
+                        badge = '<span class="week-item-badge done-overdue"><i class="fa-solid fa-check"></i>Done / Overdue</span>';
+                    } else if (item.completed) {
                         badge = '<span class="week-item-badge"><i class="fa-solid fa-check"></i>Done</span>';
                     } else if (item.overdue) {
                         badge = '<span class="week-item-badge overdue"><i class="fa-solid fa-triangle-exclamation"></i>Overdue</span>';
@@ -609,6 +612,23 @@ $notificationCount = is_array($notificationsNew) ? count($notificationsNew) : 0;
          }
          $todayDate = date('Y-m-d');
          $todayDay = date('D');
+         ensureRoutinePointsLogsTable();
+         $routineCompletionByDate = [];
+         $routineLogStmt = $db->prepare("SELECT routine_id, DATE(created_at) AS date_key, MAX(created_at) AS completed_at
+                                         FROM routine_points_logs
+                                         WHERE child_user_id = :child_id
+                                         GROUP BY routine_id, DATE(created_at)");
+         $routineLogStmt->execute([':child_id' => $_SESSION['user_id']]);
+         foreach ($routineLogStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $rid = (int) ($row['routine_id'] ?? 0);
+            $dateKey = $row['date_key'] ?? null;
+            if ($rid > 0 && $dateKey) {
+               if (!isset($routineCompletionByDate[$rid])) {
+                  $routineCompletionByDate[$rid] = [];
+               }
+               $routineCompletionByDate[$rid][$dateKey] = $row['completed_at'];
+            }
+         }
          $isRoutineScheduledOnDate = static function (array $routine, string $dateKey): bool {
             $recurrence = $routine['recurrence'] ?? '';
             $routineWeekday = !empty($routine['created_at']) ? (int) date('N', strtotime($routine['created_at'])) : null;
@@ -630,7 +650,11 @@ $notificationCount = is_array($notificationsNew) ? count($notificationsNew) : 0;
             }
             return $routineDateKey !== null && $routineDateKey === $dateKey;
          };
-         $isRoutineCompletedOnDate = static function (array $routine, string $dateKey): bool {
+         $isRoutineCompletedOnDate = static function (array $routine, string $dateKey) use ($routineCompletionByDate): bool {
+            $rid = (int) ($routine['id'] ?? 0);
+            if ($rid > 0 && !empty($routineCompletionByDate[$rid][$dateKey])) {
+               return true;
+            }
             $tasks = $routine['tasks'] ?? [];
             if (empty($tasks)) {
                return false;
@@ -897,16 +921,20 @@ foreach ($taskCountStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
                         continue;
                      }
                   }
-                  $completedFlag = $isRoutineCompletedOnDate($routine, $dateKey);
+                  $routineId = (int) ($routine['id'] ?? 0);
+                  $completedStamp = $routineCompletionByDate[$routineId][$dateKey] ?? null;
+                  $completedFlag = $completedStamp ? true : $isRoutineCompletedOnDate($routine, $dateKey);
                   $overdueFlag = false;
-                  if (!$completedFlag) {
-                     $dueStamp = $getScheduleDueStamp($dateKey, $timeOfDay, $startTimeValue);
-                     if ($dueStamp !== null && $dueStamp < $nowTs && $dateKey <= $todayKey) {
+                  $dueStamp = $getScheduleDueStamp($dateKey, $timeOfDay, $startTimeValue);
+                  if ($completedFlag) {
+                     if ($completedStamp && $dueStamp !== null && strtotime($completedStamp) > $dueStamp) {
                         $overdueFlag = true;
                      }
+                  } else if ($dueStamp !== null && $dueStamp < $nowTs && $dateKey <= $todayKey) {
+                     $overdueFlag = true;
                   }
-                  $scheduleByDay[$dateKey][] = [
-                     'id' => (int) ($routine['id'] ?? 0),
+                    $scheduleByDay[$dateKey][] = [
+                      'id' => (int) ($routine['id'] ?? 0),
                      'title' => $routine['title'],
                      'type' => 'Routine',
                      'points' => $totalPoints,

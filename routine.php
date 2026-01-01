@@ -50,6 +50,31 @@ function routineBelongsToChild(int $routine_id, int $child_user_id): bool {
     return (int) $ownerId === $child_user_id;
 }
 
+function routineIsScheduledToday(array $routine, string $todayDate, string $todayDay, ?string &$scheduledLabel = null): bool {
+    $recurrence = (string) ($routine['recurrence'] ?? '');
+    $scheduledLabel = null;
+    if ($recurrence === 'daily') {
+        return true;
+    }
+    if ($recurrence === 'weekly') {
+        $days = array_filter(array_map('trim', explode(',', (string) ($routine['recurrence_days'] ?? ''))));
+        if (empty($days)) {
+            return true;
+        }
+        $scheduledLabel = implode(', ', $days);
+        return in_array($todayDay, $days, true);
+    }
+    $routineDate = $routine['routine_date'] ?? null;
+    if (!$routineDate && !empty($routine['created_at'])) {
+        $routineDate = date('Y-m-d', strtotime($routine['created_at']));
+    }
+    if ($routineDate) {
+        $scheduledLabel = $routineDate;
+        return $routineDate === $todayDate;
+    }
+    return true;
+}
+
 function normalizeRoutineStructure(?string $rawStructure, int $family_root_id, array &$errors): array {
     if (!$rawStructure) {
         $errors[] = 'Add at least one routine task.';
@@ -244,6 +269,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             echo json_encode(['status' => 'error', 'message' => 'Routine not assigned to this child.']);
             exit;
         }
+        $routine = getRoutineWithTasks($routineId);
+        if (!$routine) {
+            http_response_code(404);
+            echo json_encode(['status' => 'error', 'message' => 'Routine not found.']);
+            exit;
+        }
+        $todayDate = date('Y-m-d');
+        $todayDay = date('D');
+        $scheduleLabel = null;
+        if (!routineIsScheduledToday($routine, $todayDate, $todayDay, $scheduleLabel)) {
+            $message = 'This routine can only be completed on its scheduled day.';
+            if ($scheduleLabel) {
+                if ($routine['recurrence'] === 'weekly') {
+                    $message = 'This routine can only be completed on: ' . $scheduleLabel . '.';
+                } else {
+                    $message = 'This routine is scheduled for ' . date('m/d/Y', strtotime($scheduleLabel)) . ' and can only be completed that day.';
+                }
+            }
+            echo json_encode(['status' => 'not_today', 'message' => $message]);
+            exit;
+        }
         $updated = setRoutineTaskStatus($routineId, $taskId, $status);
         echo json_encode(['status' => $updated ? 'ok' : 'error']);
         exit;
@@ -287,7 +333,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             echo json_encode(['status' => 'error', 'message' => 'Routine not found.']);
             exit;
         }
+        $todayDate = date('Y-m-d');
+        $todayDay = date('D');
+        $scheduleLabel = null;
+        if (!routineIsScheduledToday($routine, $todayDate, $todayDay, $scheduleLabel)) {
+            $message = 'This routine can only be completed on its scheduled day.';
+            if ($scheduleLabel) {
+                if ($routine['recurrence'] === 'weekly') {
+                    $message = 'This routine can only be completed on: ' . $scheduleLabel . '.';
+                } else {
+                    $message = 'This routine is scheduled for ' . date('m/d/Y', strtotime($scheduleLabel)) . ' and can only be completed that day.';
+                }
+            }
+            echo json_encode(['status' => 'not_today', 'message' => $message]);
+            exit;
+        }
         $childId = (int) $_SESSION['user_id'];
+        ensureRoutinePointsLogsTable();
+        $stmt = $db->prepare("SELECT created_at FROM routine_points_logs WHERE routine_id = :routine_id AND child_user_id = :child_id AND DATE(created_at) = :today ORDER BY created_at DESC LIMIT 1");
+        $stmt->execute([
+            ':routine_id' => $routineId,
+            ':child_id' => $childId,
+            ':today' => $todayDate
+        ]);
+        $lastCompletion = $stmt->fetchColumn();
+        if ($lastCompletion) {
+            $formatted = date('m/d/Y h:i A', strtotime($lastCompletion));
+            echo json_encode([
+                'status' => 'already_completed',
+                'message' => 'You already completed this routine on ' . $formatted . '. It cannot be completed again today.',
+                'completed_at' => $formatted
+            ]);
+            exit;
+        }
         if (!isset($_SESSION['routine_awards'])) {
             $_SESSION['routine_awards'] = [];
         }
@@ -375,9 +453,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $bonusAwarded = is_numeric($bonus) ? (int) $bonus : 0;
         $_SESSION['routine_awards'][$routineId] = true;
         $newTotal = getChildTotalPoints($childId);
-        if ($taskPointsAwarded > 0 || $bonusAwarded > 0) {
-              logRoutinePointsAward($routineId, $childId, $taskPointsAwarded, $bonusAwarded);
-          }
+        logRoutinePointsAward($routineId, $childId, $taskPointsAwarded, $bonusAwarded);
   
           refreshRoutineGoalsForChild($childId, $routineId);
 
@@ -794,6 +870,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 $routine_tasks = $isParentContext ? getRoutineTasks($family_root_id) : [];
 $routines = getRoutines($_SESSION['user_id']);
+$routineCompletionMap = [];
+if (getEffectiveRole($_SESSION['user_id']) === 'child') {
+    ensureRoutinePointsLogsTable();
+    $todayDate = date('Y-m-d');
+    $stmt = $db->prepare("SELECT routine_id, created_at FROM routine_points_logs WHERE child_user_id = :child_id AND DATE(created_at) = :today ORDER BY created_at DESC");
+    $stmt->execute([':child_id' => (int) $_SESSION['user_id'], ':today' => $todayDate]);
+    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+        $rid = (int) ($row['routine_id'] ?? 0);
+        if ($rid && empty($routineCompletionMap[$rid])) {
+            $routineCompletionMap[$rid] = $row['created_at'];
+        }
+    }
+}
 $todayDate = date('Y-m-d');
 
 foreach ($routines as &$routineEntry) {
@@ -817,6 +906,10 @@ foreach ($routines as &$routineEntry) {
     unset($task);
     $routineEntry['tasks'] = $tasks;
     $routineEntry['completed_today'] = !empty($tasks) && $completedTodayCount === count($tasks);
+    if (!empty($routineCompletionMap[(int) $routineEntry['id']])) {
+        $routineEntry['completed_today'] = true;
+        $routineEntry['last_completed_at'] = $routineCompletionMap[(int) $routineEntry['id']];
+    }
 }
 unset($routineEntry);
 
@@ -1329,6 +1422,10 @@ margin-bottom: 20px;}
         .routine-modal-card h2 { margin: 0; font-size: 1.1rem; }
         .routine-modal-close { background: transparent; border: none; font-size: 1.3rem; font-weight: 600; cursor: pointer; color: #555; }
         .routine-modal-body { padding: 12px 16px 18px; overflow-y: auto; }
+        .routine-modal-actions { margin-top: 16px; display: flex; justify-content: flex-end; }
+        .routine-modal.blocked { background: rgba(0,0,0,0.65); }
+        .routine-modal.blocked .routine-modal-card { max-width: 520px; }
+        .routine-modal.blocked .routine-modal-body { color: #455a64; font-size: 0.95rem; display: grid; gap: 8px; }
         .help-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: none; align-items: center; justify-content: center; z-index: 4300; padding: 14px; }
         .help-modal.open { display: flex; }
         .help-card { background: #fff; border-radius: 12px; max-width: 720px; width: min(720px, 100%); max-height: 85vh; overflow: hidden; box-shadow: 0 12px 32px rgba(0,0,0,0.25); display: grid; grid-template-rows: auto 1fr; }
@@ -2072,6 +2169,20 @@ margin-bottom: 20px;}
             <?php endif; ?>
         </section>
     </main>
+    <div class="routine-modal blocked" data-routine-blocked-modal>
+        <div class="routine-modal-card" role="dialog" aria-modal="true" aria-labelledby="routine-blocked-title">
+            <header>
+                <h2 id="routine-blocked-title">Routine Notice</h2>
+                <button type="button" class="routine-modal-close" data-routine-blocked-close aria-label="Close notice">&times;</button>
+            </header>
+            <div class="routine-modal-body">
+                <p data-routine-blocked-message></p>
+                <div class="routine-modal-actions">
+                    <button type="button" class="button" data-routine-blocked-close>OK</button>
+                </div>
+            </div>
+        </div>
+    </div>
     <div class="help-modal" data-help-modal>
         <div class="help-card" role="dialog" aria-modal="true" aria-labelledby="help-title">
             <header>
@@ -2143,6 +2254,9 @@ margin-bottom: 20px;}
             const prefOpen = document.querySelector('[data-routine-pref-open]');
             const prefModal = document.querySelector('[data-routine-pref-modal]');
             const prefClose = prefModal ? prefModal.querySelector('[data-routine-pref-close]') : null;
+            const blockedModal = document.querySelector('[data-routine-blocked-modal]');
+            const blockedMessage = blockedModal ? blockedModal.querySelector('[data-routine-blocked-message]') : null;
+            const blockedCloses = blockedModal ? blockedModal.querySelectorAll('[data-routine-blocked-close]') : [];
             const createOpen = document.querySelector('[data-routine-create-open]');
             const createModal = document.querySelector('[data-routine-create-modal]');
             const createClose = createModal ? createModal.querySelector('[data-routine-create-close]') : null;
@@ -2156,6 +2270,18 @@ margin-bottom: 20px;}
                 modal.classList.remove('open');
                 document.body.classList.remove('modal-open');
             };
+            const openRoutineBlockedModal = (message) => {
+                if (!blockedModal) return;
+                if (blockedMessage) {
+                    blockedMessage.textContent = message || 'This routine cannot be completed right now.';
+                }
+                openRoutineModal(blockedModal);
+            };
+            if (blockedModal && blockedCloses.length) {
+                blockedCloses.forEach(btn => btn.addEventListener('click', () => closeRoutineModal(blockedModal)));
+                blockedModal.addEventListener('click', (e) => { if (e.target === blockedModal) closeRoutineModal(blockedModal); });
+            }
+            page.openRoutineBlockedModal = openRoutineBlockedModal;
             if (prefOpen && prefModal) {
                 prefOpen.addEventListener('click', () => openRoutineModal(prefModal));
                 if (prefClose) prefClose.addEventListener('click', () => closeRoutineModal(prefModal));
@@ -3468,6 +3594,18 @@ margin-bottom: 20px;}
                         alert('No tasks are available in this routine yet.');
                         return;
                     }
+                    if (this.routine && this.routine.completed_today) {
+                        const completedAt = this.routine.last_completed_at
+                            ? new Date(this.routine.last_completed_at).toLocaleString()
+                            : '';
+                        const message = completedAt
+                            ? `You already completed this routine on ${completedAt}. It cannot be completed again today.`
+                            : 'You already completed this routine today. It cannot be completed again.';
+                        if (page.openRoutineBlockedModal) {
+                            page.openRoutineBlockedModal(message);
+                        }
+                        return;
+                    }
                     try {
                         console.log('[RoutinePlayer] openFlow', { routineId: this.routine.id });
                     } catch (e) {}
@@ -3829,9 +3967,11 @@ margin-bottom: 20px;}
                     fetch('routine.php', { method: 'POST', body: payload })
                         .then(response => response.json())
                         .then(data => {
-                            if (data && data.status === 'duplicate') {
-                                if (this.summaryBonusEl) {
-                                    this.summaryBonusEl.textContent = data.message || '';
+                            if (data && ['duplicate', 'already_completed', 'not_today'].includes(data.status)) {
+                                const message = data.message || 'This routine cannot be completed right now.';
+                                this.closeOverlay();
+                                if (page.openRoutineBlockedModal) {
+                                    page.openRoutineBlockedModal(message);
                                 }
                                 return;
                             }
@@ -3951,7 +4091,18 @@ margin-bottom: 20px;}
                     const payload = new FormData();
                     payload.append('action', 'reset_routine_tasks');
                     payload.append('routine_id', this.routine.id);
-                    fetch('routine.php', { method: 'POST', body: payload }).catch(() => {});
+                    fetch('routine.php', { method: 'POST', body: payload })
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data && data.status === 'not_today') {
+                                const message = data.message || 'This routine cannot be completed right now.';
+                                this.closeOverlay();
+                                if (page.openRoutineBlockedModal) {
+                                    page.openRoutineBlockedModal(message);
+                                }
+                            }
+                        })
+                        .catch(() => {});
                 }
 
                 updateTaskStatus(taskId, status) {
