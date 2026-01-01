@@ -201,8 +201,9 @@ $notificationCount = is_array($notificationsNew) ? count($notificationsNew) : 0;
         .notification-badge { position: absolute; top: -6px; right: -8px; background: #d32f2f; color: #fff; border-radius: 12px; padding: 2px 6px; font-size: 0.75rem; font-weight: 700; min-width: 22px; text-align: center; }
         .avatar-notification { position: absolute; top: 0; right: 0; transform: translate(35%, -35%); }
         .week-item-badge { display: inline-flex; align-items: center; gap: 4px; margin-left: 8px; padding: 2px 8px; border-radius: 999px; font-size: 0.7rem; font-weight: 700; background: #4caf50; color: #fff; text-transform: uppercase; }
+        .week-item-badge.compact { justify-content: center; margin-left: 6px; width: 20px; height: 20px; padding: 0; border-radius: 50%; font-size: 0.65rem; }
         .week-item-badge.overdue { background: #d9534f; }
-        .week-item-badge.done-overdue { background: linear-gradient(-70deg, #d9534f 0%, #d9534f 48%, #4caf50 52%, #4caf50 100%); }
+        .week-item-badge-group { display: inline-flex; align-items: center; }
         .nav-links { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: center; margin-top: 8px; }
         .nav-button { display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; background: #eef4ff; border: 1px solid #d5def0; border-radius: 8px; color: #0d47a1; font-weight: 700; text-decoration: none; }
         .nav-button:hover { background: #dce8ff; }
@@ -412,13 +413,13 @@ $notificationCount = is_array($notificationsNew) ? count($notificationsNew) : 0;
                 ];
                 const buildItem = (item) => {
                     let badge = '';
-                    if (item.completed && item.overdue) {
-                        badge = '<span class="week-item-badge done-overdue"><i class="fa-solid fa-check"></i>Done / Overdue</span>';
-                    } else if (item.completed) {
-                        badge = '<span class="week-item-badge"><i class="fa-solid fa-check"></i>Done</span>';
-                    } else if (item.overdue) {
-                        badge = '<span class="week-item-badge overdue"><i class="fa-solid fa-triangle-exclamation"></i>Overdue</span>';
-                    }
+                      if (item.completed && item.overdue) {
+                        badge = '<span class="week-item-badge-group"><span class="week-item-badge compact" title="Done"><i class="fa-solid fa-check"></i></span><span class="week-item-badge overdue compact" title="Overdue"><i class="fa-solid fa-triangle-exclamation"></i></span></span>';
+                      } else if (item.completed) {
+                        badge = '<span class="week-item-badge" title="Done"><i class="fa-solid fa-check"></i>Done</span>';
+                      } else if (item.overdue) {
+                        badge = '<span class="week-item-badge overdue" title="Overdue"><i class="fa-solid fa-triangle-exclamation"></i>Overdue</span>';
+                      }
                     const wrapperStart = item.link
                         ? '<a class="week-item" href="' + item.link + '">'
                         : '<div class="week-item">';
@@ -772,7 +773,7 @@ foreach ($taskCountStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
             $stamp = strtotime($dateKey . ' 23:59:59');
             return $stamp === false ? null : $stamp;
          };
-         $taskWeekStmt = $db->prepare("SELECT id, title, points, due_date, end_date, recurrence, recurrence_days, time_of_day, status FROM tasks WHERE child_user_id = :child_id AND due_date IS NOT NULL AND DATE(due_date) <= :end ORDER BY due_date");
+        $taskWeekStmt = $db->prepare("SELECT id, title, points, due_date, end_date, recurrence, recurrence_days, time_of_day, status, completed_at, approved_at FROM tasks WHERE child_user_id = :child_id AND due_date IS NOT NULL AND DATE(due_date) <= :end ORDER BY due_date");
          $taskWeekStmt->execute([
             ':child_id' => $_SESSION['user_id'],
             ':end' => $weekEnd->format('Y-m-d')
@@ -785,7 +786,7 @@ foreach ($taskCountStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
             }, $taskRows)));
             if (!empty($taskIds)) {
                $placeholders = implode(',', array_fill(0, count($taskIds), '?'));
-               $instanceStmt = $db->prepare("SELECT task_id, date_key, status FROM task_instances WHERE task_id IN ($placeholders) AND date_key BETWEEN ? AND ?");
+               $instanceStmt = $db->prepare("SELECT task_id, date_key, status, completed_at FROM task_instances WHERE task_id IN ($placeholders) AND date_key BETWEEN ? AND ?");
                $params = $taskIds;
                $params[] = $weekStart->format('Y-m-d');
                $params[] = $weekEnd->format('Y-m-d');
@@ -799,7 +800,10 @@ foreach ($taskCountStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
                   if (!isset($taskInstanceMap[$tid])) {
                      $taskInstanceMap[$tid] = [];
                   }
-                  $taskInstanceMap[$tid][$dateKey] = $instanceRow['status'] ?? null;
+                  $taskInstanceMap[$tid][$dateKey] = [
+                     'status' => $instanceRow['status'] ?? null,
+                     'completed_at' => $instanceRow['completed_at'] ?? null
+                  ];
                }
             }
          }
@@ -844,18 +848,27 @@ foreach ($taskCountStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
                      continue;
                   }
                }
-               $instanceStatus = $taskInstanceMap[(int) ($row['id'] ?? 0)][$dateKey] ?? null;
+               $instanceData = $taskInstanceMap[(int) ($row['id'] ?? 0)][$dateKey] ?? null;
+               $instanceStatus = is_array($instanceData) ? ($instanceData['status'] ?? null) : $instanceData;
+               $instanceCompletedAt = is_array($instanceData) ? ($instanceData['completed_at'] ?? null) : null;
                $completedFlag = false;
                $rejectedFlag = false;
+               $completedStamp = null;
                if (empty($repeat)) {
                   $completedFlag = in_array(($row['status'] ?? ''), ['completed', 'approved'], true);
+                  $completedStamp = $row['completed_at'] ?? $row['approved_at'] ?? null;
                } elseif ($instanceStatus) {
                   $completedFlag = in_array($instanceStatus, ['completed', 'approved'], true);
                   $rejectedFlag = $instanceStatus === 'rejected';
+                  $completedStamp = $instanceCompletedAt;
                }
                $overdueFlag = false;
-               if (!$completedFlag && !$rejectedFlag) {
-                  $dueStamp = $getScheduleDueStamp($dateKey, $timeOfDay, $dueTimeValue);
+               $dueStamp = $getScheduleDueStamp($dateKey, $timeOfDay, $dueTimeValue);
+               if ($completedFlag) {
+                  if ($completedStamp && $dueStamp !== null && strtotime($completedStamp) > $dueStamp) {
+                     $overdueFlag = true;
+                  }
+               } elseif (!$rejectedFlag) {
                   if ($dueStamp !== null && $dueStamp < $nowTs && $dateKey <= $todayKey) {
                      $overdueFlag = true;
                   }

@@ -590,9 +590,11 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
         .calendar-task-header { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
         .task-week-list .calendar-task-header { flex-direction: row; align-items: center; flex-wrap: wrap; }
         .calendar-task-title-wrap { display: inline-flex; align-items: center; gap: 6px; flex: 1; min-width: 0; }
-        .calendar-task-badge { display: inline-flex; align-items: center; justify-content: center; gap: 4px; width: fit-content; padding: 2px 8px; border-radius: 999px; font-size: 0.7rem; font-weight: 700; letter-spacing: 0.02em; text-transform: uppercase; }
+        .calendar-task-badge { display: inline-flex; align-items: center; gap: 4px; width: fit-content; padding: 2px 8px; border-radius: 999px; font-size: 0.7rem; font-weight: 700; letter-spacing: 0.02em; text-transform: uppercase; }
         .calendar-task-badge.overdue { background: #d9534f; color: #fff; }
         .calendar-task-badge.completed { background: #4caf50; color: #fff; }
+        .calendar-task-badge.compact { justify-content: center; width: 20px; height: 20px; padding: 0; border-radius: 50%; font-size: 0.65rem; }
+        .calendar-task-badge-group { display: inline-flex; align-items: center; gap: 5px; }
         .calendar-task-title { font-weight: 700; color: #3e2723; }
         .calendar-task-points { color: #fff; font-size: 0.7rem; font-weight: 700; border-radius: 50px; background-color: #ffc224; padding: 2px 8px; }
         .calendar-task-meta { color: #6d4c41; font-size: 0.85rem; }
@@ -601,9 +603,7 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
         .calendar-empty { display: none; text-align: center; color: #9e9e9e; font-weight: 600; padding: 18px; }
         .calendar-empty.active { display: block; }
         /* Overdue styles (role-specific colors for autism-friendliness) */
-        .overdue {
-            border-left: 5px solid <?php echo (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) ? '#d9534f' : '#ff9900'; ?>; /* Red for parent/family/caregiver, orange for child */
-        }
+        .overdue { }
         .overdue-label {
             background-color: <?php echo (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) ? '#d9534f' : '#ff9900'; ?>;
             color: white;
@@ -1811,7 +1811,7 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                     .filter((value) => !Number.isNaN(value));
             };
 
-            const buildTaskItem = (task, dateKey, timeInfo) => {
+            const buildTaskItem = (task, dateKey, timeInfo, useTextDual = false) => {
                 const item = document.createElement('button');
                 item.type = 'button';
                 item.className = 'calendar-task-item';
@@ -1825,21 +1825,48 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                 title.className = 'calendar-task-title';
                 title.textContent = task.title || 'Task';
                 titleWrap.appendChild(title);
-                const isCompleted = isTaskCompleted(task, dateKey);
-                const isOverdue = !isCompleted && isTaskOverdue(task, dateKey);
-                let badge = null;
-                if (isCompleted) {
-                    badge = document.createElement('span');
-                    badge.className = 'calendar-task-badge completed';
-                    const icon = document.createElement('i');
-                    icon.className = 'fa-solid fa-check';
-                    badge.appendChild(icon);
-                    badge.appendChild(document.createTextNode(' Done'));
-                } else if (isOverdue) {
-                    badge = document.createElement('span');
-                    badge.className = 'calendar-task-badge overdue';
-                    badge.textContent = 'Overdue';
-                }
+                  const isCompleted = isTaskCompleted(task, dateKey);
+                  const isCompletedLate = isTaskCompletedLate(task, dateKey);
+                  const isOverdue = !isCompleted && isTaskOverdue(task, dateKey);
+                  let badge = null;
+                  if (isCompleted && isCompletedLate) {
+                      badge = document.createElement('span');
+                      badge.className = 'calendar-task-badge-group';
+                      const doneBadge = document.createElement('span');
+                      doneBadge.className = useTextDual ? 'calendar-task-badge completed' : 'calendar-task-badge completed compact';
+                      doneBadge.title = 'Done';
+                      const doneIcon = document.createElement('i');
+                      doneIcon.className = 'fa-solid fa-check';
+                      doneBadge.appendChild(doneIcon);
+                      if (useTextDual) {
+                          doneBadge.appendChild(document.createTextNode(' Done'));
+                      }
+                      const lateBadge = document.createElement('span');
+                      lateBadge.className = useTextDual ? 'calendar-task-badge overdue' : 'calendar-task-badge overdue compact';
+                      lateBadge.title = 'Overdue';
+                      if (useTextDual) {
+                          lateBadge.appendChild(document.createTextNode('Overdue'));
+                      } else {
+                          const lateIcon = document.createElement('i');
+                          lateIcon.className = 'fa-solid fa-triangle-exclamation';
+                          lateBadge.appendChild(lateIcon);
+                      }
+                      badge.appendChild(doneBadge);
+                      badge.appendChild(lateBadge);
+                  } else if (isCompleted) {
+                      badge = document.createElement('span');
+                      badge.className = 'calendar-task-badge completed';
+                      badge.title = 'Done';
+                      const icon = document.createElement('i');
+                      icon.className = 'fa-solid fa-check';
+                      badge.appendChild(icon);
+                      badge.appendChild(document.createTextNode(' Done'));
+                  } else if (isOverdue) {
+                      badge = document.createElement('span');
+                      badge.className = 'calendar-task-badge overdue';
+                      badge.title = 'Overdue';
+                      badge.textContent = 'Overdue';
+                  }
                 const points = document.createElement('span');
                 points.className = 'calendar-task-points';
                 points.textContent = `${task.points || 0} pts`;
@@ -1933,9 +1960,9 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                             sectionTitle.textContent = section.label;
                             const itemsWrap = document.createElement('div');
                             itemsWrap.className = 'week-list-items';
-                            sectionItems.forEach(({ task, timeInfo }) => {
-                                itemsWrap.appendChild(buildTaskItem(task, dateKey, timeInfo));
-                            });
+                              sectionItems.forEach(({ task, timeInfo }) => {
+                                  itemsWrap.appendChild(buildTaskItem(task, dateKey, timeInfo, true));
+                              });
                             sectionWrap.appendChild(sectionTitle);
                             sectionWrap.appendChild(itemsWrap);
                             sectionsWrap.appendChild(sectionWrap);
@@ -2031,9 +2058,9 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                             sectionTitle.textContent = section.label;
                             sectionWrap.appendChild(sectionTitle);
 
-                            sectionItems.forEach(({ task, timeInfo }) => {
-                                sectionWrap.appendChild(buildTaskItem(task, dateKey, timeInfo));
-                            });
+                              sectionItems.forEach(({ task, timeInfo }) => {
+                                  sectionWrap.appendChild(buildTaskItem(task, dateKey, timeInfo));
+                              });
 
                             list.appendChild(sectionWrap);
                         });
@@ -2170,6 +2197,30 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
             return false;
         }
 
+        function getTaskCompletionTimestamp(task, dateKey) {
+            if (!task) return null;
+            const repeat = task.recurrence || '';
+            const instance = repeat ? getTaskInstance(task, dateKey) : null;
+            let stamp = null;
+            if (!repeat) {
+                stamp = task.approved_at || task.completed_at || null;
+            } else if (instance) {
+                stamp = instance.approved_at || instance.completed_at || null;
+            }
+            if (!stamp) return null;
+            const parsed = Date.parse(stamp);
+            return Number.isNaN(parsed) ? null : parsed;
+        }
+
+        function isTaskCompletedLate(task, dateKey) {
+            if (!isTaskCompleted(task, dateKey)) return false;
+            const completionStamp = getTaskCompletionTimestamp(task, dateKey);
+            if (!completionStamp) return false;
+            const dueStamp = getInstanceDueTimestamp(task, dateKey);
+            if (!dueStamp) return false;
+            return completionStamp > dueStamp;
+        }
+
         function isTaskOverdue(task, dateKey) {
             if (!task || !dateKey) return false;
             const repeat = task.recurrence || '';
@@ -2255,11 +2306,30 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
             points.className = 'task-pill';
             points.textContent = `${task.points || 0} pts`;
             const isCompleted = isTaskCompleted(task, viewDateKey);
+            const isCompletedLate = isTaskCompletedLate(task, viewDateKey);
             const isOverdue = !isCompleted && isTaskOverdue(task, viewDateKey);
             let badge = null;
-            if (isCompleted) {
+            if (isCompleted && isCompletedLate) {
+                badge = document.createElement('span');
+                badge.className = 'calendar-task-badge-group';
+                const doneBadge = document.createElement('span');
+                doneBadge.className = 'calendar-task-badge completed compact';
+                doneBadge.title = 'Done';
+                const doneIcon = document.createElement('i');
+                doneIcon.className = 'fa-solid fa-check';
+                doneBadge.appendChild(doneIcon);
+                const lateBadge = document.createElement('span');
+                lateBadge.className = 'calendar-task-badge overdue compact';
+                lateBadge.title = 'Overdue';
+                const lateIcon = document.createElement('i');
+                lateIcon.className = 'fa-solid fa-triangle-exclamation';
+                lateBadge.appendChild(lateIcon);
+                badge.appendChild(doneBadge);
+                badge.appendChild(lateBadge);
+            } else if (isCompleted) {
                 badge = document.createElement('span');
                 badge.className = 'calendar-task-badge completed';
+                badge.title = 'Done';
                 const icon = document.createElement('i');
                 icon.className = 'fa-solid fa-check';
                 badge.appendChild(icon);
@@ -2267,6 +2337,7 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
             } else if (isOverdue) {
                 badge = document.createElement('span');
                 badge.className = 'calendar-task-badge overdue';
+                badge.title = 'Overdue';
                 badge.textContent = 'Overdue';
             }
 

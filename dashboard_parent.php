@@ -450,7 +450,12 @@ foreach (($data['redeemed_rewards'] ?? []) as $rr) {
     }
 }
 $todayDate = date('Y-m-d');
-$isRoutineCompletedOnDate = static function (array $routine, string $dateKey): bool {
+ensureRoutinePointsLogsTable();
+$isRoutineCompletedOnDate = static function (array $routine, string $dateKey, array $completionMap = []): bool {
+    $rid = (int) ($routine['id'] ?? 0);
+    if ($rid > 0 && !empty($completionMap[$rid][$dateKey])) {
+        return true;
+    }
     $tasks = $routine['tasks'] ?? [];
     if (empty($tasks)) {
         return false;
@@ -565,16 +570,73 @@ $getScheduleDueStamp = static function ($dateKey, $timeOfDay, $timeValue) {
         .child-schedule-time { color: #6d4c41; font-size: 0.9rem; }
         .child-schedule-points { font-weight: 700; color: #2e7d32; white-space: nowrap; }
         .child-schedule-badge { display: inline-flex; align-items: center; gap: 4px; margin-left: 8px; padding: 2px 8px; border-radius: 999px; font-size: 0.7rem; font-weight: 700; background: #4caf50; color: #fff; text-transform: uppercase; }
+        .child-schedule-badge.compact { justify-content: center; margin-left: 6px; width: 20px; height: 20px; padding: 0; border-radius: 50%; font-size: 0.65rem; }
         .child-schedule-badge.overdue { background: #d9534f; }
+        .child-schedule-badge-group { display: inline-flex; align-items: center; }
         .week-day-group.is-today { border: 1px solid #ffd28a; background: #ffe0b2; border-radius: 10px; padding: 10px; }
         .view-week-button { justify-self: start; padding: 6px 12px; font-size: 0.9rem; background: #eef4ff; border: 1px solid #d5def0; color: #0d47a1; border-radius: 8px; cursor: pointer; }
         .week-modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.55); display: none; align-items: center; justify-content: center; z-index: 3200; padding: 14px; }
         .week-modal-backdrop.open { display: flex; }
-        .week-modal { background: #fff; border-radius: 12px; max-width: 620px; width: min(620px, 100%); max-height: 80vh; overflow: hidden; box-shadow: 0 14px 36px rgba(0,0,0,0.25); display: grid; grid-template-rows: auto 1fr; }
+        .week-modal { background: #fff; border-radius: 12px; max-width: 1100px; width: min(1100px, 96vw); max-height: 90vh; overflow: hidden; box-shadow: 0 14px 36px rgba(0,0,0,0.25); display: grid; grid-template-rows: auto 1fr; }
         .week-modal header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid #e0e0e0; }
         .week-modal h3 { margin: 0; font-size: 1.1rem; }
         .week-modal-close { background: transparent; border: none; font-size: 1.3rem; cursor: pointer; color: #555; }
-        .week-modal-body { padding: 12px 16px 16px; overflow-y: auto; text-align: left; }
+        .week-modal-body { padding: 0; overflow-y: auto; text-align: left; }
+        .week-modal .task-calendar-section { width: 100%; max-width: 100%; margin: 0; padding: 0; }
+        .week-modal .task-calendar-card { background: transparent; border-radius: 0; box-shadow: none; padding: 16px; display: grid; gap: 16px; }
+        .week-modal .calendar-header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+        .week-modal .calendar-header h2 { margin: 0; font-size: 1.2rem; }
+        .week-modal .calendar-subtitle { margin: 4px 0 0; color: #607d8b; font-size: 0.95rem; }
+        .week-modal .calendar-nav { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+        .week-modal .calendar-nav-button { border: 1px solid #d5def0; background: #eef4ff; color: #0d47a1; font-weight: 700; border-radius: 999px; padding: 6px 12px; cursor: pointer; }
+        .week-modal .calendar-nav-button:hover { background: #dce8ff; }
+        .week-modal .calendar-range { font-weight: 700; color: #37474f; }
+        .week-modal .calendar-view-toggle { display: inline-flex; align-items: center; gap: 6px; padding: 4px; border-radius: 999px; border: 1px solid #d5def0; background: #f5f7fb; }
+        .week-modal .calendar-view-button { width: 36px; height: 36px; border: none; border-radius: 50%; background: transparent; color: #607d8b; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
+        .week-modal .calendar-view-button.active { background: #0d47a1; color: #fff; box-shadow: 0 4px 10px rgba(13, 71, 161, 0.2); }
+        .week-modal .task-week-calendar { border: 1px solid #d5def0; border-radius: 12px; background: #fff; overflow: hidden; position: relative; }
+        .week-modal .task-week-scroll { overflow-x: auto; }
+        .week-modal .week-days { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
+        .week-modal .week-day-name { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; }
+        .week-modal .week-day-num { font-size: 1rem; }
+        .week-modal .week-days-header { background: #f5f7fb; padding: 8px; min-width: 980px; }
+        .week-modal .week-days-header .week-day { background: #fff; border: 1px solid #d5def0; border-radius: 10px; padding: 6px 0; display: grid; gap: 2px; justify-items: center; font-weight: 700; color: #37474f; font-family: inherit; }
+        .week-modal .week-days-header .week-day.is-today { background: #ffe0b2; border-color: #ffd28a; color: #ef6c00; }
+        .week-modal .week-grid { display: grid; grid-template-columns: repeat(7, minmax(133px, 1fr)); gap: 6px; background: #f5f7fb; padding: 6px 8px 10px; min-width: 980px; }
+        .week-modal .week-column { background: #fff; border: 1px solid #d5def0; border-radius: 10px; padding: 8px; display: flex; flex-direction: column; gap: 8px; min-height: 140px; }
+        .week-modal .week-column-tasks { display: grid; gap: 8px; }
+        .week-modal .task-week-calendar.is-hidden { display: none; }
+        .week-modal .task-week-list { display: none; border: 1px solid #d5def0; border-radius: 12px; background: #fff; padding: 12px; }
+        .week-modal .task-week-list.active { display: grid; gap: 12px; }
+        .week-modal .week-list-day { border: 1px solid #d5def0; border-radius: 12px; padding: 12px; background: #fdfdfd; display: grid; gap: 10px; }
+        .week-modal .week-list-day.is-today { border-color: #ffd28a; background: #ffe0b2; }
+        .week-modal .week-list-day.is-today .week-list-day-name,
+        .week-modal .week-list-day.is-today .week-list-day-date { color: #ef6c00; }
+        .week-modal .week-list-day-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-weight: 700; color: #37474f; }
+        .week-modal .week-list-day-name { text-transform: uppercase; letter-spacing: 0.04em; font-size: 0.8rem; color: #607d8b; }
+        .week-modal .week-list-day-date { color: #0d47a1; }
+        .week-modal .week-list-sections { display: grid; gap: 10px; }
+        .week-modal .week-list-section-title { font-weight: 700; color: #37474f; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; }
+        .week-modal .week-list-items { display: grid; gap: 8px; }
+        .week-modal .week-list-empty { color: #9e9e9e; font-size: 0.9rem; text-align: center; }
+        .week-modal .calendar-section { display: grid; gap: 6px; }
+        .week-modal .calendar-section-title { font-weight: 700; color: #37474f; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.04em; }
+        .week-modal .calendar-task-item { border: 1px solid #ffd28a; background: #fff7e6; border-radius: 10px; padding: 8px; text-align: left; cursor: pointer; display: grid; gap: 4px; font-size: 0.9rem; }
+        .week-modal .calendar-task-item:hover { background: #ffe9c6; }
+        .week-modal .calendar-task-header { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+        .week-modal .task-week-list .calendar-task-header { flex-direction: row; align-items: center; flex-wrap: wrap; }
+        .week-modal .calendar-task-title-wrap { display: inline-flex; align-items: center; gap: 6px; flex: 1; min-width: 0; }
+        .week-modal .calendar-task-badge { display: inline-flex; align-items: center; gap: 4px; width: fit-content; padding: 2px 8px; border-radius: 999px; font-size: 0.7rem; font-weight: 700; letter-spacing: 0.02em; text-transform: uppercase; }
+        .week-modal .calendar-task-badge.overdue { background: #d9534f; color: #fff; }
+        .week-modal .calendar-task-badge.completed { background: #4caf50; color: #fff; }
+        .week-modal .calendar-task-badge.compact { justify-content: center; width: 20px; height: 20px; padding: 0; border-radius: 50%; font-size: 0.65rem; }
+        .week-modal .calendar-task-badge-group { display: inline-flex; align-items: center; gap: 5px; }
+        .week-modal .calendar-task-title { font-weight: 700; color: #3e2723; }
+        .week-modal .calendar-task-points { color: #fff; font-size: 0.7rem; font-weight: 700; border-radius: 50px; background-color: #ffc224; padding: 2px 8px; }
+        .week-modal .calendar-task-meta { color: #6d4c41; font-size: 0.85rem; }
+        .week-modal .calendar-day-empty { color: #9e9e9e; font-size: 0.85rem; text-align: center; padding: 8px 0; }
+        .week-modal .calendar-empty { display: none; text-align: center; color: #9e9e9e; font-weight: 600; padding: 18px; }
+        .week-modal .calendar-empty.active { display: block; }
         .help-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.55); display: none; align-items: center; justify-content: center; z-index: 3300; padding: 14px; }
         .help-modal.open { display: flex; }
         .help-card { background: #fff; border-radius: 12px; max-width: 720px; width: min(720px, 100%); max-height: 85vh; overflow: hidden; box-shadow: 0 14px 36px rgba(0,0,0,0.25); display: grid; grid-template-rows: auto 1fr; }
@@ -946,6 +1008,66 @@ $getScheduleDueStamp = static function ($dateKey, $timeOfDay, $timeValue) {
             const weekModalBody = weekModal ? weekModal.querySelector('[data-week-modal-body]') : null;
             const weekModalTitle = weekModal ? weekModal.querySelector('#week-modal-title') : null;
             const weekModalClose = weekModal ? weekModal.querySelector('[data-week-modal-close]') : null;
+            const startOfWeek = (date) => {
+                const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+                const day = d.getDay();
+                const diff = (day + 6) % 7;
+                d.setDate(d.getDate() - diff);
+                d.setHours(0, 0, 0, 0);
+                return d;
+            };
+            const addDays = (date, days) => {
+                const d = new Date(date.getTime());
+                d.setDate(d.getDate() + days);
+                d.setHours(0, 0, 0, 0);
+                return d;
+            };
+            const formatDateKey = (date) => {
+                const year = date.getFullYear();
+                const month = String(date.getMonth() + 1).padStart(2, '0');
+                const day = String(date.getDate()).padStart(2, '0');
+                return `${year}-${month}-${day}`;
+            };
+            const formatWeekRange = (startDate) => {
+                const endDate = addDays(startDate, 6);
+                const options = { month: 'short', day: 'numeric' };
+                const startLabel = startDate.toLocaleDateString(undefined, options);
+                const endLabel = endDate.toLocaleDateString(undefined, options);
+                return `${startLabel} - ${endLabel}`;
+            };
+            const buildWeekModalSkeleton = (childName) => `
+                <section class="task-calendar-section week-modal-calendar">
+                    <div class="task-calendar-card">
+                        <div class="calendar-header">
+                            <div>
+                                <h2>Weekly Calendar</h2>
+                                <p class="calendar-subtitle">Tasks and routines for ${childName}.</p>
+                            </div>
+                            <div class="calendar-nav">
+                                <div class="calendar-view-toggle" role="group" aria-label="Calendar view">
+                                    <button type="button" class="calendar-view-button active" data-calendar-view="calendar" aria-pressed="true" title="Calendar view">
+                                        <i class="fa-solid fa-calendar-days"></i>
+                                    </button>
+                                    <button type="button" class="calendar-view-button" data-calendar-view="list" aria-pressed="false" title="List view">
+                                        <i class="fa-solid fa-list"></i>
+                                    </button>
+                                </div>
+                                <button type="button" class="calendar-nav-button" data-week-nav="-1">Previous Week</button>
+                                <div class="calendar-range" data-week-range></div>
+                                <button type="button" class="calendar-nav-button" data-week-nav="1">Next Week</button>
+                            </div>
+                        </div>
+                        <div class="task-week-calendar" data-week-calendar>
+                            <div class="task-week-scroll">
+                                <div class="week-days week-days-header" data-week-days></div>
+                                <div class="week-grid" data-week-grid></div>
+                            </div>
+                            <div class="calendar-empty" data-calendar-empty>No tasks or routines for this week.</div>
+                        </div>
+                        <div class="task-week-list" data-week-list></div>
+                    </div>
+                </section>
+            `;
             const openWeekModal = (btn) => {
                 if (!weekModal || !weekModalBody) return;
                 const childName = btn.getAttribute('data-child-name') || 'Child';
@@ -956,70 +1078,262 @@ $getScheduleDueStamp = static function ($dateKey, $timeOfDay, $timeValue) {
                 } catch (e) {
                     schedule = {};
                 }
-                const todayKey = new Date().toISOString().slice(0, 10);
                 if (weekModalTitle) {
                     weekModalTitle.textContent = childName + ' - Week Schedule';
                 }
-                const dates = Object.keys(schedule).sort();
-                if (!dates.length) {
-                    weekModalBody.innerHTML = '<p>No tasks or routines this week.</p>';
-                } else {
-                    weekModalBody.innerHTML = dates.map((dateKey) => {
-                        const items = schedule[dateKey] || [];
+                weekModalBody.innerHTML = buildWeekModalSkeleton(childName);
+                const calendarWrap = weekModalBody.querySelector('[data-week-calendar]');
+                const listWrap = weekModalBody.querySelector('[data-week-list]');
+                const weekDaysEl = weekModalBody.querySelector('[data-week-days]');
+                const weekGridEl = weekModalBody.querySelector('[data-week-grid]');
+                const weekRangeEl = weekModalBody.querySelector('[data-week-range]');
+                const emptyEl = weekModalBody.querySelector('[data-calendar-empty]');
+                const viewButtons = Array.from(weekModalBody.querySelectorAll('[data-calendar-view]'));
+                const navButtons = Array.from(weekModalBody.querySelectorAll('[data-week-nav]'));
+                let currentWeekStart = startOfWeek(new Date());
+                let currentView = 'calendar';
+
+                const setView = (view) => {
+                    currentView = view === 'list' ? 'list' : 'calendar';
+                    if (calendarWrap) {
+                        calendarWrap.classList.toggle('is-hidden', currentView === 'list');
+                    }
+                    if (listWrap) {
+                        listWrap.classList.toggle('active', currentView === 'list');
+                    }
+                    viewButtons.forEach((btn) => {
+                        const btnView = btn.getAttribute('data-calendar-view');
+                        const isActive = btnView === (currentView === 'calendar' ? 'calendar' : 'list');
+                        btn.classList.toggle('active', isActive);
+                        btn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+                    });
+                };
+
+                const buildBadge = (item, useTextDual) => {
+                    if (!item) return null;
+                    if (item.completed && item.overdue) {
+                        const group = document.createElement('span');
+                        group.className = 'calendar-task-badge-group';
+                        const doneBadge = document.createElement('span');
+                        doneBadge.className = useTextDual ? 'calendar-task-badge completed' : 'calendar-task-badge completed compact';
+                        doneBadge.title = 'Done';
+                        const doneIcon = document.createElement('i');
+                        doneIcon.className = 'fa-solid fa-check';
+                        doneBadge.appendChild(doneIcon);
+                        if (useTextDual) {
+                            doneBadge.appendChild(document.createTextNode(' Done'));
+                        }
+                        const overdueBadge = document.createElement('span');
+                        overdueBadge.className = useTextDual ? 'calendar-task-badge overdue' : 'calendar-task-badge overdue compact';
+                        overdueBadge.title = 'Overdue';
+                        if (useTextDual) {
+                            overdueBadge.appendChild(document.createTextNode('Overdue'));
+                        } else {
+                            const overdueIcon = document.createElement('i');
+                            overdueIcon.className = 'fa-solid fa-triangle-exclamation';
+                            overdueBadge.appendChild(overdueIcon);
+                        }
+                        group.appendChild(doneBadge);
+                        group.appendChild(overdueBadge);
+                        return group;
+                    }
+                    if (item.completed) {
+                        const badge = document.createElement('span');
+                        badge.className = 'calendar-task-badge completed';
+                        badge.title = 'Done';
+                        const icon = document.createElement('i');
+                        icon.className = 'fa-solid fa-check';
+                        badge.appendChild(icon);
+                        badge.appendChild(document.createTextNode(' Done'));
+                        return badge;
+                    }
+                    if (item.overdue) {
+                        const badge = document.createElement('span');
+                        badge.className = 'calendar-task-badge overdue';
+                        badge.title = 'Overdue';
+                        badge.textContent = 'Overdue';
+                        return badge;
+                    }
+                    return null;
+                };
+
+                const buildTaskItem = (item, useTextDual = false) => {
+                    const wrapper = document.createElement(item.link ? 'a' : 'div');
+                    wrapper.className = 'calendar-task-item';
+                    if (item.link) {
+                        wrapper.href = item.link;
+                    }
+                    const header = document.createElement('div');
+                    header.className = 'calendar-task-header';
+                    const titleWrap = document.createElement('span');
+                    titleWrap.className = 'calendar-task-title-wrap';
+                    const title = document.createElement('span');
+                    title.className = 'calendar-task-title';
+                    title.textContent = item.title || 'Item';
+                    titleWrap.appendChild(title);
+                    const points = document.createElement('span');
+                    points.className = 'calendar-task-points';
+                    points.textContent = `${item.points || 0} pts`;
+                    const badge = buildBadge(item, useTextDual);
+                    header.appendChild(titleWrap);
+                    header.appendChild(points);
+                    if (badge) {
+                        header.appendChild(badge);
+                    }
+                    wrapper.appendChild(header);
+                    if (item.time_label) {
+                        const meta = document.createElement('span');
+                        meta.className = 'calendar-task-meta';
+                        const metaIcon = document.createElement('i');
+                        metaIcon.className = 'fa-solid fa-clock';
+                        meta.appendChild(metaIcon);
+                        meta.appendChild(document.createTextNode(` ${item.time_label}`));
+                        wrapper.appendChild(meta);
+                    }
+                    return wrapper;
+                };
+
+                const renderList = (weekDates) => {
+                    if (!listWrap) return 0;
+                    listWrap.innerHTML = '';
+                    const todayKey = formatDateKey(new Date());
+                    let totalItems = 0;
+                    const sections = [
+                        { key: 'anytime', label: 'Due Today' },
+                        { key: 'morning', label: 'Morning' },
+                        { key: 'afternoon', label: 'Afternoon' },
+                        { key: 'evening', label: 'Evening' }
+                    ];
+                    weekDates.forEach(({ date, dateKey }) => {
+                        const items = (schedule[dateKey] || []).slice();
+                        items.sort((a, b) => {
+                            const timeA = a.time || '99:99';
+                            const timeB = b.time || '99:99';
+                            const timeCompare = timeA.localeCompare(timeB);
+                            if (timeCompare !== 0) return timeCompare;
+                            return String(a.title || '').localeCompare(String(b.title || ''));
+                        });
+                        totalItems += items.length;
+                        const dayCard = document.createElement('div');
+                        dayCard.className = `week-list-day${dateKey === todayKey ? ' is-today' : ''}`;
+                        const header = document.createElement('div');
+                        header.className = 'week-list-day-header';
+                        const name = document.createElement('span');
+                        name.className = 'week-list-day-name';
+                        name.textContent = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][date.getDay()];
+                        const dateLabel = document.createElement('span');
+                        dateLabel.className = 'week-list-day-date';
+                        dateLabel.textContent = date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+                        header.appendChild(name);
+                        header.appendChild(dateLabel);
+                        dayCard.appendChild(header);
+                        const sectionsWrap = document.createElement('div');
+                        sectionsWrap.className = 'week-list-sections';
+                        sections.forEach((section) => {
+                            const sectionItems = items.filter((entry) => (entry.time_of_day || 'anytime') === section.key);
+                            if (!sectionItems.length) return;
+                            const sectionWrap = document.createElement('div');
+                            const sectionTitle = document.createElement('div');
+                            sectionTitle.className = 'week-list-section-title';
+                            sectionTitle.textContent = section.label;
+                            const itemsWrap = document.createElement('div');
+                            itemsWrap.className = 'week-list-items';
+                            sectionItems.forEach((entry) => {
+                                itemsWrap.appendChild(buildTaskItem(entry, true));
+                            });
+                            sectionWrap.appendChild(sectionTitle);
+                            sectionWrap.appendChild(itemsWrap);
+                            sectionsWrap.appendChild(sectionWrap);
+                        });
+                        if (!sectionsWrap.childElementCount) {
+                            const empty = document.createElement('div');
+                            empty.className = 'week-list-empty';
+                            empty.textContent = 'No tasks or routines';
+                            dayCard.appendChild(empty);
+                        } else {
+                            dayCard.appendChild(sectionsWrap);
+                        }
+                        listWrap.appendChild(dayCard);
+                    });
+                    return totalItems;
+                };
+
+                const renderWeek = () => {
+                    if (!weekDaysEl || !weekGridEl) return;
+                    weekDaysEl.innerHTML = '';
+                    weekGridEl.innerHTML = '';
+                    const weekDates = [];
+                    const todayKey = formatDateKey(new Date());
+                    for (let i = 0; i < 7; i += 1) {
+                        const date = addDays(currentWeekStart, i);
+                        const dateKey = formatDateKey(date);
+                        weekDates.push({ date, dateKey });
+                        const dayCell = document.createElement('div');
+                        dayCell.className = `week-day${dateKey === todayKey ? ' is-today' : ''}`;
+                        const nameSpan = document.createElement('span');
+                        nameSpan.className = 'week-day-name';
+                        nameSpan.textContent = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][date.getDay()];
+                        const numSpan = document.createElement('span');
+                        numSpan.className = 'week-day-num';
+                        numSpan.textContent = date.getDate();
+                        dayCell.appendChild(nameSpan);
+                        dayCell.appendChild(numSpan);
+                        weekDaysEl.appendChild(dayCell);
+                    }
+                    let totalItems = 0;
+                    weekDates.forEach(({ dateKey }) => {
+                        const items = (schedule[dateKey] || []).slice();
+                        items.sort((a, b) => {
+                            const timeA = a.time || '99:99';
+                            const timeB = b.time || '99:99';
+                            const timeCompare = timeA.localeCompare(timeB);
+                            if (timeCompare !== 0) return timeCompare;
+                            return String(a.title || '').localeCompare(String(b.title || ''));
+                        });
+                        totalItems += items.length;
+                        const column = document.createElement('div');
+                        column.className = 'week-column';
+                        const list = document.createElement('div');
+                        list.className = 'week-column-tasks';
                         if (!items.length) {
-                            return '';
+                            const empty = document.createElement('div');
+                            empty.className = 'calendar-day-empty';
+                            empty.textContent = 'No items';
+                            list.appendChild(empty);
+                        } else {
+                            items.forEach((entry) => {
+                                list.appendChild(buildTaskItem(entry, false));
+                            });
                         }
-                        const label = new Date(dateKey + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
-                        const sections = [
-                            { key: 'anytime', label: 'Due Today' },
-                            { key: 'morning', label: 'Morning' },
-                            { key: 'afternoon', label: 'Afternoon' },
-                            { key: 'evening', label: 'Evening' }
-                        ];
-                    const buildItem = (item) => {
-                        let badge = '';
-                        if (item.completed) {
-                            badge = '<span class="child-schedule-badge"><i class="fa-solid fa-check"></i>Done</span>';
-                        } else if (item.overdue) {
-                            badge = '<span class="child-schedule-badge overdue"><i class="fa-solid fa-triangle-exclamation"></i>Overdue</span>';
-                        }
-                        const wrapperStart = item.link
-                            ? '<a class="child-schedule-item" href="' + item.link + '">'
-                            : '<div class="child-schedule-item">';
-                        const wrapperEnd = item.link ? '</a>' : '</div>';
-                        return '<li>' +
-                            wrapperStart +
-                            '<div class="child-schedule-main">' +
-                            '<i class="' + item.icon + '"></i>' +
-                            '<div>' +
-                            '<div class="child-schedule-title">' + item.title + badge + '</div>' +
-                            '<div class="child-schedule-time">' + item.time_label + '</div>' +
-                            '</div>' +
-                            '</div>' +
-                            '<div class="child-schedule-points">' + item.points + ' pts</div>' +
-                            wrapperEnd +
-                            '</li>';
-                    };
-                        const sectionsHtml = sections.map((section) => {
-                            const sectionItems = items.filter((item) => item.time_of_day === section.key);
-                            if (!sectionItems.length) {
-                                return '';
-                            }
-                            return '<div class="child-schedule-section">' +
-                                '<div class="child-schedule-section-title">' + section.label + '</div>' +
-                                '<ul class="child-schedule-section-list">' + sectionItems.map(buildItem).join('') + '</ul>' +
-                                '</div>';
-                        }).join('');
-                        if (!sectionsHtml) {
-                            return '';
-                        }
-                        const isToday = dateKey === todayKey ? ' is-today' : '';
-                        return '<div class="week-day-group' + isToday + '">' +
-                            '<div class="week-day-title">' + label + '</div>' +
-                            sectionsHtml +
-                            '</div>';
-                    }).join('') || '<p>No tasks or routines this week.</p>';
-                }
+                        column.appendChild(list);
+                        weekGridEl.appendChild(column);
+                    });
+                    if (weekRangeEl) {
+                        weekRangeEl.textContent = formatWeekRange(currentWeekStart);
+                    }
+                    if (emptyEl) {
+                        emptyEl.classList.toggle('active', totalItems === 0);
+                    }
+                    renderList(weekDates);
+                };
+
+                viewButtons.forEach((btn) => {
+                    btn.addEventListener('click', () => {
+                        const view = btn.getAttribute('data-calendar-view');
+                        setView(view);
+                    });
+                });
+                navButtons.forEach((btn) => {
+                    btn.addEventListener('click', () => {
+                        const delta = parseInt(btn.getAttribute('data-week-nav'), 10);
+                        if (Number.isNaN(delta)) return;
+                        currentWeekStart = addDays(currentWeekStart, delta * 7);
+                        renderWeek();
+                    });
+                });
+
+                setView(currentView);
+                renderWeek();
                 weekModal.classList.add('open');
                 document.body.classList.add('modal-open');
             };
@@ -1651,12 +1965,28 @@ $getScheduleDueStamp = static function ($dateKey, $timeOfDay, $timeValue) {
                <div class="children-overview-grid">
                <?php foreach ($data['children'] as $child): ?>
                   <?php
-                     $childId = (int) ($child['child_user_id'] ?? 0);
-                     $weekSchedule = [];
-                     foreach ($weekDates as $dateKey) {
-                        $weekSchedule[$dateKey] = [];
+                   $childId = (int) ($child['child_user_id'] ?? 0);
+                   $routineCompletionByDate = [];
+                   $routineLogStmt = $db->prepare("SELECT routine_id, DATE(created_at) AS date_key, MAX(created_at) AS completed_at
+                       FROM routine_points_logs
+                       WHERE child_user_id = :child_id
+                       GROUP BY routine_id, DATE(created_at)");
+                   $routineLogStmt->execute([':child_id' => $childId]);
+                   foreach ($routineLogStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                      $rid = (int) ($row['routine_id'] ?? 0);
+                      $dateKey = $row['date_key'] ?? null;
+                      if ($rid > 0 && $dateKey) {
+                         if (!isset($routineCompletionByDate[$rid])) {
+                            $routineCompletionByDate[$rid] = [];
+                         }
+                         $routineCompletionByDate[$rid][$dateKey] = $row['completed_at'];
+                      }
+                   }
+                   $weekSchedule = [];
+                   foreach ($weekDates as $dateKey) {
+                     $weekSchedule[$dateKey] = [];
                      }
-                     $taskStmt = $db->prepare("SELECT id, title, points, due_date, end_date, recurrence, recurrence_days, time_of_day, status FROM tasks WHERE child_user_id = :child_id AND due_date IS NOT NULL AND DATE(due_date) <= :end");
+                      $taskStmt = $db->prepare("SELECT id, title, points, due_date, end_date, recurrence, recurrence_days, time_of_day, status, completed_at, approved_at FROM tasks WHERE child_user_id = :child_id AND due_date IS NOT NULL AND DATE(due_date) <= :end");
                      $taskStmt->execute([
                         ':child_id' => $childId,
                         ':end' => $weekEnd->format('Y-m-d')
@@ -1667,25 +1997,28 @@ $getScheduleDueStamp = static function ($dateKey, $timeOfDay, $timeValue) {
                         $taskIds = array_values(array_filter(array_map(static function ($row) {
                            return (int) ($row['id'] ?? 0);
                         }, $taskRows)));
-                        if (!empty($taskIds)) {
-                           $placeholders = implode(',', array_fill(0, count($taskIds), '?'));
-                           $instanceStmt = $db->prepare("SELECT task_id, date_key, status FROM task_instances WHERE task_id IN ($placeholders) AND date_key BETWEEN ? AND ?");
-                           $params = $taskIds;
-                           $params[] = $weekStart->format('Y-m-d');
-                           $params[] = $weekEnd->format('Y-m-d');
-                           $instanceStmt->execute($params);
-                           foreach ($instanceStmt->fetchAll(PDO::FETCH_ASSOC) as $instanceRow) {
-                              $tid = (int) $instanceRow['task_id'];
-                              $dateKey = $instanceRow['date_key'];
-                              if (!$dateKey) {
-                                 continue;
-                              }
-                              if (!isset($taskInstanceMap[$tid])) {
-                                 $taskInstanceMap[$tid] = [];
-                              }
-                              $taskInstanceMap[$tid][$dateKey] = $instanceRow['status'] ?? null;
-                           }
-                        }
+                         if (!empty($taskIds)) {
+                            $placeholders = implode(',', array_fill(0, count($taskIds), '?'));
+                            $instanceStmt = $db->prepare("SELECT task_id, date_key, status, completed_at FROM task_instances WHERE task_id IN ($placeholders) AND date_key BETWEEN ? AND ?");
+                            $params = $taskIds;
+                            $params[] = $weekStart->format('Y-m-d');
+                            $params[] = $weekEnd->format('Y-m-d');
+                            $instanceStmt->execute($params);
+                            foreach ($instanceStmt->fetchAll(PDO::FETCH_ASSOC) as $instanceRow) {
+                               $tid = (int) $instanceRow['task_id'];
+                               $dateKey = $instanceRow['date_key'];
+                               if (!$dateKey) {
+                                  continue;
+                               }
+                               if (!isset($taskInstanceMap[$tid])) {
+                                  $taskInstanceMap[$tid] = [];
+                               }
+                               $taskInstanceMap[$tid][$dateKey] = [
+                                  'status' => $instanceRow['status'] ?? null,
+                                  'completed_at' => $instanceRow['completed_at'] ?? null
+                               ];
+                            }
+                         }
                      }
                      foreach ($taskRows as $row) {
                         $timeOfDay = $row['time_of_day'] ?? 'anytime';
@@ -1727,18 +2060,27 @@ $getScheduleDueStamp = static function ($dateKey, $timeOfDay, $timeValue) {
                                  continue;
                               }
                            }
-                           $instanceStatus = $taskInstanceMap[(int) ($row['id'] ?? 0)][$dateKey] ?? null;
+                           $instanceData = $taskInstanceMap[(int) ($row['id'] ?? 0)][$dateKey] ?? null;
+                           $instanceStatus = is_array($instanceData) ? ($instanceData['status'] ?? null) : $instanceData;
+                           $instanceCompletedAt = is_array($instanceData) ? ($instanceData['completed_at'] ?? null) : null;
                            $completedFlag = false;
                            $rejectedFlag = false;
+                           $completedStamp = null;
                            if (empty($repeat)) {
                               $completedFlag = in_array(($row['status'] ?? ''), ['completed', 'approved'], true);
+                              $completedStamp = $row['completed_at'] ?? $row['approved_at'] ?? null;
                            } elseif ($instanceStatus) {
                               $completedFlag = in_array($instanceStatus, ['completed', 'approved'], true);
                               $rejectedFlag = $instanceStatus === 'rejected';
+                              $completedStamp = $instanceCompletedAt;
                            }
                            $overdueFlag = false;
-                           if (!$completedFlag && !$rejectedFlag) {
-                              $dueStamp = $getScheduleDueStamp($dateKey, $timeOfDay, $dueTimeValue);
+                           $dueStamp = $getScheduleDueStamp($dateKey, $timeOfDay, $dueTimeValue);
+                           if ($completedFlag) {
+                              if ($completedStamp && $dueStamp !== null && strtotime($completedStamp) > $dueStamp) {
+                                 $overdueFlag = true;
+                              }
+                           } elseif (!$rejectedFlag) {
                               if ($dueStamp !== null && $dueStamp < $nowTs && $dateKey <= $todayKey) {
                                  $overdueFlag = true;
                               }
@@ -1804,14 +2146,21 @@ $getScheduleDueStamp = static function ($dateKey, $timeOfDay, $timeValue) {
                                 continue;
                              }
                           }
-                          $completedFlag = $isRoutineCompletedOnDate($routine, $dateKey);
-                          $overdueFlag = false;
-                          if (!$completedFlag) {
-                             $dueStamp = $getScheduleDueStamp($dateKey, $timeOfDay, $startTimeValue);
-                             if ($dueStamp !== null && $dueStamp < $nowTs && $dateKey <= $todayKey) {
-                                $overdueFlag = true;
-                             }
-                          }
+                           $routineId = (int) ($routine['id'] ?? 0);
+                           $completedStamp = $routineCompletionByDate[$routineId][$dateKey] ?? null;
+                           $completedFlag = $completedStamp ? true : $isRoutineCompletedOnDate($routine, $dateKey, $routineCompletionByDate);
+                           $overdueFlag = false;
+                           if (!$completedFlag) {
+                              $dueStamp = $getScheduleDueStamp($dateKey, $timeOfDay, $startTimeValue);
+                              if ($dueStamp !== null && $dueStamp < $nowTs && $dateKey <= $todayKey) {
+                                 $overdueFlag = true;
+                              }
+                           } else {
+                              $dueStamp = $getScheduleDueStamp($dateKey, $timeOfDay, $startTimeValue);
+                              if ($completedStamp && $dueStamp !== null && strtotime($completedStamp) > $dueStamp) {
+                                 $overdueFlag = true;
+                              }
+                           }
                           $weekSchedule[$dateKey][] = [
                              'id' => (int) ($routine['id'] ?? 0),
                              'title' => $routine['title'],
@@ -2040,11 +2389,16 @@ $getScheduleDueStamp = static function ($dateKey, $timeOfDay, $timeValue) {
                                                     <div>
                                                        <div class="child-schedule-title">
                                                           <?php echo htmlspecialchars($item['title']); ?>
-                                                          <?php if (!empty($item['completed'])): ?>
-                                                             <span class="child-schedule-badge"><i class="fa-solid fa-check"></i>Done</span>
-                                                          <?php elseif (!empty($item['overdue'])): ?>
-                                                             <span class="child-schedule-badge overdue"><i class="fa-solid fa-triangle-exclamation"></i>Overdue</span>
-                                                          <?php endif; ?>
+                                                            <?php if (!empty($item['completed']) && !empty($item['overdue'])): ?>
+                                                              <span class="child-schedule-badge-group">
+                                                                <span class="child-schedule-badge compact" title="Done"><i class="fa-solid fa-check"></i></span>
+                                                                <span class="child-schedule-badge overdue compact" title="Overdue"><i class="fa-solid fa-triangle-exclamation"></i></span>
+                                                              </span>
+                                                            <?php elseif (!empty($item['completed'])): ?>
+                                                              <span class="child-schedule-badge" title="Done"><i class="fa-solid fa-check"></i>Done</span>
+                                                            <?php elseif (!empty($item['overdue'])): ?>
+                                                              <span class="child-schedule-badge overdue" title="Overdue"><i class="fa-solid fa-triangle-exclamation"></i>Overdue</span>
+                                                            <?php endif; ?>
                                                        </div>
                                                        <div class="child-schedule-time"><?php echo htmlspecialchars($item['time_label']); ?></div>
                                                     </div>
