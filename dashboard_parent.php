@@ -846,6 +846,7 @@ if (isset($_GET['week_schedule'])) {
         .child-schedule-item { display: flex; align-items: center; justify-content: space-between; gap: 10px; background: #f9f9f9; border-radius: 8px; padding: 8px 10px; text-decoration: none; color: inherit; cursor: pointer; width: 100%; }
         .child-schedule-item:hover { background: #f0f0f0; }
         .child-schedule-main { display: flex; align-items: center; gap: 8px; }
+        .child-schedule-main>i { color: #919191; }
         .child-schedule-title { font-weight: 600; color: #3e2723; }
         .child-schedule-time { color: #6d4c41; font-size: 0.9rem; }
         .child-schedule-points { font-weight: 700; color: #2e7d32; white-space: nowrap; }
@@ -913,7 +914,7 @@ if (isset($_GET['week_schedule'])) {
         .week-modal .calendar-task-badge-group { display: inline-flex; align-items: center; gap: 5px; }
         .week-modal .calendar-task-title { font-weight: 700; color: #3e2723; }
         .week-modal .calendar-task-points { color: #fff; font-size: 0.7rem; font-weight: 700; border-radius: 50px; background-color: #ffc224; padding: 2px 8px; }
-        .week-modal .calendar-task-meta { color: #6d4c41; font-size: 0.85rem; }
+        .week-modal .calendar-task-meta { color: #919191; font-size: 0.85rem; }
         .week-modal .calendar-day-empty { color: #9e9e9e; font-size: 0.85rem; text-align: center; padding: 8px 0; }
         .week-modal .calendar-empty { display: none; text-align: center; color: #9e9e9e; font-weight: 600; padding: 18px; }
         .week-modal .calendar-empty.active { display: block; }

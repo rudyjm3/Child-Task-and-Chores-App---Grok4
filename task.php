@@ -494,7 +494,7 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
             border-radius: 5px;
             cursor: pointer;
         }
-        .button.secondary { background: #607d8b; }
+        .button.secondary { background: #619fd0; }
         .button.danger { background: #e53935; }
         /* Improved task card styling for spacing and readability */
         .task-card {
@@ -506,6 +506,7 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
         .task-card-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
+        .task-card-title-wrapper { flex: 1; text-align: left; }
         .task-card-title { font-weight: 700; font-size: 1.2rem; color: #37474f; }
         .task-pill { background-color: #ffc224; color: #fff; padding: 2px 8px; border-radius: 50px; font-size: 0.7rem; font-weight: 700; white-space: nowrap; }
         .task-meta { display: grid; gap: 4px; color: #455a64; font-size: 0.95rem; }
@@ -2298,9 +2299,12 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
             const header = document.createElement('div');
             header.className = 'task-card-header';
 
-            const title = document.createElement('div');
-            title.className = 'task-card-title';
-            title.textContent = task.title || 'Task';
+              const titleWrapper = document.createElement('div');
+              titleWrapper.className = 'task-card-title-wrapper';
+              const title = document.createElement('div');
+              title.className = 'task-card-title';
+              title.textContent = task.title || 'Task';
+              titleWrapper.appendChild(title);
 
             const points = document.createElement('div');
             points.className = 'task-pill';
@@ -2341,7 +2345,7 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                 badge.textContent = 'Overdue';
             }
 
-            header.appendChild(title);
+              header.appendChild(titleWrapper);
             header.appendChild(points);
             if (badge) {
                 header.appendChild(badge);

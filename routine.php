@@ -1140,8 +1140,8 @@ margin-bottom: 20px;}
         .routine-card-actions .button { flex: 1 1 45%; min-width: 0; text-align: center; }
         .routine-card-title-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
         .routine-action-icons { display: inline-flex; gap: 8px; align-items: center; }
-        .icon-button { width: 36px; height: 36px; border: none; background: transparent; color: #9f9f9f; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
-        .icon-button.danger { color: #9f9f9f; }
+        .icon-button { width: 36px; height: 36px; border: none; background: transparent; color: #919191; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+        .icon-button.danger { color: #919191; }
         .collapsible-card { border: none; margin: 12px 0 0; padding: 0; }
         .collapsible-card summary { list-style: none; }
         .collapsible-card summary::-webkit-details-marker,
@@ -1368,7 +1368,7 @@ margin-bottom: 20px;}
         .library-form small { font-size: 0.78rem; color: #607d8b; }
         .dual-inputs { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 14px; }
         .form-actions { margin-top: 10px; display: flex; justify-content: flex-end; }
-        .button.primary { background: linear-gradient(135deg, #2196f3, #42a5f5); color: #fff; border: none; padding: 10px 20px; border-radius: 10px; font-weight: 700; cursor: pointer; transition: transform 140ms ease, box-shadow 140ms ease; }
+        .button.primary { background: linear-gradient(135deg, #619fd0, #42a5f5); color: #fff; border: none; padding: 10px 20px; border-radius: 10px; font-weight: 700; cursor: pointer; transition: transform 140ms ease, box-shadow 140ms ease; }
         .button.primary:hover { transform: translateY(-1px); box-shadow: 0 6px 16px rgba(33,150,243,0.35); }
         .library-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }
         .library-filters { display: inline-flex; align-items: center; gap: 10px; font-weight: 600; color: #37474f; }
@@ -1429,13 +1429,13 @@ margin-bottom: 20px;}
         .routine-action-bar { display: flex; justify-content: flex-end; align-items: center; gap: 10px; margin: 10px 0 18px; }
         .routine-create-button { width: 52px; height: 52px; border-radius: 50%; border: none; background: #ff9800; color: #fff; display: inline-flex; align-items: center; justify-content: center; font-size: 1.4rem; cursor: pointer; box-shadow: 0 6px 14px rgba(255, 152, 0, 0.35); }
         .routine-create-button:hover { background: #fb8c00; }
-        .routine-pref-button { border: none; background: transparent; color: #9f9f9f; font-size: 1.4rem; cursor: pointer; padding: 6px; }
+        .routine-pref-button { border: none; background: transparent; color: #919191; font-size: 1.4rem; cursor: pointer; padding: 6px; }
         .routine-pref-button:hover { color: #7a7a7a; }
         .routine-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: none; align-items: center; justify-content: center; z-index: 4200; padding: 14px; }
         .routine-modal.open { display: flex; }
         body.modal-open { overflow: hidden; }
         .routine-modal-card { background: #fff; border-radius: 14px; max-width: 920px; width: min(920px, 100%); max-height: 90vh; overflow: hidden; box-shadow: 0 12px 32px rgba(0,0,0,0.25); display: grid; grid-template-rows: auto 1fr; }
-        .routine-modal-card header { display: flex; align-items: center; justify-content: space-between; font-weight: 600; padding: 12px 16px; border-bottom: 1px solid #e0e0e0; }
+        .routine-modal-card header { display: flex; align-items: center; justify-content: space-between; flex-direction: row;font-weight: 600; padding: 12px 16px; border-bottom: 1px solid #e0e0e0; }
         .routine-modal-card h2 { margin: 0; font-size: 1.1rem; }
         .routine-modal-close { background: transparent; border: none; font-size: 1.3rem; font-weight: 600; cursor: pointer; color: #555; }
         .routine-modal-body { padding: 12px 16px 18px; overflow-y: auto; }

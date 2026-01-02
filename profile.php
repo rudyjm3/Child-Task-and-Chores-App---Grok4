@@ -361,7 +361,7 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
         .parent-profile { 
-            background: #f9f9f9;
+            background: #fff;
             border-radius: 10px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }

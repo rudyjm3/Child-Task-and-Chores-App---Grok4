@@ -911,7 +911,7 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
         .input-error { border-color: #d32f2f !important; box-shadow: 0 0 0 2px rgba(211, 47, 47, 0.2); }
         .form-error { color: #d32f2f; font-weight: 700; margin-bottom: 8px; }
         .child-select-grid.input-error { outline: 2px solid #d32f2f; border-radius: 12px; padding: 6px; }
-        .icon-button { width: 36px; height: 36px; border: none; background: transparent; color: #9f9f9f; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+        .icon-button { width: 36px; height: 36px; border: none; background: transparent; color: #919191; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
         /* .icon-button:hover { background: rgba(0,0,0,0.06); color: #37474f; } */
         .icon-button:hover {color: #7a7a7a; }
         /* .icon-button.danger { color: #d32f2f; }

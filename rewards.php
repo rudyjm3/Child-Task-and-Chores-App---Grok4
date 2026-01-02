@@ -220,7 +220,7 @@ foreach ($activeRewards as $reward) {
         .template-grid { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-start; }
         .template-card { flex: 1 1 285px; border: 1px solid #e0e4ee; border-radius: 10px; padding: 14px; background: #fff; box-shadow: 0 2px 6px rgba(0,0,0,0.05); display: grid; gap: 10px; position: relative; max-width: 288px; }
         .template-actions { display: flex; gap: 8px; justify-content: flex-start; flex-wrap: wrap; align-items: center; }
-        .template-icon-button { border: none; background: transparent; color: #9f9f9f; padding: 6px 8px; border-radius: 8px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+        .template-icon-button { border: none; background: transparent; color: #919191; padding: 6px 8px; border-radius: 8px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
         .template-icon-button:hover { background: rgba(0,0,0,0.04); color: #7a7a7a; }
         .template-icon-button.danger { color: #9f9f9f; }
         .template-icon-button.danger:hover { background: rgba(0,0,0,0.04); color: #7a7a7a; }
@@ -257,9 +257,9 @@ foreach ($activeRewards as $reward) {
         .reward-card { gap: 8px; width: 100%; max-width: none; }
         .reward-card-header { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
         .reward-actions { display: inline-flex; gap: 8px; }
-        .icon-button { border: none; background: transparent; cursor: pointer; color: #9f9f9f; padding: 6px 8px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; }
+        .icon-button { border: none; background: transparent; cursor: pointer; color: #919191; padding: 6px 8px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; }
         .icon-button:hover { background: rgba(0,0,0,0.04); color: #7a7a7a; }
-        .icon-button.danger { color: #9f9f9f; }
+        .icon-button.danger { color: #919191; }
         .icon-button.danger:hover { background: rgba(0,0,0,0.04); color: #7a7a7a; }
         .add-child-reward-btn { border: none; background: transparent; cursor: pointer; color: #1565c0; padding: 6px 10px; border-radius: 8px; display: inline-flex; align-items: center; gap: 8px; font-weight: 700; }
         .add-child-reward-btn:hover { background: rgba(21,101,192,0.08); color: #0d47a1; }
