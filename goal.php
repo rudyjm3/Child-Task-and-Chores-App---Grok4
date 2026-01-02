@@ -892,15 +892,15 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
         .goal-routine-badges { display: flex; flex-wrap: wrap; gap: 6px; }
         .goal-routine-badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; background: #f2f5f9; color: #37474f; font-weight: 700; font-size: 0.82rem; }
         .goal-routine-count { display: inline-flex; align-items: center; justify-content: center; min-width: 22px; padding: 2px 8px; border-radius: 999px; background: #1565c0; color: #fff; font-weight: 700; font-size: 0.78rem; }
-        .goal-card-header { display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 8px; }
-        .goal-card-title-text { font-size: 1.2rem; font-weight: 600; text-align: center; margin: 0; }
+        .goal-card-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
+        .goal-card-title-text { font-size: 1.2rem; font-weight: 600; text-align: left; margin: 0; }
         .goal-status-badge { color: #f9f9f9; font-weight: 600; font-size: 0.9rem; letter-spacing: 2px; border-radius: 50px; padding: 5px 10px; margin-left: 1%; box-shadow: 0px 2px 6px rgba(0, 0, 0, 0.4); }
         .goal-status-badge.active { background-color: #1db41d; }
         .goal-status-badge.completed { background-color: #607d8b; }
         .goal-status-badge.rejected { background-color: #d32f2f; }
         .goal-info-row { display: flex; flex-wrap: wrap; gap: 6px; }
         .goal-info-label { font-weight: 700; color: #919191; display: inline-flex; align-items: center; margin-right: 6px; }
-        .goal-assignee { text-align: center; margin-top: 10px; }
+        .goal-assignee { text-align: left; margin-top: 0; }
         .goal-description { text-align: left; }
         .goal-info-row { text-align: left; }
         .goal-task-tracked { text-align: left; display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; background: #eef4ff; color: #0d47a1; font-weight: 700; font-size: 0.85rem; }
@@ -986,6 +986,7 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
         .edit-delete a:hover {
             text-decoration: underline;
         }
+        .edit-delete { display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px; }
         .reject-comment {
             margin-top: 10px;
         }
@@ -1136,6 +1137,9 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                                     <?php if (!empty($goal['creator_display_name'])): ?>
                                         <p class="goal-info-row"><span class="goal-info-label"><i class="fa-solid fa-user-pen"></i></span><?php echo htmlspecialchars($goal['creator_display_name']); ?></p>
                                     <?php endif; ?>
+                                    <?php if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])): ?>
+                                        <div class="goal-info-row goal-assignee"><span class="goal-info-label"><i class="fa-solid fa-user"></i></span><?php echo htmlspecialchars($goal['child_display_name']); ?></div>
+                                    <?php endif; ?>
                                     <div class="goal-progress">
                                         <div class="goal-progress-header">
                                             <span><?php echo htmlspecialchars($goalTypeLabel); ?></span>
@@ -1182,7 +1186,6 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                                         </div>
                                     </div>
                                     <?php if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])): ?>
-                                        <p class="goal-assignee"><span class="goal-info-label"><i class="fa-solid fa-user"></i></span><?php echo htmlspecialchars($goal['child_display_name']); ?></p>
                                         <?php if ($goal['status'] === 'pending_approval'): ?>
                                             <form method="POST" action="goal.php">
                                                 <input type="hidden" name="goal_id" value="<?php echo $goal['id']; ?>">
@@ -1256,6 +1259,9 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                             <?php if (!empty($goal['creator_display_name'])): ?>
                                 <p class="goal-info-row"><span class="goal-info-label"><i class="fa-solid fa-user-pen"></i></span><?php echo htmlspecialchars($goal['creator_display_name']); ?></p>
                             <?php endif; ?>
+                            <?php if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])): ?>
+                                <div class="goal-info-row goal-assignee"><span class="goal-info-label"><i class="fa-solid fa-user"></i></span><?php echo htmlspecialchars($goal['child_display_name']); ?></div>
+                            <?php endif; ?>
                             <div class="goal-progress">
                                 <div class="goal-progress-header">
                                     <span><?php echo htmlspecialchars($goalTypeLabel); ?></span>
@@ -1265,9 +1271,6 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                                 <span style="width: 100%;"></span>
                             </div>
                             </div>
-                            <?php if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])): ?>
-                                <p class="goal-assignee"><span class="goal-info-label"><i class="fa-solid fa-user"></i></span><?php echo htmlspecialchars($goal['child_display_name']); ?></p>
-                            <?php endif; ?>
                         </div>
                     <?php endforeach; ?>
                         <?php endif; ?>
@@ -1295,10 +1298,12 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                                     <?php if (!empty($goal['creator_display_name'])): ?>
                                         <p class="goal-info-row"><span class="goal-info-label"><i class="fa-solid fa-user-pen"></i></span><?php echo htmlspecialchars($goal['creator_display_name']); ?></p>
                                     <?php endif; ?>
+                                    <?php if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])): ?>
+                                        <div class="goal-info-row goal-assignee"><span class="goal-info-label"><i class="fa-solid fa-user"></i></span><?php echo htmlspecialchars($goal['child_display_name']); ?></div>
+                                    <?php endif; ?>
                                     <p class="goal-info-row"><span class="goal-info-label"><i class="fa-regular fa-calendar-days"></i></span><?php echo htmlspecialchars($goal['rejected_at_formatted']); ?></p>
                                     <p class="goal-info-row"><span class="goal-info-label"><i class="fa-solid fa-comment"></i></span><?php echo htmlspecialchars($goal['rejection_comment'] ?? 'No comments available.'); ?></p>
                                     <?php if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])): ?>
-                                        <p class="goal-assignee"><span class="goal-info-label"><i class="fa-solid fa-user"></i></span><?php echo htmlspecialchars($goal['child_display_name']); ?></p>
                                         <form method="POST" action="goal.php">
                                             <input type="hidden" name="goal_id" value="<?php echo $goal['id']; ?>">
                                             <button type="submit" name="reactivate_goal" class="button">Reactivate</button>

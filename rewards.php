@@ -225,6 +225,7 @@ foreach ($activeRewards as $reward) {
         .template-icon-button.danger { color: #9f9f9f; }
         .template-icon-button.danger:hover { background: rgba(0,0,0,0.04); color: #7a7a7a; }
         .badge { display: inline-block; background: #e3f2fd; color: #0d47a1; padding: 4px 8px; border-radius: 12px; font-size: 0.85em; }
+        [data-child-active-list] .badge { background: #ffc224; color: #fff; font-weight: 600; }
         .message { background: #e8f5e9; color: #2e7d32; border: 1px solid #c8e6c9; padding: 10px 12px; border-radius: 6px; margin-bottom: 10px; }
         .recent-list { display: grid; gap: 8px; }
         .recent-item { border: 1px solid #eceff4; border-radius: 8px; padding: 10px; background: #fff; display: flex; justify-content: space-between; gap: 10px; }

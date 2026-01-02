@@ -1050,6 +1050,7 @@ display: flex; flex-wrap: wrap; align-items: center; justify-content: space-betw
 margin-bottom: 20px;}
         .routine-section-header h2 { margin: 0; /*color: #f5f7fa;*/ font-size: 1.2rem; letter-spacing: 0.02em; }
         .routine-header-actions { display: inline-flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+        .routine-view-row { display: flex; justify-content: flex-start; align-items: center; margin-bottom: 12px; }
         .routine-view-toggle { display: inline-flex; align-items: center; gap: 6px; padding: 4px; border-radius: 999px; border: 1px solid #d5def0; background: #f5f7fb; }
         .routine-view-button { width: 36px; height: 36px; border: none; border-radius: 50%; background: transparent; color: #607d8b; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
         .routine-view-button.active { background: #0d47a1; color: #fff; box-shadow: 0 4px 10px rgba(13, 71, 161, 0.2); }
@@ -1101,11 +1102,12 @@ margin-bottom: 20px;}
         .selected-task-item.error { border-color: #f44336; }
         .drag-handle { cursor: grab; font-size: 1.2rem; color: #9e9e9e; }
         .task-meta { font-size: 0.85rem; color: #616161; }
-        .task-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.65); display: flex; align-items: center; justify-content: center; padding: 20px; z-index: 2000; opacity: 0; pointer-events: none; transition: opacity 200ms ease; }
+        .task-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.65); display: flex; align-items: center; justify-content: center; padding: 20px; z-index: 4400; opacity: 0; pointer-events: none; transition: opacity 200ms ease; }
         .task-modal-overlay.active { opacity: 1; pointer-events: auto; }
-        .task-modal { background: #fff; border-radius: 14px; max-width: 520px; width: min(520px, 100%); max-height: 90vh; overflow-y: auto; padding: 28px; position: relative; box-shadow: 0 18px 36px rgba(0,0,0,0.25); }
+        .task-modal { background: #fff; border-radius: 14px; max-width: 520px; width: min(520px, 100%); max-height: 90vh; overflow: hidden; padding: 28px; position: relative; box-shadow: 0 18px 36px rgba(0,0,0,0.25); display: flex; flex-direction: column; }
         .task-modal h3 { margin-top: 0; }
         .task-modal-close { position: absolute; top: 12px; right: 12px; border: none; background: transparent; font-size: 1.5rem; line-height: 1; cursor: pointer; color: #455a64; }
+        .task-modal .library-form { overflow-y: auto; flex: 1 1 auto; padding-right: 4px; }
         .summary-row { display: flex; flex-wrap: wrap; gap: 16px; font-weight: 600; margin-top: 12px; }
         .summary-row .warning { color: #c62828; }
         .library-card-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin: 12px auto 0; }
@@ -1118,11 +1120,11 @@ margin-bottom: 20px;}
         .library-task-card { background: #fff; border: 1px solid #e0e0e0; border-radius: 10px; padding: 16px; display: flex; flex-direction: column; gap: 10px; box-shadow: 0 2px 6px rgba(0,0,0,0.05); }
         .library-task-card header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
         .library-task-card h4 { margin: 0; font-size: 1.1rem; }
-        .library-task-points { font-weight: 700; color: #1e88e5; }
+        .library-task-points { background-color: #ffc224; color: #fff; padding: 2px 8px; border-radius: 50px; font-size: 0.7rem; font-weight: 700; white-space: nowrap; }
         .library-task-description { margin: 0; font-size: 0.9rem; color: #546e7a; }
         .library-task-meta { display: flex; flex-wrap: wrap; gap: 8px; font-size: 0.85rem; color: #37474f; }
         .library-task-meta span { background: #f0f4f7; border-radius: 999px; padding: 4px 10px; }
-        .library-task-actions { margin-top: auto; display: flex; flex-direction: column; gap: 8px; }
+        .library-task-actions { margin-top: auto; display: inline-flex; gap: 8px; align-items: center; align-self: flex-end; }
         .routine-card { border: 1px solid #e0e0e0; border-radius: 12px; padding: 18px; margin-bottom: 20px; background: linear-gradient(145deg, #ffffff, #f5f5f5); box-shadow: 0 3px 8px rgba(0,0,0,0.08); }
         .routine-card.child-view { background: linear-gradient(160deg, #e3f2fd, #e8f5e9); border-color: #bbdefb; }
         .routine-card header { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; }
@@ -1429,14 +1431,17 @@ margin-bottom: 20px;}
         .routine-action-bar { display: flex; justify-content: flex-end; align-items: center; gap: 10px; margin: 10px 0 18px; }
         .routine-create-button { width: 52px; height: 52px; border-radius: 50%; border: none; background: #ff9800; color: #fff; display: inline-flex; align-items: center; justify-content: center; font-size: 1.4rem; cursor: pointer; box-shadow: 0 6px 14px rgba(255, 152, 0, 0.35); }
         .routine-create-button:hover { background: #fb8c00; }
-        .routine-pref-button { border: none; background: transparent; color: #919191; font-size: 1.4rem; cursor: pointer; padding: 6px; }
-        .routine-pref-button:hover { color: #7a7a7a; }
+        .routine-pref-button,
+        .routine-library-button { border: none; background: transparent; color: #919191; font-size: 1.4rem; cursor: pointer; padding: 6px; }
+        .routine-pref-button:hover,
+        .routine-library-button:hover { color: #7a7a7a; }
         .routine-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: none; align-items: center; justify-content: center; z-index: 4200; padding: 14px; }
         .routine-modal.open { display: flex; }
         body.modal-open { overflow: hidden; }
         .routine-modal-card { background: #fff; border-radius: 14px; max-width: 920px; width: min(920px, 100%); max-height: 90vh; overflow: hidden; box-shadow: 0 12px 32px rgba(0,0,0,0.25); display: grid; grid-template-rows: auto 1fr; }
         .routine-modal-card header { display: flex; align-items: center; justify-content: space-between; flex-direction: row;font-weight: 600; padding: 12px 16px; border-bottom: 1px solid #e0e0e0; }
         .routine-modal-card h2 { margin: 0; font-size: 1.1rem; }
+        .routine-modal-header-actions { display: inline-flex; align-items: center; gap: 10px; }
         .routine-modal-close { background: transparent; border: none; font-size: 1.3rem; font-weight: 600; cursor: pointer; color: #555; }
         .routine-modal-body { padding: 12px 16px 18px; overflow-y: auto; }
         .routine-modal-actions { margin-top: 16px; display: flex; justify-content: flex-end; }
@@ -1488,8 +1493,11 @@ margin-bottom: 20px;}
 
         <?php if ($isParentContext): ?>
             <div class="routine-action-bar">
+                <button type="button" class="routine-library-button" data-routine-library-open aria-label="Open routine task library">
+                    <i class="fa-solid fa-rectangle-list"></i>
+                </button>
                 <button type="button" class="routine-pref-button" data-routine-pref-open aria-label="Routine timer preferences">
-                    <i class="fa-solid fa-gear"></i>
+                    <i class="fa-solid fa-sliders"></i>
                 </button>
                 <button type="button" class="routine-create-button" data-routine-create-open aria-label="Create routine">
                     <i class="fa-solid fa-plus"></i>
@@ -1690,49 +1698,54 @@ margin-bottom: 20px;}
                 </div>
             </div>
 
-            <section class="routine-section">
-                <div class="routine-section-header">
-                    <h2>Routine Task Library</h2>
-                    <button type="button" class="button primary" data-action="open-task-modal">Add Routine Task</button>
-                </div>
-                <div class="library-grid">
-                    <div class="library-card">
-                        <div class="library-header">
-                            <h3>Task Library</h3>
-                            <div class="library-filters">
-                                <label for="library-filter">Filter by category:</label>
-                                <select id="library-filter" data-role="library-filter">
-                                    <option value="all">All Tasks</option>
-                                    <option value="hygiene">Hygiene</option>
-                                    <option value="homework">Homework</option>
-                                    <option value="household">Household</option>
-                                </select>
-                            </div>
+            <div class="routine-modal" data-routine-library-modal>
+                <div class="routine-modal-card" role="dialog" aria-modal="true" aria-labelledby="routine-library-title">
+                    <header>
+                        <h2 id="routine-library-title">Routine Task Library</h2>
+                        <div class="routine-modal-header-actions">
+                            <button type="button" class="button primary" data-action="open-task-modal">Add Routine Task</button>
+                            <button type="button" class="routine-modal-close" data-routine-library-close aria-label="Close routine task library">&times;</button>
                         </div>
-                        <?php if (empty($routine_tasks)): ?>
-                            <p class="no-data">No routine tasks available yet. Add a task to start building routines.</p>
-                        <?php else: ?>
-                            <details class="library-collapse">
-                                <summary class="library-toggle">Show Library Tasks</summary>
-                                <div class="library-table-wrap">
-                                    <div class="library-card-list">
-                                        <?php foreach ($routine_tasks as $task): ?>
-                                            <?php
-                                                $taskMinSeconds = isset($task['minimum_seconds']) ? (int) $task['minimum_seconds'] : 0;
-                                                $taskMinEnabled = !empty($task['minimum_enabled']);
-                                                if ($taskMinSeconds > 0) {
-                                                    $taskMinMinutesPart = floor($taskMinSeconds / 60);
-                                                    $taskMinSecondsPart = $taskMinSeconds % 60;
-                                                    $taskMinDisplayBase = sprintf('%02d:%02d', $taskMinMinutesPart, $taskMinSecondsPart);
-                                                    $taskMinDisplay = $taskMinEnabled ? $taskMinDisplayBase : $taskMinDisplayBase . ' (off)';
-                                                } else {
-                                                    $taskMinDisplay = '--';
-                                                }
-                                                $taskMinMinutesValue = $taskMinSeconds > 0
-                                                    ? rtrim(rtrim(number_format($taskMinSeconds / 60, 2, '.', ''), '0'), '.')
-                                                    : '';
-                                                $taskDescription = trim((string) ($task['description'] ?? ''));
-                                            ?>
+                    </header>
+                    <div class="routine-modal-body">
+                        <div class="library-grid">
+                            <div class="library-card">
+                                <div class="library-header">
+                                    <h3>Task Library</h3>
+                                    <div class="library-filters">
+                                        <label for="library-filter">Filter by category:</label>
+                                        <select id="library-filter" data-role="library-filter">
+                                            <option value="all">All Tasks</option>
+                                            <option value="hygiene">Hygiene</option>
+                                            <option value="homework">Homework</option>
+                                            <option value="household">Household</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <?php if (empty($routine_tasks)): ?>
+                                    <p class="no-data">No routine tasks available yet. Add a task to start building routines.</p>
+                                <?php else: ?>
+                                    <details class="library-collapse">
+                                        <summary class="library-toggle">View Saved Library Tasks</summary>
+                                        <div class="library-table-wrap">
+                                            <div class="library-card-list">
+                                                <?php foreach ($routine_tasks as $task): ?>
+                                                    <?php
+                                                        $taskMinSeconds = isset($task['minimum_seconds']) ? (int) $task['minimum_seconds'] : 0;
+                                                        $taskMinEnabled = !empty($task['minimum_enabled']);
+                                                        if ($taskMinSeconds > 0) {
+                                                            $taskMinMinutesPart = floor($taskMinSeconds / 60);
+                                                            $taskMinSecondsPart = $taskMinSeconds % 60;
+                                                            $taskMinDisplayBase = sprintf('%02d:%02d', $taskMinMinutesPart, $taskMinSecondsPart);
+                                                            $taskMinDisplay = $taskMinEnabled ? $taskMinDisplayBase : $taskMinDisplayBase . ' (off)';
+                                                        } else {
+                                                            $taskMinDisplay = '--';
+                                                        }
+                                                        $taskMinMinutesValue = $taskMinSeconds > 0
+                                                            ? rtrim(rtrim(number_format($taskMinSeconds / 60, 2, '.', ''), '0'), '.')
+                                                            : '';
+                                                        $taskDescription = trim((string) ($task['description'] ?? ''));
+                                                    ?>
                                             <article class="library-task-card" data-role="library-item" data-category="<?php echo htmlspecialchars($task['category']); ?>">
                                                 <header>
                                                     <h4><?php echo htmlspecialchars($task['title']); ?></h4>
@@ -1748,122 +1761,149 @@ margin-bottom: 20px;}
                                                 </div>
                                                 <?php if ((int) $task['parent_user_id'] === $family_root_id): ?>
                                                     <div class="library-task-actions">
-                                                        <details class="routine-task-edit">
-                                                            <summary>Edit</summary>
-                                                            <form method="POST" class="routine-task-edit-form">
-                                                                <input type="hidden" name="routine_task_id" value="<?php echo (int) $task['id']; ?>">
-                                                                <label>
-                                                                    Title
-                                                                    <input type="text" name="edit_rt_title" value="<?php echo htmlspecialchars($task['title']); ?>" required>
-                                                                </label>
-                                                                <label>
-                                                                    Description
-                                                                    <textarea name="edit_rt_description" rows="2"><?php echo htmlspecialchars($task['description'] ?? ''); ?></textarea>
-                                                                </label>
-                                                                <label>
-                                                                    Time Limit (min)
-                                                                    <input type="number" name="edit_rt_time_limit" min="1" value="<?php echo (int) $task['time_limit']; ?>" required>
-                                                                </label>
-                                                                <label>
-                                                                    Minimum Time (min)
-                                                                    <input type="number" name="edit_rt_min_minutes" min="0" step="0.1" value="<?php echo htmlspecialchars($taskMinMinutesValue); ?>">
-                                                                </label>
-                                                                <label class="toggle-inline">
-                                                                    <input type="checkbox" name="edit_rt_min_enabled" value="1" <?php echo $taskMinEnabled ? 'checked' : ''; ?>>
-                                                                    Require minimum time before completion
-                                                                </label>
-                                                                <small>Children must stay on this task at least this long before moving on.</small>
-                                                                <label>
-                                                                   Point Value
-                                                                   <input type="number" name="edit_rt_point_value" min="0" value="<?php echo (int) $task['point_value']; ?>">
-                                                                </label>
-                                                                <label>
-                                                                    Category
-                                                                    <select name="edit_rt_category">
-                                                                        <option value="hygiene" <?php echo ($task['category'] === 'hygiene') ? 'selected' : ''; ?>>Hygiene</option>
-                                                                        <option value="homework" <?php echo ($task['category'] === 'homework') ? 'selected' : ''; ?>>Homework</option>
-                                                                        <option value="household" <?php echo ($task['category'] === 'household') ? 'selected' : ''; ?>>Household</option>
-                                                                    </select>
-                                                                </label>
-                                                                <button type="submit" name="update_routine_task" class="button">Save Changes</button>
-                                                            </form>
-                                                        </details>
+                                                        <button type="button"
+                                                                class="icon-button"
+                                                                data-routine-task-edit-open
+                                                                data-task-id="<?php echo (int) $task['id']; ?>"
+                                                                data-task-title="<?php echo htmlspecialchars($task['title']); ?>"
+                                                                data-task-description="<?php echo htmlspecialchars($taskDescription); ?>"
+                                                                data-task-time-limit="<?php echo (int) $task['time_limit']; ?>"
+                                                                data-task-minutes="<?php echo htmlspecialchars($taskMinMinutesValue); ?>"
+                                                                data-task-min-enabled="<?php echo $taskMinEnabled ? '1' : '0'; ?>"
+                                                                data-task-point-value="<?php echo (int) $task['point_value']; ?>"
+                                                                data-task-category="<?php echo htmlspecialchars($task['category']); ?>"
+                                                                aria-label="Edit routine task">
+                                                            <i class="fa-solid fa-pen"></i>
+                                                        </button>
                                                         <form method="POST" onsubmit="return confirm('Delete this task?');">
                                                             <input type="hidden" name="routine_task_id" value="<?php echo (int) $task['id']; ?>">
-                                                            <button type="submit" name="delete_routine_task" class="button danger">Delete</button>
+                                                            <button type="submit" name="delete_routine_task" class="icon-button danger" aria-label="Delete routine task">
+                                                                <i class="fa-solid fa-trash"></i>
+                                                            </button>
                                                         </form>
                                                     </div>
                                                 <?php endif; ?>
                                             </article>
-                                        <?php endforeach; ?>
+                                                <?php endforeach; ?>
+                                            </div>
+                                        </div>
+                                    </details>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                        <div class="task-modal-overlay" data-role="task-modal" aria-hidden="true">
+                            <div class="task-modal" role="dialog" aria-modal="true" aria-labelledby="task-modal-title">
+                                <button type="button" class="task-modal-close" data-action="close-task-modal" aria-label="Close add routine task dialog"><i class="fa-solid fa-xmark"></i></button>
+                                <h3 id="task-modal-title">Create Routine Task</h3>
+                                <form method="POST" class="library-form" autocomplete="off">
+                                    <div class="input-group">
+                                        <label for="rt_title">Task Title</label>
+                                        <input type="text" id="rt_title" name="rt_title" required>
                                     </div>
-                                </div>
-                            </details>
-                        <?php endif; ?>
+                                    <div class="input-group">
+                                        <label for="rt_description">Description</label>
+                                        <textarea id="rt_description" name="rt_description" rows="3" placeholder="Describe what the child needs to do"></textarea>
+                                    </div>
+                                    <div class="dual-inputs">
+                                        <div class="input-group">
+                                            <label for="rt_time_limit">Time Limit (minutes)</label>
+                                            <input type="number" id="rt_time_limit" name="rt_time_limit" min="1" required>
+                                        </div>
+                                        <div class="input-group">
+                                            <label for="rt_point_value">Point Value</label>
+                                            <input type="number" id="rt_point_value" name="rt_point_value" min="0" value="0">
+                                        </div>
+                                    </div>
+                                    <div class="input-group">
+                                        <label for="rt_min_time">Minimum Time Before Completion (minutes)</label>
+                                        <input type="number" id="rt_min_time" name="rt_min_time" min="0" step="0.1" placeholder="Optional">
+                                        <small>Leave blank if the child can move on at any time.</small>
+                                    </div>
+                                    <div class="input-group">
+                                        <label for="rt_category">Category</label>
+                                        <select id="rt_category" name="rt_category">
+                                            <option value="hygiene">Hygiene</option>
+                                            <option value="homework">Homework</option>
+                                            <option value="household">Household</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-actions">
+                                        <button type="submit" name="create_routine_task" class="button primary">Add Routine Task</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                        <div class="task-modal-overlay" data-role="task-edit-modal" aria-hidden="true">
+                            <div class="task-modal" role="dialog" aria-modal="true" aria-labelledby="task-edit-title">
+                                <button type="button" class="task-modal-close" data-action="close-task-edit-modal" aria-label="Close edit routine task dialog"><i class="fa-solid fa-xmark"></i></button>
+                                <h3 id="task-edit-title">Edit Routine Task</h3>
+                                <form method="POST" class="library-form" autocomplete="off">
+                                    <input type="hidden" name="routine_task_id" value="">
+                                    <div class="input-group">
+                                        <label for="edit_rt_title">Title</label>
+                                        <input type="text" id="edit_rt_title" name="edit_rt_title" required>
+                                    </div>
+                                    <div class="input-group">
+                                        <label for="edit_rt_description">Description</label>
+                                        <textarea id="edit_rt_description" name="edit_rt_description" rows="3"></textarea>
+                                    </div>
+                                    <div class="dual-inputs">
+                                        <div class="input-group">
+                                            <label for="edit_rt_time_limit">Time Limit (min)</label>
+                                            <input type="number" id="edit_rt_time_limit" name="edit_rt_time_limit" min="1" required>
+                                        </div>
+                                        <div class="input-group">
+                                            <label for="edit_rt_point_value">Point Value</label>
+                                            <input type="number" id="edit_rt_point_value" name="edit_rt_point_value" min="0" value="0">
+                                        </div>
+                                    </div>
+                                    <div class="input-group">
+                                        <label for="edit_rt_min_minutes">Minimum Time (min)</label>
+                                        <input type="number" id="edit_rt_min_minutes" name="edit_rt_min_minutes" min="0" step="0.1">
+                                        <small>Children must stay on this task at least this long before moving on.</small>
+                                    </div>
+                                    <div class="input-group">
+                                        <label class="toggle-inline">
+                                            <input type="checkbox" id="edit_rt_min_enabled" name="edit_rt_min_enabled" value="1">
+                                            Require minimum time before completion
+                                        </label>
+                                    </div>
+                                    <div class="input-group">
+                                        <label for="edit_rt_category">Category</label>
+                                        <select id="edit_rt_category" name="edit_rt_category">
+                                            <option value="hygiene">Hygiene</option>
+                                            <option value="homework">Homework</option>
+                                            <option value="household">Household</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-actions">
+                                        <button type="submit" name="update_routine_task" class="button">Save Changes</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
                     </div>
                 </div>
-                <div class="task-modal-overlay" data-role="task-modal" aria-hidden="true">
-                    <div class="task-modal" role="dialog" aria-modal="true" aria-labelledby="task-modal-title">
-                        <button type="button" class="task-modal-close" data-action="close-task-modal" aria-label="Close add routine task dialog"><i class="fa-solid fa-xmark"></i></button>
-                        <h3 id="task-modal-title">Create Routine Task</h3>
-                        <form method="POST" class="library-form" autocomplete="off">
-                            <div class="input-group">
-                                <label for="rt_title">Task Title</label>
-                                <input type="text" id="rt_title" name="rt_title" required>
-                            </div>
-                            <div class="input-group">
-                                <label for="rt_description">Description</label>
-                                <textarea id="rt_description" name="rt_description" rows="3" placeholder="Describe what the child needs to do"></textarea>
-                            </div>
-                            <div class="dual-inputs">
-                                <div class="input-group">
-                                    <label for="rt_time_limit">Time Limit (minutes)</label>
-                                    <input type="number" id="rt_time_limit" name="rt_time_limit" min="1" required>
-                                </div>
-                                <div class="input-group">
-                                    <label for="rt_point_value">Point Value</label>
-                                    <input type="number" id="rt_point_value" name="rt_point_value" min="0" value="0">
-                                </div>
-                            </div>
-                            <div class="input-group">
-                                <label for="rt_min_time">Minimum Time Before Completion (minutes)</label>
-                                <input type="number" id="rt_min_time" name="rt_min_time" min="0" step="0.1" placeholder="Optional">
-                                <small>Leave blank if the child can move on at any time.</small>
-                            </div>
-                            <div class="input-group">
-                                <label for="rt_category">Category</label>
-                                <select id="rt_category" name="rt_category">
-                                    <option value="hygiene">Hygiene</option>
-                                    <option value="homework">Homework</option>
-                                    <option value="household">Household</option>
-                                </select>
-                            </div>
-                            <div class="form-actions">
-                                <button type="submit" name="create_routine_task" class="button primary">Add Routine Task</button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            </section>
+            </div>
 
         <?php endif; ?>
 
         <section class="routine-section" data-routine-section>
          <div class="routine-section-header">
              <h2><?php echo ($isParentContext ? 'Family Routines' : 'My Routines'); ?></h2>
-             <?php if ($isParentContext): ?>
-                <div class="routine-header-actions">
-                    <div class="routine-view-toggle" role="group" aria-label="Routine view">
-                        <button type="button" class="routine-view-button active" data-routine-view="card" aria-pressed="true" title="Card view">
-                            <i class="fa-solid fa-table-cells"></i>
-                        </button>
-                        <button type="button" class="routine-view-button" data-routine-view="list" aria-pressed="false" title="List view">
-                            <i class="fa-solid fa-list"></i>
-                        </button>
-                    </div>
-                </div>
-             <?php endif; ?>
           </div>
+          <?php if ($isParentContext): ?>
+              <div class="routine-view-row">
+                  <div class="routine-view-toggle" role="group" aria-label="Routine view">
+                      <button type="button" class="routine-view-button active" data-routine-view="card" aria-pressed="true" title="Card view">
+                          <i class="fa-solid fa-table-cells"></i>
+                      </button>
+                      <button type="button" class="routine-view-button" data-routine-view="list" aria-pressed="false" title="List view">
+                          <i class="fa-solid fa-list"></i>
+                      </button>
+                  </div>
+              </div>
+          <?php endif; ?>
           <?php if ($isParentContext && !empty($children)): ?>
               <div class="routine-filters" data-routine-filters>
                   <div class="routine-filter-header">
@@ -2320,6 +2360,9 @@ margin-bottom: 20px;}
             const prefOpen = document.querySelector('[data-routine-pref-open]');
             const prefModal = document.querySelector('[data-routine-pref-modal]');
             const prefClose = prefModal ? prefModal.querySelector('[data-routine-pref-close]') : null;
+            const libraryOpen = document.querySelector('[data-routine-library-open]');
+            const libraryModal = document.querySelector('[data-routine-library-modal]');
+            const libraryClose = libraryModal ? libraryModal.querySelector('[data-routine-library-close]') : null;
             const blockedModal = document.querySelector('[data-routine-blocked-modal]');
             const blockedMessage = blockedModal ? blockedModal.querySelector('[data-routine-blocked-message]') : null;
             const blockedCloses = blockedModal ? blockedModal.querySelectorAll('[data-routine-blocked-close]') : [];
@@ -2352,6 +2395,11 @@ margin-bottom: 20px;}
                 prefOpen.addEventListener('click', () => openRoutineModal(prefModal));
                 if (prefClose) prefClose.addEventListener('click', () => closeRoutineModal(prefModal));
                 prefModal.addEventListener('click', (e) => { if (e.target === prefModal) closeRoutineModal(prefModal); });
+            }
+            if (libraryOpen && libraryModal) {
+                libraryOpen.addEventListener('click', () => openRoutineModal(libraryModal));
+                if (libraryClose) libraryClose.addEventListener('click', () => closeRoutineModal(libraryModal));
+                libraryModal.addEventListener('click', (e) => { if (e.target === libraryModal) closeRoutineModal(libraryModal); });
             }
             document.querySelectorAll('[data-routine-edit-open]').forEach((btn) => {
                 const routineId = btn.getAttribute('data-routine-id');
@@ -4274,6 +4322,78 @@ margin-bottom: 20px;}
                 document.addEventListener('keydown', (event) => {
                     if (event.key === 'Escape' && taskModal.classList.contains('active')) {
                         toggleTaskModal(false);
+                    }
+                });
+            }
+            const taskEditModal = document.querySelector('[data-role="task-edit-modal"]');
+            const closeTaskEditModalButton = taskEditModal ? taskEditModal.querySelector('[data-action="close-task-edit-modal"]') : null;
+            const taskEditButtons = document.querySelectorAll('[data-routine-task-edit-open]');
+            let taskEditModalLastFocus = null;
+            const toggleTaskEditModal = (shouldOpen) => {
+                if (!taskEditModal) return;
+                if (shouldOpen) {
+                    taskEditModalLastFocus = document.activeElement;
+                    taskEditModal.classList.add('active');
+                    taskEditModal.setAttribute('aria-hidden', 'false');
+                    const firstField = taskEditModal.querySelector('input, textarea, select');
+                    if (firstField) {
+                        firstField.focus();
+                    }
+                } else {
+                    taskEditModal.classList.remove('active');
+                    taskEditModal.setAttribute('aria-hidden', 'true');
+                    if (taskEditModalLastFocus && typeof taskEditModalLastFocus.focus === 'function') {
+                        taskEditModalLastFocus.focus();
+                    }
+                }
+            };
+            const populateTaskEditModal = (button) => {
+                if (!taskEditModal || !button) return;
+                const idField = taskEditModal.querySelector('input[name="routine_task_id"]');
+                const titleField = taskEditModal.querySelector('input[name="edit_rt_title"]');
+                const descriptionField = taskEditModal.querySelector('textarea[name="edit_rt_description"]');
+                const timeLimitField = taskEditModal.querySelector('input[name="edit_rt_time_limit"]');
+                const minMinutesField = taskEditModal.querySelector('input[name="edit_rt_min_minutes"]');
+                const minEnabledField = taskEditModal.querySelector('input[name="edit_rt_min_enabled"]');
+                const pointValueField = taskEditModal.querySelector('input[name="edit_rt_point_value"]');
+                const categoryField = taskEditModal.querySelector('select[name="edit_rt_category"]');
+                const taskId = button.getAttribute('data-task-id') || '';
+                const taskTitle = decodeHtmlEntities(button.getAttribute('data-task-title') || '');
+                const taskDescription = decodeHtmlEntities(button.getAttribute('data-task-description') || '');
+                const taskTimeLimit = button.getAttribute('data-task-time-limit') || '';
+                const taskMinMinutes = button.getAttribute('data-task-minutes') || '';
+                const taskMinEnabled = button.getAttribute('data-task-min-enabled') === '1';
+                const taskPointValue = button.getAttribute('data-task-point-value') || '0';
+                const taskCategory = button.getAttribute('data-task-category') || '';
+                if (idField) idField.value = taskId;
+                if (titleField) titleField.value = taskTitle;
+                if (descriptionField) descriptionField.value = taskDescription;
+                if (timeLimitField) timeLimitField.value = taskTimeLimit;
+                if (minMinutesField) minMinutesField.value = taskMinMinutes;
+                if (minEnabledField) minEnabledField.checked = taskMinEnabled;
+                if (pointValueField) pointValueField.value = taskPointValue;
+                if (categoryField) categoryField.value = taskCategory;
+            };
+            if (taskEditButtons.length && taskEditModal) {
+                taskEditButtons.forEach((button) => {
+                    button.addEventListener('click', () => {
+                        populateTaskEditModal(button);
+                        toggleTaskEditModal(true);
+                    });
+                });
+            }
+            if (closeTaskEditModalButton && taskEditModal) {
+                closeTaskEditModalButton.addEventListener('click', () => toggleTaskEditModal(false));
+            }
+            if (taskEditModal) {
+                taskEditModal.addEventListener('click', (event) => {
+                    if (event.target === taskEditModal) {
+                        toggleTaskEditModal(false);
+                    }
+                });
+                document.addEventListener('keydown', (event) => {
+                    if (event.key === 'Escape' && taskEditModal.classList.contains('active')) {
+                        toggleTaskEditModal(false);
                     }
                 });
             }
