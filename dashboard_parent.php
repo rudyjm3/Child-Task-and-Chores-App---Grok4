@@ -915,10 +915,18 @@ $formatParentNotificationMessage = static function (array $note): string {
         .child-info-meta { margin: 0; font-size: 0.9em; color: #666; }
         .child-info-actions { display: flex; gap: 8px;     justify-content: center;
     align-items: center; }
-        .child-action-icon { width: 36px; height: 36px; border-radius: 50%; border: none; background: transparent; color: #9f9f9f; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+        .child-action-icon { width: 36px; height: 36px; border-radius: 50%; border: none; background: transparent; color: #919191; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
         .child-action-icon:hover { color: #7a7a7a; }
-        .child-action-icon.danger { color: #9f9f9f; }
+        .child-action-icon.danger { color: #919191; }
         .child-action-icon.danger:hover { color: #7a7a7a; }
+        .member-item { display: flex; align-items: center; gap: 12px; background: #fff; }
+        .member-details { display: flex; flex-direction: column; gap: 4px; }
+        .member-actions { display: inline-flex; align-items: center; gap: 8px; margin-left: auto; }
+        .member-actions form { margin: 0; display: inline-flex; }
+        .member-action-icon { width: 36px; height: 36px; border-radius: 50%; border: none; background: transparent; color: #9f9f9f; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; text-decoration: none; }
+        .member-action-icon:hover { color: #7a7a7a; }
+        .member-action-icon.danger { color: #919191; }
+        .member-action-icon.danger:hover { color: #7a7a7a; }
         .child-info-content { display: contents; }
         .child-info-body { display: grid; gap: 12px; }
         .child-stats-grid { display: grid; gap: 12px; }
@@ -1102,7 +1110,7 @@ $formatParentNotificationMessage = static function (array $note): string {
             .inline-form .button { width: auto; }
         }
         /* Manage Family Styles - Mobile Responsive, Autism-Friendly Wizard */
-        .manage-family { background: #f9f9f9; border-radius: 8px; padding: 20px; }
+        .manage-family { background: #f5f7fb; padding: 8px; border: 1px solid #d5def0; border-radius: 12px; box-shadow: 0 6px 14px rgba(0,0,0,0.08); }
         .family-form { display: none; } /* JS toggle for wizard */
         .family-form.active { display: block; }
         .avatar-preview { width: 50px; height: 50px; border-radius: 50%; margin: 5px; cursor: pointer; }
@@ -1162,7 +1170,7 @@ $formatParentNotificationMessage = static function (array $note): string {
             .ot-row-header { flex-direction: column; align-items: flex-start; }
         }
         @media (max-width: 768px) {
-            .manage-family { padding: 10px; }
+            .manage-family { padding: 8px; }
             .button { width: 100%; }
             .child-info-card { grid-template-columns: 1fr; }
             .child-info-header img { width: 56px; height: 56px; }
@@ -1205,8 +1213,19 @@ $formatParentNotificationMessage = static function (array $note): string {
         .parent-photo-preview { width: 100%; max-height: 70vh; object-fit: contain; border-radius: 10px; }
         .parent-trash-button { border: none; background: transparent; cursor: pointer; font-size: 1.1rem; padding: 4px; color: #d32f2f; }
         .nav-links { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: center; margin-top: 8px; }
+        .nav-links-group { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: center; }
+        .nav-links-actions { display: inline-flex; align-items: center; gap: 8px; }
+        .nav-family-button { background: transparent; border: none; color: #919191; font-size: 1.4rem; padding: 6px; }
+        .nav-family-button:hover { color: #7a7a7a; background: transparent; }
         .nav-button { display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; background: #eef4ff; border: 1px solid #d5def0; border-radius: 8px; color: #0d47a1; font-weight: 700; text-decoration: none; }
         .nav-button:hover { background: #dce8ff; }
+        .family-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.55); display: none; align-items: center; justify-content: center; z-index: 3600; padding: 14px; }
+        .family-modal.open { display: flex; }
+        .family-modal-card { background: #fff; border-radius: 12px; max-width: 980px; width: min(980px, 100%); max-height: 85vh; overflow: hidden; box-shadow: 0 12px 32px rgba(0,0,0,0.25); display: grid; grid-template-rows: auto 1fr; }
+        .family-modal-card header { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid #e0e0e0; }
+        .family-modal-close { background: transparent; border: none; font-size: 1.3rem; cursor: pointer; color: #555; }
+        .family-modal-body { padding: 14px; overflow-y: auto; display: grid; gap: 16px; }
+        .family-section { background: #f5f7fb; padding: 8px; border: 1px solid #d5def0; border-radius: 12px; box-shadow: 0 6px 14px rgba(0,0,0,0.08); }
         .child-remove-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: none; align-items: center; justify-content: center; z-index: 4000; padding: 16px; }
         .child-remove-backdrop.open { display: flex; }
         .child-remove-modal { background: #fff; border-radius: 12px; max-width: 420px; width: 100%; padding: 18px; box-shadow: 0 16px 38px rgba(0,0,0,0.25); display: grid; gap: 14px; }
@@ -1214,6 +1233,13 @@ $formatParentNotificationMessage = static function (array $note): string {
         .child-remove-modal .actions { display: grid; gap: 10px; }
         .child-remove-modal .actions .button { width: 100%; }
         .child-remove-modal .subtext { color: #555; font-size: 0.95rem; }
+        .member-remove-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: none; align-items: center; justify-content: center; z-index: 4010; padding: 16px; }
+        .member-remove-backdrop.open { display: flex; }
+        .member-remove-modal { background: #fff; border-radius: 12px; max-width: 420px; width: 100%; padding: 18px; box-shadow: 0 16px 38px rgba(0,0,0,0.25); display: grid; gap: 14px; }
+        .member-remove-modal header { display: flex; justify-content: space-between; align-items: center; }
+        .member-remove-modal .actions { display: grid; gap: 10px; }
+        .member-remove-modal .actions .button { width: 100%; }
+        .member-remove-modal .subtext { color: #555; font-size: 0.95rem; }
     </style>
     <script>
         window.RoutineOvertimeByRoutine = <?php echo json_encode($overtimeLogsByRoutine, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP); ?>;
@@ -1836,6 +1862,26 @@ $formatParentNotificationMessage = static function (array $note): string {
                 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeHelp(); });
             }
 
+            const familyOpen = document.querySelector('[data-family-open]');
+            const familyModal = document.querySelector('[data-family-modal]');
+            const familyClose = familyModal ? familyModal.querySelector('[data-family-close]') : null;
+            const openFamily = () => {
+                if (!familyModal) return;
+                familyModal.classList.add('open');
+                document.body.classList.add('modal-open');
+            };
+            const closeFamily = () => {
+                if (!familyModal) return;
+                familyModal.classList.remove('open');
+                document.body.classList.remove('modal-open');
+            };
+            if (familyOpen && familyModal) {
+                familyOpen.addEventListener('click', openFamily);
+                if (familyClose) familyClose.addEventListener('click', closeFamily);
+                familyModal.addEventListener('click', (e) => { if (e.target === familyModal) closeFamily(); });
+                document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeFamily(); });
+            }
+
             const adjustModal = document.querySelector('[data-role="adjust-modal"]');
             const adjustTitle = adjustModal ? adjustModal.querySelector('[data-role="adjust-title"]') : null;
             const adjustChildIdInput = adjustModal ? adjustModal.querySelector('[data-role="adjust-child-id"]') : null;
@@ -2070,6 +2116,57 @@ $formatParentNotificationMessage = static function (array $note): string {
                     form.submit();
                 });
             }
+
+            const memberRemoveModal = document.querySelector('[data-member-remove-modal]');
+            const memberRemoveConfirm = memberRemoveModal ? memberRemoveModal.querySelector('[data-action="member-remove-confirm"]') : null;
+            const memberRemoveCancelButtons = memberRemoveModal ? memberRemoveModal.querySelectorAll('[data-action="member-remove-cancel"]') : [];
+            let activeMemberRemoveForm = null;
+
+            const closeMemberRemoveModal = () => {
+                if (!memberRemoveModal) return;
+                memberRemoveModal.classList.remove('open');
+                memberRemoveModal.setAttribute('aria-hidden', 'true');
+                document.body.classList.remove('modal-open');
+                activeMemberRemoveForm = null;
+            };
+            const openMemberRemoveModal = (form) => {
+                activeMemberRemoveForm = form;
+                if (!memberRemoveModal) return;
+                memberRemoveModal.classList.add('open');
+                memberRemoveModal.setAttribute('aria-hidden', 'false');
+                document.body.classList.add('modal-open');
+            };
+
+            document.querySelectorAll('[data-role="member-remove-form"]').forEach(form => {
+                const button = form.querySelector('[data-action="remove-member"]');
+                if (!button) return;
+                button.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    openMemberRemoveModal(form);
+                });
+            });
+
+            if (memberRemoveModal) {
+                memberRemoveModal.addEventListener('click', (e) => {
+                    if (e.target === memberRemoveModal) {
+                        closeMemberRemoveModal();
+                    }
+                });
+            }
+
+            memberRemoveCancelButtons.forEach(btn => btn.addEventListener('click', closeMemberRemoveModal));
+
+            if (memberRemoveConfirm) {
+                memberRemoveConfirm.addEventListener('click', () => {
+                    const form = activeMemberRemoveForm;
+                    if (!form) {
+                        closeMemberRemoveModal();
+                        return;
+                    }
+                    closeMemberRemoveModal();
+                    form.submit();
+                });
+            }
         });
     </script>
 </head>
@@ -2082,20 +2179,27 @@ $formatParentNotificationMessage = static function (array $note): string {
          <?php endif; ?>
       </p>
       <div class="nav-links">
-         <a class="nav-button" href="dashboard_parent.php">Dashboard</a>
-         <a class="nav-button" href="goal.php">Goals</a>
-         <a class="nav-button" href="task.php">Tasks</a>
-         <a class="nav-button" href="routine.php">Routines</a>
-         <a class="nav-button" href="rewards.php">Rewards</a>
-         <a class="nav-button" href="profile.php?self=1">Profile</a>
-         <a class="nav-button" href="logout.php">Logout</a>
-         <button type="button" class="nav-button" data-help-open>Help</button>
-         <button type="button" class="parent-notification-trigger" data-parent-notify-trigger aria-label="Notifications">
-            <i class="fa-solid fa-bell"></i>
-            <?php if ($parentNotificationCount > 0): ?>
-               <span class="parent-notification-badge"><?php echo (int)$parentNotificationCount; ?></span>
-            <?php endif; ?>
-         </button>
+         <div class="nav-links-group">
+            <a class="nav-button" href="dashboard_parent.php">Dashboard</a>
+            <a class="nav-button" href="goal.php">Goals</a>
+            <a class="nav-button" href="task.php">Tasks</a>
+            <a class="nav-button" href="routine.php">Routines</a>
+            <a class="nav-button" href="rewards.php">Rewards</a>
+            <a class="nav-button" href="profile.php?self=1">Profile</a>
+            <a class="nav-button" href="logout.php">Logout</a>
+            <button type="button" class="nav-button" data-help-open>Help</button>
+            <div class="nav-links-actions">
+               <button type="button" class="parent-notification-trigger" data-parent-notify-trigger aria-label="Notifications">
+                  <i class="fa-solid fa-bell"></i>
+                  <?php if ($parentNotificationCount > 0): ?>
+                     <span class="parent-notification-badge"><?php echo (int)$parentNotificationCount; ?></span>
+                  <?php endif; ?>
+               </button>
+               <button type="button" class="nav-family-button" data-family-open aria-label="Family settings">
+                  <i class="fa-solid fa-users-gear"></i>
+               </button>
+            </div>
+         </div>
       </div>
       
    </header>
@@ -2451,6 +2555,241 @@ $formatParentNotificationMessage = static function (array $note): string {
          </div>
       </div>
    </div>
+   <div class="family-modal" data-family-modal>
+      <div class="family-modal-card" role="dialog" aria-modal="true" aria-labelledby="family-modal-title">
+         <header>
+            <h2 id="family-modal-title">Family Management</h2>
+            <button type="button" class="family-modal-close" aria-label="Close family modal" data-family-close><i class="fa-solid fa-xmark"></i></button>
+         </header>
+         <div class="family-modal-body">
+            <?php if (in_array($role_type, ['main_parent', 'secondary_parent', 'family_member'])): ?>
+            <div class="manage-family family-section" id="manage-family">
+               <h2>Manage Family</h2>
+               <?php if (in_array($role_type, ['main_parent', 'secondary_parent'])): ?>
+                  <button id="add-child-btn" class="button">Add Child</button>
+               <?php endif; ?>
+               <button id="add-caregiver-btn" class="button" style="background: #ff9800;">Add New User</button>
+               <?php if (in_array($role_type, ['main_parent', 'secondary_parent'])): ?>
+                  <div id="child-form" class="family-form">
+                     <h3>Add Child</h3>
+                     <form method="POST" action="dashboard_parent.php" enctype="multipart/form-data">
+                        <div class="form-group">
+                           <label for="first_name">First Name:</label>
+                           <input type="text" id="first_name" name="first_name" required>
+                        </div>
+                        <div class="form-group">
+                           <label for="last_name">Last Name:</label>
+                           <input type="text" id="last_name" name="last_name" required>
+                        </div>
+                        <div class="form-group">
+                           <label for="child_username">Username (for login):</label>
+                           <input type="text" id="child_username" name="child_username" required>
+                        </div>
+                        <div class="form-group">
+                           <label for="child_password">Password (parent sets):</label>
+                           <input type="password" id="child_password" name="child_password" required>
+                        </div>
+                        <div class="form-group">
+                           <label for="birthday">Birthday:</label>
+                           <input type="date" id="birthday" name="birthday" required>
+                        </div>
+                        <div class="form-group">
+                           <label for="child_gender">Gender:</label>
+                           <select id="child_gender" name="child_gender" required>
+                               <option value="">Select...</option>
+                               <option value="male">Male</option>
+                               <option value="female">Female</option>
+                           </select>
+                        </div>
+                        <div class="form-group">
+                           <label>Avatar:</label>
+                           <div class="avatar-options">
+                              <img class="avatar-option" data-avatar="images/avatar_images/default-avatar.png" src="images/avatar_images/default-avatar.png" alt="Avatar default">
+                              <img class="avatar-option" data-avatar="images/avatar_images/boy-1.png" src="images/avatar_images/boy-1.png" alt="Avatar 1">
+                              <img class="avatar-option" data-avatar="images/avatar_images/girl-1.png" src="images/avatar_images/girl-1.png" alt="Avatar 2">
+                              <img class="avatar-option" data-avatar="images/avatar_images/xmas-elf-boy.png" src="images/avatar_images/xmas-elf-boy.png" alt="Avatar 3">
+                              <!-- Add more based on uploaded files -->
+                           </div>
+                           <input type="file" id="avatar-upload" name="avatar_upload" accept="image/*">
+                           <img id="avatar-preview" src="images/avatar_images/default-avatar.png" alt="Preview" style="width: 100px; border-radius: 50%;">
+                           <input type="hidden" id="avatar" name="avatar">
+                        </div>
+                        <button type="submit" name="add_child" class="button">Add Child</button>
+                     </form>
+                  </div>
+               <?php endif; ?>
+               <div id="caregiver-form" class="family-form">
+                  <h3>Add Family Member/Caregiver</h3>
+                  <form method="POST" action="dashboard_parent.php">
+                     <div class="form-group">
+                        <label for="secondary_first_name">First Name:</label>
+                        <input type="text" id="secondary_first_name" name="secondary_first_name" required placeholder="Enter first name">
+                     </div>
+                     <div class="form-group">
+                        <label for="secondary_last_name">Last Name:</label>
+                        <input type="text" id="secondary_last_name" name="secondary_last_name" required placeholder="Enter last name">
+                     </div>
+                     <div class="form-group">
+                        <label for="secondary_username">Username (for login):</label>
+                        <input type="text" id="secondary_username" name="secondary_username" required placeholder="Choose a username">
+                     </div>
+                     <div class="form-group">
+                        <label for="secondary_password">Password:</label>
+                        <input type="password" id="secondary_password" name="secondary_password" required>
+                     </div>
+                     <div class="form-group">
+                        <label for="role_type">Role Type:</label>
+                        <select id="role_type" name="role_type" required>
+                           <option value="secondary_parent">Secondary Parent (Full Access)</option>
+                           <option value="family_member">Family Member (Limited Access)</option>
+                           <option value="caregiver">Caregiver (Task Management Only)</option>
+                        </select>
+                     </div>
+                     <button type="submit" name="add_new_user" class="button">Add New User</button>
+                  </form>
+               </div>
+            </div>
+            <?php endif; ?>
+            <div class="family-members-list family-children-list family-section">
+               <h2>Children</h2>
+               <?php if (isset($data['children']) && is_array($data['children']) && !empty($data['children'])): ?>
+                   <?php foreach ($data['children'] as $child): ?>
+                       <div class="member-item">
+                          <div class="member-details">
+                             <p><?php echo htmlspecialchars($child['child_name']); ?>
+                                <span class="role-type">(Child)</span>
+                             </p>
+                          </div>
+                          <div class="member-actions">
+                             <?php if (in_array($role_type, ['main_parent', 'secondary_parent'])): ?>
+                                 <a href="profile.php?user_id=<?php echo $child['child_user_id']; ?>&type=child" class="member-action-icon" aria-label="Edit child">
+                                     <i class="fa-solid fa-pen"></i>
+                                 </a>
+                             <?php endif; ?>
+                             <?php if ($role_type === 'main_parent'): ?>
+                                 <form method="POST" data-role="child-remove-form">
+                                     <input type="hidden" name="delete_user_id" value="<?php echo $child['child_user_id']; ?>">
+                                     <input type="hidden" name="delete_mode" value="soft">
+                                     <input type="hidden" name="delete_user" value="1">
+                                     <button type="submit" class="member-action-icon danger" data-action="remove-child" aria-label="Remove child">
+                                         <i class="fa-solid fa-trash"></i>
+                                     </button>
+                                 </form>
+                             <?php endif; ?>
+                          </div>
+                       </div>
+                   <?php endforeach; ?>
+               <?php else: ?>
+                   <p>No children added yet.</p>
+               <?php endif; ?>
+            </div>
+            <div class="family-members-list family-section">
+               <?php // Use precomputed $main_parent_id from top of file ?>
+               <h2>Family Members</h2>
+               <?php
+              $stmt = $db->prepare("SELECT u.id, CONCAT(u.first_name, ' ', u.last_name) AS name, u.username, fl.role_type 
+                                    FROM users u 
+                                    JOIN family_links fl ON u.id = fl.linked_user_id 
+                                    WHERE fl.main_parent_id = :main_parent_id 
+                                    AND fl.role_type IN ('secondary_parent', 'family_member') 
+                                    ORDER BY fl.role_type, u.name");
+              $stmt->execute([':main_parent_id' => $main_parent_id]);
+              $family_members = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+              if ($role_type !== 'main_parent') {
+                  $ownerStmt = $db->prepare("SELECT id, CONCAT(first_name, ' ', last_name) AS name, username FROM users WHERE id = :id");
+                  $ownerStmt->execute([':id' => $main_parent_id]);
+                  $mainOwner = $ownerStmt->fetch(PDO::FETCH_ASSOC);
+                  if ($mainOwner) {
+                      $mainOwner['role_type'] = 'main_parent';
+                      array_unshift($family_members, $mainOwner);
+                  }
+              }
+               
+               if (!empty($family_members)): ?>
+                   <?php foreach ($family_members as $member): ?>
+                       <div class="member-item">
+                          <div class="member-details">
+                             <p><?php echo htmlspecialchars($member['name'] ?? $member['username']); ?>
+                                 <span class="role-type">(<?php
+                                     $memberBadge = getUserRoleLabel($member['id']) ?? ($member['role_type'] ?? '');
+                                     if (!$memberBadge && isset($member['role_type'])) {
+                                         $memberBadge = ucfirst(str_replace('_', ' ', $member['role_type']));
+                                     }
+                                     echo htmlspecialchars($memberBadge);
+                                 ?>)</span>
+                              </p>
+                          </div>
+                          <?php if (in_array($role_type, ['main_parent', 'secondary_parent']) && ($member['role_type'] ?? '') !== 'main_parent'): ?>
+                              <div class="member-actions">
+                                  <a href="profile.php?edit_user=<?php echo $member['id']; ?>&role_type=<?php echo urlencode($member['role_type']); ?>" class="member-action-icon" aria-label="Edit family member">
+                                      <i class="fa-solid fa-pen"></i>
+                                  </a>
+                                  <form method="POST" data-role="member-remove-form">
+                                      <input type="hidden" name="delete_user_id" value="<?php echo $member['id']; ?>">
+                                      <input type="hidden" name="delete_user" value="1">
+                                      <button type="button" class="member-action-icon danger" data-action="remove-member" aria-label="Remove family member">
+                                          <i class="fa-solid fa-trash"></i>
+                                      </button>
+                                  </form>
+                              </div>
+                          <?php endif; ?>
+                       </div>
+                   <?php endforeach; ?>
+               <?php else: ?>
+                   <p>No family members added yet.</p>
+               <?php endif; ?>
+
+           </div>
+            <div class="family-members-list family-section">
+               <h2>Caregivers</h2>
+               <?php
+               $stmt = $db->prepare("SELECT u.id, CONCAT(u.first_name, ' ', u.last_name) AS name, u.username, fl.role_type 
+                                     FROM users u 
+                                     JOIN family_links fl ON u.id = fl.linked_user_id 
+                                     WHERE fl.main_parent_id = :main_parent_id 
+                                     AND fl.role_type = 'caregiver' 
+                                     ORDER BY u.name");
+               $stmt->execute([':main_parent_id' => $main_parent_id]);
+               $caregivers = $stmt->fetchAll(PDO::FETCH_ASSOC);
+               
+               if (!empty($caregivers)): ?>
+                   <?php foreach ($caregivers as $caregiver): ?>
+                       <div class="member-item">
+                           <div class="member-details">
+                              <p><?php echo htmlspecialchars($caregiver['name'] ?? $caregiver['username']); ?>
+                                 <span class="role-type">(<?php
+                                     $caregiverBadge = getUserRoleLabel($caregiver['id']) ?? ($caregiver['role_type'] ?? '');
+                                     if (!$caregiverBadge && isset($caregiver['role_type'])) {
+                                         $caregiverBadge = ucfirst(str_replace('_', ' ', $caregiver['role_type']));
+                                     }
+                                     echo htmlspecialchars($caregiverBadge ?: 'Caregiver');
+                                 ?>)</span>
+                              </p>
+                           </div>
+                           <?php if (in_array($role_type, ['main_parent', 'secondary_parent'])): ?>
+                              <div class="member-actions">
+                                  <a href="profile.php?edit_user=<?php echo $caregiver['id']; ?>&role_type=<?php echo urlencode($caregiver['role_type']); ?>" class="member-action-icon" aria-label="Edit caregiver">
+                                      <i class="fa-solid fa-pen"></i>
+                                  </a>
+                                  <form method="POST" data-role="member-remove-form">
+                                      <input type="hidden" name="delete_user_id" value="<?php echo $caregiver['id']; ?>">
+                                      <input type="hidden" name="delete_user" value="1">
+                                      <button type="button" class="member-action-icon danger" data-action="remove-member" aria-label="Remove caregiver">
+                                          <i class="fa-solid fa-trash"></i>
+                                      </button>
+                                  </form>
+                              </div>
+                           <?php endif; ?>
+                       </div>
+                   <?php endforeach; ?>
+               <?php else: ?>
+                   <p>No caregivers added yet.</p>
+               <?php endif; ?>
+           </div>
+         </div>
+      </div>
+   </div>
    <main class="dashboard">
       <?php if (isset($message)) echo "<p>$message</p>"; ?>
       
@@ -2748,177 +3087,6 @@ $formatParentNotificationMessage = static function (array $note): string {
                <p>No children added yet. Add your first child below!</p>
          <?php endif; ?>
       </div>
-      <div class="family-members-list">
-         <?php // Use precomputed $main_parent_id from top of file ?>
-         <h2>Family Members</h2>
-         <?php
-        $stmt = $db->prepare("SELECT u.id, CONCAT(u.first_name, ' ', u.last_name) AS name, u.username, fl.role_type 
-                              FROM users u 
-                              JOIN family_links fl ON u.id = fl.linked_user_id 
-                              WHERE fl.main_parent_id = :main_parent_id 
-                              AND fl.role_type IN ('secondary_parent', 'family_member') 
-                              ORDER BY fl.role_type, u.name");
-        $stmt->execute([':main_parent_id' => $main_parent_id]);
-        $family_members = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-        if ($role_type !== 'main_parent') {
-            $ownerStmt = $db->prepare("SELECT id, CONCAT(first_name, ' ', last_name) AS name, username FROM users WHERE id = :id");
-            $ownerStmt->execute([':id' => $main_parent_id]);
-            $mainOwner = $ownerStmt->fetch(PDO::FETCH_ASSOC);
-            if ($mainOwner) {
-                $mainOwner['role_type'] = 'main_parent';
-                array_unshift($family_members, $mainOwner);
-            }
-        }
-         
-         if (!empty($family_members)): ?>
-             <?php foreach ($family_members as $member): ?>
-                 <div class="member-item">
-                    <p><?php echo htmlspecialchars($member['name'] ?? $member['username']); ?> 
-                        <span class="role-type">(<?php
-                            $memberBadge = getUserRoleLabel($member['id']) ?? ($member['role_type'] ?? '');
-                            if (!$memberBadge && isset($member['role_type'])) {
-                                $memberBadge = ucfirst(str_replace('_', ' ', $member['role_type']));
-                            }
-                            echo htmlspecialchars($memberBadge);
-                        ?>)</span>
-                     </p>
-                     <?php if (in_array($role_type, ['main_parent', 'secondary_parent']) && ($member['role_type'] ?? '') !== 'main_parent'): ?>
-                         <a href="profile.php?edit_user=<?php echo $member['id']; ?>&role_type=<?php echo urlencode($member['role_type']); ?>" class="button edit-btn">Edit</a>
-                         <form method="POST" style="display: inline;">
-                             <input type="hidden" name="delete_user_id" value="<?php echo $member['id']; ?>">
-                             <button type="submit" name="delete_user" class="button delete-btn" 
-                                     onclick="return confirm('Are you sure you want to remove this family member?')">
-                                 Remove
-                             </button>
-                         </form>
-                     <?php endif; ?>
-                 </div>
-             <?php endforeach; ?>
-         <?php else: ?>
-             <p>No family members added yet.</p>
-         <?php endif; ?>
-
-         <h2>Caregivers</h2>
-         <?php
-         $stmt = $db->prepare("SELECT u.id, CONCAT(u.first_name, ' ', u.last_name) AS name, u.username, fl.role_type 
-                               FROM users u 
-                               JOIN family_links fl ON u.id = fl.linked_user_id 
-                               WHERE fl.main_parent_id = :main_parent_id 
-                               AND fl.role_type = 'caregiver' 
-                               ORDER BY u.name");
-         $stmt->execute([':main_parent_id' => $main_parent_id]);
-         $caregivers = $stmt->fetchAll(PDO::FETCH_ASSOC);
-         
-         if (!empty($caregivers)): ?>
-             <?php foreach ($caregivers as $caregiver): ?>
-                 <div class="member-item">
-                     <p><?php echo htmlspecialchars($caregiver['name'] ?? $caregiver['username']); ?></p>
-                     <?php if (in_array($role_type, ['main_parent', 'secondary_parent'])): ?>
-                         <a href="profile.php?edit_user=<?php echo $caregiver['id']; ?>&role_type=<?php echo urlencode($caregiver['role_type']); ?>" class="button edit-btn">Edit</a>
-                         <form method="POST" style="display: inline;">
-                             <input type="hidden" name="delete_user_id" value="<?php echo $caregiver['id']; ?>">
-                             <button type="submit" name="delete_user" class="button delete-btn" 
-                                     onclick="return confirm('Are you sure you want to remove this caregiver?')">
-                                 Remove
-                             </button>
-                         </form>
-                     <?php endif; ?>
-                 </div>
-             <?php endforeach; ?>
-         <?php else: ?>
-             <p>No caregivers added yet.</p>
-         <?php endif; ?>
-     </div>
-      <?php if (in_array($role_type, ['main_parent', 'secondary_parent', 'family_member'])): ?>
-      <div class="manage-family" id="manage-family">
-         <h2>Manage Family</h2>
-         <?php if (in_array($role_type, ['main_parent', 'secondary_parent'])): ?>
-            <button id="add-child-btn" class="button">Add Child</button>
-         <?php endif; ?>
-         <button id="add-caregiver-btn" class="button" style="background: #ff9800;">Add New User</button>
-         <?php if (in_array($role_type, ['main_parent', 'secondary_parent'])): ?>
-            <div id="child-form" class="family-form">
-               <h3>Add Child</h3>
-               <form method="POST" action="dashboard_parent.php" enctype="multipart/form-data">
-                  <div class="form-group">
-                     <label for="first_name">First Name:</label>
-                     <input type="text" id="first_name" name="first_name" required>
-                  </div>
-                  <div class="form-group">
-                     <label for="last_name">Last Name:</label>
-                     <input type="text" id="last_name" name="last_name" required>
-                  </div>
-                  <div class="form-group">
-                     <label for="child_username">Username (for login):</label>
-                     <input type="text" id="child_username" name="child_username" required>
-                  </div>
-                  <div class="form-group">
-                     <label for="child_password">Password (parent sets):</label>
-                     <input type="password" id="child_password" name="child_password" required>
-                  </div>
-                  <div class="form-group">
-                     <label for="birthday">Birthday:</label>
-                     <input type="date" id="birthday" name="birthday" required>
-                  </div>
-                  <div class="form-group">
-                     <label for="child_gender">Gender:</label>
-                     <select id="child_gender" name="child_gender" required>
-                         <option value="">Select...</option>
-                         <option value="male">Male</option>
-                         <option value="female">Female</option>
-                     </select>
-                  </div>
-                  <div class="form-group">
-                     <label>Avatar:</label>
-                     <div class="avatar-options">
-                        <img class="avatar-option" data-avatar="images/avatar_images/default-avatar.png" src="images/avatar_images/default-avatar.png" alt="Avatar default">
-                        <img class="avatar-option" data-avatar="images/avatar_images/boy-1.png" src="images/avatar_images/boy-1.png" alt="Avatar 1">
-                        <img class="avatar-option" data-avatar="images/avatar_images/girl-1.png" src="images/avatar_images/girl-1.png" alt="Avatar 2">
-                        <img class="avatar-option" data-avatar="images/avatar_images/xmas-elf-boy.png" src="images/avatar_images/xmas-elf-boy.png" alt="Avatar 3">
-                        <!-- Add more based on uploaded files -->
-                     </div>
-                     <input type="file" id="avatar-upload" name="avatar_upload" accept="image/*">
-                     <img id="avatar-preview" src="images/avatar_images/default-avatar.png" alt="Preview" style="width: 100px; border-radius: 50%;">
-                     <input type="hidden" id="avatar" name="avatar">
-                  </div>
-                  <button type="submit" name="add_child" class="button">Add Child</button>
-               </form>
-            </div>
-         <?php endif; ?>
-         <div id="caregiver-form" class="family-form">
-            <h3>Add Family Member/Caregiver</h3>
-            <form method="POST" action="dashboard_parent.php">
-               <div class="form-group">
-                  <label for="secondary_first_name">First Name:</label>
-                  <input type="text" id="secondary_first_name" name="secondary_first_name" required placeholder="Enter first name">
-               </div>
-               <div class="form-group">
-                  <label for="secondary_last_name">Last Name:</label>
-                  <input type="text" id="secondary_last_name" name="secondary_last_name" required placeholder="Enter last name">
-               </div>
-               <div class="form-group">
-                  <label for="secondary_username">Username (for login):</label>
-                  <input type="text" id="secondary_username" name="secondary_username" required placeholder="Choose a username">
-               </div>
-               <div class="form-group">
-                  <label for="secondary_password">Password:</label>
-                  <input type="password" id="secondary_password" name="secondary_password" required>
-               </div>
-               <div class="form-group">
-                  <label for="role_type">Role Type:</label>
-                  <select id="role_type" name="role_type" required>
-                     <option value="secondary_parent">Secondary Parent (Full Access)</option>
-                     <option value="family_member">Family Member (Limited Access)</option>
-                     <option value="caregiver">Caregiver (Task Management Only)</option>
-                  </select>
-               </div>
-               <button type="submit" name="add_new_user" class="button">Add New User</button>
-            </form>
-         </div>
-      </div>
-      <?php endif; ?>
-
       <!-- Rest of sections (Management Links, Rewards, etc.) with name display updates -->
       <div class="management-links">
          <h2>Management Links</h2>
@@ -3129,6 +3297,19 @@ $formatParentNotificationMessage = static function (array $note): string {
             <button type="button" class="button" data-action="child-remove-soft">Remove (keep data)</button>
             <button type="button" class="button danger" data-action="child-remove-hard">Delete permanently</button>
             <button type="button" class="button secondary" data-action="child-remove-cancel">Cancel</button>
+        </div>
+    </div>
+</div>
+<div class="member-remove-backdrop" data-member-remove-modal aria-hidden="true">
+    <div class="member-remove-modal" role="dialog" aria-modal="true" aria-labelledby="member-remove-title">
+        <header>
+            <h3 id="member-remove-title">Remove User</h3>
+            <button type="button" class="modal-close" data-action="member-remove-cancel" aria-label="Close"><i class="fa-solid fa-xmark"></i></button>
+        </header>
+        <p class="subtext">Are you sure you want to remove this user?</p>
+        <div class="actions">
+            <button type="button" class="button danger" data-action="member-remove-confirm">Remove</button>
+            <button type="button" class="button secondary" data-action="member-remove-cancel">Cancel</button>
         </div>
     </div>
 </div>
