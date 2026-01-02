@@ -123,6 +123,99 @@ $notificationsNew = $data['notifications_new'] ?? [];
 $notificationsRead = $data['notifications_read'] ?? [];
 $notificationsDeleted = $data['notifications_deleted'] ?? [];
 $notificationCount = is_array($notificationsNew) ? count($notificationsNew) : 0;
+
+$formatChildNotificationMessage = static function (array $note): string {
+    $message = (string) ($note['message'] ?? '');
+    $type = (string) ($note['type'] ?? '');
+    $titleTypes = [
+        'task_completed',
+        'task_approved',
+        'task_rejected',
+        'task_rejected_closed',
+        'routine_completed',
+        'goal_completed',
+        'goal_ready',
+        'goal_reward_earned',
+        'reward_redeemed',
+        'reward_denied'
+    ];
+    if (!in_array($type, $titleTypes, true)) {
+        return htmlspecialchars($message);
+    }
+    $parts = explode(':', $message, 2);
+    if (count($parts) < 2) {
+        return htmlspecialchars($message);
+    }
+    $prefix = htmlspecialchars(trim($parts[0]));
+    $title = htmlspecialchars(ltrim($parts[1]));
+    if ($title === '') {
+        return htmlspecialchars($message);
+    }
+    return $prefix . ': <span class="notification-title">' . $title . '</span>';
+};
+
+$buildChildNotificationViewLink = static function (array $note): ?string {
+    $linkUrl = trim((string) ($note['link_url'] ?? ''));
+    $type = (string) ($note['type'] ?? '');
+    $viewLink = $linkUrl !== '' ? $linkUrl : null;
+    $taskIdFromLink = null;
+    $taskInstanceDate = null;
+    $rewardIdFromLink = null;
+
+    if ($linkUrl !== '') {
+        $urlParts = parse_url($linkUrl);
+        if (!empty($urlParts['query'])) {
+            parse_str($urlParts['query'], $queryVars);
+            if (!empty($queryVars['task_id'])) {
+                $taskIdFromLink = (int) $queryVars['task_id'];
+            }
+            if (!empty($queryVars['instance_date'])) {
+                $taskInstanceDate = $queryVars['instance_date'];
+            }
+            if (!empty($queryVars['highlight_reward'])) {
+                $rewardIdFromLink = (int) $queryVars['highlight_reward'];
+            } elseif (!empty($queryVars['reward_id'])) {
+                $rewardIdFromLink = (int) $queryVars['reward_id'];
+            }
+        }
+        if (!$taskIdFromLink && !empty($urlParts['fragment']) && preg_match('/task-(\d+)/', $urlParts['fragment'], $matches)) {
+            $taskIdFromLink = (int) $matches[1];
+        }
+    }
+
+    if (in_array($type, ['task_completed', 'task_approved', 'task_rejected', 'task_rejected_closed'], true)) {
+        if ($taskIdFromLink) {
+            $viewLink = 'task.php?task_id=' . (int) $taskIdFromLink;
+            if (!empty($taskInstanceDate)) {
+                $viewLink .= '&instance_date=' . urlencode($taskInstanceDate);
+            }
+            $viewLink .= '#task-' . (int) $taskIdFromLink;
+        } elseif ($viewLink === null) {
+            $viewLink = 'task.php';
+        }
+    }
+
+    if (in_array($type, ['goal_completed', 'goal_ready'], true)) {
+        if ($viewLink === null || strpos($viewLink, 'dashboard_child.php') === 0) {
+            $viewLink = 'goal.php';
+        }
+    }
+
+    if (in_array($type, ['reward_redeemed', 'reward_denied', 'goal_reward_earned'], true)) {
+        $viewLink = 'dashboard_child.php?open_rewards=1';
+        if ($rewardIdFromLink) {
+            $viewLink .= '&highlight_reward=' . (int) $rewardIdFromLink . '#reward-' . (int) $rewardIdFromLink;
+        }
+    }
+
+    if ($type === 'routine_completed') {
+        if ($viewLink === null || strpos($viewLink, 'dashboard_child.php') === 0) {
+            $viewLink = 'routine.php';
+        }
+    }
+
+    return $viewLink;
+};
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -221,9 +314,12 @@ $notificationCount = is_array($notificationsNew) ? count($notificationsNew) : 0;
         .notification-panel { display: none; }
         .notification-panel.active { display: block; }
         .notification-list { list-style: none; padding: 0; margin: 12px 0; display: grid; gap: 10px; }
+        .notification-bulk { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-weight: 600; color: #37474f; }
+        .notification-bulk input { width: 18px; height: 18px; }
         .notification-item { padding: 10px; background: #fff; border: 1px solid #e0e0e0; border-radius: 8px; display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
         .notification-item input[type="checkbox"] { width: 19.8px; height: 19.8px; }
         .notification-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 8px; }
+        .notification-title { font-weight: 700; color: #919191; }
         .goal-celebration { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(255, 248, 225, 0.92); z-index: 5000; }
         .goal-celebration.active { display: flex; }
         .goal-celebration-card { background: #fff; border-radius: 18px; padding: 24px 26px; text-align: center; box-shadow: 0 18px 40px rgba(0,0,0,0.25); position: relative; animation: pop-in 300ms ease; }
@@ -262,6 +358,7 @@ $notificationCount = is_array($notificationsNew) ? count($notificationsNew) : 0;
         .rewards-panel.active { display: block; }
         .reward-list { list-style: none; padding: 0; margin: 12px 0; display: grid; gap: 10px; }
         .reward-list-item { padding: 12px; background: #fff; border: 1px solid #e0e0e0; border-radius: 10px; display: grid; gap: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); text-align: left; }
+        .reward-list-item.highlight { outline: 2px solid #ffd28a; box-shadow: 0 0 0 3px rgba(255, 210, 138, 0.35); }
         .reward-list-item .reward-title { font-weight: 700; }
         .reward-list-item .reward-actions { display: flex; justify-content: flex-end; }
         .points-history-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: none; align-items: center; justify-content: center; z-index: 4200; padding: 14px; }
@@ -300,6 +397,30 @@ $notificationCount = is_array($notificationsNew) ? count($notificationsNew) : 0;
                 childTabButtons.forEach(btn => btn.classList.toggle('active', btn.getAttribute('data-tab') === target));
                 childPanels.forEach(panel => panel.classList.toggle('active', panel.getAttribute('data-tab-panel') === target));
             };
+            if (childModal) {
+                childModal.querySelectorAll('[data-child-bulk-action]').forEach((bulk) => {
+                    bulk.addEventListener('change', () => {
+                        if (!bulk.checked) return;
+                        const form = bulk.closest('form');
+                        if (!form) return;
+                        const actionName = bulk.getAttribute('data-child-bulk-action');
+                        form.querySelectorAll('input[name="notification_ids[]"]').forEach((input) => {
+                            input.checked = true;
+                        });
+                        if (actionName) {
+                            let hidden = form.querySelector(`input[name="${actionName}"]`);
+                            if (!hidden) {
+                                hidden = document.createElement('input');
+                                hidden.type = 'hidden';
+                                hidden.name = actionName;
+                                hidden.value = '1';
+                                form.appendChild(hidden);
+                            }
+                        }
+                        form.submit();
+                    });
+                });
+            }
         const openChildModal = () => {
             if (!childModal) return;
             childModal.classList.add('open');
@@ -347,6 +468,25 @@ $notificationCount = is_array($notificationsNew) ? count($notificationsNew) : 0;
                 rewardsTabs.forEach(btn => {
                     btn.addEventListener('click', () => setRewardsTab(btn.getAttribute('data-rewards-tab')));
                 });
+            }
+
+            const pageParams = new URLSearchParams(window.location.search);
+            const openRewards = pageParams.get('open_rewards');
+            const rewardTabParam = pageParams.get('reward_tab');
+            const highlightReward = pageParams.get('highlight_reward');
+            if ((openRewards === '1' || highlightReward) && rewardsModal) {
+                openRewardsModal();
+                if (rewardTabParam) {
+                    setRewardsTab(rewardTabParam === 'redeemed' ? 'redeemed' : 'available');
+                }
+                if (highlightReward) {
+                    const rewardCard = document.getElementById('reward-' + highlightReward)
+                        || document.getElementById('redeemed-reward-' + highlightReward);
+                    if (rewardCard) {
+                        rewardCard.classList.add('highlight');
+                        rewardCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }
+                }
             }
 
             const historyOpen = document.querySelector('[data-points-history-open]');
@@ -524,16 +664,25 @@ $notificationCount = is_array($notificationsNew) ? count($notificationsNew) : 0;
          <div class="notification-body">
             <form method="POST" action="dashboard_child.php" data-tab-panel="new" class="notification-panel active">
                <?php if (!empty($notificationsNew)): ?>
+                  <label class="notification-bulk">
+                     <input type="checkbox" data-child-bulk-action="mark_notifications_read">
+                     Mark all as read
+                  </label>
                   <ul class="notification-list">
                      <?php foreach ($notificationsNew as $note): ?>
                         <li class="notification-item">
                            <input type="checkbox" name="notification_ids[]" value="<?php echo (int)$note['id']; ?>" aria-label="Mark notification as read">
                            <div>
-                              <div><?php echo htmlspecialchars($note['message']); ?></div>
+                              <div><?php echo $formatChildNotificationMessage($note); ?></div>
                               <div class="notification-meta">
                                  <?php echo htmlspecialchars(date('m/d/Y h:i A', strtotime($note['created_at']))); ?>
                                  <?php if (!empty($note['type'])): ?> | <?php echo htmlspecialchars(str_replace('_', ' ', $note['type'])); ?><?php endif; ?>
-                                 <?php if (!empty($note['link_url'])): ?> | <a href="<?php echo htmlspecialchars($note['link_url']); ?>">View</a><?php endif; ?>
+                                 <?php
+                                    $viewLink = $buildChildNotificationViewLink($note);
+                                    if (!empty($viewLink)) {
+                                        echo ' | <a href="' . htmlspecialchars($viewLink) . '">View</a>';
+                                    }
+                                 ?>
                               </div>
                            </div>
                         </li>
@@ -549,16 +698,25 @@ $notificationCount = is_array($notificationsNew) ? count($notificationsNew) : 0;
 
             <form method="POST" action="dashboard_child.php" data-tab-panel="read" class="notification-panel">
                <?php if (!empty($notificationsRead)): ?>
+                  <label class="notification-bulk">
+                     <input type="checkbox" data-child-bulk-action="move_notifications_trash">
+                     Move all to trash
+                  </label>
                   <ul class="notification-list">
                      <?php foreach ($notificationsRead as $note): ?>
                         <li class="notification-item">
                            <input type="checkbox" name="notification_ids[]" value="<?php echo (int)$note['id']; ?>" aria-label="Move to trash">
                            <div>
-                              <div><?php echo htmlspecialchars($note['message']); ?></div>
+                              <div><?php echo $formatChildNotificationMessage($note); ?></div>
                               <div class="notification-meta">
                                  <?php echo htmlspecialchars(date('m/d/Y h:i A', strtotime($note['created_at']))); ?>
                                  <?php if (!empty($note['type'])): ?> | <?php echo htmlspecialchars(str_replace('_', ' ', $note['type'])); ?><?php endif; ?>
-                                 <?php if (!empty($note['link_url'])): ?> | <a href="<?php echo htmlspecialchars($note['link_url']); ?>">View</a><?php endif; ?>
+                                 <?php
+                                    $viewLink = $buildChildNotificationViewLink($note);
+                                    if (!empty($viewLink)) {
+                                        echo ' | <a href="' . htmlspecialchars($viewLink) . '">View</a>';
+                                    }
+                                 ?>
                               </div>
                            </div>
                            <button type="submit" name="trash_single" value="<?php echo (int)$note['id']; ?>" class="trash-button" aria-label="Move to trash"><i class="fa-solid fa-trash"></i></button>
@@ -575,6 +733,10 @@ $notificationCount = is_array($notificationsNew) ? count($notificationsNew) : 0;
 
             <form method="POST" action="dashboard_child.php" data-tab-panel="deleted" class="notification-panel">
                <?php if (!empty($notificationsDeleted)): ?>
+                  <label class="notification-bulk">
+                     <input type="checkbox" data-child-bulk-action="delete_notifications_perm">
+                     Delete all
+                  </label>
                   <ul class="notification-list">
                      <?php foreach ($notificationsDeleted as $note): ?>
                         <li class="notification-item">
@@ -1157,7 +1319,7 @@ foreach ($taskCountStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
                   <?php if (!empty($data['rewards'])): ?>
                      <ul class="reward-list">
                         <?php foreach ($data['rewards'] as $reward): ?>
-                           <li class="reward-list-item">
+                           <li class="reward-list-item" id="reward-<?php echo (int) $reward['id']; ?>">
                               <div class="reward-title"><?php echo htmlspecialchars($reward['title']); ?> (<?php echo htmlspecialchars($reward['point_cost']); ?> points)</div>
                               <div><?php echo htmlspecialchars($reward['description']); ?></div>
                               <div class="reward-actions">
@@ -1177,7 +1339,7 @@ foreach ($taskCountStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
                   <?php if (!empty($redeemedThisWeek)): ?>
                      <ul class="reward-list">
                         <?php foreach ($redeemedThisWeek as $reward): ?>
-                           <li class="reward-list-item">
+                           <li class="reward-list-item" id="redeemed-reward-<?php echo (int) $reward['id']; ?>">
                               <div class="reward-title"><?php echo htmlspecialchars($reward['title']); ?> (<?php echo htmlspecialchars($reward['point_cost']); ?> points)</div>
                               <div><?php echo htmlspecialchars($reward['description']); ?></div>
                               <div>Redeemed on: <?php echo !empty($reward['redeemed_on']) ? htmlspecialchars(date('m/d/Y h:i A', strtotime($reward['redeemed_on']))) : 'Date unavailable'; ?></div>

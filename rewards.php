@@ -257,6 +257,7 @@ foreach ($activeRewards as $reward) {
         .reward-card { gap: 8px; width: 100%; max-width: none; }
         .reward-card-header { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
         .reward-actions { display: inline-flex; gap: 8px; }
+        .reward-card.highlight { border: 2px solid #f9a825; box-shadow: 0 0 0 3px rgba(249,168,37,0.2); }
         .icon-button { border: none; background: transparent; cursor: pointer; color: #919191; padding: 6px 8px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; }
         .icon-button:hover { background: rgba(0,0,0,0.04); color: #7a7a7a; }
         .icon-button.danger { color: #919191; }
@@ -352,7 +353,7 @@ foreach ($activeRewards as $reward) {
                                 <div class="reward-list" style="display:grid; gap:12px; width:100%;">
                                     <?php if (!empty($childCard['rewards'])): ?>
                                         <?php foreach ($childCard['rewards'] as $reward): ?>
-                                            <div class="template-card reward-card" data-reward-card="<?php echo (int)$reward['id']; ?>" style="width:100%;">
+                                            <div class="template-card reward-card" id="reward-<?php echo (int)$reward['id']; ?>" data-reward-card="<?php echo (int)$reward['id']; ?>" style="width:100%;">
                                                 <div class="reward-card-header">
                                                     <div>
                                                         <strong><?php echo htmlspecialchars($reward['title']); ?></strong>
@@ -407,7 +408,7 @@ foreach ($activeRewards as $reward) {
                                     <?php $fulfilledList = $fulfilledRewardsByChild[$cid] ?? []; ?>
                                     <?php if (!empty($fulfilledList)): ?>
                                         <?php foreach ($fulfilledList as $reward): ?>
-                                            <div class="template-card reward-card" style="width:100%;">
+                                            <div class="template-card reward-card" id="reward-<?php echo (int)$reward['id']; ?>" style="width:100%;">
                                                 <div class="reward-card-header">
                                                     <div>
                                                         <strong><?php echo htmlspecialchars($reward['title']); ?></strong>
@@ -440,7 +441,7 @@ foreach ($activeRewards as $reward) {
                                 <div class="reward-list" style="display:grid; gap:12px; width:100%;">
                                     <?php if (!empty($pendingRewardsByChild[$cid])): ?>
                                         <?php foreach ($pendingRewardsByChild[$cid] as $reward): ?>
-                                            <div class="template-card reward-card" style="width:100%;">
+                                            <div class="template-card reward-card" id="reward-<?php echo (int)$reward['id']; ?>" style="width:100%;">
                                                 <div class="reward-card-header">
                                                     <div>
                                                         <strong><?php echo htmlspecialchars($reward['title']); ?></strong>
@@ -998,6 +999,30 @@ $hasRecentMore = $recentTotal > $recentLimit;
                 openModal(`${headerName} - ${title}`, list);
             }
         };
+        const params = new URLSearchParams(window.location.search);
+        const highlightReward = params.get('highlight_reward');
+        if (highlightReward) {
+            const card = document.getElementById(`reward-${highlightReward}`);
+            if (card) {
+                const list = card.closest('[data-child-active-list], [data-child-redeemed-list], [data-child-pending-list]');
+                let title = 'Rewards';
+                if (list?.hasAttribute('data-child-active-list')) {
+                    title = 'Active Rewards';
+                } else if (list?.hasAttribute('data-child-redeemed-list')) {
+                    title = 'Redeemed Rewards';
+                } else if (list?.hasAttribute('data-child-pending-list')) {
+                    title = 'Awaiting Fulfillment';
+                }
+                const headerName = list?.closest('.child-reward-card')?.querySelector('.child-header strong')?.textContent || title;
+                if (list) {
+                    openModal(`${headerName} - ${title}`, list);
+                    attachRewardListeners(modalBody);
+                    attachStepperListeners(modalBody);
+                }
+                card.classList.add('highlight');
+                card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        }
         if (hash.startsWith('#pending-child-')) {
             const cid = hash.replace('#pending-child-', '');
             openFromHash(`[data-child-pending-list="${cid}"]`, 'Awaiting Fulfillment');

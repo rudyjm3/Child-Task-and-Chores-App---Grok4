@@ -440,7 +440,7 @@ $getRewardFulfillMeta = function($rewardId) use ($db) {
     $rewardId = (int)$rewardId;
     if ($rewardId <= 0) return null;
     if (isset($cache[$rewardId])) return $cache[$rewardId];
-    $stmt = $db->prepare("SELECT fulfilled_on, fulfilled_by FROM rewards WHERE id = :id");
+    $stmt = $db->prepare("SELECT fulfilled_on, fulfilled_by, denied_on, denied_by, denied_note FROM rewards WHERE id = :id");
     $stmt->execute([':id' => $rewardId]);
     $cache[$rewardId] = $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
     return $cache[$rewardId];
@@ -782,6 +782,36 @@ if (isset($_GET['week_schedule'])) {
     ]);
     exit;
 }
+
+$formatParentNotificationMessage = static function (array $note): string {
+    $message = (string) ($note['message'] ?? '');
+    $type = (string) ($note['type'] ?? '');
+    $titleTypes = [
+        'task_completed',
+        'task_approved',
+        'task_rejected',
+        'task_rejected_closed',
+        'routine_completed',
+        'goal_completed',
+        'goal_ready',
+        'goal_reward_earned',
+        'reward_redeemed',
+        'reward_denied'
+    ];
+    if (!in_array($type, $titleTypes, true)) {
+        return htmlspecialchars($message);
+    }
+    $parts = explode(':', $message, 2);
+    if (count($parts) < 2) {
+        return htmlspecialchars($message);
+    }
+    $prefix = htmlspecialchars(trim($parts[0]));
+    $title = htmlspecialchars(ltrim($parts[1]));
+    if ($title === '') {
+        return htmlspecialchars($message);
+    }
+    return $prefix . ': <span class="parent-notification-title">' . $title . '</span>';
+};
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -1064,9 +1094,12 @@ if (isset($_GET['week_schedule'])) {
         .parent-notification-panel { display: none; }
         .parent-notification-panel.active { display: block; }
         .parent-notification-list { list-style: none; padding: 0; margin: 12px 0; display: grid; gap: 8px; }
+        .parent-notification-bulk { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-weight: 600; color: #37474f; }
+        .parent-notification-bulk input { width: 18px; height: 18px; }
         .parent-notification-item { padding: 10px; background: #fff; border: 1px solid #e0e0e0; border-radius: 8px; display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
         .parent-notification-item input[type="checkbox"] { width: 19.8px; height: 19.8px; }
         .parent-notification-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 8px; }
+        .parent-notification-title { font-weight: 700; color: #919191; }
         .parent-task-photo-thumb { width: 54px; height: 54px; border-radius: 10px; object-fit: cover; border: 1px solid #d5def0; box-shadow: 0 2px 6px rgba(0,0,0,0.12); cursor: pointer; }
         .parent-photo-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: none; align-items: center; justify-content: center; z-index: 4200; padding: 14px; }
         .parent-photo-modal.open { display: flex; }
@@ -1170,6 +1203,30 @@ if (isset($_GET['week_schedule'])) {
                 parentTabButtons.forEach(btn => btn.classList.toggle('active', btn.getAttribute('data-tab') === target));
                 parentPanels.forEach(panel => panel.classList.toggle('active', panel.getAttribute('data-tab-panel') === target));
             };
+            if (parentModal) {
+                parentModal.querySelectorAll('[data-parent-bulk-action]').forEach((bulk) => {
+                    bulk.addEventListener('change', () => {
+                        if (!bulk.checked) return;
+                        const form = bulk.closest('form');
+                        if (!form) return;
+                        const actionName = bulk.getAttribute('data-parent-bulk-action');
+                        form.querySelectorAll('input[name="parent_notification_ids[]"]').forEach((input) => {
+                            input.checked = true;
+                        });
+                        if (actionName) {
+                            let hidden = form.querySelector(`input[name="${actionName}"]`);
+                            if (!hidden) {
+                                hidden = document.createElement('input');
+                                hidden.type = 'hidden';
+                                hidden.name = actionName;
+                                hidden.value = '1';
+                                form.appendChild(hidden);
+                            }
+                        }
+                        form.submit();
+                    });
+                });
+            }
             const openParentModal = () => {
                 if (!parentModal) return;
                 parentModal.classList.add('open');
@@ -1958,18 +2015,24 @@ if (isset($_GET['week_schedule'])) {
          <div class="parent-notification-body">
             <form method="POST" action="dashboard_parent.php" data-tab-panel="new" class="parent-notification-panel active">
                 <?php if (!empty($parentNew)): ?>
+                    <label class="parent-notification-bulk">
+                        <input type="checkbox" data-parent-bulk-action="mark_parent_notifications_read">
+                        Mark all as read
+                    </label>
                     <ul class="parent-notification-list">
                         <?php foreach ($parentNew as $note): ?>
                             <li class="parent-notification-item">
                                 <input type="checkbox" name="parent_notification_ids[]" value="<?php echo (int)$note['id']; ?>" aria-label="Mark notification as read">
                                 <div>
-                                    <div><?php echo htmlspecialchars($note['message']); ?></div>
+                                    <div><?php echo $formatParentNotificationMessage($note); ?></div>
                                     <?php
                                         $taskIdFromLink = null;
                                         $taskInstanceDate = null;
                                         $taskPhoto = null;
                                         $taskStatus = null;
                                         $taskApprovedAt = null;
+                                        $taskRejectedAt = null;
+                                        $taskRejectedAt = null;
                                         if ($note['type'] === 'task_completed' && !empty($note['link_url'])) {
                                             $urlParts = parse_url($note['link_url']);
                                             if (!empty($urlParts['query'])) {
@@ -1985,16 +2048,16 @@ if (isset($_GET['week_schedule'])) {
                                                 $taskIdFromLink = (int) $matches[1];
                                             }
                                             if ($taskIdFromLink) {
-                                                $taskPhotoStmt = $db->prepare("SELECT photo_proof, status, approved_at, recurrence FROM tasks WHERE id = :id LIMIT 1");
+                                                $taskPhotoStmt = $db->prepare("SELECT photo_proof, status, approved_at, rejected_at, recurrence FROM tasks WHERE id = :id LIMIT 1");
                                                 $taskPhotoStmt->execute([':id' => $taskIdFromLink]);
                                                 $taskRow = $taskPhotoStmt->fetch(PDO::FETCH_ASSOC);
                                                 $taskIsRecurring = !empty($taskRow['recurrence']);
                                                 if ($taskIsRecurring) {
                                                     if ($taskInstanceDate) {
-                                                        $instStmt = $db->prepare("SELECT date_key, photo_proof, status, approved_at FROM task_instances WHERE task_id = :id AND date_key = :date_key LIMIT 1");
+                                                        $instStmt = $db->prepare("SELECT date_key, photo_proof, status, approved_at, rejected_at FROM task_instances WHERE task_id = :id AND date_key = :date_key LIMIT 1");
                                                         $instStmt->execute([':id' => $taskIdFromLink, ':date_key' => $taskInstanceDate]);
                                                     } else {
-                                                        $instStmt = $db->prepare("SELECT date_key, photo_proof, status, approved_at FROM task_instances WHERE task_id = :id ORDER BY completed_at DESC LIMIT 1");
+                                                        $instStmt = $db->prepare("SELECT date_key, photo_proof, status, approved_at, rejected_at FROM task_instances WHERE task_id = :id ORDER BY completed_at DESC LIMIT 1");
                                                         $instStmt->execute([':id' => $taskIdFromLink]);
                                                     }
                                                     $instRow = $instStmt->fetch(PDO::FETCH_ASSOC);
@@ -2002,10 +2065,12 @@ if (isset($_GET['week_schedule'])) {
                                                     $taskPhoto = $instRow['photo_proof'] ?? null;
                                                     $taskStatus = $instRow['status'] ?? null;
                                                     $taskApprovedAt = $instRow['approved_at'] ?? null;
+                                                    $taskRejectedAt = $instRow['rejected_at'] ?? null;
                                                 } else {
                                                     $taskPhoto = $taskRow['photo_proof'] ?? null;
                                                     $taskStatus = $taskRow['status'] ?? null;
                                                     $taskApprovedAt = $taskRow['approved_at'] ?? null;
+                                                    $taskRejectedAt = $taskRow['rejected_at'] ?? null;
                                                 }
                                             }
                                         }
@@ -2027,8 +2092,8 @@ if (isset($_GET['week_schedule'])) {
                                                 }
                                             }
                                         }
-                                        if ($note['type'] === 'reward_redeemed' && $rewardIdFromLink) {
-                                            $viewLink = 'dashboard_parent.php?highlight_redeemed=' . (int)$rewardIdFromLink . '#redeemed-reward-' . (int)$rewardIdFromLink;
+                                        if ($rewardIdFromLink && in_array($note['type'], ['reward_redeemed', 'goal_reward_earned'], true)) {
+                                            $viewLink = 'rewards.php?highlight_reward=' . (int)$rewardIdFromLink . '#reward-' . (int)$rewardIdFromLink;
                                         }
                                         if ($note['type'] === 'task_completed' && $taskIdFromLink) {
                                             if (!empty($note['link_url'])) {
@@ -2040,6 +2105,15 @@ if (isset($_GET['week_schedule'])) {
                                                 }
                                                 $viewLink .= '#task-' . (int) $taskIdFromLink;
                                             }
+                                        }
+                                        if (in_array($note['type'], ['goal_completed', 'goal_ready'], true)) {
+                                            $viewLink = 'goal.php';
+                                        }
+                                        if ($note['type'] === 'routine_completed' && empty($viewLink)) {
+                                            $viewLink = 'routine.php';
+                                        }
+                                        if ($note['type'] === 'reward_redeemed' && empty($viewLink)) {
+                                            $viewLink = 'rewards.php';
                                         }
                                         if ($viewLink) {
                                             echo ' | <a href="' . htmlspecialchars($viewLink) . '">View</a>';
@@ -2053,7 +2127,22 @@ if (isset($_GET['week_schedule'])) {
                                     </div>
                                 <?php endif; ?>
                                 <?php if ($note['type'] === 'reward_redeemed' && $rewardIdFromLink): ?>
-                                    <?php if (!empty($fulfillMeta) && !empty($fulfillMeta['fulfilled_on'])): ?>
+                                    <?php if (!empty($fulfillMeta) && !empty($fulfillMeta['denied_on'])): ?>
+                                        <div class="parent-notification-meta">
+                                            Denied on: <?php echo htmlspecialchars(date('m/d/Y h:i A', strtotime($fulfillMeta['denied_on']))); ?>
+                                            <?php if (!empty($fulfillMeta['denied_by'])):
+                                                $deniedNameStmt = $db->prepare("SELECT CONCAT(first_name, ' ', last_name) AS name, username FROM users WHERE id = :uid");
+                                                $deniedNameStmt->execute([':uid' => (int)$fulfillMeta['denied_by']]);
+                                                $dn = $deniedNameStmt->fetch(PDO::FETCH_ASSOC);
+                                                $deniedName = $dn && trim($dn['name']) !== '' ? $dn['name'] : ($dn['username'] ?? '');
+                                            ?>
+                                                by <?php echo htmlspecialchars($deniedName); ?>
+                                            <?php endif; ?>
+                                            <?php if (!empty($fulfillMeta['denied_note'])): ?>
+                                                | Reason: <?php echo htmlspecialchars($fulfillMeta['denied_note']); ?>
+                                            <?php endif; ?>
+                                        </div>
+                                    <?php elseif (!empty($fulfillMeta) && !empty($fulfillMeta['fulfilled_on'])): ?>
                                         <div class="parent-notification-meta">
                                             Fulfilled on: <?php echo htmlspecialchars(date('m/d/Y h:i A', strtotime($fulfillMeta['fulfilled_on']))); ?>
                                             <?php if (!empty($fulfillMeta['fulfilled_by'])):
@@ -2083,6 +2172,10 @@ if (isset($_GET['week_schedule'])) {
                                             <div class="parent-notification-meta">
                                                 Approved!<?php if (!empty($taskApprovedAt)): ?> <?php echo htmlspecialchars(date('m/d/Y h:i A', strtotime($taskApprovedAt))); ?><?php endif; ?>
                                             </div>
+                                        <?php elseif ($taskStatus === 'rejected'): ?>
+                                            <div class="parent-notification-meta">
+                                                Rejected<?php if (!empty($taskRejectedAt)): ?> <?php echo htmlspecialchars(date('m/d/Y h:i A', strtotime($taskRejectedAt))); ?><?php endif; ?>
+                                            </div>
                                         <?php else: ?>
                                               <?php if (!empty($taskInstanceDate)): ?>
                                                   <input type="hidden" name="instance_date_map[<?php echo (int)$taskIdFromLink; ?>]" value="<?php echo htmlspecialchars($taskInstanceDate, ENT_QUOTES); ?>">
@@ -2106,12 +2199,16 @@ if (isset($_GET['week_schedule'])) {
 
             <form method="POST" action="dashboard_parent.php" data-tab-panel="read" class="parent-notification-panel">
                 <?php if (!empty($parentRead)): ?>
+                    <label class="parent-notification-bulk">
+                        <input type="checkbox" data-parent-bulk-action="move_parent_notifications_trash">
+                        Move all to trash
+                    </label>
                     <ul class="parent-notification-list">
                         <?php foreach ($parentRead as $note): ?>
                             <li class="parent-notification-item">
                                 <input type="checkbox" name="parent_notification_ids[]" value="<?php echo (int)$note['id']; ?>" aria-label="Move to trash">
                                 <div>
-                                    <div><?php echo htmlspecialchars($note['message']); ?></div>
+                                    <div><?php echo $formatParentNotificationMessage($note); ?></div>
                                     <?php
                                         $taskIdFromLink = null;
                                         $taskInstanceDate = null;
@@ -2133,16 +2230,16 @@ if (isset($_GET['week_schedule'])) {
                                                 $taskIdFromLink = (int) $matches[1];
                                             }
                                             if ($taskIdFromLink) {
-                                                $taskPhotoStmt = $db->prepare("SELECT photo_proof, status, approved_at, recurrence FROM tasks WHERE id = :id LIMIT 1");
+                                                $taskPhotoStmt = $db->prepare("SELECT photo_proof, status, approved_at, rejected_at, recurrence FROM tasks WHERE id = :id LIMIT 1");
                                                 $taskPhotoStmt->execute([':id' => $taskIdFromLink]);
                                                 $taskRow = $taskPhotoStmt->fetch(PDO::FETCH_ASSOC);
                                                 $taskIsRecurring = !empty($taskRow['recurrence']);
                                                 if ($taskIsRecurring) {
                                                     if ($taskInstanceDate) {
-                                                        $instStmt = $db->prepare("SELECT date_key, photo_proof, status, approved_at FROM task_instances WHERE task_id = :id AND date_key = :date_key LIMIT 1");
+                                                        $instStmt = $db->prepare("SELECT date_key, photo_proof, status, approved_at, rejected_at FROM task_instances WHERE task_id = :id AND date_key = :date_key LIMIT 1");
                                                         $instStmt->execute([':id' => $taskIdFromLink, ':date_key' => $taskInstanceDate]);
                                                     } else {
-                                                        $instStmt = $db->prepare("SELECT date_key, photo_proof, status, approved_at FROM task_instances WHERE task_id = :id ORDER BY completed_at DESC LIMIT 1");
+                                                        $instStmt = $db->prepare("SELECT date_key, photo_proof, status, approved_at, rejected_at FROM task_instances WHERE task_id = :id ORDER BY completed_at DESC LIMIT 1");
                                                         $instStmt->execute([':id' => $taskIdFromLink]);
                                                     }
                                                     $instRow = $instStmt->fetch(PDO::FETCH_ASSOC);
@@ -2150,10 +2247,12 @@ if (isset($_GET['week_schedule'])) {
                                                     $taskPhoto = $instRow['photo_proof'] ?? null;
                                                     $taskStatus = $instRow['status'] ?? null;
                                                     $taskApprovedAt = $instRow['approved_at'] ?? null;
+                                                    $taskRejectedAt = $instRow['rejected_at'] ?? null;
                                                 } else {
                                                     $taskPhoto = $taskRow['photo_proof'] ?? null;
                                                     $taskStatus = $taskRow['status'] ?? null;
                                                     $taskApprovedAt = $taskRow['approved_at'] ?? null;
+                                                    $taskRejectedAt = $taskRow['rejected_at'] ?? null;
                                                 }
                                             }
                                         }
@@ -2174,8 +2273,8 @@ if (isset($_GET['week_schedule'])) {
                                                     }
                                                 }
                                             }
-                                            if ($note['type'] === 'reward_redeemed' && $rewardIdFromLink) {
-                                                $viewLink = 'dashboard_parent.php?highlight_redeemed=' . (int)$rewardIdFromLink . '#redeemed-reward-' . (int)$rewardIdFromLink;
+                                            if ($rewardIdFromLink && in_array($note['type'], ['reward_redeemed', 'goal_reward_earned'], true)) {
+                                                $viewLink = 'rewards.php?highlight_reward=' . (int)$rewardIdFromLink . '#reward-' . (int)$rewardIdFromLink;
                                             }
                                             if ($note['type'] === 'task_completed' && $taskIdFromLink) {
                                                 if (!empty($note['link_url'])) {
@@ -2187,6 +2286,15 @@ if (isset($_GET['week_schedule'])) {
                                                     }
                                                     $viewLink .= '#task-' . (int) $taskIdFromLink;
                                                 }
+                                            }
+                                            if (in_array($note['type'], ['goal_completed', 'goal_ready'], true)) {
+                                                $viewLink = 'goal.php';
+                                            }
+                                            if ($note['type'] === 'routine_completed' && empty($viewLink)) {
+                                                $viewLink = 'routine.php';
+                                            }
+                                            if ($note['type'] === 'reward_redeemed' && empty($viewLink)) {
+                                                $viewLink = 'rewards.php';
                                             }
                                             if ($viewLink) {
                                                 echo ' | <a href="' . htmlspecialchars($viewLink) . '">View</a>';
@@ -2200,7 +2308,22 @@ if (isset($_GET['week_schedule'])) {
                                     </div>
                                 <?php endif; ?>
                                 <?php if ($note['type'] === 'reward_redeemed' && $rewardIdFromLink): ?>
-                                        <?php if (!empty($fulfillMeta) && !empty($fulfillMeta['fulfilled_on'])): ?>
+                                        <?php if (!empty($fulfillMeta) && !empty($fulfillMeta['denied_on'])): ?>
+                                            <div class="parent-notification-meta">
+                                                Denied on: <?php echo htmlspecialchars(date('m/d/Y h:i A', strtotime($fulfillMeta['denied_on']))); ?>
+                                                <?php if (!empty($fulfillMeta['denied_by'])):
+                                                    $deniedNameStmt = $db->prepare("SELECT CONCAT(first_name, ' ', last_name) AS name, username FROM users WHERE id = :uid");
+                                                    $deniedNameStmt->execute([':uid' => (int)$fulfillMeta['denied_by']]);
+                                                    $dn = $deniedNameStmt->fetch(PDO::FETCH_ASSOC);
+                                                    $deniedName = $dn && trim($dn['name']) !== '' ? $dn['name'] : ($dn['username'] ?? '');
+                                                ?>
+                                                    by <?php echo htmlspecialchars($deniedName); ?>
+                                                <?php endif; ?>
+                                                <?php if (!empty($fulfillMeta['denied_note'])): ?>
+                                                    | Reason: <?php echo htmlspecialchars($fulfillMeta['denied_note']); ?>
+                                                <?php endif; ?>
+                                            </div>
+                                        <?php elseif (!empty($fulfillMeta) && !empty($fulfillMeta['fulfilled_on'])): ?>
                                             <div class="parent-notification-meta">
                                                 Fulfilled on: <?php echo htmlspecialchars(date('m/d/Y h:i A', strtotime($fulfillMeta['fulfilled_on']))); ?>
                                                 <?php if (!empty($fulfillMeta['fulfilled_by'])):
@@ -2212,18 +2335,29 @@ if (isset($_GET['week_schedule'])) {
                                                     by <?php echo htmlspecialchars($fulfillName); ?>
                                                 <?php endif; ?>
                                             </div>
-                                          <?php else: ?>
-                                              <div class="inline-form" style="margin-top:6px;">
-                                                  <input type="hidden" name="parent_notification_id" value="<?php echo (int)$note['id']; ?>">
-                                                  <button type="submit" name="fulfill_reward" value="<?php echo (int)$rewardIdFromLink; ?>" class="button approve-button">Fulfill</button>
-                                              </div>
-                                              <div class="inline-form" style="margin-top:6px;">
-                                                  <input type="hidden" name="parent_notification_id" value="<?php echo (int)$note['id']; ?>">
-                                                  <textarea name="deny_reward_note" rows="2" placeholder="Optional deny note" style="width:100%; max-width:360px;"></textarea>
-                                                  <button type="submit" name="deny_reward" value="<?php echo (int)$rewardIdFromLink; ?>" class="button secondary">Deny</button>
-                                              </div>
-                                          <?php endif; ?>
-                                      <?php endif; ?>
+                                        <?php else: ?>
+                                            <div class="inline-form" style="margin-top:6px;">
+                                                <input type="hidden" name="parent_notification_id" value="<?php echo (int)$note['id']; ?>">
+                                                <button type="submit" name="fulfill_reward" value="<?php echo (int)$rewardIdFromLink; ?>" class="button approve-button">Fulfill</button>
+                                            </div>
+                                            <div class="inline-form" style="margin-top:6px;">
+                                                <input type="hidden" name="parent_notification_id" value="<?php echo (int)$note['id']; ?>">
+                                                <textarea name="deny_reward_note" rows="2" placeholder="Optional deny note" style="width:100%; max-width:360px;"></textarea>
+                                                <button type="submit" name="deny_reward" value="<?php echo (int)$rewardIdFromLink; ?>" class="button secondary">Deny</button>
+                                            </div>
+                                        <?php endif; ?>
+                                    <?php endif; ?>
+                                    <?php if ($note['type'] === 'task_completed' && $taskIdFromLink): ?>
+                                        <div class="parent-notification-meta">
+                                            <?php if ($taskStatus === 'approved'): ?>
+                                                Approved<?php if (!empty($taskApprovedAt)): ?> <?php echo htmlspecialchars(date('m/d/Y h:i A', strtotime($taskApprovedAt))); ?><?php endif; ?>
+                                            <?php elseif ($taskStatus === 'rejected'): ?>
+                                                Rejected<?php if (!empty($taskRejectedAt)): ?> <?php echo htmlspecialchars(date('m/d/Y h:i A', strtotime($taskRejectedAt))); ?><?php endif; ?>
+                                            <?php else: ?>
+                                                Awaiting approval
+                                            <?php endif; ?>
+                                        </div>
+                                    <?php endif; ?>
                                 </div>
                                 <button type="submit" name="trash_parent_single" value="<?php echo (int)$note['id']; ?>" class="parent-trash-button" aria-label="Move to trash"><i class="fa-solid fa-trash"></i></button>
                             </li>
@@ -2239,6 +2373,10 @@ if (isset($_GET['week_schedule'])) {
 
             <form method="POST" action="dashboard_parent.php" data-tab-panel="deleted" class="parent-notification-panel">
                 <?php if (!empty($parentDeleted)): ?>
+                    <label class="parent-notification-bulk">
+                        <input type="checkbox" data-parent-bulk-action="delete_parent_notifications_perm">
+                        Delete all
+                    </label>
                     <ul class="parent-notification-list">
                         <?php foreach ($parentDeleted as $note): ?>
                             <li class="parent-notification-item">
