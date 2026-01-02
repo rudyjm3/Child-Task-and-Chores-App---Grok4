@@ -242,6 +242,7 @@ $buildChildNotificationViewLink = static function (array $note): ?string {
     <style>
         .dashboard { padding: 20px; /*max-width: 720px;*/ max-width: 100%; margin: 0 auto; text-align: center; }
         .points-summary { margin: 20px 0; display: flex; align-items: flex-start; gap: 25px; text-align: left; }
+        .points-left { display: contents; }
         .child-identity { display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 120px; }
         .child-avatar-wrap { position: relative; display: inline-block; }
         .child-edit-wrapper { display: flex; justify-content: center; }
@@ -297,10 +298,16 @@ $buildChildNotificationViewLink = static function (array $note): ?string {
         @media (max-width: 900px) {
             .week-day-name-full { display: none; }
             .week-day-name-initial { display: inline; }
+            .points-summary { display: grid; grid-template-columns: minmax(160px, max-content) minmax(0, 1fr) minmax(0, 1fr); column-gap: 25px; align-items: start; }
+            .points-left { display: flex; flex-direction: column; gap: 18px; }
+            .points-left { grid-column: 1; }
+            .goal-summary { grid-column: 2; }
+            .week-calendar { grid-column: 3; }
         }
         @media (max-width: 768px) { .dashboard { padding: 10px; } .button { width: 100%; } }
         @media (max-width: 600px) {
-            .points-summary { flex-direction: column; align-items: center; text-align: center; }
+            .points-summary { display: flex; flex-direction: column; align-items: center; text-align: center; }
+            .points-left { display: contents; }
         }
         /* Notifications Modal */
         .notification-trigger { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; background: #fff; border: 2px solid #ffd28a; border-radius: 50%; box-shadow: 0 2px 4px rgba(0,0,0,0.12); cursor: pointer; }
@@ -1243,25 +1250,27 @@ foreach ($taskCountStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
          window.weekScheduleToday = "<?php echo htmlspecialchars($todayDate, ENT_QUOTES); ?>";
       </script>
       <div class="points-summary">
-         <div class="child-identity">
-            <div class="child-avatar-wrap">
-               <img class="child-avatar" src="<?php echo htmlspecialchars($childAvatar); ?>" alt="<?php echo htmlspecialchars($childFirstName !== '' ? $childFirstName : 'Child'); ?>">
-               <button type="button" class="notification-trigger avatar-notification" data-child-notify-trigger aria-label="Notifications"><i class="fa-solid fa-bell"></i><?php if ($notificationCount > 0): ?><span class="notification-badge"><?php echo (int)$notificationCount; ?></span><?php endif; ?></button>
+         <div class="points-left">
+            <div class="child-identity">
+               <div class="child-avatar-wrap">
+                  <img class="child-avatar" src="<?php echo htmlspecialchars($childAvatar); ?>" alt="<?php echo htmlspecialchars($childFirstName !== '' ? $childFirstName : 'Child'); ?>">
+                  <button type="button" class="notification-trigger avatar-notification" data-child-notify-trigger aria-label="Notifications"><i class="fa-solid fa-bell"></i><?php if ($notificationCount > 0): ?><span class="notification-badge"><?php echo (int)$notificationCount; ?></span><?php endif; ?></button>
+               </div>
+               <div class="child-first-name"><?php echo htmlspecialchars($childFirstName); ?></div>
+               <div class="child-edit-wrapper">
+                  <a class="child-edit-button" href="profile.php?self=1" aria-label="Edit profile">
+                     <i class="fa-solid fa-pen"></i>
+                  </a>
+               </div>
             </div>
-            <div class="child-first-name"><?php echo htmlspecialchars($childFirstName); ?></div>
-            <div class="child-edit-wrapper">
-               <a class="child-edit-button" href="profile.php?self=1" aria-label="Edit profile">
-                  <i class="fa-solid fa-pen"></i>
-               </a>
+            <div class="points-total">
+               <span class="points-total-label">Total Points</span>
+               <span class="points-total-value"><?php echo $childTotalPoints; ?></span>
+               <button type="button" class="points-history-button" data-points-history-open aria-haspopup="dialog" aria-controls="points-history-modal">
+                  <i class="fa-solid fa-clock-rotate-left"></i>History
+               </button>
             </div>
          </div>
-          <div class="points-total">
-             <span class="points-total-label">Total Points</span>
-             <span class="points-total-value"><?php echo $childTotalPoints; ?></span>
-             <button type="button" class="points-history-button" data-points-history-open aria-haspopup="dialog" aria-controls="points-history-modal">
-                <i class="fa-solid fa-clock-rotate-left"></i>History
-             </button>
-          </div>
           <div class="goal-summary">
              <div class="goal-summary-header">
                 <h3 class="goal-summary-title">Goals</h3>

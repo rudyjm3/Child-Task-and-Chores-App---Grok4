@@ -851,6 +851,7 @@ $formatParentNotificationMessage = static function (array $note): string {
         .children-overview-grid { display: grid; grid-template-columns: 1fr; gap: 20px; }
         .child-info-card, .reward-item, .goal-item { background-color: #f5f5f5; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
         .child-info-card { width: 100%; display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 20px; align-items: start; min-height: 100%; background-color: #fff; margin: 20px 0;}
+        .child-info-left { display: contents; }
         .child-info-header { display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; }
         .child-info-header img { width: 72px; height: 72px; border-radius: 50%; object-fit: cover; border: 2px solid #ececec; }
         .child-info-header-details { display: flex; flex-direction: column; gap: 4px; }
@@ -1094,6 +1095,12 @@ $formatParentNotificationMessage = static function (array $note): string {
         .routine-log-item { border: 1px solid #e3e7eb; border-radius: 10px; padding: 10px; display: grid; gap: 6px; background: #f9fbfd; }
         .routine-log-item .meta { color: #546e7a; font-size: 0.9rem; display: flex; flex-wrap: wrap; gap: 10px; }
         .routine-log-item .overtime { color: #c62828; font-weight: 700; }
+        @media (max-width: 900px) {
+            .child-info-card { grid-template-columns: minmax(160px, max-content) minmax(0, 1fr) minmax(0, 1fr); column-gap: 20px; row-gap: 16px; align-items: start; }
+            .child-info-left { display: flex; flex-direction: column; gap: 18px; grid-column: 1; }
+            .child-info-body { grid-column: 2; }
+            .child-schedule-card { grid-column: 3; }
+        }
         @media (max-width: 768px) {
             .overtime-date > summary, .overtime-routine > summary { padding: 12px; }
             .ot-row-header { flex-direction: column; align-items: flex-start; }
@@ -2477,47 +2484,49 @@ $formatParentNotificationMessage = static function (array $note): string {
                      $weekScheduleJson = htmlspecialchars(json_encode($weekSchedule, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT), ENT_QUOTES);
                   ?>
                   <div class="child-info-card">
-                      <div class="child-info-header">
-                         <img src="<?php echo htmlspecialchars($child['avatar'] ?? 'default-avatar.png'); ?>" alt="Avatar for <?php echo htmlspecialchars($child['child_name']); ?>">
-                         <div class="child-info-header-details">
-                            <p class="child-info-name"><?php echo htmlspecialchars($child['child_name']); ?></p>
-                            <p class="child-info-meta">Age: <?php echo htmlspecialchars($child['age'] ?? 'N/A'); ?></p>
-                            <div class="child-info-actions">
-                               <?php if (in_array($role_type, ['main_parent', 'secondary_parent'])): ?>
-                                   <a href="profile.php?user_id=<?php echo $child['child_user_id']; ?>&type=child" class="child-action-icon" aria-label="Edit Child"><i class="fa-solid fa-pen"></i></a>
-                               <?php endif; ?>
-                               <?php if ($role_type === 'main_parent'): ?>
-                                   <form method="POST" data-role="child-remove-form">
-                                       <input type="hidden" name="delete_user_id" value="<?php echo $child['child_user_id']; ?>">
-                                       <input type="hidden" name="delete_mode" value="soft">
-                                       <input type="hidden" name="delete_user" value="1">
-                                       <button type="submit" class="child-action-icon danger" data-action="remove-child" aria-label="Remove Child"><i class="fa-solid fa-trash"></i></button>
-                                   </form>
-                               <?php endif; ?>
-                            </div>
-                         </div>
-                      </div>
-                      <div class="points-progress-wrapper">
-                          <div class="points-progress-label">Points Earned</div>
-                          <div class="points-number" data-points="<?php echo (int)($child['points_earned'] ?? 0); ?>">0</div>
-                          <?php if (in_array($role_type, ['main_parent', 'secondary_parent'], true)): ?>
+                      <div class="child-info-left">
+                          <div class="child-info-header">
+                             <img src="<?php echo htmlspecialchars($child['avatar'] ?? 'default-avatar.png'); ?>" alt="Avatar for <?php echo htmlspecialchars($child['child_name']); ?>">
+                             <div class="child-info-header-details">
+                                <p class="child-info-name"><?php echo htmlspecialchars($child['child_name']); ?></p>
+                                <p class="child-info-meta">Age: <?php echo htmlspecialchars($child['age'] ?? 'N/A'); ?></p>
+                                <div class="child-info-actions">
+                                   <?php if (in_array($role_type, ['main_parent', 'secondary_parent'])): ?>
+                                       <a href="profile.php?user_id=<?php echo $child['child_user_id']; ?>&type=child" class="child-action-icon" aria-label="Edit Child"><i class="fa-solid fa-pen"></i></a>
+                                   <?php endif; ?>
+                                   <?php if ($role_type === 'main_parent'): ?>
+                                       <form method="POST" data-role="child-remove-form">
+                                           <input type="hidden" name="delete_user_id" value="<?php echo $child['child_user_id']; ?>">
+                                           <input type="hidden" name="delete_mode" value="soft">
+                                           <input type="hidden" name="delete_user" value="1">
+                                           <button type="submit" class="child-action-icon danger" data-action="remove-child" aria-label="Remove Child"><i class="fa-solid fa-trash"></i></button>
+                                       </form>
+                                   <?php endif; ?>
+                                </div>
+                             </div>
+                          </div>
+                          <div class="points-progress-wrapper">
+                              <div class="points-progress-label">Points Earned</div>
+                              <div class="points-number" data-points="<?php echo (int)($child['points_earned'] ?? 0); ?>">0</div>
+                              <?php if (in_array($role_type, ['main_parent', 'secondary_parent'], true)): ?>
+                                  <button type="button"
+                                      class="button adjust-button"
+                                      data-role="open-adjust-modal"
+                                      data-child-id="<?php echo (int)$child['child_user_id']; ?>"
+                                      data-child-name="<?php echo htmlspecialchars($child['child_name']); ?>"
+                                      data-history='<?php echo htmlspecialchars(json_encode($child['point_adjustments'] ?? [], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT)); ?>'>
+                                      <span class="label">Points</span>
+                                      <span class="icon">+ / -</span>
+                                  </button>
+                              <?php endif; ?>
                               <button type="button"
-                                  class="button adjust-button"
-                                  data-role="open-adjust-modal"
-                                  data-child-id="<?php echo (int)$child['child_user_id']; ?>"
-                                  data-child-name="<?php echo htmlspecialchars($child['child_name']); ?>"
-                                  data-history='<?php echo htmlspecialchars(json_encode($child['point_adjustments'] ?? [], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT)); ?>'>
-                                  <span class="label">Points</span>
-                                  <span class="icon">+ / -</span>
+                                      class="button secondary"
+                                      data-child-history-open
+                                      data-child-history-id="<?php echo (int)$child['child_user_id']; ?>"
+                                      data-child-history-name="<?php echo htmlspecialchars($child['child_name']); ?>">
+                                  History
                               </button>
-                          <?php endif; ?>
-                          <button type="button"
-                                  class="button secondary"
-                                  data-child-history-open
-                                  data-child-history-id="<?php echo (int)$child['child_user_id']; ?>"
-                                  data-child-history-name="<?php echo htmlspecialchars($child['child_name']); ?>">
-                              History
-                          </button>
+                          </div>
                       </div>
                       <div class="child-info-content">
                       <?php
