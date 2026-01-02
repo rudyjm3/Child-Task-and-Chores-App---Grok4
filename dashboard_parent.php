@@ -891,6 +891,8 @@ $formatParentNotificationMessage = static function (array $note): string {
         .child-schedule-item:hover { background: #f0f0f0; }
         .child-schedule-main { display: flex; align-items: center; gap: 8px; }
         .child-schedule-main>i { color: #919191; }
+        .child-schedule-card .child-schedule-main > i.fa-list-check { color: #ef6c00; }
+        .child-schedule-card .child-schedule-main > i.fa-repeat { color: #0d47a1; }
         .child-schedule-title { font-weight: 600; color: #3e2723; }
         .child-schedule-time { color: #6d4c41; font-size: 0.9rem; }
         .child-schedule-points { font-weight: 700; color: #2e7d32; white-space: nowrap; }
@@ -950,6 +952,10 @@ $formatParentNotificationMessage = static function (array $note): string {
         .week-modal .calendar-task-item:hover { background: #ffe9c6; }
         .week-modal .calendar-task-header { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
         .week-modal .task-week-list .calendar-task-header { flex-direction: row; align-items: center; flex-wrap: wrap; }
+        .week-modal .calendar-task-type-icon { font-size: 1rem; }
+        .week-modal .calendar-task-type-icon.is-task { color: #ef6c00; }
+        .week-modal .calendar-task-type-icon.is-routine { color: #0d47a1; }
+        .week-modal .task-week-list .calendar-task-type-icon { align-self: center; }
         .week-modal .calendar-task-title-wrap { display: inline-flex; align-items: center; gap: 6px; flex: 1; min-width: 0; }
         .week-modal .calendar-task-badge { display: inline-flex; align-items: center; gap: 4px; width: fit-content; padding: 2px 8px; border-radius: 999px; font-size: 0.7rem; font-weight: 700; letter-spacing: 0.02em; text-transform: uppercase; }
         .week-modal .calendar-task-badge.overdue { background: #d9534f; color: #fff; }
@@ -1530,6 +1536,10 @@ $formatParentNotificationMessage = static function (array $note): string {
                     }
                     const header = document.createElement('div');
                     header.className = 'calendar-task-header';
+                    const typeIcon = document.createElement('i');
+                    typeIcon.className = item.type === 'Routine'
+                        ? 'fa-solid fa-repeat calendar-task-type-icon is-routine'
+                        : 'fa-solid fa-list-check calendar-task-type-icon is-task';
                     const titleWrap = document.createElement('span');
                     titleWrap.className = 'calendar-task-title-wrap';
                     const title = document.createElement('span');
@@ -1540,6 +1550,7 @@ $formatParentNotificationMessage = static function (array $note): string {
                     points.className = 'calendar-task-points';
                     points.textContent = `${item.points || 0} pts`;
                     const badge = buildBadge(item, useTextDual);
+                    header.appendChild(typeIcon);
                     header.appendChild(titleWrap);
                     header.appendChild(points);
                     if (badge) {
