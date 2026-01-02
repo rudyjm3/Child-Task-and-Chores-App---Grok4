@@ -149,7 +149,10 @@ function hydrateGoalTaskData(array $goals) {
             $taskMap[$goalId] = [];
         }
         if (!empty($row['title'])) {
-            $taskMap[$goalId][] = $row['title'];
+            $taskMap[$goalId][] = [
+                'id' => (int) ($row['task_id'] ?? 0),
+                'title' => $row['title']
+            ];
         }
     }
 
@@ -873,19 +876,6 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
             );
             opacity: 1;
         }
-        body:not(.child-theme) .goal-progress-bar.task-quota.has-steps::after {
-            background-image: repeating-linear-gradient(
-                -70deg,
-                transparent,
-                transparent calc(100% / var(--goal-progress-steps) - var(--goal-progress-tick-width)),
-                var(--goal-progress-tick-color) calc(100% / var(--goal-progress-steps) - var(--goal-progress-tick-width)),
-                var(--goal-progress-tick-color) calc(100% / var(--goal-progress-steps))
-            );
-        }
-        body:not(.child-theme) .goal-progress-bar.task-quota span {
-            background: linear-gradient(-70deg, #00bcd4, #4caf50);
-            clip-path: polygon(0 0, 100% 0, calc(100% - 12px) 100%, 0 100%);
-        }
         .goal-next-needed { font-size: 0.92rem; color: #455a64; }
         .goal-meta { display: grid; gap: 6px; color: #5f6c76; font-size: 0.92rem; margin-top: 8px; }
         .goal-detail-pill { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; background: #eef4ff; color: #0d47a1; font-weight: 700; font-size: 0.85rem; }
@@ -903,7 +893,6 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
         .goal-assignee { text-align: left; margin-top: 0; }
         .goal-description { text-align: left; }
         .goal-info-row { text-align: left; }
-        .goal-task-tracked { text-align: left; display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; background: #eef4ff; color: #0d47a1; font-weight: 700; font-size: 0.85rem; }
         .goal-description { margin: 6px 0 0; color: #546e7a; }
         .goal-task-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; max-height: 180px; overflow: auto; padding: 6px; border: 1px solid #e0e0e0; border-radius: 10px; background: #fafafa; }
         .goal-task-card { border: 1px solid #d5def0; border-radius: 10px; padding: 8px; display: grid; gap: 6px; background: #fff; }
@@ -1065,8 +1054,7 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                                 ][$goalProgress['goal_type']] ?? 'Goal';
                                 $progressValue = $goalProgress['current'] . ' / ' . $goalProgress['target'];
                                 $progressPercent = (int) ($goalProgress['percent'] ?? 0);
-                                $progressSteps = 0;
-                                $progressBarTypeClass = '';
+                                $progressSteps = min(14, max(1, (int) ($goalProgress['target'] ?? 0)));
                                 $displayStatus = $goal['status'];
                                 if ($goal['status'] === 'active' && !empty($goalProgress['is_met'])) {
                                     $displayStatus = !empty($goal['requires_parent_approval']) ? 'pending_approval' : 'completed';
@@ -1085,12 +1073,8 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                                             $completedUnits = $totalUnits;
                                         }
                                         $progressPercent = (int) round(($completedUnits / $totalUnits) * 100);
-                                        $progressSteps = min(14, $totalUnits);
+                                        $progressSteps = min(14, max(1, $totalUnits));
                                     }
-                                }
-                                if ($goalType === 'task_quota') {
-                                    $progressSteps = min(14, max(0, (int) ($goalProgress['target'] ?? 0)));
-                                    $progressBarTypeClass = ' task-quota';
                                 }
                                 $routineTargetIds = $goal['routine_target_ids'] ?? [];
                                 if (empty($routineTargetIds) && !empty($goal['routine_id'])) {
@@ -1145,19 +1129,31 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                                             <span><?php echo htmlspecialchars($goalTypeLabel); ?></span>
                                             <span><?php echo htmlspecialchars($progressValue); ?></span>
                                         </div>
-                                        <div class="goal-progress-bar<?php echo $progressSteps > 0 ? ' has-steps' : ''; ?><?php echo $progressBarTypeClass; ?>"<?php echo $progressSteps > 0 ? ' style="--goal-progress-steps: ' . (int) $progressSteps . ';"' : ''; ?>>
+                                        <div class="goal-progress-bar has-steps"<?php echo $progressSteps > 0 ? ' style="--goal-progress-steps: ' . (int) $progressSteps . ';"' : ''; ?>>
                                             <span style="width: <?php echo (int) $progressPercent; ?>%;"></span>
                                         </div>
                                         <?php if (!empty($goalProgress['next_needed'])): ?>
                                             <div class="goal-next-needed">Next: <?php echo htmlspecialchars($goalProgress['next_needed']); ?></div>
                                         <?php endif; ?>
-                                        <?php if (!empty($goal['task_targets'])): ?>
-                                            <div class="goal-task-tracked">
-                                                <span class="goal-info-label"><i class="fa-solid fa-list-check"></i></span>
-                                                <?php echo htmlspecialchars(implode(', ', $goal['task_targets'])); ?>
-                                            </div>
-                                        <?php endif; ?>
                                         <div class="goal-meta">
+                                            <?php if (!empty($goal['task_targets'])): ?>
+                                                <?php $taskCounts = $goalProgress['task_counts'] ?? []; ?>
+                                                <div class="goal-routine-badges" aria-label="Task completion counts">
+                                                    <?php foreach ($goal['task_targets'] as $task): ?>
+                                                        <?php
+                                                            $taskId = (int) ($task['id'] ?? 0);
+                                                            $taskTitle = $task['title'] ?? '';
+                                                            $taskCount = $taskId ? (int) ($taskCounts[$taskId] ?? 0) : 0;
+                                                        ?>
+                                                        <?php if ($taskTitle !== ''): ?>
+                                                            <span class="goal-routine-badge">
+                                                                <?php echo htmlspecialchars($taskTitle); ?>
+                                                                <span class="goal-routine-count"><?php echo $taskCount; ?></span>
+                                                            </span>
+                                                        <?php endif; ?>
+                                                    <?php endforeach; ?>
+                                                </div>
+                                            <?php endif; ?>
                                             <?php if (!empty($goal['routine_targets'])): ?>
                                                 <div class="goal-routine-badges" aria-label="Routine completion counts">
                                                     <?php foreach ($goal['routine_targets'] as $routine): ?>
@@ -1239,6 +1235,25 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                             'task_quota' => 'Task quota'
                         ][$goalProgress['goal_type']] ?? 'Goal';
                         $progressValue = $goalProgress['current'] . ' / ' . $goalProgress['target'];
+                        $progressPercent = (int) ($goalProgress['percent'] ?? 0);
+                        $progressSteps = min(14, max(1, (int) ($goalProgress['target'] ?? 0)));
+                        $goalType = $goalProgress['goal_type'] ?? '';
+                        $routineTargets = $goal['routine_targets'] ?? [];
+                        if (count($routineTargets) > 1 && in_array($goalType, ['routine_streak', 'routine_count'], true)) {
+                            $routineCounts = $goalProgress['routine_counts'] ?? [];
+                            $totalUnits = count($routineTargets) * max(1, (int) ($goalProgress['target'] ?? 0));
+                            if ($totalUnits > 0) {
+                                $completedUnits = 0;
+                                foreach ($routineTargets as $routine) {
+                                    $completedUnits += (int) ($routineCounts[$routine['id']] ?? 0);
+                                }
+                                if ($completedUnits > $totalUnits) {
+                                    $completedUnits = $totalUnits;
+                                }
+                                $progressPercent = (int) round(($completedUnits / $totalUnits) * 100);
+                                $progressSteps = min(14, max(1, $totalUnits));
+                            }
+                        }
                         if (is_array($celebrationGoals) && !empty($goalProgressData['celebration_ready'])) {
                             $celebrationGoals[] = [
                                 'id' => (int) $goal['id'],
@@ -1267,8 +1282,8 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                                     <span><?php echo htmlspecialchars($goalTypeLabel); ?></span>
                                     <span><?php echo htmlspecialchars($progressValue); ?></span>
                                 </div>
-                            <div class="goal-progress-bar complete">
-                                <span style="width: 100%;"></span>
+                            <div class="goal-progress-bar has-steps complete"<?php echo $progressSteps > 0 ? ' style="--goal-progress-steps: ' . (int) $progressSteps . ';"' : ''; ?>>
+                                <span style="width: <?php echo (int) $progressPercent; ?>%;"></span>
                             </div>
                             </div>
                         </div>

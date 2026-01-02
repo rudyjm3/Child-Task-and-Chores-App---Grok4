@@ -1914,6 +1914,8 @@ function getRoutineCompletionSummary(array $routine_ids, $child_id, $require_on_
     }
 
     $routineCounts = [];
+    $taskCounts = [];
+    $taskCounts = [];
     foreach ($routineDates as $routineId => $dates) {
         $routineCounts[$routineId] = count($dates);
     }
@@ -2215,6 +2217,10 @@ function calculateGoalProgress(array $goal, $child_id) {
                 continue;
             }
             $count++;
+            $taskId = (int) ($row['id'] ?? 0);
+            if ($taskId > 0) {
+                $taskCounts[$taskId] = ($taskCounts[$taskId] ?? 0) + 1;
+            }
             $rowDate = !empty($row['completed_at']) ? date('Y-m-d', strtotime($row['completed_at'])) : (!empty($row['approved_at']) ? date('Y-m-d', strtotime($row['approved_at'])) : null);
             if ($rowDate) {
                 $lastDate = $lastDate ? max($lastDate, $rowDate) : $rowDate;
@@ -2226,6 +2232,10 @@ function calculateGoalProgress(array $goal, $child_id) {
                 continue;
             }
             $count++;
+            $taskId = (int) ($row['id'] ?? 0);
+            if ($taskId > 0) {
+                $taskCounts[$taskId] = ($taskCounts[$taskId] ?? 0) + 1;
+            }
             if ($dateKey) {
                 $lastDate = $lastDate ? max($lastDate, $dateKey) : $dateKey;
             }
@@ -2268,7 +2278,8 @@ function calculateGoalProgress(array $goal, $child_id) {
         'last_progress_date' => $lastProgressDate,
         'next_needed' => $nextHint,
         'is_met' => $isMet,
-        'routine_counts' => $routineCounts
+        'routine_counts' => $routineCounts,
+        'task_counts' => $taskCounts
     ];
 }
 
