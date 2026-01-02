@@ -1106,7 +1106,7 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                                 ];
                                 $goalPayloadJson = htmlspecialchars(json_encode($goalPayload, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP), ENT_QUOTES, 'UTF-8');
                                 ?>
-                                <div class="goal-card">
+                                <div class="goal-card" id="goal-<?php echo (int) $goal['id']; ?>">
                                     <div class="goal-card-header">
                                         <h3 class="goal-card-title-text"><?php echo htmlspecialchars($goal['title']); ?></h3>
                                         <?php if ($displayStatus === 'active'): ?>
@@ -1171,7 +1171,7 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                                             <?php if (($goalProgress['goal_type'] ?? '') === 'routine_streak'): ?>
                                                 <span class="goal-detail-pill">Streak: <?php echo (int) ($goal['streak_required'] ?? 0); ?> days</span>
                                             <?php elseif (in_array(($goalProgress['goal_type'] ?? ''), ['routine_count', 'task_quota'], true)): ?>
-                                                <span class="goal-detail-pill">Target: <?php echo (int) ($goal['target_count'] ?? 0); ?></span>
+                                                <span class="goal-detail-pill">Target days: <?php echo (int) ($goal['target_count'] ?? 0); ?></span>
                                             <?php endif; ?>
                                             <?php if (!empty($goal['require_on_time'])): ?>
                                                 <span class="goal-detail-pill">On-time required</span>
@@ -1261,7 +1261,7 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                             ];
                         }
                         ?>
-                        <div class="goal-card">
+                        <div class="goal-card" id="goal-<?php echo (int) $goal['id']; ?>">
                             <div class="goal-card-header">
                                 <h3 class="goal-card-title-text"><?php echo htmlspecialchars($goal['title']); ?></h3>
                                 <span class="goal-status-badge completed">Completed</span>
@@ -1300,7 +1300,7 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                             <p>No rejected goals.</p>
                         <?php else: ?>
                             <?php foreach ($rejected_goals as $goal): ?>
-                                <div class="goal-card rejected-card">
+                                <div class="goal-card rejected-card" id="goal-<?php echo (int) $goal['id']; ?>">
                                     <div class="goal-card-header">
                                         <h3 class="goal-card-title-text"><?php echo htmlspecialchars($goal['title']); ?></h3>
                                         <span class="goal-status-badge rejected">Rejected</span>

@@ -159,7 +159,7 @@ $formatChildNotificationMessage = static function (array $note): string {
         }
     }
 
-    if (in_array($type, ['task_approved', 'task_rejected', 'task_rejected_closed', 'goal_completed', 'goal_ready', 'goal_reward_earned', 'reward_denied', 'reward_fulfilled'], true)) {
+    if (in_array($type, ['task_approved', 'task_rejected', 'task_rejected_closed', 'goal_completed', 'goal_ready', 'goal_reward_earned', 'goal_points_awarded', 'reward_denied', 'reward_fulfilled'], true)) {
         if (preg_match('/:\\s*([^|]+?)(?=\\s*(\\||$))/', $message, $match, PREG_OFFSET_CAPTURE)) {
             return $highlight($message, $match[1][1], strlen($match[1][0]));
         }
@@ -209,7 +209,7 @@ $buildChildNotificationViewLink = static function (array $note): ?string {
         }
     }
 
-    if (in_array($type, ['goal_completed', 'goal_ready'], true)) {
+    if (in_array($type, ['goal_completed', 'goal_ready', 'goal_points_awarded'], true)) {
         if ($viewLink === null || strpos($viewLink, 'dashboard_child.php') === 0) {
             $viewLink = 'goal.php';
         }

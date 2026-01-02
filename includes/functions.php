@@ -1996,7 +1996,9 @@ function markGoalCompleted($goal, $child_id, $note = null, $notifyParent = true)
     $pointsAwarded = isset($goal['points_awarded']) ? (int) $goal['points_awarded'] : 0;
     if ($pointsAwarded > 0 && in_array($awardMode, ['points', 'both'], true)) {
         updateChildPoints((int) $child_id, $pointsAwarded);
-        addChildNotification((int) $child_id, 'goal_points_awarded', "You earned {$pointsAwarded} points for completing a goal!", 'dashboard_child.php');
+        $goalTitle = $goal['title'] ?? 'Goal';
+        $goalLink = $goalId > 0 ? ('goal.php#goal-' . $goalId) : 'goal.php';
+        addChildNotification((int) $child_id, 'goal_points_awarded', "You earned {$pointsAwarded} points for completing: {$goalTitle}", $goalLink);
     }
     if (!empty($goal['reward_id']) && in_array($awardMode, ['reward', 'both'], true)) {
         awardGoalReward($goal, $child_id);
@@ -2079,6 +2081,7 @@ function calculateGoalProgress(array $goal, $child_id) {
     $title = $goal['title'] ?? 'Goal';
     $requireOnTime = !empty($goal['require_on_time']);
     $routineCounts = [];
+    $taskCounts = [];
     $target = 1;
     $current = 0;
     $currentStreak = 0;

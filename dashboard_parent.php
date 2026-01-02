@@ -824,6 +824,16 @@ $formatParentNotificationMessage = static function (array $note): string {
         }
     }
 
+    if (preg_match('/"([^"]+)"/', $message, $match, PREG_OFFSET_CAPTURE)) {
+        return $highlight($message, $match[1][1], strlen($match[1][0]));
+    }
+    if (preg_match('/\\bcompleted\\s+([^\\.]+)\\./', $message, $match, PREG_OFFSET_CAPTURE)) {
+        return $highlight($message, $match[1][1], strlen($match[1][0]));
+    }
+    if (preg_match('/:\\s*([^|]+?)(?=\\s*(\\||$))/', $message, $match, PREG_OFFSET_CAPTURE)) {
+        return $highlight($message, $match[1][1], strlen($match[1][0]));
+    }
+
     return htmlspecialchars($message);
 };
 ?>
