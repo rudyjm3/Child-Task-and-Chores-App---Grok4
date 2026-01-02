@@ -3,7 +3,7 @@
 // Purpose: Display child dashboard with progress and task/reward links
 // Inputs: Session data
 // Outputs: Dashboard interface
-// Version: 3.17.5 (Notifications moved to header-triggered modal, Font Awesome icons)
+// Version: 3.17.6 (Notifications moved to header-triggered modal, Font Awesome icons)
 
 require_once __DIR__ . '/includes/functions.php';
 
@@ -120,12 +120,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     } elseif (isset($_POST['redeem_reward'])) {
         $reward_id = filter_input(INPUT_POST, 'reward_id', FILTER_VALIDATE_INT);
-        if (redeemReward($_SESSION['user_id'], $reward_id)) {
-            $message = "Reward redeemed successfully! Refresh to see updates.";
-            $data = getDashboardData($_SESSION['user_id']); // Refresh data
-        } else {
-            $message = "Not enough points to redeem this reward.";
-        }
+        $success = ($reward_id && redeemReward($_SESSION['user_id'], $reward_id));
+        $_SESSION['flash_message'] = $success
+            ? "Reward redeemed successfully!"
+            : "Not enough points to redeem this reward.";
+        header("Location: dashboard_child.php?open_rewards=1&reward_tab=available");
+        exit;
     }
 }
 $notificationsNew = $data['notifications_new'] ?? [];
@@ -134,6 +134,11 @@ $notificationsDeleted = $data['notifications_deleted'] ?? [];
 $notificationCount = is_array($notificationsNew) ? count($notificationsNew) : 0;
 $notificationActionSummary = $notificationActionSummary ?? '';
 $notificationActionTab = $notificationActionTab ?? '';
+$flashMessage = $_SESSION['flash_message'] ?? null;
+if ($flashMessage !== null) {
+    $message = $flashMessage;
+    unset($_SESSION['flash_message']);
+}
 
 $formatChildNotificationMessage = static function (array $note): string {
     $message = (string) ($note['message'] ?? '');
@@ -237,7 +242,7 @@ $buildChildNotificationViewLink = static function (array $note): ?string {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Child Dashboard</title>
-   <link rel="stylesheet" href="css/main.css?v=3.17.5">
+   <link rel="stylesheet" href="css/main.css?v=3.17.6">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" integrity="Evv84Mr4kqVGRNSgIGL/F/aIDqQb7xQ2vcrdIwxfjThSH8CSR7PBEakCr51Ck+w+/U6swU2Im1vVX0SVk9ABhg==" crossorigin="anonymous" referrerpolicy="no-referrer">
     <style>
         .dashboard { padding: 20px; /*max-width: 720px;*/ max-width: 100%; margin: 0 auto; text-align: center; }
@@ -427,24 +432,12 @@ $buildChildNotificationViewLink = static function (array $note): ?string {
             if (childModal) {
                 childModal.querySelectorAll('[data-child-bulk-action]').forEach((bulk) => {
                     bulk.addEventListener('change', () => {
-                        if (!bulk.checked) return;
                         const form = bulk.closest('form');
                         if (!form) return;
-                        const actionName = bulk.getAttribute('data-child-bulk-action');
+                        const shouldCheck = bulk.checked;
                         form.querySelectorAll('input[name="notification_ids[]"]').forEach((input) => {
-                            input.checked = true;
+                            input.checked = shouldCheck;
                         });
-                        if (actionName) {
-                            let hidden = form.querySelector(`input[name="${actionName}"]`);
-                            if (!hidden) {
-                                hidden = document.createElement('input');
-                                hidden.type = 'hidden';
-                                hidden.name = actionName;
-                                hidden.value = '1';
-                                form.appendChild(hidden);
-                            }
-                        }
-                        form.submit();
                     });
                 });
             }
@@ -1461,7 +1454,7 @@ foreach ($taskCountStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
       </script>
    <?php endif; ?>
    <footer>
-   <p>Child Task and Chore App - Ver 3.17.5</p>
+   <p>Child Task and Chore App - Ver 3.17.6</p>
 </footer>
   <script src="js/number-stepper.js" defer></script>
 </body>

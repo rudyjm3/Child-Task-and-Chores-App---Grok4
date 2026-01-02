@@ -1,7 +1,7 @@
 <?php
 // login.php - User login
 // Purpose: Authenticate and redirect to dashboard
-// Version: 3.17.5
+// Version: 3.17.6
 
 require_once __DIR__ . '/includes/functions.php';
 
@@ -40,7 +40,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Login - Child Task and Chore App</title>
-    <link rel="stylesheet" href="css/main.css?v=3.17.5">
+    <link rel="stylesheet" href="css/main.css?v=3.17.6">
     <style>
         .login-form { padding: 20px; max-width: 400px; margin: 0 auto; text-align: center; }
         .form-group { margin-bottom: 15px; }

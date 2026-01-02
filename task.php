@@ -3,7 +3,7 @@
 // Purpose: Allow parents to create tasks and children to view/complete them
 // Inputs: POST data for task creation, task ID for completion
 // Outputs: Task management interface
-// Version: 3.17.5
+// Version: 3.17.6
 
 session_start(); // Ensure session is started to load existing session
 
@@ -411,7 +411,7 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Task Management</title>
-      <link rel="stylesheet" href="css/main.css?v=3.17.5">
+      <link rel="stylesheet" href="css/main.css?v=3.17.6">
     <link rel="icon" type="image/svg+xml" href="images/favicon.svg">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" integrity="Evv84Mr4kqVGRNSgIGL/F/aIDqQb7xQ2vcrdIwxfjThSH8CSR7PBEakCr51Ck+w+/U6swU2Im1vVX0SVk9ABhg==" crossorigin="anonymous" referrerpolicy="no-referrer">
     <style>
@@ -3668,9 +3668,9 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
         </div>
     <?php endif; ?>
     <footer>
-      <p>Child Task and Chore App - Ver 3.17.5</p>
+      <p>Child Task and Chore App - Ver 3.17.6</p>
    </footer>
-  <script src="js/number-stepper.js?v=3.17.5" defer></script>
+  <script src="js/number-stepper.js?v=3.17.6" defer></script>
 </body>
 </html>
 

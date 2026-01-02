@@ -43,9 +43,69 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!$reward_id && isset($_POST['fulfill_reward'])) {
             $reward_id = filter_input(INPUT_POST, 'fulfill_reward', FILTER_VALIDATE_INT);
         }
-        $messages[] = ($reward_id && fulfillReward($reward_id, $main_parent_id, $_SESSION['user_id']))
-            ? "Reward fulfillment recorded."
-            : "Unable to mark reward as fulfilled.";
+        $fulfilled = ($reward_id && fulfillReward($reward_id, $main_parent_id, $_SESSION['user_id']));
+        if ($fulfilled) {
+            $messages[] = "Reward fulfillment recorded.";
+            ensureParentNotificationsTable();
+            $rewardTitleStmt = $db->prepare("SELECT title FROM rewards WHERE id = :id AND parent_user_id = :parent_id");
+            $rewardTitleStmt->execute([':id' => $reward_id, ':parent_id' => $main_parent_id]);
+            $rewardTitle = $rewardTitleStmt->fetchColumn() ?: 'Reward';
+            $resolvedMessage = 'Reward fulfilled: ' . $rewardTitle . ' | ' . date('m/d/Y h:i A');
+            $update = $db->prepare("UPDATE parent_notifications
+                                    SET type = 'reward_fulfilled',
+                                        message = :message,
+                                        is_read = 1
+                                    WHERE parent_user_id = :parent_id
+                                      AND type = 'reward_redeemed'
+                                      AND link_url LIKE :link");
+            $update->execute([
+                ':message' => $resolvedMessage,
+                ':parent_id' => $main_parent_id,
+                ':link' => '%highlight_reward=' . (int) $reward_id . '%'
+            ]);
+        } else {
+            $messages[] = "Unable to mark reward as fulfilled.";
+        }
+    } elseif (isset($_POST['deny_reward'])) {
+        $reward_id = filter_input(INPUT_POST, 'reward_id', FILTER_VALIDATE_INT);
+        if (!$reward_id && isset($_POST['deny_reward'])) {
+            $reward_id = filter_input(INPUT_POST, 'deny_reward', FILTER_VALIDATE_INT);
+        }
+        $deny_note = trim(filter_input(INPUT_POST, 'deny_reward_note', FILTER_SANITIZE_STRING) ?? '');
+        $denied = ($reward_id && denyReward($reward_id, $main_parent_id, $_SESSION['user_id'], $deny_note));
+        if (!$denied && $reward_id) {
+            $statusStmt = $db->prepare("SELECT status, denied_on FROM rewards WHERE id = :id AND parent_user_id = :parent_id");
+            $statusStmt->execute([':id' => $reward_id, ':parent_id' => $main_parent_id]);
+            $statusRow = $statusStmt->fetch(PDO::FETCH_ASSOC);
+            if (!empty($statusRow) && ($statusRow['status'] ?? '') === 'available' && !empty($statusRow['denied_on'])) {
+                $denied = true;
+            }
+        }
+        if ($denied) {
+            $messages[] = "Reward request denied.";
+            ensureParentNotificationsTable();
+            $rewardTitleStmt = $db->prepare("SELECT title FROM rewards WHERE id = :id AND parent_user_id = :parent_id");
+            $rewardTitleStmt->execute([':id' => $reward_id, ':parent_id' => $main_parent_id]);
+            $rewardTitle = $rewardTitleStmt->fetchColumn() ?: 'Reward';
+            $resolvedMessage = 'Reward denied: ' . $rewardTitle . ' | ' . date('m/d/Y h:i A');
+            if ($deny_note !== '') {
+                $resolvedMessage .= ' | Reason: ' . $deny_note;
+            }
+            $update = $db->prepare("UPDATE parent_notifications
+                                    SET type = 'reward_denied',
+                                        message = :message,
+                                        is_read = 1
+                                    WHERE parent_user_id = :parent_id
+                                      AND type = 'reward_redeemed'
+                                      AND link_url LIKE :link");
+            $update->execute([
+                ':message' => $resolvedMessage,
+                ':parent_id' => $main_parent_id,
+                ':link' => '%highlight_reward=' . (int) $reward_id . '%'
+            ]);
+        } else {
+            $messages[] = "Unable to deny reward request.";
+        }
     } elseif (isset($_POST['create_template'])) {
         $title = trim((string)filter_input(INPUT_POST, 'template_title', FILTER_SANITIZE_STRING));
         $description = trim((string)filter_input(INPUT_POST, 'template_description', FILTER_SANITIZE_STRING));
@@ -200,7 +260,7 @@ foreach ($activeRewards as $reward) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Reward Library</title>
-    <link rel="stylesheet" href="css/main.css?v=3.17.5">
+    <link rel="stylesheet" href="css/main.css?v=3.17.6">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" integrity="Evv84Mr4kqVGRNSgIGL/F/aIDqQb7xQ2vcrdIwxfjThSH8CSR7PBEakCr51Ck+w+/U6swU2Im1vVX0SVk9ABhg==" crossorigin="anonymous" referrerpolicy="no-referrer">
     <style>
         body { font-family: Arial, sans-serif; background: #f5f7fb; }
@@ -425,11 +485,16 @@ foreach ($activeRewards as $reward) {
                                                         <p>Fulfilled on: <?php echo htmlspecialchars(date('m/d/Y h:i A', strtotime($reward['fulfilled_on']))); ?><?php if (!empty($reward['fulfilled_by_name'])): ?> by <?php echo htmlspecialchars($reward['fulfilled_by_name']); ?><?php endif; ?></p>
                                                     <?php else: ?>
                                                         <p class="awaiting-label">Awaiting fulfillment by parent.</p>
-                                                        <form method="POST" action="rewards.php" class="inline-form">
-                                                            <input type="hidden" name="reward_id" value="<?php echo (int)$reward['id']; ?>">
-                                                            <button type="submit" name="fulfill_reward" class="button approve-button">Mark Fulfilled</button>
-                                                        </form>
-                                                    <?php endif; ?>
+                                                    <form method="POST" action="rewards.php" class="inline-form">
+                                                        <input type="hidden" name="reward_id" value="<?php echo (int)$reward['id']; ?>">
+                                                        <button type="submit" name="fulfill_reward" class="button approve-button">Mark Fulfilled</button>
+                                                    </form>
+                                                    <form method="POST" action="rewards.php" class="inline-form" style="margin-top:6px;">
+                                                        <input type="hidden" name="reward_id" value="<?php echo (int)$reward['id']; ?>">
+                                                        <textarea name="deny_reward_note" rows="2" placeholder="Optional deny note" style="width:100%; max-width:360px;"></textarea>
+                                                        <button type="submit" name="deny_reward" class="button secondary">Deny</button>
+                                                    </form>
+                                                <?php endif; ?>
                                                 </div>
                                             </div>
                                         <?php endforeach; ?>
@@ -458,6 +523,11 @@ foreach ($activeRewards as $reward) {
                                                     <form method="POST" action="rewards.php" class="inline-form">
                                                         <input type="hidden" name="reward_id" value="<?php echo (int)$reward['id']; ?>">
                                                         <button type="submit" name="fulfill_reward" class="button approve-button">Mark Fulfilled</button>
+                                                    </form>
+                                                    <form method="POST" action="rewards.php" class="inline-form" style="margin-top:6px;">
+                                                        <input type="hidden" name="reward_id" value="<?php echo (int)$reward['id']; ?>">
+                                                        <textarea name="deny_reward_note" rows="2" placeholder="Optional deny note" style="width:100%; max-width:360px;"></textarea>
+                                                        <button type="submit" name="deny_reward" class="button secondary">Deny</button>
                                                     </form>
                                                 </div>
                                             </div>

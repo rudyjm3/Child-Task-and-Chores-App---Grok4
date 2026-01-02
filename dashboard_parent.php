@@ -3,7 +3,7 @@
 // Purpose: Display parent dashboard with child overview and management links
 // Inputs: Session data
 // Outputs: Dashboard interface
-// Version: 3.17.5 (Notifications moved to header-triggered modal, Font Awesome icons, routine/reward updates)
+// Version: 3.17.6 (Notifications moved to header-triggered modal, Font Awesome icons, routine/reward updates)
 
 require_once __DIR__ . '/includes/functions.php';
 
@@ -312,31 +312,87 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
     } elseif (isset($_POST['fulfill_reward'])) {
-        $reward_id = filter_input(INPUT_POST, 'reward_id', FILTER_VALIDATE_INT);
-        if (!$reward_id && isset($_POST['fulfill_reward'])) {
-            $reward_id = filter_input(INPUT_POST, 'fulfill_reward', FILTER_VALIDATE_INT);
+        $rewardPayload = $_POST['fulfill_reward'] ?? '';
+        $reward_id = 0;
+        $parent_notification_id = 0;
+        if (is_string($rewardPayload) && strpos($rewardPayload, '|') !== false) {
+            [$rewardIdRaw, $noteIdRaw] = explode('|', $rewardPayload, 2);
+            $reward_id = (int) $rewardIdRaw;
+            $parent_notification_id = (int) $noteIdRaw;
+        } else {
+            $reward_id = filter_var($rewardPayload, FILTER_VALIDATE_INT) ?: 0;
+            $parent_notification_id = filter_input(INPUT_POST, 'parent_notification_id', FILTER_VALIDATE_INT);
         }
-        $parent_notification_id = filter_input(INPUT_POST, 'parent_notification_id', FILTER_VALIDATE_INT);
-        $message = ($reward_id && fulfillReward($reward_id, $main_parent_id, $_SESSION['user_id']))
-            ? "Reward fulfillment recorded."
-            : "Unable to mark reward as fulfilled.";
-        if ($message === "Reward fulfillment recorded." && $parent_notification_id) {
+        if (!$reward_id) {
+            $reward_id = filter_input(INPUT_POST, 'reward_id', FILTER_VALIDATE_INT);
+        }
+        $fulfilled = ($reward_id && fulfillReward($reward_id, $main_parent_id, $_SESSION['user_id']));
+        if (!$fulfilled && $reward_id) {
+            $statusStmt = $db->prepare("SELECT status, fulfilled_on FROM rewards WHERE id = :id AND parent_user_id = :parent_id");
+            $statusStmt->execute([':id' => $reward_id, ':parent_id' => $main_parent_id]);
+            $statusRow = $statusStmt->fetch(PDO::FETCH_ASSOC);
+            if (!empty($statusRow) && !empty($statusRow['fulfilled_on'])) {
+                $fulfilled = true;
+            }
+        }
+        $message = $fulfilled ? "Reward fulfillment recorded." : "Unable to mark reward as fulfilled.";
+        if ($fulfilled && $parent_notification_id) {
             ensureParentNotificationsTable();
+            $rewardTitleStmt = $db->prepare("SELECT title FROM rewards WHERE id = :id");
+            $rewardTitleStmt->execute([':id' => $reward_id]);
+            $rewardTitle = $rewardTitleStmt->fetchColumn() ?: 'Reward';
+            $resolvedMessage = 'Reward fulfilled: ' . $rewardTitle . ' | ' . date('m/d/Y h:i A');
+            $update = $db->prepare("UPDATE parent_notifications SET type = 'reward_fulfilled', message = :message, is_read = 1 WHERE id = :id AND parent_user_id = :pid");
+            $update->execute([':message' => $resolvedMessage, ':id' => $parent_notification_id, ':pid' => $main_parent_id]);
             $mark = $db->prepare("UPDATE parent_notifications SET is_read = 1 WHERE id = :id AND parent_user_id = :pid");
             $mark->execute([':id' => $parent_notification_id, ':pid' => $main_parent_id]);
         }
     } elseif (isset($_POST['deny_reward'])) {
-        $reward_id = filter_input(INPUT_POST, 'reward_id', FILTER_VALIDATE_INT);
-        if (!$reward_id && isset($_POST['deny_reward'])) {
-            $reward_id = filter_input(INPUT_POST, 'deny_reward', FILTER_VALIDATE_INT);
+        $denyPayload = $_POST['deny_reward'] ?? '';
+        $reward_id = 0;
+        $parent_notification_id = 0;
+        if (is_string($denyPayload) && strpos($denyPayload, '|') !== false) {
+            [$rewardIdRaw, $noteIdRaw] = explode('|', $denyPayload, 2);
+            $reward_id = (int) $rewardIdRaw;
+            $parent_notification_id = (int) $noteIdRaw;
+        } else {
+            $reward_id = filter_var($denyPayload, FILTER_VALIDATE_INT) ?: 0;
+            $parent_notification_id = filter_input(INPUT_POST, 'parent_notification_id', FILTER_VALIDATE_INT);
         }
-        $parent_notification_id = filter_input(INPUT_POST, 'parent_notification_id', FILTER_VALIDATE_INT);
-        $deny_note = trim(filter_input(INPUT_POST, 'deny_reward_note', FILTER_SANITIZE_STRING) ?? '');
-        $message = ($reward_id && denyReward($reward_id, $main_parent_id, $_SESSION['user_id'], $deny_note))
-            ? "Reward request denied."
-            : "Unable to deny reward request.";
-        if ($message === "Reward request denied." && $parent_notification_id) {
+        if (!$reward_id) {
+            $reward_id = filter_input(INPUT_POST, 'reward_id', FILTER_VALIDATE_INT);
+        }
+        $deny_note = '';
+        if ($parent_notification_id && !empty($_POST['deny_reward_note']) && is_array($_POST['deny_reward_note'])) {
+            $noteMap = $_POST['deny_reward_note'];
+            if (array_key_exists((string) $parent_notification_id, $noteMap)) {
+                $deny_note = trim((string) filter_var($noteMap[(string) $parent_notification_id], FILTER_SANITIZE_STRING));
+            }
+        }
+        if ($deny_note === '') {
+            $deny_note = trim(filter_input(INPUT_POST, 'deny_reward_note', FILTER_SANITIZE_STRING) ?? '');
+        }
+        $denied = ($reward_id && denyReward($reward_id, $main_parent_id, $_SESSION['user_id'], $deny_note));
+        if (!$denied && $reward_id) {
+            $statusStmt = $db->prepare("SELECT status, denied_on FROM rewards WHERE id = :id AND parent_user_id = :parent_id");
+            $statusStmt->execute([':id' => $reward_id, ':parent_id' => $main_parent_id]);
+            $statusRow = $statusStmt->fetch(PDO::FETCH_ASSOC);
+            if (!empty($statusRow) && ($statusRow['status'] ?? '') === 'available' && !empty($statusRow['denied_on'])) {
+                $denied = true;
+            }
+        }
+        $message = $denied ? "Reward request denied." : "Unable to deny reward request.";
+        if ($denied && $parent_notification_id) {
             ensureParentNotificationsTable();
+            $rewardTitleStmt = $db->prepare("SELECT title FROM rewards WHERE id = :id");
+            $rewardTitleStmt->execute([':id' => $reward_id]);
+            $rewardTitle = $rewardTitleStmt->fetchColumn() ?: 'Reward';
+            $resolvedMessage = 'Reward denied: ' . $rewardTitle . ' | ' . date('m/d/Y h:i A');
+            if ($deny_note !== '') {
+                $resolvedMessage .= ' | Reason: ' . $deny_note;
+            }
+            $update = $db->prepare("UPDATE parent_notifications SET type = 'reward_denied', message = :message, is_read = 1 WHERE id = :id AND parent_user_id = :pid");
+            $update->execute([':message' => $resolvedMessage, ':id' => $parent_notification_id, ':pid' => $main_parent_id]);
             $mark = $db->prepare("UPDATE parent_notifications SET is_read = 1 WHERE id = :id AND parent_user_id = :pid");
             $mark->execute([':id' => $parent_notification_id, ':pid' => $main_parent_id]);
         }
@@ -451,7 +507,7 @@ $getRewardFulfillMeta = function($rewardId) use ($db) {
     $rewardId = (int)$rewardId;
     if ($rewardId <= 0) return null;
     if (isset($cache[$rewardId])) return $cache[$rewardId];
-    $stmt = $db->prepare("SELECT fulfilled_on, fulfilled_by, denied_on, denied_by, denied_note FROM rewards WHERE id = :id");
+    $stmt = $db->prepare("SELECT status, redeemed_on, fulfilled_on, fulfilled_by, denied_on, denied_by, denied_note FROM rewards WHERE id = :id");
     $stmt->execute([':id' => $rewardId]);
     $cache[$rewardId] = $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
     return $cache[$rewardId];
@@ -843,11 +899,11 @@ $formatParentNotificationMessage = static function (array $note): string {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Parent Dashboard</title>
-    <link rel="stylesheet" href="css/main.css?v=3.17.5">
+    <link rel="stylesheet" href="css/main.css?v=3.17.6">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" integrity="Evv84Mr4kqVGRNSgIGL/F/aIDqQb7xQ2vcrdIwxfjThSH8CSR7PBEakCr51Ck+w+/U6swU2Im1vVX0SVk9ABhg==" crossorigin="anonymous" referrerpolicy="no-referrer">
     <style>
         .dashboard { padding: 20px; max-width: 900px; margin: 0 auto; }
-        .children-overview, .management-links, .active-rewards, .redeemed-rewards, .pending-approvals, .completed-goals, .manage-family { margin-top: 20px; }
+        .children-overview, .management-links, .active-rewards, .redeemed-rewards, .manage-family { margin-top: 20px; }
         .children-overview-grid { display: grid; grid-template-columns: 1fr; gap: 20px; }
         .child-info-card, .reward-item, .goal-item { background-color: #f5f5f5; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
         .child-info-card { width: 100%; display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 20px; align-items: start; min-height: 100%; background-color: #fff; margin: 20px 0;}
@@ -1249,24 +1305,12 @@ $formatParentNotificationMessage = static function (array $note): string {
             if (parentModal) {
                 parentModal.querySelectorAll('[data-parent-bulk-action]').forEach((bulk) => {
                     bulk.addEventListener('change', () => {
-                        if (!bulk.checked) return;
                         const form = bulk.closest('form');
                         if (!form) return;
-                        const actionName = bulk.getAttribute('data-parent-bulk-action');
+                        const shouldCheck = bulk.checked;
                         form.querySelectorAll('input[name="parent_notification_ids[]"]').forEach((input) => {
-                            input.checked = true;
+                            input.checked = shouldCheck;
                         });
-                        if (actionName) {
-                            let hidden = form.querySelector(`input[name="${actionName}"]`);
-                            if (!hidden) {
-                                hidden = document.createElement('input');
-                                hidden.type = 'hidden';
-                                hidden.name = actionName;
-                                hidden.value = '1';
-                                form.appendChild(hidden);
-                            }
-                        }
-                        form.submit();
                     });
                 });
             }
@@ -2184,45 +2228,14 @@ $formatParentNotificationMessage = static function (array $note): string {
                                     </div>
                                 <?php endif; ?>
                                 <?php if ($note['type'] === 'reward_redeemed' && $rewardIdFromLink): ?>
-                                    <?php if (!empty($fulfillMeta) && !empty($fulfillMeta['denied_on'])): ?>
-                                        <div class="parent-notification-meta">
-                                            Denied on: <?php echo htmlspecialchars(date('m/d/Y h:i A', strtotime($fulfillMeta['denied_on']))); ?>
-                                            <?php if (!empty($fulfillMeta['denied_by'])):
-                                                $deniedNameStmt = $db->prepare("SELECT CONCAT(first_name, ' ', last_name) AS name, username FROM users WHERE id = :uid");
-                                                $deniedNameStmt->execute([':uid' => (int)$fulfillMeta['denied_by']]);
-                                                $dn = $deniedNameStmt->fetch(PDO::FETCH_ASSOC);
-                                                $deniedName = $dn && trim($dn['name']) !== '' ? $dn['name'] : ($dn['username'] ?? '');
-                                            ?>
-                                                by <?php echo htmlspecialchars($deniedName); ?>
-                                            <?php endif; ?>
-                                            <?php if (!empty($fulfillMeta['denied_note'])): ?>
-                                                | Reason: <?php echo htmlspecialchars($fulfillMeta['denied_note']); ?>
-                                            <?php endif; ?>
-                                        </div>
-                                    <?php elseif (!empty($fulfillMeta) && !empty($fulfillMeta['fulfilled_on'])): ?>
-                                        <div class="parent-notification-meta">
-                                            Fulfilled on: <?php echo htmlspecialchars(date('m/d/Y h:i A', strtotime($fulfillMeta['fulfilled_on']))); ?>
-                                            <?php if (!empty($fulfillMeta['fulfilled_by'])):
-                                                $fulfillNameStmt = $db->prepare("SELECT CONCAT(first_name, ' ', last_name) AS name, username FROM users WHERE id = :uid");
-                                                $fulfillNameStmt->execute([':uid' => (int)$fulfillMeta['fulfilled_by']]);
-                                                $fn = $fulfillNameStmt->fetch(PDO::FETCH_ASSOC);
-                                                $fulfillName = $fn && trim($fn['name']) !== '' ? $fn['name'] : ($fn['username'] ?? '');
-                                            ?>
-                                                by <?php echo htmlspecialchars($fulfillName); ?>
-                                            <?php endif; ?>
-                                        </div>
-                                      <?php else: ?>
-                                          <div class="inline-form" style="margin-top:6px;">
-                                              <input type="hidden" name="parent_notification_id" value="<?php echo (int)$note['id']; ?>">
-                                              <button type="submit" name="fulfill_reward" value="<?php echo (int)$rewardIdFromLink; ?>" class="button approve-button">Fulfill</button>
-                                          </div>
-                                          <div class="inline-form" style="margin-top:6px;">
-                                              <input type="hidden" name="parent_notification_id" value="<?php echo (int)$note['id']; ?>">
-                                              <textarea name="deny_reward_note" rows="2" placeholder="Optional deny note" style="width:100%; max-width:360px;"></textarea>
-                                              <button type="submit" name="deny_reward" value="<?php echo (int)$rewardIdFromLink; ?>" class="button secondary">Deny</button>
-                                          </div>
-                                      <?php endif; ?>
-                                  <?php endif; ?>
+                                    <div class="inline-form" style="margin-top:6px;">
+                                        <button type="submit" name="fulfill_reward" value="<?php echo (int)$rewardIdFromLink; ?>|<?php echo (int)$note['id']; ?>" class="button approve-button">Fulfill</button>
+                                    </div>
+                                    <div class="inline-form" style="margin-top:6px;">
+                                        <textarea name="deny_reward_note[<?php echo (int)$note['id']; ?>]" rows="2" placeholder="Optional deny note" style="width:100%; max-width:360px;"></textarea>
+                                        <button type="submit" name="deny_reward" value="<?php echo (int)$rewardIdFromLink; ?>|<?php echo (int)$note['id']; ?>" class="button secondary">Deny</button>
+                                    </div>
+                                <?php endif; ?>
                                 <?php if ($note['type'] === 'task_completed' && $taskIdFromLink): ?>
                                     <div class="inline-form" style="margin-top:6px;">
                                         <?php if ($taskStatus === 'approved'): ?>
@@ -2364,45 +2377,14 @@ $formatParentNotificationMessage = static function (array $note): string {
                                         <img src="<?php echo htmlspecialchars($taskPhoto); ?>" alt="Task photo proof" class="parent-task-photo-thumb" data-parent-photo-src="<?php echo htmlspecialchars($taskPhoto, ENT_QUOTES); ?>">
                                     </div>
                                 <?php endif; ?>
-                                <?php if ($note['type'] === 'reward_redeemed' && $rewardIdFromLink): ?>
-                                        <?php if (!empty($fulfillMeta) && !empty($fulfillMeta['denied_on'])): ?>
-                                            <div class="parent-notification-meta">
-                                                Denied on: <?php echo htmlspecialchars(date('m/d/Y h:i A', strtotime($fulfillMeta['denied_on']))); ?>
-                                                <?php if (!empty($fulfillMeta['denied_by'])):
-                                                    $deniedNameStmt = $db->prepare("SELECT CONCAT(first_name, ' ', last_name) AS name, username FROM users WHERE id = :uid");
-                                                    $deniedNameStmt->execute([':uid' => (int)$fulfillMeta['denied_by']]);
-                                                    $dn = $deniedNameStmt->fetch(PDO::FETCH_ASSOC);
-                                                    $deniedName = $dn && trim($dn['name']) !== '' ? $dn['name'] : ($dn['username'] ?? '');
-                                                ?>
-                                                    by <?php echo htmlspecialchars($deniedName); ?>
-                                                <?php endif; ?>
-                                                <?php if (!empty($fulfillMeta['denied_note'])): ?>
-                                                    | Reason: <?php echo htmlspecialchars($fulfillMeta['denied_note']); ?>
-                                                <?php endif; ?>
-                                            </div>
-                                        <?php elseif (!empty($fulfillMeta) && !empty($fulfillMeta['fulfilled_on'])): ?>
-                                            <div class="parent-notification-meta">
-                                                Fulfilled on: <?php echo htmlspecialchars(date('m/d/Y h:i A', strtotime($fulfillMeta['fulfilled_on']))); ?>
-                                                <?php if (!empty($fulfillMeta['fulfilled_by'])):
-                                                    $fulfillNameStmt = $db->prepare("SELECT CONCAT(first_name, ' ', last_name) AS name, username FROM users WHERE id = :uid");
-                                                    $fulfillNameStmt->execute([':uid' => (int)$fulfillMeta['fulfilled_by']]);
-                                                    $fn = $fulfillNameStmt->fetch(PDO::FETCH_ASSOC);
-                                                    $fulfillName = $fn && trim($fn['name']) !== '' ? $fn['name'] : ($fn['username'] ?? '');
-                                                ?>
-                                                    by <?php echo htmlspecialchars($fulfillName); ?>
-                                                <?php endif; ?>
-                                            </div>
-                                        <?php else: ?>
-                                            <div class="inline-form" style="margin-top:6px;">
-                                                <input type="hidden" name="parent_notification_id" value="<?php echo (int)$note['id']; ?>">
-                                                <button type="submit" name="fulfill_reward" value="<?php echo (int)$rewardIdFromLink; ?>" class="button approve-button">Fulfill</button>
-                                            </div>
-                                            <div class="inline-form" style="margin-top:6px;">
-                                                <input type="hidden" name="parent_notification_id" value="<?php echo (int)$note['id']; ?>">
-                                                <textarea name="deny_reward_note" rows="2" placeholder="Optional deny note" style="width:100%; max-width:360px;"></textarea>
-                                                <button type="submit" name="deny_reward" value="<?php echo (int)$rewardIdFromLink; ?>" class="button secondary">Deny</button>
-                                            </div>
-                                        <?php endif; ?>
+                                    <?php if ($note['type'] === 'reward_redeemed' && $rewardIdFromLink): ?>
+                                        <div class="inline-form" style="margin-top:6px;">
+                                            <button type="submit" name="fulfill_reward" value="<?php echo (int)$rewardIdFromLink; ?>|<?php echo (int)$note['id']; ?>" class="button approve-button">Fulfill</button>
+                                        </div>
+                                        <div class="inline-form" style="margin-top:6px;">
+                                            <textarea name="deny_reward_note[<?php echo (int)$note['id']; ?>]" rows="2" placeholder="Optional deny note" style="width:100%; max-width:360px;"></textarea>
+                                            <button type="submit" name="deny_reward" value="<?php echo (int)$rewardIdFromLink; ?>|<?php echo (int)$note['id']; ?>" class="button secondary">Deny</button>
+                                        </div>
                                     <?php endif; ?>
                                     <?php if ($note['type'] === 'task_completed' && $taskIdFromLink): ?>
                                         <div class="parent-notification-meta">
@@ -3068,124 +3050,9 @@ $formatParentNotificationMessage = static function (array $note): string {
             </div>
          </div>
       </div>
-      <div class="pending-approvals">
-         <h2>Pending Goal Approvals</h2>
-         <?php if (isset($data['pending_approvals']) && is_array($data['pending_approvals']) && !empty($data['pending_approvals'])): ?>
-              <?php foreach ($data['pending_approvals'] as $approval): ?>
-                   <div class="goal-item">
-                     <p>Goal: <?php echo htmlspecialchars($approval['title']); ?></p>
-                     <p>Child: <?php echo htmlspecialchars($approval['child_username']); ?></p>
-                    <?php if (!empty($approval['creator_display_name'])): ?>
-                        <p>Created by: <?php echo htmlspecialchars($approval['creator_display_name']); ?></p>
-                    <?php endif; ?>
-                    <p>Requested on: <?php echo htmlspecialchars($approval['requested_at']); ?></p>
-                     <form method="POST" action="dashboard_parent.php">
-                           <input type="hidden" name="goal_id" value="<?php echo $approval['id']; ?>">
-                           <button type="submit" name="approve_goal" class="button approve-button">Approve</button>
-                           <button type="submit" name="reject_goal" class="button reject-button">Reject</button>
-                           <div class="form-group">
-                              <label for="rejection_comment_<?php echo $approval['id']; ?>">Comment (optional):</label>
-                              <textarea id="rejection_comment_<?php echo $approval['id']; ?>" name="rejection_comment"></textarea>
-                           </div>
-                     </form>
-                  </div>
-               <?php endforeach; ?>
-         <?php else: ?>
-               <p>No pending approvals.</p>
-         <?php endif; ?>
-      </div>
-      <div class="completed-goals">
-         <h2>Completed Goals</h2>
-         <?php
-         $all_completed_goals = [];
-         $parent_id = $_SESSION['user_id'];
-         $stmt = $db->prepare("SELECT 
-                                g.id, 
-                                g.title, 
-                                g.start_date, 
-                                g.end_date, 
-                              g.completed_at, 
-                              u.username as child_username,
-                              COALESCE(
-                                 NULLIF(TRIM(CONCAT(COALESCE(creator.first_name, ''), ' ', COALESCE(creator.last_name, ''))), ''),
-                                 NULLIF(creator.name, ''),
-                                 creator.username,
-                                 'Unknown'
-                              ) AS creator_display_name
-                              FROM goals g 
-                              JOIN users u ON g.child_user_id = u.id 
-                              LEFT JOIN users creator ON g.created_by = creator.id
-                              WHERE g.parent_user_id = :parent_id AND g.status = 'completed'");
-         $stmt->execute([':parent_id' => $parent_id]);
-         $all_completed_goals = $stmt->fetchAll(PDO::FETCH_ASSOC);
-         ?>
-         <?php if (!empty($all_completed_goals)): ?>
-              <?php foreach ($all_completed_goals as $goal): ?>
-                   <div class="goal-item">
-                     <p>Goal: <?php echo htmlspecialchars($goal['title']); ?></p>
-                     <p>Child: <?php echo htmlspecialchars($goal['child_username']); ?></p>
-                    <?php if (!empty($goal['creator_display_name'])): ?>
-                        <p>Created by: <?php echo htmlspecialchars($goal['creator_display_name']); ?></p>
-                    <?php endif; ?>
-                    <p>Period: <?php echo htmlspecialchars(date('m/d/Y h:i A', strtotime($goal['start_date']))); ?> to <?php echo htmlspecialchars(date('m/d/Y h:i A', strtotime($goal['end_date']))); ?></p>
-                     <p>Completed on: <?php echo htmlspecialchars(date('m/d/Y h:i A', strtotime($goal['completed_at']))); ?></p>
-                  </div>
-               <?php endforeach; ?>
-         <?php else: ?>
-               <p>No goals completed yet.</p>
-         <?php endif; ?>
-      </div>
-      <div class="rejected-goals">
-         <h2>Rejected Goals</h2>
-         <?php
-         $stmt = $db->prepare("SELECT 
-                                g.id, 
-                                g.title, 
-                                g.start_date, 
-                                g.end_date, 
-                              g.rejected_at, 
-                              g.rejection_comment, 
-                              u.username as child_username, 
-                              r.title as reward_title,
-                              COALESCE(
-                                 NULLIF(TRIM(CONCAT(COALESCE(creator.first_name, ''), ' ', COALESCE(creator.last_name, ''))), ''),
-                                 NULLIF(creator.name, ''),
-                                 creator.username,
-                                 'Unknown'
-                              ) AS creator_display_name
-                              FROM goals g 
-                              JOIN users u ON g.child_user_id = u.id 
-                              LEFT JOIN rewards r ON g.reward_id = r.id 
-                              LEFT JOIN users creator ON g.created_by = creator.id
-                              WHERE g.parent_user_id = :parent_id AND g.status = 'rejected'");
-         $stmt->execute([':parent_id' => $_SESSION['user_id']]);
-         $rejected_goals = $stmt->fetchAll(PDO::FETCH_ASSOC);
-         foreach ($rejected_goals as &$goal) {
-               $goal['start_date_formatted'] = date('m/d/Y h:i A', strtotime($goal['start_date']));
-               $goal['end_date_formatted'] = date('m/d/Y h:i A', strtotime($goal['end_date']));
-               $goal['rejected_at_formatted'] = date('m/d/Y h:i A', strtotime($goal['rejected_at']));
-         }
-         unset($goal);
-         ?>
-         <?php if (empty($rejected_goals)): ?>
-               <p>No rejected goals.</p>
-         <?php else: ?>
-              <?php foreach ($rejected_goals as $goal): ?>
-                   <div class="goal-item">
-                     <p>Goal: <?php echo htmlspecialchars($goal['title']); ?></p>
-                     <p>Child: <?php echo htmlspecialchars($goal['child_username']); ?></p>
-                    <?php if (!empty($goal['creator_display_name'])): ?>
-                        <p>Created by: <?php echo htmlspecialchars($goal['creator_display_name']); ?></p>
-                    <?php endif; ?>
-                    <p>Period: <?php echo htmlspecialchars($goal['start_date_formatted']); ?> to <?php echo htmlspecialchars($goal['end_date_formatted']); ?></p>
-                     <p>Reward: <?php echo htmlspecialchars($goal['reward_title'] ?? 'None'); ?></p>
-                     <p>Status: Rejected</p>
-                     <p>Rejected on: <?php echo htmlspecialchars($goal['rejected_at_formatted']); ?></p>
-                     <p>Comment: <?php echo htmlspecialchars($goal['rejection_comment'] ?? 'No comments available.'); ?></p>
-                  </div>
-               <?php endforeach; ?>
-         <?php endif; ?>
-      </div>
+      
+      
+      
     </main>
     <div class="adjust-modal-backdrop" data-role="adjust-modal">
         <div class="adjust-modal">
@@ -3248,7 +3115,7 @@ $formatParentNotificationMessage = static function (array $note): string {
       </div>
    </div>
     <footer>
-     <p>Child Task and Chores App - Ver 3.17.5</p>
+     <p>Child Task and Chores App - Ver 3.17.6</p>
    </footer>
 </body>
 <div class="child-remove-backdrop" data-child-remove-modal aria-hidden="true">

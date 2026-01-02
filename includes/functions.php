@@ -3,7 +3,7 @@
 // Purpose: Centralize common operations for maintainability
 // Inputs: None initially
 // Outputs: Functions for app logic
-// Version: 3.17.5 (Family-wide role support and linked management enhancements)
+// Version: 3.17.6 (Family-wide role support and linked management enhancements)
 
 require_once __DIR__ . '/db_connect.php';
 
@@ -861,7 +861,7 @@ function getDashboardData($user_id) {
             FROM rewards r
             LEFT JOIN users child ON r.redeemed_by = child.id
             LEFT JOIN users fulfiller ON r.fulfilled_by = fulfiller.id
-            WHERE r.parent_user_id = :parent_id AND r.status = 'redeemed'
+            WHERE r.parent_user_id = :parent_id AND r.status = 'redeemed' AND r.denied_on IS NULL
             ORDER BY COALESCE(r.redeemed_on, r.created_on) DESC
             LIMIT 25
         ");
@@ -1484,7 +1484,16 @@ function redeemReward($child_user_id, $reward_id) {
 
         updateChildPoints($child_user_id, -$point_cost);
 
-        $stmt = $db->prepare("UPDATE rewards SET status = 'redeemed', redeemed_by = :child_id, redeemed_on = NOW() WHERE id = :id");
+        $stmt = $db->prepare("UPDATE rewards
+                              SET status = 'redeemed',
+                                  redeemed_by = :child_id,
+                                  redeemed_on = NOW(),
+                                  fulfilled_on = NULL,
+                                  fulfilled_by = NULL,
+                                  denied_on = NULL,
+                                  denied_by = NULL,
+                                  denied_note = NULL
+                              WHERE id = :id");
         $stmt->execute([':child_id' => $child_user_id, ':id' => $reward_id]);
 
         $db->commit();
@@ -1572,6 +1581,8 @@ function denyReward($reward_id, $parent_user_id, $actor_user_id, $note = null) {
                 denied_note = :note
             WHERE id = :reward_id
               AND parent_user_id = :parent_id
+              AND status = 'redeemed'
+              AND fulfilled_on IS NULL
         ");
         $stmt->execute([
             ':actor_id' => $actor_user_id,
