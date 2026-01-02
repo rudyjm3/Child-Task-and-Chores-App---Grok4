@@ -1173,6 +1173,10 @@ $formatParentNotificationMessage = static function (array $note): string {
             .manage-family { padding: 8px; }
             .button { width: 100%; }
             .child-info-card { grid-template-columns: 1fr; }
+            .child-info-left,
+            .child-info-body,
+            .child-schedule-card { grid-column: auto; }
+            .child-info-content { display: block; }
             .child-info-header img { width: 56px; height: 56px; }
             .child-info-body { flex-direction: column; }
             .points-progress-container { width: 100%; height: 140px; }
@@ -3086,16 +3090,6 @@ $formatParentNotificationMessage = static function (array $note): string {
          <?php else: ?>
                <p>No children added yet. Add your first child below!</p>
          <?php endif; ?>
-      </div>
-      <!-- Rest of sections (Management Links, Rewards, etc.) with name display updates -->
-      <div class="management-links">
-         <h2>Management Links</h2>
-         <a href="task.php" class="button">Create Task</a>
-         <a href="rewards.php" class="button">Reward Library</a>
-      </div>
-      <div class="routine-management">
-         <h2>Routine Management</h2>
-         <a href="routine.php" class="button">Full Routine Editor</a>
       </div>
       <div class="routine-analytics">
          <h2>Routine Overtime Insights</h2>
