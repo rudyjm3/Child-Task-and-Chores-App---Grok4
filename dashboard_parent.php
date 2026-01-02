@@ -111,6 +111,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt = $db->prepare("UPDATE parent_notifications SET is_read = 1, deleted_at = NULL WHERE id IN ($placeholders) AND parent_user_id = ?");
             $stmt->execute($params);
             $message = "Notifications marked as read.";
+            $count = count($ids);
+            $parentNotificationActionSummary = 'Marked ' . $count . ' notification' . ($count === 1 ? '' : 's') . ' as read.';
+            $parentNotificationActionTab = 'read';
             $parentNotices = getParentNotifications($main_parent_id);
         }
     } elseif (isset($_POST['move_parent_notifications_trash']) || isset($_POST['trash_parent_single'])) {
@@ -127,6 +130,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt = $db->prepare("UPDATE parent_notifications SET deleted_at = NOW() WHERE id IN ($placeholders) AND parent_user_id = ?");
             $stmt->execute($params);
             $message = "Notifications moved to trash.";
+            $count = count($ids);
+            $parentNotificationActionSummary = 'Moved ' . $count . ' notification' . ($count === 1 ? '' : 's') . ' to Trash.';
+            $parentNotificationActionTab = 'deleted';
             $parentNotices = getParentNotifications($main_parent_id);
         }
     } elseif (isset($_POST['delete_parent_notifications_perm']) || isset($_POST['delete_parent_single_perm'])) {
@@ -143,6 +149,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt = $db->prepare("DELETE FROM parent_notifications WHERE id IN ($placeholders) AND parent_user_id = ?");
             $stmt->execute($params);
             $message = "Notifications deleted.";
+            $count = count($ids);
+            $parentNotificationActionSummary = 'Deleted ' . $count . ' notification' . ($count === 1 ? '' : 's') . '.';
+            $parentNotificationActionTab = 'deleted';
         }
     } elseif (isset($_POST['approve_task_notification'])) {
         $task_id = isset($_POST['approve_task_notification']) ? (int) $_POST['approve_task_notification'] : 0;
@@ -435,6 +444,8 @@ $parentNew = $parentNotices['new'] ?? [];
 $parentRead = $parentNotices['read'] ?? [];
 $parentDeleted = $parentNotices['deleted'] ?? [];
 $parentNotificationCount = count($parentNew);
+$parentNotificationActionSummary = $parentNotificationActionSummary ?? '';
+$parentNotificationActionTab = $parentNotificationActionTab ?? '';
 $getRewardFulfillMeta = function($rewardId) use ($db) {
     static $cache = [];
     $rewardId = (int)$rewardId;
@@ -786,31 +797,34 @@ if (isset($_GET['week_schedule'])) {
 $formatParentNotificationMessage = static function (array $note): string {
     $message = (string) ($note['message'] ?? '');
     $type = (string) ($note['type'] ?? '');
-    $titleTypes = [
-        'task_completed',
-        'task_approved',
-        'task_rejected',
-        'task_rejected_closed',
-        'routine_completed',
-        'goal_completed',
-        'goal_ready',
-        'goal_reward_earned',
-        'reward_redeemed',
-        'reward_denied'
-    ];
-    if (!in_array($type, $titleTypes, true)) {
-        return htmlspecialchars($message);
+    $highlight = static function (string $text, int $start, int $length): string {
+        $prefix = substr($text, 0, $start);
+        $title = substr($text, $start, $length);
+        $suffix = substr($text, $start + $length);
+        return htmlspecialchars($prefix)
+            . '<span class="parent-notification-title">' . htmlspecialchars($title) . '</span>'
+            . htmlspecialchars($suffix);
+    };
+
+    if ($type === 'reward_redeemed') {
+        if (preg_match('/"([^"]+)"/', $message, $match, PREG_OFFSET_CAPTURE)) {
+            return $highlight($message, $match[1][1], strlen($match[1][0]));
+        }
     }
-    $parts = explode(':', $message, 2);
-    if (count($parts) < 2) {
-        return htmlspecialchars($message);
+
+    if (in_array($type, ['routine_completed', 'task_completed'], true)) {
+        if (preg_match('/\\bcompleted\\s+([^\\.]+)\\./', $message, $match, PREG_OFFSET_CAPTURE)) {
+            return $highlight($message, $match[1][1], strlen($match[1][0]));
+        }
     }
-    $prefix = htmlspecialchars(trim($parts[0]));
-    $title = htmlspecialchars(ltrim($parts[1]));
-    if ($title === '') {
-        return htmlspecialchars($message);
+
+    if (in_array($type, ['task_approved', 'task_rejected', 'task_rejected_closed', 'goal_completed', 'goal_ready', 'goal_reward_earned', 'reward_denied', 'reward_fulfilled'], true)) {
+        if (preg_match('/:\\s*([^|]+?)(?=\\s*(\\||$))/', $message, $match, PREG_OFFSET_CAPTURE)) {
+            return $highlight($message, $match[1][1], strlen($match[1][0]));
+        }
     }
-    return $prefix . ': <span class="parent-notification-title">' . $title . '</span>';
+
+    return htmlspecialchars($message);
 };
 ?>
 <!DOCTYPE html>
@@ -1099,7 +1113,9 @@ $formatParentNotificationMessage = static function (array $note): string {
         .parent-notification-item { padding: 10px; background: #fff; border: 1px solid #e0e0e0; border-radius: 8px; display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
         .parent-notification-item input[type="checkbox"] { width: 19.8px; height: 19.8px; }
         .parent-notification-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 8px; }
-        .parent-notification-title { font-weight: 700; color: #919191; }
+        .parent-notification-actions .button.delete-danger { background-color: #d32f2f; }
+        .parent-notification-title { font-weight: 700; color: #ef6c00; }
+        .parent-notification-action-summary { margin-top: 10px; padding: 8px 10px; border-radius: 8px; background: #fff3e0; color: #ef6c00; font-weight: 700; }
         .parent-task-photo-thumb { width: 54px; height: 54px; border-radius: 10px; object-fit: cover; border: 1px solid #d5def0; box-shadow: 0 2px 6px rgba(0,0,0,0.12); cursor: pointer; }
         .parent-photo-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: none; align-items: center; justify-content: center; z-index: 4200; padding: 14px; }
         .parent-photo-modal.open { display: flex; }
@@ -1108,7 +1124,7 @@ $formatParentNotificationMessage = static function (array $note): string {
         .parent-photo-close { background: transparent; border: none; font-size: 1.3rem; cursor: pointer; color: #555; }
         .parent-photo-body { padding: 12px 14px 16px; }
         .parent-photo-preview { width: 100%; max-height: 70vh; object-fit: contain; border-radius: 10px; }
-        .parent-trash-button { border: none; background: transparent; cursor: pointer; font-size: 1.1rem; padding: 4px; color: #b71c1c; }
+        .parent-trash-button { border: none; background: transparent; cursor: pointer; font-size: 1.1rem; padding: 4px; color: #d32f2f; }
         .nav-links { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: center; margin-top: 8px; }
         .nav-button { display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; background: #eef4ff; border: 1px solid #d5def0; border-radius: 8px; color: #0d47a1; font-weight: 700; text-decoration: none; }
         .nav-button:hover { background: #dce8ff; }
@@ -1199,6 +1215,10 @@ $formatParentNotificationMessage = static function (array $note): string {
             const parentClose = parentModal ? parentModal.querySelector('[data-parent-notifications-close]') : null;
             const parentTabButtons = parentModal ? parentModal.querySelectorAll('.parent-tab-button') : [];
             const parentPanels = parentModal ? parentModal.querySelectorAll('.parent-notification-panel') : [];
+            const parentAction = {
+                summary: <?php echo json_encode($parentNotificationActionSummary); ?>,
+                tab: <?php echo json_encode($parentNotificationActionTab); ?>
+            };
             const setParentTab = (target) => {
                 parentTabButtons.forEach(btn => btn.classList.toggle('active', btn.getAttribute('data-tab') === target));
                 parentPanels.forEach(panel => panel.classList.toggle('active', panel.getAttribute('data-tab-panel') === target));
@@ -1245,6 +1265,12 @@ $formatParentNotificationMessage = static function (array $note): string {
                 parentTabButtons.forEach(btn => {
                     btn.addEventListener('click', () => setParentTab(btn.getAttribute('data-tab')));
                 });
+            }
+            if (parentAction.summary && parentModal) {
+                openParentModal();
+                if (parentAction.tab) {
+                    setParentTab(parentAction.tab);
+                }
             }
 
             const parentPhotoThumbs = document.querySelectorAll('[data-parent-photo-src]');
@@ -2013,6 +2039,9 @@ $formatParentNotificationMessage = static function (array $note): string {
             <button type="button" class="parent-tab-button" data-tab="deleted">Deleted (<?php echo count($parentDeleted); ?>)</button>
          </div>
          <div class="parent-notification-body">
+            <?php if (!empty($parentNotificationActionSummary)): ?>
+               <div class="parent-notification-action-summary"><?php echo htmlspecialchars($parentNotificationActionSummary); ?></div>
+            <?php endif; ?>
             <form method="POST" action="dashboard_parent.php" data-tab-panel="new" class="parent-notification-panel active">
                 <?php if (!empty($parentNew)): ?>
                     <label class="parent-notification-bulk">
@@ -2201,7 +2230,7 @@ $formatParentNotificationMessage = static function (array $note): string {
                 <?php if (!empty($parentRead)): ?>
                     <label class="parent-notification-bulk">
                         <input type="checkbox" data-parent-bulk-action="move_parent_notifications_trash">
-                        Move all to trash
+                        Move all to deleted
                     </label>
                     <ul class="parent-notification-list">
                         <?php foreach ($parentRead as $note): ?>
@@ -2382,7 +2411,7 @@ $formatParentNotificationMessage = static function (array $note): string {
                             <li class="parent-notification-item">
                                 <input type="checkbox" name="parent_notification_ids[]" value="<?php echo (int)$note['id']; ?>" aria-label="Delete permanently">
                                 <div>
-                                    <div><?php echo htmlspecialchars($note['message']); ?></div>
+                                    <div><?php echo $formatParentNotificationMessage($note); ?></div>
                                     <div class="parent-notification-meta">
                                         Deleted: <?php echo htmlspecialchars(date('m/d/Y h:i A', strtotime($note['deleted_at']))); ?>
                                     </div>
@@ -2392,10 +2421,10 @@ $formatParentNotificationMessage = static function (array $note): string {
                         <?php endforeach; ?>
                     </ul>
                     <div class="parent-notification-actions">
-                        <button type="submit" name="delete_parent_notifications_perm" class="button danger">Delete Selected</button>
+                        <button type="submit" name="delete_parent_notifications_perm" class="button delete-danger">Delete Selected</button>
                     </div>
                 <?php else: ?>
-                    <p class="parent-notification-meta" style="margin: 12px 0;">Trash is empty.</p>
+                    <p class="parent-notification-meta" style="margin: 12px 0;">Deleted is empty.</p>
                 <?php endif; ?>
             </form>
          </div>

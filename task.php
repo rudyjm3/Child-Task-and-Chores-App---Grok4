@@ -529,7 +529,8 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
         .task-section-toggle[open] summary::after { transform: rotate(180deg); }
         .task-section-toggle[open] { border-color: #ffd28a; box-shadow: 0 6px 16px rgba(255, 210, 138, 0.25); }
         .task-section-content { overflow: hidden; max-height: 0; opacity: 0; transform: translateY(-6px); transition: max-height 280ms ease, opacity 200ms ease, transform 200ms ease; margin-top: 15px; }
-        .task-section-toggle[open] .task-section-content { max-height: 3000px; opacity: 1; transform: translateY(0); }
+        .task-section-toggle[open] .task-section-content { max-height: 12000px; opacity: 1; transform: translateY(0); }
+        .task-approved-view-more { display: flex; justify-content: center; margin: 12px 0 4px; }
         .task-count-badge { background: #ff6f61; color: #fff; border-radius: 12px; padding: 2px 8px; font-size: 0.8rem; font-weight: 700; min-width: 24px; text-align: center; }
         .task-calendar-section { width: 100%; max-width: 100%; margin: 0 auto 24px; padding: 0 20px; }
         .task-calendar-card { background: #fff; border-radius: 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); padding: 16px; display: grid; gap: 16px; }
@@ -632,6 +633,10 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
         .task-create-card header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid #e0e0e0; }
         .task-create-body { padding: 12px 16px 18px; overflow-y: auto; }
         .task-photo-thumb { width: 56px; height: 56px; border-radius: 10px; object-fit: cover; border: 1px solid #d5def0; box-shadow: 0 2px 6px rgba(0,0,0,0.12); cursor: pointer; }
+        .task-photo-proof { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
+        .task-photo-proof-label { display: flex; flex-direction: column; align-items: center; font-size: 0.95rem; color: #6d6d6d; min-width: 72px; }
+        .task-photo-proof-label .task-meta-icon { color: #919191; }
+        .task-photo-proof-label span { text-align: center; }
         .task-photo-preview { width: 100%; max-height: 70vh; object-fit: contain; border-radius: 10px; }
         .no-scroll { overflow: hidden; }
         .task-modal-card header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid #e0e0e0; }
@@ -856,6 +861,8 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
         const photoModal = document.querySelector('[data-task-photo-modal]');
         const photoCloses = photoModal ? photoModal.querySelectorAll('[data-task-photo-close]') : [];
         const photoPreview = photoModal ? photoModal.querySelector('[data-task-photo-preview]') : null;
+        const approvedSection = document.querySelector('[data-approved-section]');
+        const approvedViewMore = approvedSection ? approvedSection.querySelector('[data-approved-view-more]') : null;
         floatingTimerEl = document.querySelector('[data-floating-timer]');
         floatingTitleEl = floatingTimerEl ? floatingTimerEl.querySelector('[data-floating-title]') : null;
         floatingPointsEl = floatingTimerEl ? floatingTimerEl.querySelector('[data-floating-points]') : null;
@@ -983,6 +990,39 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
         openDeleteTaskModal = openDeleteModal;
         openProofTaskModal = openProofModal;
         openPhotoViewer = openPhotoModal;
+
+        if (approvedSection && approvedViewMore && isParentView) {
+            const approvedCards = Array.from(approvedSection.querySelectorAll('[data-approved-card]'));
+            const step = parseInt(approvedViewMore.getAttribute('data-approved-step'), 10) || 5;
+            let visibleCount = approvedCards.filter((card) => card.style.display !== 'none').length || step;
+            const setButtonLabel = (allVisible) => {
+                approvedViewMore.textContent = allVisible ? 'View less' : 'View more';
+            };
+            const applyVisibility = (count) => {
+                approvedCards.forEach((card, index) => {
+                    card.style.display = index < count ? '' : 'none';
+                });
+                visibleCount = count;
+            };
+            const updateViewMore = () => {
+                if (approvedCards.length <= step) {
+                    approvedViewMore.style.display = 'none';
+                    return;
+                }
+                approvedViewMore.style.display = '';
+                setButtonLabel(visibleCount >= approvedCards.length);
+            };
+            updateViewMore();
+            approvedViewMore.addEventListener('click', () => {
+                if (visibleCount >= approvedCards.length) {
+                    applyVisibility(step);
+                } else {
+                    const nextCount = Math.min(approvedCards.length, visibleCount + step);
+                    applyVisibility(nextCount);
+                }
+                updateViewMore();
+            });
+        }
         if (floatingTimerEl) {
             if (floatingOpenBtn) {
                 floatingOpenBtn.addEventListener('click', () => {
@@ -2388,14 +2428,23 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
 
             card.appendChild(meta);
 
-            if (proofSrc) {
+            if (task.photo_proof_required && proofSrc) {
                 const proofWrap = document.createElement('div');
-                proofWrap.className = 'task-description';
+                proofWrap.className = 'task-photo-proof';
+                const label = document.createElement('div');
+                label.className = 'task-photo-proof-label';
+                const icon = document.createElement('i');
+                icon.className = 'fa-solid fa-camera task-meta-icon';
+                const labelText = document.createElement('span');
+                labelText.textContent = 'Photo proof:';
+                label.appendChild(icon);
+                label.appendChild(labelText);
                 const img = document.createElement('img');
                 img.src = proofSrc;
                 img.alt = 'Photo proof';
                 img.className = 'task-photo-thumb';
                 img.dataset.taskPhotoSrc = proofSrc;
+                proofWrap.appendChild(label);
                 proofWrap.appendChild(img);
                 card.appendChild(proofWrap);
             }
@@ -3153,7 +3202,7 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                     </div>
                 </details>
 
-                <details class="task-section-toggle">
+                <details class="task-section-toggle" data-approved-section>
                     <summary>
                         <span class="task-section-title">Approved Tasks <span class="task-count-badge"><?php echo count($approved_tasks); ?></span></span>
                     </summary>
@@ -3161,8 +3210,14 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                         <?php if (empty($approved_tasks)): ?>
                             <p>No approved tasks.</p>
                         <?php else: ?>
+                            <?php $approvedIndex = 0; ?>
+                            <?php $isParentView = canCreateContent($_SESSION['user_id']); ?>
                             <?php foreach ($approved_tasks as $task): ?>
-                            <div class="task-card" id="task-<?php echo (int) $task['id']; ?>" data-task-id="<?php echo $task['id']; ?>">
+                            <?php
+                                $approvedIndex++;
+                                $hideApproved = $isParentView && $approvedIndex > 5;
+                            ?>
+                            <div class="task-card" id="task-<?php echo (int) $task['id']; ?>" data-task-id="<?php echo $task['id']; ?>" data-approved-card data-approved-index="<?php echo $approvedIndex; ?>"<?php echo $hideApproved ? ' style="display:none;"' : ''; ?>>
                             <div class="task-card-header">
                                 <div class="task-card-title"><?php echo htmlspecialchars($task['title']); ?></div>
                                 <div class="task-pill"><?php echo (int)$task['points']; ?> pts</div>
@@ -3222,6 +3277,15 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                                   <div class="task-meta-row">
                                       <span><span class="task-meta-label"><i class="fa-solid fa-camera task-meta-icon"></i></span> <?php echo !empty($task['photo_proof_required']) ? 'Required' : 'Not required'; ?></span>
                                   </div>
+                                  <?php if (!empty($task['photo_proof_required']) && !empty($task['photo_proof'])): ?>
+                                      <div class="task-photo-proof">
+                                          <div class="task-photo-proof-label">
+                                              <i class="fa-solid fa-camera task-meta-icon"></i>
+                                              <span>Photo proof:</span>
+                                          </div>
+                                          <img src="<?php echo htmlspecialchars($task['photo_proof']); ?>" alt="Photo proof" class="task-photo-thumb" data-task-photo-src="<?php echo htmlspecialchars($task['photo_proof'], ENT_QUOTES); ?>">
+                                      </div>
+                                  <?php endif; ?>
                                   <?php if (!empty($task['creator_display_name'])): ?>
                                       <div class="task-meta-row">
                                           <span><span class="task-meta-label"><i class="fa-solid fa-user-pen task-meta-icon"></i></span> <?php echo htmlspecialchars($task['creator_display_name']); ?></span>
@@ -3231,6 +3295,11 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                               <p class="completed"><span class="completed-icon"><i class="fa-regular fa-circle-check"></i></span>Approved</p>
                             </div>
                             <?php endforeach; ?>
+                            <?php if ($isParentView && count($approved_tasks) > 5): ?>
+                                <div class="task-approved-view-more">
+                                    <button type="button" class="button secondary" data-approved-view-more data-approved-step="5">View more</button>
+                                </div>
+                            <?php endif; ?>
                         <?php endif; ?>
                     </div>
                 </details>
