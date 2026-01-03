@@ -310,7 +310,7 @@ $buildChildNotificationViewLink = static function (array $note): ?string {
             .week-calendar { grid-column: 3; }
         }
         @media (max-width: 768px) { .dashboard { padding: 10px; } .button { width: 100%; } }
-        @media (max-width: 600px) {
+        @media (max-width: 700px) {
             .points-summary { display: flex; flex-direction: column; align-items: center; text-align: center; }
             .points-left { display: contents; }
         }

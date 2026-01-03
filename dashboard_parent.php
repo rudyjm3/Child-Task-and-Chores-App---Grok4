@@ -943,16 +943,18 @@ $formatParentNotificationMessage = static function (array $note): string {
         .badge-count { font-size: 1.6em; font-weight: 700; color: #2e7d32; line-height: 1.1; }
         .child-reward-badge-link .badge-label { font-size: 0.85em; color: #666; }
         .points-progress-wrapper { display: flex; flex-direction: column; align-items: center; gap: 6px; flex: 1; }
-        .points-progress-label { font-size: 0.9em; font-weight: 600; color: #555; text-align: center; }
+        .points-progress-label { font-size: 1.1em; font-weight: 600; color: #555; text-align: center; }
         .points-number { font-size: 1.6em; font-weight: 700; color: #2e7d32; line-height: 1; }
         .child-info-actions form { margin: 0; }
         .child-badge-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 6px; }
         .badge-pill { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 8px; background: transparent; color: #0d47a1; font-weight: 700; border: 1px solid #d5def0; font-size: 0.95em; text-decoration: none; }
         .badge-pill:hover { background: #eef4ff; text-decoration: none; }
         .badge-pill i { font-size: 0.95em; }
-        .adjust-button { background: #ff9800 !important; color: #fff; display: block; gap: 4px; justify-items: center; font-weight: 700; }
+        .adjust-button { background: #ff9800 !important; color: #fff; display: block; gap: 4px; justify-items: center; font-weight: 700; min-width: -webkit-fill-available;}
         .adjust-button .label { font-size: 0.95em; }
         .adjust-button .icon { font-size: 1.1em; line-height: 1; }
+        .history-button { background: #5384ca !important; min-width:-webkit-fill-available; color: #fff; }
+        .history-button i { color: inherit; }
         .points-adjust-card { border: 1px dashed #c8e6c9; background: #fdfefb; padding: 10px 12px; border-radius: 6px; display: grid; gap: 8px; }
         .points-adjust-card .button { width: 100%; }
         .child-schedule-card { border: 1px solid #e0e0e0; background: #fff; border-radius: 10px; padding: 12px; display: grid; gap: 10px; }
@@ -2819,14 +2821,6 @@ $formatParentNotificationMessage = static function (array $note): string {
                                    <?php if (in_array($role_type, ['main_parent', 'secondary_parent'])): ?>
                                        <a href="profile.php?user_id=<?php echo $child['child_user_id']; ?>&type=child" class="child-action-icon" aria-label="Edit Child"><i class="fa-solid fa-pen"></i></a>
                                    <?php endif; ?>
-                                   <?php if ($role_type === 'main_parent'): ?>
-                                       <form method="POST" data-role="child-remove-form">
-                                           <input type="hidden" name="delete_user_id" value="<?php echo $child['child_user_id']; ?>">
-                                           <input type="hidden" name="delete_mode" value="soft">
-                                           <input type="hidden" name="delete_user" value="1">
-                                           <button type="submit" class="child-action-icon danger" data-action="remove-child" aria-label="Remove Child"><i class="fa-solid fa-trash"></i></button>
-                                       </form>
-                                   <?php endif; ?>
                                 </div>
                              </div>
                           </div>
@@ -2840,16 +2834,15 @@ $formatParentNotificationMessage = static function (array $note): string {
                                       data-child-id="<?php echo (int)$child['child_user_id']; ?>"
                                       data-child-name="<?php echo htmlspecialchars($child['child_name']); ?>"
                                       data-history='<?php echo htmlspecialchars(json_encode($child['point_adjustments'] ?? [], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT)); ?>'>
-                                      <span class="label">Points</span>
                                       <span class="icon">+ / -</span>
                                   </button>
                               <?php endif; ?>
                               <button type="button"
-                                      class="button secondary"
+                                      class="button secondary history-button"
                                       data-child-history-open
                                       data-child-history-id="<?php echo (int)$child['child_user_id']; ?>"
                                       data-child-history-name="<?php echo htmlspecialchars($child['child_name']); ?>">
-                                  History
+                                  <i class="fa-solid fa-clock-rotate-left"></i>
                               </button>
                           </div>
                       </div>
