@@ -306,9 +306,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             $rejectError = null;
             if (rejectGoal($goal_id, $main_parent_id, $comment, $rejectError)) {
-                $message = "Goal rejected.";
+                $message = "Goal denied.";
             } else {
-                $message = "Failed to reject goal." . ($rejectError ? " Reason: " . htmlspecialchars($rejectError) : "");
+                $message = "Failed to deny goal." . ($rejectError ? " Reason: " . htmlspecialchars($rejectError) : "");
             }
         }
     } elseif (isset($_POST['fulfill_reward'])) {

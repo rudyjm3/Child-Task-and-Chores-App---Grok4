@@ -19,6 +19,12 @@ if (!isset($_SESSION['name'])) {
 }
 
 $family_root_id = getFamilyRootId($_SESSION['user_id']);
+$goalRole = getEffectiveRole($_SESSION['user_id']);
+if (in_array($goalRole, ['main_parent', 'secondary_parent', 'family_member', 'caregiver'], true)) {
+    autoCloseExpiredGoals($family_root_id, null);
+} elseif ($goalRole === 'child') {
+    autoCloseExpiredGoals(null, (int) $_SESSION['user_id']);
+}
 
 function resolveGoalRewardId($parent_id, $child_id, $reward_selection) {
     global $db;
@@ -194,6 +200,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $award_mode = filter_input(INPUT_POST, 'award_mode', FILTER_SANITIZE_STRING) ?: 'both';
         $requires_parent_approval = isset($_POST['requires_parent_approval']) ? 1 : 0;
         $task_target_ids = array_values(array_filter(array_map('intval', $_POST['task_target_ids'] ?? [])));
+        $reactivateOnSave = !empty($_POST['reactivate_on_save']);
 
         if (!in_array($goal_type, ['routine_streak', 'routine_count'], true)) {
             $routine_ids = [];
@@ -279,7 +286,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         ];
 
         if (updateGoal($goal_id, $family_root_id, $title, $start_date, $end_date, $reward_id, $options)) {
-            $message = "Goal updated successfully!";
+            if ($reactivateOnSave) {
+                if (reactivateGoal($goal_id, $family_root_id)) {
+                    $updated = $db->prepare("SELECT * FROM goals WHERE id = :goal_id");
+                    $updated->execute([':goal_id' => $goal_id]);
+                    $goalRow = $updated->fetch(PDO::FETCH_ASSOC);
+                    if ($goalRow) {
+                        refreshGoalProgress($goalRow, $goalRow['child_user_id']);
+                    }
+                    $message = "Goal updated and reactivated successfully!";
+                } else {
+                    $message = "Goal updated, but failed to reactivate.";
+                }
+            } else {
+                $message = "Goal updated successfully!";
+            }
         } else {
             $message = "Failed to update goal.";
         }
@@ -321,9 +342,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             } else {
                 $rejectError = null;
                 if (rejectGoal($goal_id, $family_root_id, $rejection_comment, $rejectError)) {
-                    $message = "Goal rejected.";
+                    $message = "Goal denied.";
                 } else {
-                    $message = "Failed to reject goal." . ($rejectError ? " Reason: " . htmlspecialchars($rejectError) : "");
+                    $message = "Failed to deny goal." . ($rejectError ? " Reason: " . htmlspecialchars($rejectError) : "");
                 }
             }
         }
@@ -884,7 +905,7 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
         .goal-routine-count { display: inline-flex; align-items: center; justify-content: center; min-width: 22px; padding: 2px 8px; border-radius: 999px; background: #1565c0; color: #fff; font-weight: 700; font-size: 0.78rem; }
         .goal-card-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
         .goal-card-title-text { font-size: 1.2rem; font-weight: 600; text-align: left; margin: 0; }
-        .goal-status-badge { color: #f9f9f9; font-weight: 600; font-size: 0.9rem; letter-spacing: 2px; border-radius: 50px; padding: 5px 10px; margin-left: 1%; box-shadow: 0px 2px 6px rgba(0, 0, 0, 0.4); }
+        .goal-status-badge { color: #f9f9f9; font-weight: 600; font-size: 0.85rem; letter-spacing: 2px; border-radius: 50px; padding: 5px 10px; margin-left: 1%; }
         .goal-status-badge.active { background-color: #1db41d; }
         .goal-status-badge.completed { background-color: #607d8b; }
         .goal-status-badge.rejected { background-color: #d32f2f; }
@@ -1173,6 +1194,9 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                                             <?php elseif (in_array(($goalProgress['goal_type'] ?? ''), ['routine_count', 'task_quota'], true)): ?>
                                                 <span class="goal-detail-pill">Target days: <?php echo (int) ($goal['target_count'] ?? 0); ?></span>
                                             <?php endif; ?>
+                                            <?php if (($goal['award_mode'] ?? 'both') === 'reward' && empty($goal['points_awarded']) && !empty($goal['reward_title'])): ?>
+                                                <span class="goal-detail-pill">Reward: <?php echo htmlspecialchars($goal['reward_title']); ?></span>
+                                            <?php endif; ?>
                                             <?php if (!empty($goal['require_on_time'])): ?>
                                                 <span class="goal-detail-pill">On-time required</span>
                                             <?php endif; ?>
@@ -1186,9 +1210,9 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                                             <form method="POST" action="goal.php">
                                                 <input type="hidden" name="goal_id" value="<?php echo $goal['id']; ?>">
                                                 <button type="submit" name="approve_goal" class="button">Approve</button>
-                                                <button type="submit" name="reject_goal" class="button" style="background-color: #f44336;">Reject</button>
+                                                <button type="submit" name="reject_goal" class="button" style="background-color: #f44336;">Deny</button>
                                                 <div class="reject-comment">
-                                                    <label for="rejection_comment_<?php echo $goal['id']; ?>">Comment (optional):</label>
+                                                    <label for="rejection_comment_<?php echo $goal['id']; ?>">Reason (optional):</label>
                                                     <textarea id="rejection_comment_<?php echo $goal['id']; ?>" name="rejection_comment"></textarea>
                                                 </div>
                                             </form>
@@ -1293,17 +1317,54 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                 </details>
                 <details class="task-section-toggle" <?php echo !empty($rejected_goals) ? 'open' : ''; ?>>
                     <summary>
-                        <span class="task-section-title">Rejected Goals <span class="task-count-badge"><?php echo count($rejected_goals); ?></span></span>
+                        <span class="task-section-title">Inactive Goals <span class="task-count-badge"><?php echo count($rejected_goals); ?></span></span>
                     </summary>
                     <div class="task-section-content">
                         <?php if (empty($rejected_goals)): ?>
-                            <p>No rejected goals.</p>
+                            <p>No inactive goals.</p>
                         <?php else: ?>
                             <?php foreach ($rejected_goals as $goal): ?>
+                                <?php
+                                    $inactiveLabel = 'Denied';
+                                    $rejectionNote = (string) ($goal['rejection_comment'] ?? '');
+                                    if (stripos($rejectionNote, 'Incomplete') === 0) {
+                                        $inactiveLabel = 'Incomplete';
+                                    }
+                                    $inactiveDateLabel = $inactiveLabel === 'Incomplete' ? 'Incomplete on' : 'Denied on';
+                                    $inactiveRoutineTargetIds = $goal['routine_target_ids'] ?? [];
+                                    if (empty($inactiveRoutineTargetIds) && !empty($goal['routine_id'])) {
+                                        $inactiveRoutineTargetIds = [(int) $goal['routine_id']];
+                                    }
+                                    $inactivePayload = [
+                                        'id' => (int) $goal['id'],
+                                        'child_user_id' => (int) ($goal['child_user_id'] ?? 0),
+                                        'title' => $goal['title'] ?? '',
+                                        'description' => $goal['description'] ?? '',
+                                        'start_date' => !empty($goal['start_date']) ? date('Y-m-d\\TH:i', strtotime($goal['start_date'])) : '',
+                                        'end_date' => !empty($goal['end_date']) ? date('Y-m-d\\TH:i', strtotime($goal['end_date'])) : '',
+                                        'reward_id' => (int) ($goal['reward_id'] ?? 0),
+                                        'goal_type' => $goal['goal_type'] ?? 'manual',
+                                        'routine_id' => (int) ($goal['routine_id'] ?? 0),
+                                        'routine_ids' => array_values(array_filter(array_map('intval', $inactiveRoutineTargetIds))),
+                                        'task_category' => $goal['task_category'] ?? '',
+                                        'target_count' => (int) ($goal['target_count'] ?? 0),
+                                        'streak_required' => (int) ($goal['streak_required'] ?? 0),
+                                        'time_window_type' => $goal['time_window_type'] ?? 'rolling',
+                                        'time_window_days' => (int) ($goal['time_window_days'] ?? 0),
+                                        'fixed_window_start' => $goal['fixed_window_start'] ?? '',
+                                        'fixed_window_end' => $goal['fixed_window_end'] ?? '',
+                                        'require_on_time' => (int) ($goal['require_on_time'] ?? 0),
+                                        'points_awarded' => (int) ($goal['points_awarded'] ?? 0),
+                                        'award_mode' => $goal['award_mode'] ?? 'both',
+                                        'requires_parent_approval' => (int) ($goal['requires_parent_approval'] ?? 1),
+                                        'task_target_ids' => getGoalTaskTargetIds((int) $goal['id'])
+                                    ];
+                                    $inactivePayloadJson = htmlspecialchars(json_encode($inactivePayload, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP), ENT_QUOTES, 'UTF-8');
+                                ?>
                                 <div class="goal-card rejected-card" id="goal-<?php echo (int) $goal['id']; ?>">
                                     <div class="goal-card-header">
                                         <h3 class="goal-card-title-text"><?php echo htmlspecialchars($goal['title']); ?></h3>
-                                        <span class="goal-status-badge rejected">Rejected</span>
+                                        <span class="goal-status-badge rejected"><?php echo htmlspecialchars($inactiveLabel); ?></span>
                                     </div>
                                     <?php if (!empty($goal['description'])): ?>
                                         <p class="goal-description"><span class="goal-info-label"><i class="fa-solid fa-align-center"></i></span><?php echo nl2br(htmlspecialchars($goal['description'])); ?></p>
@@ -1316,21 +1377,20 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                                     <?php if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])): ?>
                                         <div class="goal-info-row goal-assignee"><span class="goal-info-label"><i class="fa-solid fa-user"></i></span><?php echo htmlspecialchars($goal['child_display_name']); ?></div>
                                     <?php endif; ?>
-                                    <p class="goal-info-row"><span class="goal-info-label"><i class="fa-regular fa-calendar-days"></i></span><?php echo htmlspecialchars($goal['rejected_at_formatted']); ?></p>
+                                    <p class="goal-info-row"><span class="goal-info-label"><i class="fa-regular fa-calendar-days"></i></span><?php echo htmlspecialchars($inactiveDateLabel); ?>: <?php echo htmlspecialchars($goal['rejected_at_formatted']); ?></p>
                                     <p class="goal-info-row"><span class="goal-info-label"><i class="fa-solid fa-comment"></i></span><?php echo htmlspecialchars($goal['rejection_comment'] ?? 'No comments available.'); ?></p>
                                     <?php if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])): ?>
-                                        <form method="POST" action="goal.php">
-                                            <input type="hidden" name="goal_id" value="<?php echo $goal['id']; ?>">
-                                            <button type="submit" name="reactivate_goal" class="button">Reactivate</button>
-                                        </form>
-                                <div class="edit-delete">
-                                    <form method="POST" action="goal.php" style="display:inline;">
-                                        <input type="hidden" name="goal_id" value="<?php echo $goal['id']; ?>">
-                                        <button type="submit" name="delete_goal" class="icon-button danger" aria-label="Delete goal">
-                                            <i class="fa-solid fa-trash"></i>
-                                        </button>
-                                    </form>
-                                </div>
+                                        <div class="edit-delete">
+                                            <button type="button" class="button" data-goal-edit-open data-goal-reactivate="1" data-goal-payload="<?php echo $inactivePayloadJson; ?>" aria-label="Reactivate goal">
+                                                Reactivate
+                                            </button>
+                                            <form method="POST" action="goal.php" style="display:inline;">
+                                                <input type="hidden" name="goal_id" value="<?php echo $goal['id']; ?>">
+                                                <button type="submit" name="delete_goal" class="icon-button danger" aria-label="Delete goal">
+                                                    <i class="fa-solid fa-trash"></i>
+                                                </button>
+                                            </form>
+                                        </div>
                                     <?php elseif ($_SESSION['role'] === 'child'): ?>
                                         <p>Created on: <?php echo htmlspecialchars($goal['created_at_formatted']); ?></p>
                                     <?php endif; ?>
@@ -1626,6 +1686,7 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                 <div class="goal-create-body">
                     <form method="POST" action="goal.php" data-goal-edit-form>
                         <input type="hidden" name="goal_id" value="">
+                        <input type="hidden" name="reactivate_on_save" value="0" data-goal-reactivate-flag>
                         <div class="form-error" data-goal-edit-error style="display:none;"></div>
                         <?php
                         $children = $goalFormData['children'] ?? [];
@@ -2078,7 +2139,7 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
           goalEditModal.classList.remove('open');
           document.body.classList.remove('no-scroll');
       };
-      const openGoalEdit = (payload) => {
+      const openGoalEdit = (payload, reactivate = false) => {
           if (!goalEditModal || !goalEditForm) return;
           goalEditForm.reset();
           if (goalEditError) {
@@ -2087,6 +2148,10 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
           }
           goalEditForm.querySelectorAll('.input-error').forEach(el => el.classList.remove('input-error'));
           goalEditForm.querySelectorAll('.child-select-grid').forEach(el => el.classList.remove('input-error'));
+          const reactivateField = goalEditForm.querySelector('[data-goal-reactivate-flag]');
+          if (reactivateField) {
+              reactivateField.value = reactivate ? '1' : '0';
+          }
 
           goalEditForm.querySelector('[name="goal_id"]').value = payload.id || '';
           goalEditForm.querySelector('[name="title"]').value = payload.title || '';
@@ -2163,7 +2228,8 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
               } catch (err) {
                   payload = {};
               }
-              openGoalEdit(payload);
+              const reactivate = button.dataset.goalReactivate === '1';
+              openGoalEdit(payload, reactivate);
           });
       });
 

@@ -172,6 +172,12 @@ $activeRewardStmt = $db->prepare("
     FROM rewards r
     LEFT JOIN users cu ON r.child_user_id = cu.id
     WHERE r.parent_user_id = :parent_id AND r.status = 'available'
+      AND NOT EXISTS (
+          SELECT 1 FROM goals g
+          WHERE g.reward_id = r.id
+            AND g.award_mode IN ('reward', 'both')
+            AND g.status IN ('active', 'pending_approval', 'rejected')
+      )
     ORDER BY r.created_on DESC
     LIMIT 50
 ");

@@ -630,6 +630,7 @@ function getDashboardData($user_id) {
                 $main_parent_id = $main_parent_from_link;
             }
         }
+        autoCloseExpiredGoals($main_parent_id, null);
 
         // Determine all parent IDs in this family (main + linked adults)
         $family_parent_ids = [$main_parent_id];
@@ -832,6 +833,12 @@ function getDashboardData($user_id) {
                               WHERE r.parent_user_id = :parent_id AND r.status = 'available'
                                 AND (cp.deleted_at IS NULL OR cp.child_user_id IS NULL)
                                 AND (cu.deleted_at IS NULL OR r.child_user_id IS NULL)
+                                AND NOT EXISTS (
+                                    SELECT 1 FROM goals g
+                                    WHERE g.reward_id = r.id
+                                      AND g.award_mode IN ('reward', 'both')
+                                      AND g.status IN ('active', 'pending_approval', 'rejected')
+                                )
                               ORDER BY r.created_on DESC");
         $stmt->execute([':parent_id' => $main_parent_id]);
         $data['active_rewards'] = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
@@ -904,6 +911,7 @@ function getDashboardData($user_id) {
 
     } elseif ($role === 'child') {
         // Fetch remaining_points from child_points
+        autoCloseExpiredGoals(null, $user_id);
         $stmt = $db->prepare("SELECT total_points FROM child_points WHERE child_user_id = :child_id");
         $stmt->execute([':child_id' => $user_id]);
         $data['remaining_points'] = $stmt->fetchColumn() ?: 0;
@@ -916,7 +924,17 @@ function getDashboardData($user_id) {
         $parentStmt->execute([':child_id' => $user_id]);
         $parent_id = $parentStmt->fetchColumn();
         if ($parent_id) {
-            $stmt = $db->prepare("SELECT id, title, description, point_cost FROM rewards WHERE parent_user_id = :parent_id AND status = 'available' AND (child_user_id IS NULL OR child_user_id = :child_id)");
+            $stmt = $db->prepare("SELECT id, title, description, point_cost
+                                  FROM rewards
+                                  WHERE parent_user_id = :parent_id
+                                    AND status = 'available'
+                                    AND (child_user_id IS NULL OR child_user_id = :child_id)
+                                    AND NOT EXISTS (
+                                        SELECT 1 FROM goals g
+                                        WHERE g.reward_id = rewards.id
+                                          AND g.award_mode IN ('reward', 'both')
+                                          AND g.status IN ('active', 'pending_approval', 'rejected')
+                                    )");
             $stmt->execute([':parent_id' => $parent_id, ':child_id' => $user_id]);
             $data['rewards'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
         }
@@ -1463,6 +1481,16 @@ function assignTemplateToChildren($parent_user_id, $template_id, array $child_us
 function redeemReward($child_user_id, $reward_id) {
     global $db;
     $parent_id = getFamilyRootId($child_user_id);
+    $lockStmt = $db->prepare("SELECT 1
+                              FROM goals
+                              WHERE reward_id = :reward_id
+                                AND award_mode IN ('reward', 'both')
+                                AND status IN ('active', 'pending_approval', 'rejected')
+                              LIMIT 1");
+    $lockStmt->execute([':reward_id' => $reward_id]);
+    if ($lockStmt->fetchColumn()) {
+        return false;
+    }
     $db->beginTransaction();
     try {
         $stmt = $db->prepare("SELECT title, point_cost FROM rewards WHERE id = :id AND status = 'available' AND parent_user_id = :parent_id AND (child_user_id IS NULL OR child_user_id = :child_id)");
@@ -1780,7 +1808,7 @@ function updateGoal($goal_id, $parent_user_id, $title, $start_date, $end_date, $
     $updated = $db->prepare("SELECT * FROM goals WHERE id = :goal_id");
     $updated->execute([':goal_id' => $goal_id]);
     $goalRow = $updated->fetch(PDO::FETCH_ASSOC);
-    if ($goalRow && ($goalRow['status'] ?? '') === 'active') {
+    if ($goalRow && in_array(($goalRow['status'] ?? ''), ['active', 'pending_approval'], true)) {
         refreshGoalProgress($goalRow, $goalRow['child_user_id']);
     }
     return true;
@@ -2034,6 +2062,40 @@ function markGoalPendingApproval($goal) {
     $parentId = (int) ($goal['parent_user_id'] ?? 0);
     if ($parentId) {
         addParentNotification($parentId, 'goal_ready', "Goal ready for approval: {$title}", 'goal.php');
+    }
+    return true;
+}
+
+function markGoalIncomplete($goal, $child_id, $reason = null) {
+    global $db;
+    $goalId = (int) ($goal['id'] ?? 0);
+    if ($goalId <= 0) {
+        return false;
+    }
+    $note = trim((string) $reason);
+    if ($note === '') {
+        $note = 'Incomplete: End date reached before completing the goal.';
+    } elseif (stripos($note, 'Incomplete') !== 0) {
+        $note = 'Incomplete: ' . $note;
+    }
+    $stmt = $db->prepare("UPDATE goals
+                          SET status = 'rejected',
+                              rejected_at = NOW(),
+                              rejection_comment = :comment
+                          WHERE id = :goal_id AND status = 'active'");
+    $stmt->execute([
+        ':comment' => $note,
+        ':goal_id' => $goalId
+    ]);
+    if ($stmt->rowCount() <= 0) {
+        return false;
+    }
+    $title = $goal['title'] ?? 'Goal';
+    $message = "Goal incomplete: {$title}. End date reached before the goal requirements were met.";
+    addChildNotification((int) $child_id, 'goal_incomplete', $message, 'goal.php');
+    $parentId = (int) ($goal['parent_user_id'] ?? 0);
+    if ($parentId) {
+        addParentNotification($parentId, 'goal_incomplete', $message, 'goal.php');
     }
     return true;
 }
@@ -2319,8 +2381,22 @@ function refreshGoalProgress(array $goal, $child_id) {
                 ':next_needed_hint' => $progress['next_needed']
             ]);
     }
+    $status = $goal['status'] ?? 'active';
+    $goalType = $goal['goal_type'] ?? 'manual';
+    if ($status === 'pending_approval' && !$progress['is_met'] && $goalType !== 'manual') {
+        $db->prepare("UPDATE goals SET status = 'active', requested_at = NULL WHERE id = :goal_id AND status = 'pending_approval'")
+           ->execute([':goal_id' => $goalId]);
+        $status = 'active';
+    }
+    if (!$progress['is_met'] && $status === 'active' && !empty($goal['end_date'])) {
+        $endStamp = strtotime($goal['end_date']);
+        if ($endStamp && $endStamp < time()) {
+            markGoalIncomplete($goal, $child_id);
+            return $progress;
+        }
+    }
     $requiresApproval = !empty($goal['requires_parent_approval']);
-    if ($progress['is_met'] && ($goal['status'] ?? 'active') === 'active') {
+    if ($progress['is_met'] && $status === 'active') {
         if ($requiresApproval) {
             markGoalPendingApproval($goal);
         } else {
@@ -2328,6 +2404,30 @@ function refreshGoalProgress(array $goal, $child_id) {
         }
     }
     return $progress;
+}
+
+function autoCloseExpiredGoals($parent_id = null, $child_id = null) {
+    global $db;
+    $filters = ["status = 'active'", "end_date IS NOT NULL", "end_date < NOW()"];
+    $params = [];
+    if ($parent_id !== null) {
+        $filters[] = "parent_user_id = :parent_id";
+        $params[':parent_id'] = (int) $parent_id;
+    }
+    if ($child_id !== null) {
+        $filters[] = "child_user_id = :child_id";
+        $params[':child_id'] = (int) $child_id;
+    }
+    $where = implode(' AND ', $filters);
+    $stmt = $db->prepare("SELECT * FROM goals WHERE {$where}");
+    $stmt->execute($params);
+    $goals = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    foreach ($goals as $goal) {
+        $childId = (int) ($goal['child_user_id'] ?? 0);
+        if ($childId > 0) {
+            refreshGoalProgress($goal, $childId);
+        }
+    }
 }
 
 function refreshTaskGoalsForChild($child_id) {
@@ -2467,10 +2567,15 @@ function rejectGoal($goal_id, $parent_user_id, $rejection_comment, &$error = nul
             ':comment' => $rejection_comment
         ]);
         if ($stmt->rowCount() > 0) {
+            $note = trim((string) $rejection_comment);
+            $message = 'Goal denied: ' . ($goal['title'] ?? 'Goal');
+            if ($note !== '') {
+                $message .= ' | Reason: ' . $note;
+            }
             addChildNotification(
                 (int)$goal['child_user_id'],
                 'goal_rejected',
-                'Goal rejected: ' . ($goal['title'] ?? 'Goal'),
+                $message,
                 'dashboard_child.php'
             );
             return true;
