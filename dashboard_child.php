@@ -295,7 +295,7 @@ $buildChildNotificationViewLink = static function (array $note): ?string {
         .week-item-icon { color: #ef6c00; }
         .week-item-title { font-weight: 700; color: #3e2723; }
         .week-item-meta { color: #6d4c41; font-size: 0.9rem; }
-        .week-item-points { font-weight: 700; color: #00bb01; white-space: nowrap; }
+        .week-item-points { color: #fff; font-size: 0.7rem; font-weight: 600; border-radius: 50px; background-color: #4caf50; padding: 2px 8px; white-space: nowrap; }
         .button { padding: 10px 20px; margin: 5px; background-color: #ff9800; color: white; border: none; border-radius: 5px; cursor: pointer; text-decoration: none; display: inline-block; font-size: 16px; min-height: 44px; }
         .redeem-button { background-color: #2196f3; }
         

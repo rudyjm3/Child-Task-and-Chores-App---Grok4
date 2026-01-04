@@ -907,7 +907,8 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
         .goal-card-title-text { font-size: 1.2rem; font-weight: 600; text-align: left; margin: 0; }
         .goal-status-badge { color: #f9f9f9; font-weight: 600; font-size: 0.85rem; letter-spacing: 2px; border-radius: 50px; padding: 5px 10px; margin-left: 1%; }
         .goal-status-badge.active { background-color: #1db41d; }
-        .goal-status-badge.completed { background-color: #607d8b; }
+        .goal-status-badge.completed { background-color: #4caf50; }
+        .completed { background-color: #4caf50; }
         .goal-status-badge.rejected { background-color: #d32f2f; }
         .goal-info-row { display: flex; flex-wrap: wrap; gap: 6px; }
         .goal-info-label { font-weight: 700; color: #919191; display: inline-flex; align-items: center; margin-right: 6px; }

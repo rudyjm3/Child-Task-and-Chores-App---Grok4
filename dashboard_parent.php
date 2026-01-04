@@ -972,7 +972,7 @@ $formatParentNotificationMessage = static function (array $note): string {
         .child-schedule-card .child-schedule-main > i.fa-repeat { color: #0d47a1; }
         .child-schedule-title { font-weight: 600; color: #3e2723; }
         .child-schedule-time { color: #6d4c41; font-size: 0.9rem; }
-        .child-schedule-points { font-weight: 700; color: #2e7d32; white-space: nowrap; }
+        .child-schedule-points { background-color: #4caf50; color: #fff; border-radius: 12px; padding: 4px 8px; font-size: 0.85rem; font-weight: 600; white-space: nowrap; }
         .child-schedule-badge { display: inline-flex; align-items: center; gap: 4px; margin-left: 8px; padding: 2px 8px; border-radius: 999px; font-size: 0.7rem; font-weight: 700; background: #4caf50; color: #fff; text-transform: uppercase; }
         .child-schedule-badge.compact { justify-content: center; margin-left: 6px; width: 20px; height: 20px; padding: 0; border-radius: 50%; font-size: 0.65rem; }
         .child-schedule-badge.overdue { background: #d9534f; }
@@ -1040,7 +1040,7 @@ $formatParentNotificationMessage = static function (array $note): string {
         .week-modal .calendar-task-badge.compact { justify-content: center; width: 20px; height: 20px; padding: 0; border-radius: 50%; font-size: 0.65rem; }
         .week-modal .calendar-task-badge-group { display: inline-flex; align-items: center; gap: 5px; }
         .week-modal .calendar-task-title { font-weight: 700; color: #3e2723; }
-        .week-modal .calendar-task-points { color: #fff; font-size: 0.7rem; font-weight: 700; border-radius: 50px; background-color: #ffc224; padding: 2px 8px; }
+        .week-modal .calendar-task-points { color: #fff; font-size: 0.7rem; font-weight: 700; border-radius: 50px; background-color: #4caf50; padding: 2px 8px; }
         .week-modal .calendar-task-meta { color: #919191; font-size: 0.85rem; }
         .week-modal .calendar-day-empty { color: #9e9e9e; font-size: 0.85rem; text-align: center; padding: 8px 0; }
         .week-modal .calendar-empty { display: none; text-align: center; color: #9e9e9e; font-weight: 600; padding: 18px; }

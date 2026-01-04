@@ -325,7 +325,12 @@ if (!empty($tasks)) {
 }
 
 // Group tasks by status for sectioned display
+$today_key = date('Y-m-d');
 $pending_tasks = array_filter($tasks, function($t) { return $t['status'] === 'pending'; });
+$pending_tasks = array_values(array_filter($pending_tasks, function($t) use ($today_key) {
+    $end_key = !empty($t['end_date']) ? $t['end_date'] : null;
+    return !$end_key || $end_key >= $today_key;
+}));
 $completed_tasks = array_filter($tasks, function($t) { return $t['status'] === 'completed' && empty($t['recurrence']); }); // Waiting approval (non-recurring)
 $approved_tasks = array_filter($tasks, function($t) { return $t['status'] === 'approved' && empty($t['recurrence']); });
 
@@ -359,6 +364,28 @@ foreach ($taskInstancesByTask as $taskId => $instances) {
 }
 $completed_tasks = array_values(array_merge($completed_tasks, $completed_instances));
 $approved_tasks = array_values(array_merge($approved_tasks, $approved_instances));
+$expired_tasks = [];
+foreach ($tasks as $task) {
+    $end_key = !empty($task['end_date']) ? $task['end_date'] : null;
+    if (!$end_key || $end_key >= $today_key) {
+        continue;
+    }
+    if (in_array(($task['status'] ?? ''), ['approved', 'completed', 'rejected'], true)) {
+        continue;
+    }
+    $instances = $taskInstancesByTask[(int) ($task['id'] ?? 0)] ?? [];
+    $hasCompletion = false;
+    foreach ($instances as $instance) {
+        if (in_array(($instance['status'] ?? ''), ['completed', 'approved'], true)) {
+            $hasCompletion = true;
+            break;
+        }
+    }
+    if ($hasCompletion) {
+        continue;
+    }
+    $expired_tasks[] = $task;
+}
 
 $welcome_role_label = getUserRoleLabel($_SESSION['user_id']);
 if (!$welcome_role_label) {
@@ -506,9 +533,11 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
         .task-card-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
+        .task-card-badges { display: inline-flex; align-items: center; gap: 8px; }
+        .task-approved-badge { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; color: #4caf50; }
         .task-card-title-wrapper { flex: 1; text-align: left; }
         .task-card-title { font-weight: 700; font-size: 1.2rem; color: #37474f; }
-        .task-pill { background-color: #ffc224; color: #fff; padding: 2px 8px; border-radius: 50px; font-size: 0.7rem; font-weight: 700; white-space: nowrap; }
+        .task-pill { background-color: #4caf50; color: #fff; padding: 2px 8px; border-radius: 50px; font-size: 0.7rem; font-weight: 700; white-space: nowrap; }
         .task-meta { display: grid; gap: 4px; color: #455a64; font-size: 0.95rem; }
         .task-meta-row { display: flex; flex-wrap: wrap; gap: 10px; }
         .task-meta-row > span { display: flex; align-items: center; gap: 6px; }
@@ -598,7 +627,7 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
         .calendar-task-badge.compact { justify-content: center; width: 20px; height: 20px; padding: 0; border-radius: 50%; font-size: 0.65rem; }
         .calendar-task-badge-group { display: inline-flex; align-items: center; gap: 5px; }
         .calendar-task-title { font-weight: 700; color: #3e2723; }
-        .calendar-task-points { color: #fff; font-size: 0.7rem; font-weight: 700; border-radius: 50px; background-color: #ffc224; padding: 2px 8px; }
+        .calendar-task-points { color: #fff; font-size: 0.7rem; font-weight: 700; border-radius: 50px; background-color: #4caf50; padding: 2px 8px; }
         .calendar-task-meta { color: #6d4c41; font-size: 0.85rem; }
         .calendar-task-child { }
         .calendar-day-empty { color: #9e9e9e; font-size: 0.85rem; text-align: center; padding: 8px 0; }
@@ -2515,6 +2544,7 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                         const button = document.createElement('button');
                         button.type = 'submit';
                         button.name = 'complete_task';
+                        button.className = 'button';
                         button.textContent = 'Finish Task';
                         form.appendChild(hidden);
                         form.appendChild(button);
@@ -2588,8 +2618,8 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                     deleteButton.dataset.title = task.title || '';
                     deleteButton.innerHTML = '<i class="fa-solid fa-trash"></i>';
                     actions.appendChild(editButton);
-                    actions.appendChild(deleteButton);
                     actions.appendChild(buildDuplicateButton());
+                    actions.appendChild(deleteButton);
                     card.appendChild(actions);
                 } else if (statusForView === 'completed') {
                     const approveForm = document.createElement('form');
@@ -2882,6 +2912,9 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                         $is_overdue = false;
                         $start_key = !empty($task['due_date']) ? date('Y-m-d', strtotime($task['due_date'])) : $today_key;
                         $end_key = !empty($task['end_date']) ? $task['end_date'] : null;
+                        if ($end_key && $today_key > $end_key) {
+                            continue;
+                        }
                         $within_range = $today_key >= $start_key && (!$end_key || $today_key <= $end_key);
                         $day_matches = true;
                         if ($task['recurrence'] === 'weekly') {
@@ -3018,15 +3051,6 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                                         <i class="fa-solid fa-pen"></i>
                                     </button>
                                     <button type="button"
-                                            class="icon-button danger"
-                                            aria-label="Delete task"
-                                            data-task-delete-open
-                                            data-task-id="<?php echo $task['id']; ?>"
-                                            data-child-name="<?php echo htmlspecialchars($childName, ENT_QUOTES); ?>"
-                                            data-title="<?php echo htmlspecialchars($task['title'], ENT_QUOTES); ?>">
-                                        <i class="fa-solid fa-trash"></i>
-                                    </button>
-                                    <button type="button"
                                             class="icon-button"
                                             aria-label="Duplicate task"
                                             data-task-duplicate-open
@@ -3047,6 +3071,15 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                                             data-timer-minutes="<?php echo (int)($task['timer_minutes'] ?? 0); ?>"
                                             data-photo-required="<?php echo (int)($task['photo_proof_required'] ?? 0); ?>">
                                         <i class="fa-solid fa-clone"></i>
+                                    </button>
+                                    <button type="button"
+                                            class="icon-button danger"
+                                            aria-label="Delete task"
+                                            data-task-delete-open
+                                            data-task-id="<?php echo $task['id']; ?>"
+                                            data-child-name="<?php echo htmlspecialchars($childName, ENT_QUOTES); ?>"
+                                            data-title="<?php echo htmlspecialchars($task['title'], ENT_QUOTES); ?>">
+                                        <i class="fa-solid fa-trash"></i>
                                     </button>
                                 </div>
                             <?php endif; ?>
@@ -3220,7 +3253,10 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                             <div class="task-card" id="task-<?php echo (int) $task['id']; ?>" data-task-id="<?php echo $task['id']; ?>" data-approved-card data-approved-index="<?php echo $approvedIndex; ?>"<?php echo $hideApproved ? ' style="display:none;"' : ''; ?>>
                             <div class="task-card-header">
                                 <div class="task-card-title"><?php echo htmlspecialchars($task['title']); ?></div>
-                                <div class="task-pill"><?php echo (int)$task['points']; ?> pts</div>
+                                <div class="task-card-badges">
+                                    <div class="task-pill"><?php echo (int)$task['points']; ?> pts</div>
+                                    <span class="task-approved-badge"><span class="completed-icon"><i class="fa-regular fa-circle-check"></i></span>Approved</span>
+                                </div>
                             </div>
                             <?php
                                 $timeOfDay = $task['time_of_day'] ?? 'anytime';
@@ -3292,7 +3328,6 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                                       </div>
                                   <?php endif; ?>
                             </div>
-                              <p class="completed"><span class="completed-icon"><i class="fa-regular fa-circle-check"></i></span>Approved</p>
                             </div>
                             <?php endforeach; ?>
                             <?php if ($isParentView && count($approved_tasks) > 5): ?>
@@ -3300,6 +3335,41 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                                     <button type="button" class="button secondary" data-approved-view-more data-approved-step="5">View more</button>
                                 </div>
                             <?php endif; ?>
+                        <?php endif; ?>
+                    </div>
+                </details>
+                <details class="task-section-toggle">
+                    <summary>
+                        <span class="task-section-title">Expired Tasks <span class="task-count-badge"><?php echo count($expired_tasks); ?></span></span>
+                    </summary>
+                    <div class="task-section-content">
+                        <?php if (empty($expired_tasks)): ?>
+                            <p>No expired tasks.</p>
+                        <?php else: ?>
+                            <?php foreach ($expired_tasks as $task): ?>
+                                <?php
+                                    $dueLabel = !empty($task['due_date']) ? date('m/d/Y', strtotime($task['due_date'])) : 'No due date';
+                                ?>
+                                <div class="task-card" id="task-<?php echo (int) $task['id']; ?>" data-task-id="<?php echo $task['id']; ?>">
+                                    <div class="task-card-header">
+                                        <div class="task-card-title"><?php echo htmlspecialchars($task['title']); ?></div>
+                                        <div class="task-pill"><?php echo (int)$task['points']; ?> pts</div>
+                                    </div>
+                                    <?php if (!empty($task['description'])): ?>
+                                        <div class="task-description text"><i class="fa-solid fa-align-center task-desc-icon"></i><span><?php echo htmlspecialchars($task['description']); ?></span></div>
+                                    <?php endif; ?>
+                                    <div class="task-meta">
+                                        <div class="task-meta-row">
+                                            <span><span class="task-meta-label"><i class="fa-solid fa-clock task-meta-icon"></i></span> <?php echo htmlspecialchars($dueLabel); ?></span>
+                                        </div>
+                                        <?php if (!empty($task['end_date'])): ?>
+                                            <div class="task-meta-row">
+                                                <span><span class="task-meta-label">End Date:</span> <?php echo htmlspecialchars(date('m/d/Y', strtotime($task['end_date']))); ?></span>
+                                            </div>
+                                        <?php endif; ?>
+                                    </div>
+                                </div>
+                            <?php endforeach; ?>
                         <?php endif; ?>
                     </div>
                 </details>

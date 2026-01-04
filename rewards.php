@@ -285,13 +285,13 @@ foreach ($activeRewards as $reward) {
         .button.danger { background: #c62828; }
         .template-grid { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-start; }
         .template-card { flex: 1 1 285px; border: 1px solid #e0e4ee; border-radius: 10px; padding: 14px; background: #fff; box-shadow: 0 2px 6px rgba(0,0,0,0.05); display: grid; gap: 10px; position: relative; max-width: 288px; }
-        .template-actions { display: flex; gap: 8px; justify-content: flex-start; flex-wrap: wrap; align-items: center; }
+        .template-actions { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; align-items: center; }
         .template-icon-button { border: none; background: transparent; color: #919191; padding: 6px 8px; border-radius: 8px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
         .template-icon-button:hover { background: rgba(0,0,0,0.04); color: #7a7a7a; }
         .template-icon-button.danger { color: #9f9f9f; }
         .template-icon-button.danger:hover { background: rgba(0,0,0,0.04); color: #7a7a7a; }
-        .badge { display: inline-block; background: #e3f2fd; color: #0d47a1; padding: 4px 8px; border-radius: 12px; font-size: 0.85em; }
-        [data-child-active-list] .badge { background: #ffc224; color: #fff; font-weight: 600; }
+        .badge { display: inline-block; background: #4caf50; color: #fff; padding: 4px 8px; border-radius: 12px; font-size: 0.85em; font-weight: 600; }
+        [data-child-active-list] .badge { background: #4caf50; color: #fff; font-weight: 600; }
         .message { background: #e8f5e9; color: #2e7d32; border: 1px solid #c8e6c9; padding: 10px 12px; border-radius: 6px; margin-bottom: 10px; }
         .recent-list { display: grid; gap: 8px; }
         .recent-item { border: 1px solid #eceff4; border-radius: 8px; padding: 10px; background: #fff; display: flex; justify-content: space-between; gap: 10px; }
@@ -315,7 +315,7 @@ foreach ($activeRewards as $reward) {
         .child-header img { width: 64px; height: 64px; border-radius: 50%; object-fit: cover; box-shadow: 0 2px 8px rgba(0,0,0,0.15); }
         .child-meta { display: flex; gap: 10px; flex-wrap: wrap; width: 185px; margin-bottom: 10px; font-weight: 700; color: #2c3e50; }
         .reward-badge-title-header {font-size: 12px;width: 100%; color: #9f9f9f;}
-        .child-meta .badge { background: #eef4ff; color: #0d47a1; cursor: pointer; border: none; }
+        .child-meta .badge { background: #4caf50; color: #fff; cursor: pointer; border: none; font-weight: 600; }
         .child-meta .badge-link { border-radius: 12px; padding: 4px 8px; }
         .child-badge-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
         .child-pending-badge { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 999px; background: #eef4ff; color: #0d47a1; font-weight: 700; border: 1px solid #d5def0; font-size: 0.9em; }

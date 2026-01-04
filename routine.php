@@ -1120,7 +1120,7 @@ margin-bottom: 20px;}
         .library-task-card { background: #fff; border: 1px solid #e0e0e0; border-radius: 10px; padding: 16px; display: flex; flex-direction: column; gap: 10px; box-shadow: 0 2px 6px rgba(0,0,0,0.05); }
         .library-task-card header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
         .library-task-card h4 { margin: 0; font-size: 1.1rem; }
-        .library-task-points { background-color: #ffc224; color: #fff; padding: 2px 8px; border-radius: 50px; font-size: 0.7rem; font-weight: 700; white-space: nowrap; }
+        .library-task-points { background-color: #4caf50; color: #fff; padding: 2px 8px; border-radius: 50px; font-size: 0.7rem; font-weight: 700; white-space: nowrap; }
         .library-task-description { margin: 0; font-size: 0.9rem; color: #546e7a; }
         .library-task-meta { display: flex; flex-wrap: wrap; gap: 8px; font-size: 0.85rem; color: #37474f; }
         .library-task-meta span { background: #f0f4f7; border-radius: 999px; padding: 4px 10px; }
@@ -1142,6 +1142,7 @@ margin-bottom: 20px;}
         .routine-card-actions .button { flex: 1 1 45%; min-width: 0; text-align: center; }
         .routine-card-title-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
         .routine-action-icons { display: inline-flex; gap: 8px; align-items: center; }
+        .routine-card-footer { display: flex; justify-content: flex-end; margin-top: 12px; }
         .icon-button { width: 36px; height: 36px; border: none; background: transparent; color: #919191; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
         .icon-button.danger { color: #919191; }
         .collapsible-card { border: none; margin: 12px 0 0; padding: 0; }
@@ -1775,6 +1776,19 @@ margin-bottom: 20px;}
                                                                 aria-label="Edit routine task">
                                                             <i class="fa-solid fa-pen"></i>
                                                         </button>
+                                                        <button type="button"
+                                                                class="icon-button"
+                                                                data-routine-task-duplicate-open
+                                                                data-task-title="<?php echo htmlspecialchars($task['title']); ?>"
+                                                                data-task-description="<?php echo htmlspecialchars($taskDescription); ?>"
+                                                                data-task-time-limit="<?php echo (int) $task['time_limit']; ?>"
+                                                                data-task-minutes="<?php echo htmlspecialchars($taskMinMinutesValue); ?>"
+                                                                data-task-min-enabled="<?php echo $taskMinEnabled ? '1' : '0'; ?>"
+                                                                data-task-point-value="<?php echo (int) $task['point_value']; ?>"
+                                                                data-task-category="<?php echo htmlspecialchars($task['category']); ?>"
+                                                                aria-label="Duplicate routine task">
+                                                            <i class="fa-solid fa-clone"></i>
+                                                        </button>
                                                         <form method="POST" onsubmit="return confirm('Delete this task?');">
                                                             <input type="hidden" name="routine_task_id" value="<?php echo (int) $task['id']; ?>">
                                                             <button type="submit" name="delete_routine_task" class="icon-button danger" aria-label="Delete routine task">
@@ -1959,6 +1973,22 @@ margin-bottom: 20px;}
                             $totalRoutinePoints += (int) ($taskPoints['point_value'] ?? 0);
                         }
                         $detailsId = 'routine-details-' . (int) $routine['id'];
+                        $duplicatePayload = [
+                            'id' => (int) $routine['id'],
+                            'child_user_id' => (int) ($routine['child_user_id'] ?? 0),
+                            'title' => $routine['title'] ?? '',
+                            'time_of_day' => $routine['time_of_day'] ?? 'anytime',
+                            'start_time' => !empty($routine['start_time']) ? substr($routine['start_time'], 0, 5) : '',
+                            'end_time' => !empty($routine['end_time']) ? substr($routine['end_time'], 0, 5) : '',
+                            'bonus_points' => (int) ($routine['bonus_points'] ?? 0),
+                            'recurrence' => $routine['recurrence'] ?? '',
+                            'recurrence_days' => array_values(array_filter(array_map('trim', explode(',', (string) ($routine['recurrence_days'] ?? ''))))),
+                            'routine_date' => $routine['routine_date'] ?? '',
+                            'tasks' => array_map(static function ($task) {
+                                return ['id' => (int) ($task['id'] ?? 0)];
+                            }, $routine['tasks'] ?? [])
+                        ];
+                        $duplicatePayloadJson = htmlspecialchars(json_encode($duplicatePayload, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP), ENT_QUOTES, 'UTF-8');
                     ?>
                       <article class="<?php echo $cardClasses; ?>"
                           data-routine-id="<?php echo (int) $routine['id']; ?>"
@@ -1970,19 +2000,6 @@ margin-bottom: 20px;}
                         <header>
                             <div class="routine-card-title-row">
                                 <h3><?php echo htmlspecialchars($routine['title']); ?></h3>
-                                <?php if ($isParentContext): ?>
-                                    <div class="routine-action-icons">
-                                        <button type="button" class="icon-button" data-routine-edit-open data-routine-id="<?php echo (int) $routine['id']; ?>" aria-label="Edit routine">
-                                            <i class="fa-solid fa-pen"></i>
-                                        </button>
-                                        <form method="POST" action="routine.php">
-                                            <input type="hidden" name="routine_id" value="<?php echo (int) $routine['id']; ?>">
-                                            <button type="submit" name="delete_routine" class="icon-button danger" aria-label="Delete routine" onclick="return confirm('Delete this routine?');">
-                                                <i class="fa-solid fa-trash"></i>
-                                            </button>
-                                        </form>
-                                    </div>
-                                <?php endif; ?>
                             </div>
                             <div class="routine-details">
                                 <?php if (!empty($routine['child_display_name']) && !$isChildView): ?>
@@ -2046,6 +2063,28 @@ margin-bottom: 20px;}
                                 </ul>
                             </div>
                         </details>
+                        <?php if ($isParentContext): ?>
+                            <form method="POST" action="routine.php" class="parent-complete-form" id="parent-complete-form-<?php echo (int) $routine['id']; ?>">
+                                <input type="hidden" name="routine_id" value="<?php echo (int) $routine['id']; ?>">
+                                <p class="parent-complete-note">Check the tasks completed to award points. Bonus points apply only when all tasks are checked.</p>
+                            </form>
+                            <div class="routine-card-footer">
+                                <div class="routine-action-icons">
+                                    <button type="button" class="icon-button" data-routine-edit-open data-routine-id="<?php echo (int) $routine['id']; ?>" aria-label="Edit routine">
+                                        <i class="fa-solid fa-pen"></i>
+                                    </button>
+                                    <button type="button" class="icon-button" data-routine-duplicate-open data-routine-payload="<?php echo $duplicatePayloadJson; ?>" aria-label="Duplicate routine">
+                                        <i class="fa-solid fa-clone"></i>
+                                    </button>
+                                    <form method="POST" action="routine.php">
+                                        <input type="hidden" name="routine_id" value="<?php echo (int) $routine['id']; ?>">
+                                        <button type="submit" name="delete_routine" class="icon-button danger" aria-label="Delete routine" onclick="return confirm('Delete this routine?');">
+                                            <i class="fa-solid fa-trash"></i>
+                                        </button>
+                                    </form>
+                                </div>
+                            </div>
+                        <?php endif; ?>
                         <?php if ($isChildView): ?>
                         <div class="routine-flow-overlay"
                             data-role="routine-flow"
@@ -2158,10 +2197,6 @@ margin-bottom: 20px;}
                                 </div>
                         <?php endif; ?>
                         <?php if ($isParentContext): ?>
-                                <form method="POST" action="routine.php" class="parent-complete-form" id="parent-complete-form-<?php echo (int) $routine['id']; ?>">
-                                    <input type="hidden" name="routine_id" value="<?php echo (int) $routine['id']; ?>">
-                                    <p class="parent-complete-note">Check the tasks completed to award points. Bonus points apply only when all tasks are checked.</p>
-                                </form>
                                 <?php
                                     $rid = (int) $routine['id'];
                                     $override = $editFieldOverrides[$rid] ?? null;
@@ -2670,6 +2705,15 @@ margin-bottom: 20px;}
                             this.container.classList.remove('warning-active');
                         }
                     }
+                }
+
+                setTasks(tasks) {
+                    this.selectedTasks = Array.isArray(tasks)
+                        ? tasks
+                            .map(task => ({ id: parseInt(task.id, 10) }))
+                            .filter(task => Number.isFinite(task.id) && task.id > 0)
+                        : [];
+                    this.render();
                 }
             }
 
@@ -4374,11 +4418,46 @@ margin-bottom: 20px;}
                 if (pointValueField) pointValueField.value = taskPointValue;
                 if (categoryField) categoryField.value = taskCategory;
             };
+            const populateTaskCreateModal = (button) => {
+                if (!taskModal || !button) return;
+                const createForm = taskModal.querySelector('form');
+                if (createForm) {
+                    createForm.reset();
+                }
+                const titleField = taskModal.querySelector('input[name="rt_title"]');
+                const descriptionField = taskModal.querySelector('textarea[name="rt_description"]');
+                const timeLimitField = taskModal.querySelector('input[name="rt_time_limit"]');
+                const minMinutesField = taskModal.querySelector('input[name="rt_min_time"]');
+                const pointValueField = taskModal.querySelector('input[name="rt_point_value"]');
+                const categoryField = taskModal.querySelector('select[name="rt_category"]');
+                const taskTitle = decodeHtmlEntities(button.getAttribute('data-task-title') || '');
+                const taskDescription = decodeHtmlEntities(button.getAttribute('data-task-description') || '');
+                const taskTimeLimit = button.getAttribute('data-task-time-limit') || '';
+                const taskMinMinutes = button.getAttribute('data-task-minutes') || '';
+                const taskMinEnabled = button.getAttribute('data-task-min-enabled') === '1';
+                const taskPointValue = button.getAttribute('data-task-point-value') || '0';
+                const taskCategory = button.getAttribute('data-task-category') || '';
+                if (titleField) titleField.value = taskTitle;
+                if (descriptionField) descriptionField.value = taskDescription;
+                if (timeLimitField) timeLimitField.value = taskTimeLimit;
+                if (minMinutesField) minMinutesField.value = taskMinEnabled ? taskMinMinutes : '';
+                if (pointValueField) pointValueField.value = taskPointValue;
+                if (categoryField) categoryField.value = taskCategory;
+            };
             if (taskEditButtons.length && taskEditModal) {
                 taskEditButtons.forEach((button) => {
                     button.addEventListener('click', () => {
                         populateTaskEditModal(button);
                         toggleTaskEditModal(true);
+                    });
+                });
+            }
+            const taskDuplicateButtons = document.querySelectorAll('[data-routine-task-duplicate-open]');
+            if (taskDuplicateButtons.length && taskModal) {
+                taskDuplicateButtons.forEach((button) => {
+                    button.addEventListener('click', () => {
+                        populateTaskCreateModal(button);
+                        toggleTaskModal(true);
                     });
                 });
             }
@@ -4398,6 +4477,7 @@ margin-bottom: 20px;}
                 });
             }
 
+            const routineBuilders = {};
             document.querySelectorAll('.routine-builder').forEach(container => {
                 const id = container.dataset.builderId || '';
                 let initial = [];
@@ -4407,7 +4487,67 @@ margin-bottom: 20px;}
                     const key = id.replace('edit-', '');
                     initial = (page.editInitial && page.editInitial[key]) ? page.editInitial[key] : [];
                 }
-                new RoutineBuilder(container, initial);
+                const builder = new RoutineBuilder(container, initial);
+                if (id) {
+                    routineBuilders[id] = builder;
+                }
+            });
+
+            const openRoutineDuplicate = (payload) => {
+                if (!createModal) return;
+                const form = createModal.querySelector('form');
+                if (!form) return;
+                form.reset();
+
+                const childInputs = form.querySelectorAll('input[name="child_user_ids[]"]');
+                childInputs.forEach(input => {
+                    input.checked = String(input.value) === String(payload.child_user_id || '');
+                });
+
+                const titleInput = form.querySelector('input[name="title"]');
+                const timeOfDaySelect = form.querySelector('select[name="time_of_day"]');
+                const startInput = form.querySelector('input[name="start_time"]');
+                const endInput = form.querySelector('input[name="end_time"]');
+                const bonusInput = form.querySelector('input[name="bonus_points"]');
+                const recurrenceSelect = form.querySelector('select[name="recurrence"]');
+                const dateInput = form.querySelector('input[name="routine_date"]');
+
+                if (titleInput) titleInput.value = payload.title || '';
+                if (timeOfDaySelect) timeOfDaySelect.value = payload.time_of_day || 'anytime';
+                if (startInput) startInput.value = payload.start_time || '';
+                if (endInput) endInput.value = payload.end_time || '';
+                if (bonusInput) {
+                    const bonusValue = Number.isFinite(Number(payload.bonus_points)) ? Number(payload.bonus_points) : 0;
+                    bonusInput.value = bonusValue;
+                }
+                if (recurrenceSelect) {
+                    recurrenceSelect.value = payload.recurrence || '';
+                    recurrenceSelect.dispatchEvent(new Event('change'));
+                }
+                const repeatDays = Array.isArray(payload.recurrence_days) ? payload.recurrence_days.map(String) : [];
+                form.querySelectorAll('input[name="recurrence_days[]"]').forEach(input => {
+                    input.checked = repeatDays.includes(String(input.value));
+                });
+                if (dateInput) dateInput.value = payload.routine_date || '';
+
+                const builder = routineBuilders.create;
+                if (builder) {
+                    builder.setTasks(Array.isArray(payload.tasks) ? payload.tasks : []);
+                }
+
+                openRoutineModal(createModal);
+            };
+
+            document.querySelectorAll('[data-routine-duplicate-open]').forEach((button) => {
+                button.addEventListener('click', () => {
+                    let payload = {};
+                    try {
+                        payload = JSON.parse(button.dataset.routinePayload || '{}');
+                    } catch (err) {
+                        payload = {};
+                    }
+                    openRoutineDuplicate(payload);
+                });
             });
 
             const routinePlayers = [];
