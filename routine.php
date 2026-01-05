@@ -2541,6 +2541,95 @@ margin-bottom: 20px;}
                 return 0;
             }
 
+            function getLocalDateKey(date) {
+                const year = date.getFullYear();
+                const month = String(date.getMonth() + 1).padStart(2, '0');
+                const day = String(date.getDate()).padStart(2, '0');
+                return `${year}-${month}-${day}`;
+            }
+
+            function getWeekdayLabel(date) {
+                const labels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+                return labels[date.getDay()] || '';
+            }
+
+            function parseTimeToMinutes(value) {
+                if (!value) return null;
+                const parts = String(value).split(':').map(Number);
+                if (parts.length < 2 || parts.some(Number.isNaN)) return null;
+                return (parts[0] * 60) + parts[1];
+            }
+
+            function formatMinutesToTimeLabel(totalMinutes) {
+                const safe = Math.max(0, Math.round(totalMinutes));
+                let hours = Math.floor(safe / 60);
+                const minutes = safe % 60;
+                const suffix = hours >= 12 ? 'PM' : 'AM';
+                if (hours === 0) hours = 12;
+                if (hours > 12) hours -= 12;
+                return `${hours}:${String(minutes).padStart(2, '0')} ${suffix}`;
+            }
+
+            function isRoutineScheduledToday(routine) {
+                const today = new Date();
+                const todayKey = getLocalDateKey(today);
+                const todayLabel = getWeekdayLabel(today);
+                const recurrence = routine.recurrence || '';
+                if (recurrence === 'daily') {
+                    return { scheduled: true };
+                }
+                if (recurrence === 'weekly') {
+                    const daysRaw = Array.isArray(routine.recurrence_days)
+                        ? routine.recurrence_days
+                        : String(routine.recurrence_days || '').split(',');
+                    const days = daysRaw.map(day => day.trim()).filter(Boolean);
+                    if (!days.length) {
+                        return { scheduled: true };
+                    }
+                    return { scheduled: days.includes(todayLabel), label: days.join(', ') };
+                }
+                const routineDate = routine.routine_date || routine.created_at || '';
+                if (routineDate) {
+                    const parsed = new Date(routineDate);
+                    const dateKey = Number.isNaN(parsed.getTime()) ? routineDate.slice(0, 10) : getLocalDateKey(parsed);
+                    return { scheduled: dateKey === todayKey, dateKey };
+                }
+                return { scheduled: true };
+            }
+
+            function formatDateKeyLabel(dateKey) {
+                if (!dateKey) return '';
+                const parts = String(dateKey).split('-');
+                if (parts.length !== 3) {
+                    return dateKey;
+                }
+                return `${parts[1]}/${parts[2]}/${parts[0]}`;
+            }
+
+            function getRoutineStartGate(routine) {
+                const schedule = isRoutineScheduledToday(routine);
+                if (!schedule.scheduled) {
+                    if ((routine.recurrence || '') === 'weekly' && schedule.label) {
+                        return { allowed: false, message: `This routine is scheduled for: ${schedule.label}.` };
+                    }
+                    if (schedule.dateKey) {
+                        return { allowed: false, message: `This routine is scheduled for ${formatDateKeyLabel(schedule.dateKey)} and can only be started that day.` };
+                    }
+                    return { allowed: false, message: 'This routine can only be started on its scheduled day.' };
+                }
+                const startMinutes = parseTimeToMinutes(routine.start_time);
+                if (startMinutes === null) {
+                    return { allowed: true };
+                }
+                const now = new Date();
+                const nowMinutes = now.getHours() * 60 + now.getMinutes();
+                const earliest = Math.max(0, startMinutes - 60);
+                if (nowMinutes < earliest) {
+                    return { allowed: false, message: `You can start this routine at ${formatMinutesToTimeLabel(earliest)}.` };
+                }
+                return { allowed: true };
+            }
+
             function formatSignedSeconds(seconds) {
                 if (seconds >= 0) {
                     return formatSeconds(seconds);
@@ -3750,6 +3839,14 @@ margin-bottom: 20px;}
                 openFlow() {
                     if (!this.tasks.length) {
                         alert('No tasks are available in this routine yet.');
+                        return;
+                    }
+                    const startGate = getRoutineStartGate(this.routine || {});
+                    if (!startGate.allowed) {
+                        const message = startGate.message || 'This routine cannot be started yet.';
+                        if (page.openRoutineBlockedModal) {
+                            page.openRoutineBlockedModal(message);
+                        }
                         return;
                     }
                     if (this.routine && this.routine.completed_today) {
