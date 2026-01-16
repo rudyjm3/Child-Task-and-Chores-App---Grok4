@@ -1060,22 +1060,22 @@ $formatParentNotificationMessage = static function (array $note): string {
         body.modal-open { overflow: hidden; }
         .child-history-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: none; align-items: center; justify-content: center; z-index: 4200; padding: 14px; }
         .child-history-modal.open { display: flex; }
-        .child-history-card { background: #fff; border-radius: 12px; max-width: 620px; width: min(620px, 100%); max-height: 82vh; overflow: hidden; box-shadow: 0 12px 32px rgba(0,0,0,0.25); display: grid; grid-template-rows: auto 1fr; }
+        .child-history-card { background: #fff; border-radius: 12px; max-width: 620px; width: min(620px, 100%); max-height: 92vh; overflow: hidden; box-shadow: 0 12px 32px rgba(0,0,0,0.25); display: flex; flex-direction: column; }
         .child-history-card header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid #e0e0e0; }
         .child-history-card h2 { margin: 0; font-size: 1.1rem; }
         .child-history-close { background: transparent; border: none; font-size: 1.3rem; cursor: pointer; color: #555; }
-        .child-history-body { padding: 12px 16px 16px; overflow-y: auto; text-align: left; }
+        .child-history-body { padding: 12px 16px 16px; overflow-y: auto; text-align: left; flex: 1; min-height: 0; }
         .child-history-day { margin-top: 12px; }
         .child-history-day-title { font-weight: 700; color: #5d4037; margin-bottom: 6px; }
         .child-history-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
-        .child-history-item { background: #fff7e6; border: 1px solid #ffd28a; border-radius: 10px; padding: 10px 12px; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+        .child-history-item { background: #fff; border: 1px solid #eceff4; border-radius: 14px; padding: 12px; display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
         .child-history-item-title { font-weight: 700; color: #3e2723; }
         .child-history-item-meta { color: #6d4c41; font-size: 0.95rem; }
-        .child-history-item-points { font-weight: 700; color: #00bb01; white-space: nowrap; }
-        .child-history-item-points.is-negative { color: #d32f2f; }
+        .child-history-item-points { background: #e8f5e9; color: #2e7d32; padding: 4px 10px; border-radius: 999px; font-weight: 700; white-space: nowrap; }
+        .child-history-item-points.is-negative { background: #ffebee; color: #d32f2f; }
         .adjust-modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.55); display: none; align-items: center; justify-content: center; z-index: 3000; padding: 12px; }
         .adjust-modal-backdrop.open { display: flex; }
-        .adjust-modal { background: #fff; border-radius: 10px; padding: 18px; max-width: 420px; width: min(420px, 100%); box-shadow: 0 14px 36px rgba(0,0,0,0.25); display: grid; gap: 12px; }
+        .adjust-modal { background: #fff; border-radius: 10px; padding: 18px; max-width: 420px; width: min(420px, 100%); max-height: 92vh; box-shadow: 0 14px 36px rgba(0,0,0,0.25); display: flex; flex-direction: column; gap: 12px; overflow: hidden; }
         .adjust-modal header { display: flex; justify-content: space-between; align-items: center; }
         .adjust-modal h3 { margin: 0; font-size: 1.1rem; }
         .adjust-modal-close { background: transparent; border: none; font-size: 1.4rem; cursor: pointer; }
@@ -1085,14 +1085,77 @@ $formatParentNotificationMessage = static function (array $note): string {
         .adjust-control input[type="number"]::-webkit-outer-spin-button,
         .adjust-control input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
         .adjust-control input[type="number"] { -moz-appearance: textfield; }
-        .adjust-history { background: #f9f9f9; border: 1px solid #e0e0e0; border-radius: 8px; padding: 10px; max-height: 180px; overflow-y: auto; }
+        .adjust-history { background: #f9f9f9; border: 1px solid #e0e0e0; border-radius: 8px; padding: 10px; max-height: 180px; min-height: 110px; overflow-y: auto; }
         .adjust-history h4 { margin: 0 0 8px; font-size: 0.95rem; }
         .adjust-history ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
         .adjust-history li { display: grid; gap: 2px; font-size: 0.9rem; }
-        .adjust-history .delta { font-weight: 700; }
+        .adjust-history .delta { font-weight: 700; display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 999px; background: #e8f5e9; color: #2e7d32; width: fit-content; }
         .adjust-history .delta.positive { color: #2e7d32; }
-        .adjust-history .delta.negative { color: #c62828; }
+        .adjust-history .delta.negative { color: #c62828; background: #ffebee; }
         .adjust-history .meta { color: #666; font-size: 0.85rem; }
+        .adjust-modal-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 0; }
+        .adjust-modal-back { border: none; background: transparent; color: #424242; font-size: 1.1rem; cursor: pointer; display: none; }
+        .adjust-modal-body { display: grid; gap: 14px; overflow-y: auto; flex: 1; min-height: 0; }
+        .adjust-child-card { display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 16px; background: #fff; border: 1px solid #eceff4; box-shadow: 0 8px 18px rgba(0,0,0,0.08); }
+        .adjust-child-avatar { width: 56px; height: 56px; border-radius: 50%; object-fit: cover; box-shadow: 0 2px 6px rgba(0,0,0,0.15); }
+        .adjust-child-name { font-weight: 700; color: #263238; }
+        .adjust-child-age { color: #757575; font-size: 0.9rem; margin-top: 4px; }
+        .adjust-form { display: grid; gap: 12px; }
+        .adjust-points-panel { background: #fff; border: 1px solid #eceff4; border-radius: 16px; padding: 12px; display: grid; gap: 10px; box-shadow: 0 8px 18px rgba(0,0,0,0.06); }
+        .adjust-current-points { display: inline-flex; align-items: center; justify-content: center; gap: 6px; font-weight: 700; color: #2e7d32; font-size: 1.05rem; }
+        .adjust-current-points i { color: #4caf50; }
+        .adjust-control { display: grid; grid-template-columns: 56px 1fr 56px; border-radius: 12px; overflow: hidden; border: 1px solid #e0e0e0; background: #f5f5f5; }
+        .adjust-control input[type="number"] { border: none; background: #fff; font-size: 1.2rem; text-align: center; padding: 10px; }
+        .adjust-control input[type="number"]:focus { outline: none; }
+        .adjust-step { border: none; color: #fff; font-size: 1.4rem; font-weight: 700; cursor: pointer; }
+        .adjust-step-plus { background: #4caf50; }
+        .adjust-step-minus { background: #ff9800; }
+        .adjust-reason label { font-weight: 700; }
+        .points-adjust-actions { display: flex; gap: 6px; }
+        .adjust-confirm { flex: 1; width: 100%; background: linear-gradient(90deg, #f39c12, #ffa726); }
+        .adjust-cancel { flex: 1; background: transparent; border: none; color: #757575; font-weight: 600; cursor: pointer; padding: 6px; }
+        .child-history-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 16px; border-bottom: 1px solid #e0e0e0; }
+        .child-history-back { border: none; background: transparent; color: #424242; font-size: 1.1rem; cursor: pointer; display: none; }
+        .child-history-hero { display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 16px; background: #fff; border: 1px solid #eceff4; box-shadow: 0 8px 18px rgba(0,0,0,0.08); }
+        .child-history-avatar { width: 56px; height: 56px; border-radius: 50%; object-fit: cover; box-shadow: 0 2px 6px rgba(0,0,0,0.15); }
+        .child-history-name { font-weight: 700; color: #263238; }
+        .child-history-points { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; background: #e8f5e9; color: #2e7d32; font-weight: 700; margin-top: 6px; }
+        .child-history-filters { display: inline-flex; gap: 6px; padding: 10px; border-radius: 16px; border: 1px solid #eceff4; background: #fff; box-shadow: 0 8px 18px rgba(0,0,0,0.06); }
+        .history-filter { border: none; background: transparent; color: #616161; font-weight: 600; padding: 6px 12px; border-radius: 10px; cursor: pointer; }
+        .history-filter.active { background: #6e9bd5; color: #fff; }
+        .child-history-empty { color: #9e9e9e; font-weight: 600; text-align: center; }
+        .child-history-timeline { display: grid; gap: 12px; }
+        .child-history-day { display: grid; gap: 10px; }
+        .child-history-day-title { font-weight: 700; color: #8d6e63; }
+        .child-history-item { background: #fff; border-radius: 14px; padding: 12px; border: 1px solid #eceff4; display: flex; gap: 12px; align-items: flex-start; justify-content: space-between; }
+        .child-history-item-points { background: #e8f5e9; color: #2e7d32; padding: 4px 10px; border-radius: 999px; font-weight: 700; white-space: nowrap; }
+        .child-history-item-points.is-negative { background: #ffebee; color: #d32f2f; }
+        .adjust-modal .button { margin: 0; }
+        .modal-bottom-nav { display: none; gap: 6px; padding: 10px 12px; border-top: 1px solid #e0e0e0; background: #fff; margin-top: auto; }
+        .modal-bottom-link { flex: 1; display: grid; justify-items: center; gap: 4px; text-decoration: none; color: #6d6d6d; font-weight: 600; font-size: 0.75rem; }
+        .modal-bottom-link i { font-size: 1.1rem; }
+
+        @media (max-width: 768px) {
+            .adjust-modal-backdrop,
+            .child-history-modal { padding: 0; align-items: stretch; }
+            .adjust-modal,
+            .child-history-card { max-width: none; width: 100%; height: 100%; min-height: 100vh; border-radius: 0; box-shadow: none; background: #f6f3f0; display: flex; flex-direction: column; }
+            .adjust-modal { padding: 0; }
+            .adjust-modal-header,
+            .child-history-header { padding: 12px 16px; background: #f6f3f0; }
+            .adjust-modal-back,
+            .child-history-back { display: inline-flex; }
+            .adjust-modal-close,
+            .child-history-close { display: none; }
+            .adjust-modal-body,
+            .child-history-body { padding: 12px 16px 90px; overflow-y: auto; flex: 1; min-height: 0; }
+            .child-history-filters { width: 100%; justify-content: space-between; }
+            .history-filter { flex: 1; text-align: center; }
+            .adjust-history { background: #fff; border-color: #eceff4; border-radius: 16px; box-shadow: 0 8px 18px rgba(0,0,0,0.06); max-height: 260px; min-height: 160px; }
+            .adjust-history li { padding-bottom: 6px; border-bottom: 1px solid #f0f0f0; }
+            .adjust-history li:last-child { border-bottom: none; padding-bottom: 0; }
+            .modal-bottom-nav { display: flex; justify-content: space-between; }
+        }
         .button { padding: 10px 20px; margin: 5px; background-color: #4caf50; color: white; border: none; border-radius: 5px; cursor: pointer; text-decoration: none; display: inline-block; font-size: 16px; min-height: 44px; }
         .approve-button { background-color: #4caf50; }
         .reject-button { background-color: #f44336; }
@@ -1439,6 +1502,36 @@ $formatParentNotificationMessage = static function (array $note): string {
 
             const historyButtons = document.querySelectorAll('[data-child-history-open]');
             const historyModals = document.querySelectorAll('[data-child-history-modal]');
+            const applyHistoryFilter = (modal, filter) => {
+                const items = Array.from(modal.querySelectorAll('[data-history-item]'));
+                const groups = Array.from(modal.querySelectorAll('[data-history-day]'));
+                if (!items.length) {
+                    const empty = modal.querySelector('[data-history-empty]');
+                    if (empty) {
+                        empty.style.display = 'none';
+                    }
+                    return;
+                }
+                let anyVisible = false;
+                items.forEach(item => {
+                    const type = (item.dataset.historyType || '').toLowerCase();
+                    const show = filter === 'all' ? type !== 'reward' : type === filter;
+                    item.style.display = show ? '' : 'none';
+                    item.dataset.hidden = show ? '0' : '1';
+                    if (show) {
+                        anyVisible = true;
+                    }
+                });
+                groups.forEach(group => {
+                    const groupItems = Array.from(group.querySelectorAll('[data-history-item]'));
+                    const hasVisible = groupItems.some(item => item.dataset.hidden !== '1');
+                    group.style.display = hasVisible ? '' : 'none';
+                });
+                const empty = modal.querySelector('[data-history-empty]');
+                if (empty) {
+                    empty.style.display = anyVisible ? 'none' : 'block';
+                }
+            };
             historyButtons.forEach((btn) => {
                 btn.addEventListener('click', () => {
                     const childId = btn.dataset.childHistoryId;
@@ -1446,16 +1539,32 @@ $formatParentNotificationMessage = static function (array $note): string {
                     if (!modal) return;
                     modal.classList.add('open');
                     document.body.classList.add('no-scroll');
+                    const filterButtons = Array.from(modal.querySelectorAll('[data-history-filter]'));
+                    filterButtons.forEach(button => {
+                        button.classList.toggle('active', (button.dataset.historyFilter || 'all') === 'all');
+                    });
+                    applyHistoryFilter(modal, 'all');
                 });
             });
             historyModals.forEach((modal) => {
-                const closeBtn = modal.querySelector('[data-child-history-close]');
+                const closeButtons = modal.querySelectorAll('[data-child-history-close]');
+                const filterButtons = Array.from(modal.querySelectorAll('[data-history-filter]'));
                 const closeModal = () => {
                     modal.classList.remove('open');
                     document.body.classList.remove('no-scroll');
                 };
-                if (closeBtn) closeBtn.addEventListener('click', closeModal);
+                closeButtons.forEach(btn => btn.addEventListener('click', closeModal));
                 modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
+                if (filterButtons.length) {
+                    filterButtons.forEach((button) => {
+                        button.addEventListener('click', () => {
+                            filterButtons.forEach(btn => btn.classList.toggle('active', btn === button));
+                            const filter = button.dataset.historyFilter || 'all';
+                            applyHistoryFilter(modal, filter);
+                        });
+                    });
+                    applyHistoryFilter(modal, 'all');
+                }
             });
             document.addEventListener('keydown', (e) => {
                 if (e.key !== 'Escape') return;
@@ -1892,6 +2001,10 @@ $formatParentNotificationMessage = static function (array $note): string {
             const adjustTitle = adjustModal ? adjustModal.querySelector('[data-role="adjust-title"]') : null;
             const adjustChildIdInput = adjustModal ? adjustModal.querySelector('[data-role="adjust-child-id"]') : null;
             const adjustHistoryList = adjustModal ? adjustModal.querySelector('[data-role="adjust-history-list"]') : null;
+            const adjustChildName = adjustModal ? adjustModal.querySelector('[data-role="adjust-child-name"]') : null;
+            const adjustChildAge = adjustModal ? adjustModal.querySelector('[data-role="adjust-child-age"]') : null;
+            const adjustChildAvatar = adjustModal ? adjustModal.querySelector('[data-role="adjust-child-avatar"]') : null;
+            const adjustCurrentPoints = adjustModal ? adjustModal.querySelector('[data-role="adjust-current-points"]') : null;
             const pointsInput = adjustModal ? adjustModal.querySelector('#adjust_points_input') : null;
             const reasonInput = adjustModal ? adjustModal.querySelector('#adjust_reason_input') : null;
             const setBodyScrollLocked = (locked) => {
@@ -1929,10 +2042,17 @@ $formatParentNotificationMessage = static function (array $note): string {
                 btn.addEventListener('click', () => {
                     const childId = btn.dataset.childId || '';
                     const childName = btn.dataset.childName || 'Child';
+                    const childAge = btn.dataset.childAge || 'N/A';
+                    const childAvatar = btn.dataset.childAvatar || 'images/default-avatar.png';
+                    const childPoints = btn.dataset.childPoints || '0';
                     const historyRaw = btn.dataset.history || '[]';
                     let history = [];
                     try { history = JSON.parse(historyRaw); } catch (e) { history = []; }
-                    if (adjustTitle) { adjustTitle.textContent = 'Adjust Points - ' + childName; }
+                    if (adjustTitle) { adjustTitle.textContent = 'Adjust Points'; }
+                    if (adjustChildName) { adjustChildName.textContent = childName; }
+                    if (adjustChildAge) { adjustChildAge.textContent = 'Age: ' + childAge; }
+                    if (adjustChildAvatar) { adjustChildAvatar.src = childAvatar; adjustChildAvatar.alt = childName; }
+                    if (adjustCurrentPoints) { adjustCurrentPoints.textContent = childPoints; }
                     if (adjustChildIdInput) { adjustChildIdInput.value = childId; }
                     if (pointsInput) { pointsInput.value = 1; }
                     if (reasonInput) { reasonInput.value = ''; }
@@ -2833,6 +2953,9 @@ $formatParentNotificationMessage = static function (array $note): string {
                                       data-role="open-adjust-modal"
                                       data-child-id="<?php echo (int)$child['child_user_id']; ?>"
                                       data-child-name="<?php echo htmlspecialchars($child['child_name']); ?>"
+                                      data-child-age="<?php echo htmlspecialchars($child['age'] ?? 'N/A'); ?>"
+                                      data-child-avatar="<?php echo htmlspecialchars($child['avatar'] ?? 'images/default-avatar.png'); ?>"
+                                      data-child-points="<?php echo (int)($child['points_earned'] ?? 0); ?>"
                                       data-history='<?php echo htmlspecialchars(json_encode($child['point_adjustments'] ?? [], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT)); ?>'>
                                       <span class="icon">+ / -</span>
                                   </button>
@@ -2903,6 +3026,28 @@ $formatParentNotificationMessage = static function (array $note): string {
                                       'title' => $row['reason'],
                                       'points' => (int) $row['delta_points'],
                                       'date' => $row['created_at']
+                                  ];
+                              }
+                          } catch (Exception $e) {
+                              $historyItems = $historyItems;
+                          }
+                          try {
+                              $rewardStmt = $db->prepare("
+                                  SELECT title, point_cost, redeemed_on
+                                  FROM rewards
+                                  WHERE redeemed_by = :child_id AND redeemed_on IS NOT NULL
+                              ");
+                              $rewardStmt->execute([':child_id' => $childId]);
+                              foreach ($rewardStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                                  $cost = (int) ($row['point_cost'] ?? 0);
+                                  if ($cost <= 0 || empty($row['redeemed_on'])) {
+                                      continue;
+                                  }
+                                  $historyItems[] = [
+                                      'type' => 'Reward',
+                                      'title' => 'Redeemed: ' . ($row['title'] ?? 'Reward'),
+                                      'points' => -abs($cost),
+                                      'date' => $row['redeemed_on']
                                   ];
                               }
                           } catch (Exception $e) {
@@ -3050,32 +3195,56 @@ $formatParentNotificationMessage = static function (array $note): string {
                   </div>
                   <div class="child-history-modal" data-child-history-modal data-child-history-id="<?php echo (int)$childId; ?>">
                       <div class="child-history-card" role="dialog" aria-modal="true" aria-labelledby="child-history-title-<?php echo (int)$childId; ?>">
-                          <header>
-                              <h2 id="child-history-title-<?php echo (int)$childId; ?>"><?php echo htmlspecialchars($child['child_name']); ?> Points History</h2>
+                          <header class="child-history-header">
+                              <button type="button" class="child-history-back" aria-label="Close points history" data-child-history-close>
+                                  <i class="fa-solid fa-arrow-left"></i>
+                              </button>
+                              <h2 id="child-history-title-<?php echo (int)$childId; ?>">Points History</h2>
                               <button type="button" class="child-history-close" aria-label="Close points history" data-child-history-close>&times;</button>
                           </header>
                           <div class="child-history-body">
-                              <?php if (!empty($historyByDay)): ?>
-                                  <?php foreach ($historyByDay as $day => $items): ?>
-                                      <div class="child-history-day">
-                                          <div class="child-history-day-title"><?php echo htmlspecialchars(date('M j', strtotime($day))); ?></div>
-                                          <ul class="child-history-list">
-                                              <?php foreach ($items as $item): ?>
-                                                  <li class="child-history-item">
-                                                      <div>
-                                                          <div class="child-history-item-title"><?php echo htmlspecialchars($item['type']); ?>: <?php echo htmlspecialchars($item['title']); ?></div>
-                                                          <div class="child-history-item-meta"><?php echo htmlspecialchars(date('g:i A', strtotime($item['date']))); ?></div>
-                                                      </div>
-                                                      <div class="child-history-item-points<?php echo ($item['points'] < 0 ? ' is-negative' : ''); ?>"><?php echo ($item['points'] >= 0 ? '+' : '') . (int)$item['points']; ?> pts</div>
-                                                  </li>
-                                              <?php endforeach; ?>
-                                          </ul>
-                                      </div>
-                                  <?php endforeach; ?>
-                              <?php else: ?>
-                                  <p>No points history yet.</p>
-                              <?php endif; ?>
+                              <div class="child-history-hero">
+                                  <img class="child-history-avatar" src="<?php echo htmlspecialchars($child['avatar'] ?? 'images/default-avatar.png'); ?>" alt="<?php echo htmlspecialchars($child['child_name']); ?>">
+                                  <div class="child-history-info">
+                                      <div class="child-history-name"><?php echo htmlspecialchars($child['child_name']); ?></div>
+                                      <div class="child-history-points"><i class="fa-solid fa-star"></i> <?php echo (int)($child['points_earned'] ?? 0); ?> pts</div>
+                                  </div>
+                              </div>
+                              <div class="child-history-filters" data-history-filters>
+                                  <button type="button" class="history-filter active" data-history-filter="all">All</button>
+                                  <button type="button" class="history-filter" data-history-filter="reward">Rewards Only</button>
+                              </div>
+                              <p class="child-history-empty" data-history-empty style="display:none;">No history for this filter.</p>
+                          <div class="child-history-timeline">
+                                  <?php if (!empty($historyByDay)): ?>
+                                      <?php foreach ($historyByDay as $day => $items): ?>
+                                          <div class="child-history-day" data-history-day>
+                                              <div class="child-history-day-title"><?php echo htmlspecialchars(date('M j, Y', strtotime($day))); ?></div>
+                                              <ul class="child-history-list">
+                                                  <?php foreach ($items as $item): ?>
+                                                      <li class="child-history-item" data-history-item data-history-type="<?php echo htmlspecialchars(strtolower($item['type'])); ?>">
+                                                          <div>
+                                                              <div class="child-history-item-title"><?php echo htmlspecialchars($item['title']); ?></div>
+                                                              <div class="child-history-item-meta"><?php echo htmlspecialchars(date('M j, Y, g:i A', strtotime($item['date']))); ?></div>
+                                                          </div>
+                                                          <div class="child-history-item-points<?php echo ($item['points'] < 0 ? ' is-negative' : ''); ?>"><?php echo ($item['points'] >= 0 ? '+' : '') . (int)$item['points']; ?> pts</div>
+                                                      </li>
+                                                  <?php endforeach; ?>
+                                              </ul>
+                                          </div>
+                                      <?php endforeach; ?>
+                                  <?php else: ?>
+                                      <p>No points history yet.</p>
+                                  <?php endif; ?>
+                              </div>
                           </div>
+                          <nav class="modal-bottom-nav" aria-label="Primary">
+                              <a class="modal-bottom-link" href="dashboard_parent.php"><i class="fa-solid fa-house"></i><span>Dashboard</span></a>
+                              <a class="modal-bottom-link" href="task.php"><i class="fa-solid fa-list-check"></i><span>Tasks</span></a>
+                              <a class="modal-bottom-link" href="routine.php"><i class="fa-solid fa-rotate"></i><span>Routines</span></a>
+                              <a class="modal-bottom-link" href="rewards.php"><i class="fa-solid fa-gift"></i><span>Rewards</span></a>
+                              <a class="modal-bottom-link" href="profile.php"><i class="fa-solid fa-user"></i><span>Profile</span></a>
+                          </nav>
                       </div>
                   </div>
                <?php endforeach; ?>
@@ -3211,33 +3380,59 @@ $formatParentNotificationMessage = static function (array $note): string {
     </main>
     <div class="adjust-modal-backdrop" data-role="adjust-modal">
         <div class="adjust-modal">
-            <header>
+            <header class="adjust-modal-header">
+                <button type="button" class="adjust-modal-back" data-action="close-adjust" aria-label="Close adjust points">
+                    <i class="fa-solid fa-arrow-left"></i>
+                </button>
                 <h3 data-role="adjust-title">Adjust Points</h3>
-                <button type="button" class="adjust-modal-close" data-action="close-adjust"><i class="fa-solid fa-xmark"></i></button>
+                <button type="button" class="adjust-modal-close" data-action="close-adjust" aria-label="Close adjust points">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
             </header>
-            <form method="POST">
-                <div class="form-group">
-                    <label for="adjust_points_input">Points (positive or negative)</label>
-                    <div class="adjust-control">
-                        <button type="button" data-action="decrement-points">-</button>
-                        <input id="adjust_points_input" type="number" name="points_delta" step="1" value="1" required data-stepper="false">
-                        <button type="button" data-action="increment-points">+</button>
+            <div class="adjust-modal-body">
+                <div class="adjust-child-card">
+                    <img class="adjust-child-avatar" data-role="adjust-child-avatar" src="images/default-avatar.png" alt="Child avatar">
+                    <div class="adjust-child-info">
+                        <div class="adjust-child-name" data-role="adjust-child-name">Child</div>
+                        <div class="adjust-child-age" data-role="adjust-child-age">Age: --</div>
                     </div>
                 </div>
-                <div class="form-group">
-                    <label for="adjust_reason_input">Reason</label>
-                    <input id="adjust_reason_input" type="text" name="point_reason" maxlength="255" placeholder="e.g., Helped sibling, behavior reminder">
+                <form method="POST" class="adjust-form">
+                    <div class="adjust-points-panel">
+                        <div class="adjust-current-points">
+                            <i class="fa-solid fa-star"></i>
+                            <span data-role="adjust-current-points">0</span> pts
+                        </div>
+                        <label for="adjust_points_input" class="sr-only">Points adjustment</label>
+                        <div class="adjust-control">
+                            <button type="button" class="adjust-step adjust-step-minus" data-action="decrement-points">-</button>
+                            <input id="adjust_points_input" type="number" name="points_delta" step="1" value="1" required data-stepper="false">
+                            <button type="button" class="adjust-step adjust-step-plus" data-action="increment-points">+</button>
+                        </div>
+                    </div>
+                    <div class="form-group adjust-reason">
+                        <label for="adjust_reason_input">Reason</label>
+                        <input id="adjust_reason_input" type="text" name="point_reason" maxlength="255" placeholder="Optional">
+                    </div>
+                    <input type="hidden" name="child_user_id" data-role="adjust-child-id">
+                    <input type="hidden" name="adjust_child_points" value="1">
+                    <div class="points-adjust-actions">
+                        <button type="submit" class="button approve-button adjust-confirm">Confirm</button>
+                        <button type="button" class="adjust-cancel" data-action="close-adjust">Cancel</button>
+                    </div>
+                </form>
+                <div class="adjust-history" data-role="adjust-history">
+                    <h4>Recent adjustments</h4>
+                    <ul data-role="adjust-history-list"></ul>
                 </div>
-                <input type="hidden" name="child_user_id" data-role="adjust-child-id">
-                <input type="hidden" name="adjust_child_points" value="1">
-                <div class="points-adjust-actions">
-                    <button type="submit" class="button approve-button">Apply</button>
-                </div>
-            </form>
-            <div class="adjust-history" data-role="adjust-history">
-                <h4>Recent adjustments</h4>
-                <ul data-role="adjust-history-list"></ul>
             </div>
+            <nav class="modal-bottom-nav" aria-label="Primary">
+                <a class="modal-bottom-link" href="dashboard_parent.php"><i class="fa-solid fa-house"></i><span>Dashboard</span></a>
+                <a class="modal-bottom-link" href="task.php"><i class="fa-solid fa-list-check"></i><span>Tasks</span></a>
+                <a class="modal-bottom-link" href="routine.php"><i class="fa-solid fa-rotate"></i><span>Routines</span></a>
+                <a class="modal-bottom-link" href="rewards.php"><i class="fa-solid fa-gift"></i><span>Rewards</span></a>
+                <a class="modal-bottom-link" href="profile.php"><i class="fa-solid fa-user"></i><span>Profile</span></a>
+            </nav>
         </div>
     </div>
    <div class="week-modal-backdrop" data-week-modal>
