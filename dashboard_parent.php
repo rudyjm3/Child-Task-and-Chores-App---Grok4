@@ -1116,7 +1116,7 @@ $formatParentNotificationMessage = static function (array $note): string {
         .adjust-cancel { flex: 1; background: transparent; border: none; color: #757575; font-weight: 600; cursor: pointer; padding: 6px; }
         .child-history-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 16px; border-bottom: 1px solid #e0e0e0; }
         .child-history-back { border: none; background: transparent; color: #424242; font-size: 1.1rem; cursor: pointer; display: none; }
-        .child-history-hero { display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 16px; background: #fff; border: 1px solid #eceff4; box-shadow: 0 8px 18px rgba(0,0,0,0.08); }
+        .child-history-hero { display: flex; align-items: center; gap: 12px; padding: 12px; margin-bottom: 10px; border-radius: 16px; background: #fff; border: 1px solid #eceff4; box-shadow: 0 8px 18px rgba(0,0,0,0.08); }
         .child-history-avatar { width: 56px; height: 56px; border-radius: 50%; object-fit: cover; box-shadow: 0 2px 6px rgba(0,0,0,0.15); }
         .child-history-name { font-weight: 700; color: #263238; }
         .child-history-points { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; background: #e8f5e9; color: #2e7d32; font-weight: 700; margin-top: 6px; }
@@ -1140,6 +1140,7 @@ $formatParentNotificationMessage = static function (array $note): string {
             .child-history-modal { padding: 0; align-items: stretch; }
             .adjust-modal,
             .child-history-card { max-width: none; width: 100%; height: 100%; min-height: 100vh; border-radius: 0; box-shadow: none; background: #f6f3f0; display: flex; flex-direction: column; }
+            
             .adjust-modal { padding: 0; }
             .adjust-modal-header,
             .child-history-header { padding: 12px 16px; background: #f6f3f0; }
@@ -1148,10 +1149,10 @@ $formatParentNotificationMessage = static function (array $note): string {
             .adjust-modal-close,
             .child-history-close { display: none; }
             .adjust-modal-body,
-            .child-history-body { padding: 12px 16px 90px; overflow-y: auto; flex: 1; min-height: 0; }
+            .child-history-body { padding: 12px 16px; overflow-y: auto; flex: 1; min-height: 0; }
             .child-history-filters { width: 100%; justify-content: space-between; }
             .history-filter { flex: 1; text-align: center; }
-            .adjust-history { background: #fff; border-color: #eceff4; border-radius: 16px; box-shadow: 0 8px 18px rgba(0,0,0,0.06); max-height: 260px; min-height: 160px; }
+            .adjust-history { background: #fff; border-color: #eceff4; border-radius: 16px; box-shadow: 0 8px 18px rgba(0,0,0,0.06); max-height: 360px; min-height: 160px; }
             .adjust-history li { padding-bottom: 6px; border-bottom: 1px solid #f0f0f0; }
             .adjust-history li:last-child { border-bottom: none; padding-bottom: 0; }
             .modal-bottom-nav { display: flex; justify-content: space-between; }
