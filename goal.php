@@ -238,6 +238,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($description === '') {
             $description = null;
         }
+        $reactivateOnSave = !empty($_POST['reactivate_on_save']);
         $start_date = filter_input(INPUT_POST, 'start_date', FILTER_SANITIZE_STRING);
         $end_date = filter_input(INPUT_POST, 'end_date', FILTER_SANITIZE_STRING);
         $reward_selection = $_POST['reward_id'] ?? '';
