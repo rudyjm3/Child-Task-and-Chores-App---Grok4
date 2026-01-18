@@ -812,12 +812,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (!$routineData) {
                 $messages[] = ['type' => 'error', 'text' => 'Routine could not be loaded.'];
             } else {
+                $childId = (int) ($routineData['child_user_id'] ?? 0);
+                $todayDate = date('Y-m-d');
+                $alreadyCompleted = false;
+                if ($childId > 0) {
+                    ensureRoutinePointsLogsTable();
+                    $logStmt = $db->prepare("SELECT created_at FROM routine_points_logs WHERE routine_id = :routine_id AND child_user_id = :child_id AND DATE(created_at) = :today ORDER BY created_at DESC LIMIT 1");
+                    $logStmt->execute([
+                        ':routine_id' => $routine_id,
+                        ':child_id' => $childId,
+                        ':today' => $todayDate
+                    ]);
+                    $lastCompletion = $logStmt->fetchColumn();
+                    if ($lastCompletion) {
+                        $formatted = date('m/d/Y h:i A', strtotime($lastCompletion));
+                        $messages[] = ['type' => 'error', 'text' => 'Routine already completed today at ' . $formatted . '.'];
+                        $alreadyCompleted = true;
+                    }
+                }
+                if ($alreadyCompleted) {
+                    // Skip updates if already completed today.
+                } else {
                 $tasks = $routineData['tasks'] ?? [];
                 $pendingBefore = 0;
                 $taskMap = [];
+                $completedTodayMap = [];
                 foreach ($tasks as $task) {
-                    $taskMap[(int) $task['id']] = $task;
-                    if (($task['status'] ?? 'pending') !== 'completed') {
+                    $taskId = (int) $task['id'];
+                    $taskMap[$taskId] = $task;
+                    $completedToday = false;
+                    $completedAt = $task['completed_at'] ?? null;
+                    if (!empty($completedAt) && ($task['status'] ?? 'pending') === 'completed') {
+                        $completedDate = date('Y-m-d', strtotime($completedAt));
+                        $completedToday = ($completedDate === $todayDate);
+                    }
+                    $completedTodayMap[$taskId] = $completedToday;
+                    if (!$completedToday) {
                         $pendingBefore++;
                     }
                 }
@@ -828,24 +858,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $awardedPoints = 0;
                 foreach ($tasks as $task) {
                     $taskId = (int) $task['id'];
-                    $status = in_array($taskId, $selected, true) ? 'completed' : 'pending';
+                    $isSelected = in_array($taskId, $selected, true);
+                    $status = $isSelected ? 'completed' : 'pending';
                     setRoutineTaskStatus($routine_id, $taskId, $status);
-                    if ($status === 'completed' && (($task['status'] ?? 'pending') !== 'completed')) {
-                        $awardedPoints += max(0, (int) ($task['point_value'] ?? 0));
+                    if ($isSelected && empty($completedTodayMap[$taskId])) {
+                        $awardedPoints += max(0, (int) ($task['point_value'] ?? $task['points'] ?? 0));
                     }
                 }
 
-                $childId = (int) ($routineData['child_user_id'] ?? 0);
                 if ($awardedPoints > 0 && $childId > 0) {
                     updateChildPoints($childId, $awardedPoints);
                 }
                 $awardCount = count($selected);
-                $grantBonus = $pendingBefore > 0 && $awardCount > 0 && $awardCount === count($tasks);
+                $allSelected = !empty($tasks) && $awardCount === count($tasks);
+                $grantBonus = $pendingBefore > 0 && $allSelected;
                 $bonusAwarded = 0;
                 if ($childId > 0) {
                     $bonusAwarded = completeRoutine($routine_id, $childId, $grantBonus);
                 }
-                if ($childId > 0 && ($awardedPoints > 0 || $bonusAwarded > 0)) {
+                $shouldLogCompletion = $childId > 0 && $allSelected && $pendingBefore > 0;
+                if ($childId > 0 && ($awardedPoints > 0 || $bonusAwarded > 0 || $shouldLogCompletion)) {
                     logRoutinePointsAward($routine_id, $childId, $awardedPoints, $bonusAwarded);
                 }
                 $summaryParts = [];
@@ -863,6 +895,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $summaryParts[] = 'No points were awarded';
                 }
                 $messages[] = ['type' => 'success', 'text' => 'Routine updated manually: ' . implode('. ', $summaryParts) . '.'];
+                }
             }
         }
     }
