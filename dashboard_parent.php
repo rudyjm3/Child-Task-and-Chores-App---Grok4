@@ -912,9 +912,6 @@ $formatParentNotificationMessage = static function (array $note): string {
         .child-info-header img { width: 72px; height: 72px; border-radius: 50%; object-fit: cover; border: 2px solid #ececec; }
         .child-info-header-details { display: flex; flex-direction: column; gap: 4px; }
         .child-info-name { font-size: 1.15em; font-weight: 600; margin: 0; color: #333; }
-        .child-info-meta { margin: 0; font-size: 0.9em; color: #666; }
-        .child-info-actions { display: flex; gap: 8px;     justify-content: center;
-    align-items: center; }
         .child-action-icon { width: 36px; height: 36px; border-radius: 50%; border: none; background: transparent; color: #919191; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
         .child-action-icon:hover { color: #7a7a7a; }
         .child-action-icon.danger { color: #919191; }
@@ -945,7 +942,6 @@ $formatParentNotificationMessage = static function (array $note): string {
         .points-progress-wrapper { display: flex; flex-direction: column; align-items: center; gap: 6px; flex: 1; }
         .points-progress-label { font-size: 1.1em; font-weight: 600; color: #555; text-align: center; }
         .points-number { font-size: 1.6em; font-weight: 700; color: #2e7d32; line-height: 1; }
-        .child-info-actions form { margin: 0; }
         .child-badge-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 6px; }
         .badge-pill { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 8px; background: transparent; color: #0d47a1; font-weight: 700; border: 1px solid #d5def0; font-size: 0.95em; text-decoration: none; }
         .badge-pill:hover { background: #eef4ff; text-decoration: none; }
@@ -1099,7 +1095,6 @@ $formatParentNotificationMessage = static function (array $note): string {
         .adjust-child-card { display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 16px; background: #fff; border: 1px solid #eceff4; box-shadow: 0 8px 18px rgba(0,0,0,0.08); }
         .adjust-child-avatar { width: 56px; height: 56px; border-radius: 50%; object-fit: cover; box-shadow: 0 2px 6px rgba(0,0,0,0.15); }
         .adjust-child-name { font-weight: 700; color: #263238; }
-        .adjust-child-age { color: #757575; font-size: 0.9rem; margin-top: 4px; }
         .adjust-form { display: grid; gap: 12px; }
         .adjust-points-panel { background: #fff; border: 1px solid #eceff4; border-radius: 16px; padding: 12px; display: grid; gap: 10px; box-shadow: 0 8px 18px rgba(0,0,0,0.06); }
         .adjust-current-points { display: inline-flex; align-items: center; justify-content: center; gap: 6px; font-weight: 700; color: #2e7d32; font-size: 1.05rem; }
@@ -1516,7 +1511,7 @@ $formatParentNotificationMessage = static function (array $note): string {
                 let anyVisible = false;
                 items.forEach(item => {
                     const type = (item.dataset.historyType || '').toLowerCase();
-                    const show = filter === 'all' ? type !== 'reward' : type === filter;
+                    const show = filter === 'all' ? true : type === filter;
                     item.style.display = show ? '' : 'none';
                     item.dataset.hidden = show ? '0' : '1';
                     if (show) {
@@ -2003,7 +1998,6 @@ $formatParentNotificationMessage = static function (array $note): string {
             const adjustChildIdInput = adjustModal ? adjustModal.querySelector('[data-role="adjust-child-id"]') : null;
             const adjustHistoryList = adjustModal ? adjustModal.querySelector('[data-role="adjust-history-list"]') : null;
             const adjustChildName = adjustModal ? adjustModal.querySelector('[data-role="adjust-child-name"]') : null;
-            const adjustChildAge = adjustModal ? adjustModal.querySelector('[data-role="adjust-child-age"]') : null;
             const adjustChildAvatar = adjustModal ? adjustModal.querySelector('[data-role="adjust-child-avatar"]') : null;
             const adjustCurrentPoints = adjustModal ? adjustModal.querySelector('[data-role="adjust-current-points"]') : null;
             const pointsInput = adjustModal ? adjustModal.querySelector('#adjust_points_input') : null;
@@ -2043,7 +2037,6 @@ $formatParentNotificationMessage = static function (array $note): string {
                 btn.addEventListener('click', () => {
                     const childId = btn.dataset.childId || '';
                     const childName = btn.dataset.childName || 'Child';
-                    const childAge = btn.dataset.childAge || 'N/A';
                     const childAvatar = btn.dataset.childAvatar || 'images/default-avatar.png';
                     const childPoints = btn.dataset.childPoints || '0';
                     const historyRaw = btn.dataset.history || '[]';
@@ -2051,7 +2044,6 @@ $formatParentNotificationMessage = static function (array $note): string {
                     try { history = JSON.parse(historyRaw); } catch (e) { history = []; }
                     if (adjustTitle) { adjustTitle.textContent = 'Adjust Points'; }
                     if (adjustChildName) { adjustChildName.textContent = childName; }
-                    if (adjustChildAge) { adjustChildAge.textContent = 'Age: ' + childAge; }
                     if (adjustChildAvatar) { adjustChildAvatar.src = childAvatar; adjustChildAvatar.alt = childName; }
                     if (adjustCurrentPoints) { adjustCurrentPoints.textContent = childPoints; }
                     if (adjustChildIdInput) { adjustChildIdInput.value = childId; }
@@ -2937,13 +2929,7 @@ $formatParentNotificationMessage = static function (array $note): string {
                              <img src="<?php echo htmlspecialchars($child['avatar'] ?? 'default-avatar.png'); ?>" alt="Avatar for <?php echo htmlspecialchars($child['child_name']); ?>">
                              <div class="child-info-header-details">
                                 <p class="child-info-name"><?php echo htmlspecialchars($child['child_name']); ?></p>
-                                <p class="child-info-meta">Age: <?php echo htmlspecialchars($child['age'] ?? 'N/A'); ?></p>
-                                <div class="child-info-actions">
-                                   <?php if (in_array($role_type, ['main_parent', 'secondary_parent'])): ?>
-                                       <a href="profile.php?user_id=<?php echo $child['child_user_id']; ?>&type=child" class="child-action-icon" aria-label="Edit Child"><i class="fa-solid fa-pen"></i></a>
-                                   <?php endif; ?>
-                                </div>
-                             </div>
+                            </div>
                           </div>
                           <div class="points-progress-wrapper">
                               <div class="points-progress-label">Points Earned</div>
@@ -2954,7 +2940,6 @@ $formatParentNotificationMessage = static function (array $note): string {
                                       data-role="open-adjust-modal"
                                       data-child-id="<?php echo (int)$child['child_user_id']; ?>"
                                       data-child-name="<?php echo htmlspecialchars($child['child_name']); ?>"
-                                      data-child-age="<?php echo htmlspecialchars($child['age'] ?? 'N/A'); ?>"
                                       data-child-avatar="<?php echo htmlspecialchars($child['avatar'] ?? 'images/default-avatar.png'); ?>"
                                       data-child-points="<?php echo (int)($child['points_earned'] ?? 0); ?>"
                                       data-history='<?php echo htmlspecialchars(json_encode($child['point_adjustments'] ?? [], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT)); ?>'>
@@ -3395,7 +3380,6 @@ $formatParentNotificationMessage = static function (array $note): string {
                     <img class="adjust-child-avatar" data-role="adjust-child-avatar" src="images/default-avatar.png" alt="Child avatar">
                     <div class="adjust-child-info">
                         <div class="adjust-child-name" data-role="adjust-child-name">Child</div>
-                        <div class="adjust-child-age" data-role="adjust-child-age">Age: --</div>
                     </div>
                 </div>
                 <form method="POST" class="adjust-form">

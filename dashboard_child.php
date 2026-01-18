@@ -250,9 +250,6 @@ $buildChildNotificationViewLink = static function (array $note): ?string {
         .points-left { display: contents; }
         .child-identity { display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 120px; }
         .child-avatar-wrap { position: relative; display: inline-block; }
-        .child-edit-wrapper { display: flex; justify-content: center; }
-        .child-edit-button { background: transparent; border: none; color: #5d4037; cursor: pointer; font-size: 1rem; padding: 4px; text-decoration: none; }
-        .child-edit-button:hover { color: #0d47a1; }
         .child-avatar { width: 72px; height: 72px; border-radius: 50%; object-fit: cover; border: 3px solid #ffd28a; background: #fff; box-shadow: 0 4px 10px rgba(0,0,0,0.12); }
         .child-first-name { font-size: 1rem; font-weight: 700; color: #263238; }
         .points-total { margin: 0; font-weight: 700; color: #263238; display: flex; flex-direction: column; gap: 6px; text-align: center; }
@@ -389,15 +386,32 @@ $buildChildNotificationViewLink = static function (array $note): ?string {
         .reward-list-item.highlight { outline: 2px solid #ffd28a; box-shadow: 0 0 0 3px rgba(255, 210, 138, 0.35); }
         .reward-list-item .reward-title { font-weight: 700; }
         .reward-list-item .reward-actions { display: flex; justify-content: flex-end; }
-        .points-history-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: none; align-items: center; justify-content: center; z-index: 4200; padding: 14px; }
-        .points-history-modal.open { display: flex; }
-        .points-history-card { background: #fff; border-radius: 12px; max-width: 620px; width: min(620px, 100%); max-height: 82vh; overflow: hidden; box-shadow: 0 12px 32px rgba(0,0,0,0.25); display: grid; grid-template-rows: auto 1fr; }
-        .points-history-card header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid #e0e0e0; }
-        .points-history-card h2 { margin: 0; font-size: 1.1rem; }
-        .points-history-close { background: transparent; border: none; font-size: 1.3rem; cursor: pointer; color: #555; }
-        .points-history-body { padding: 12px 16px 16px; overflow-y: auto; text-align: left; }
-        .history-day { margin-top: 12px; }
-        .history-day-title { font-weight: 700; color: #5d4037; margin-bottom: 6px; }
+        .child-history-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: none; align-items: center; justify-content: center; z-index: 4200; padding: 14px; }
+        .child-history-modal.open { display: flex; }
+        .child-history-card { background: #fff; border-radius: 12px; max-width: 620px; width: min(620px, 100%); max-height: 92vh; overflow: hidden; box-shadow: 0 12px 32px rgba(0,0,0,0.25); display: flex; flex-direction: column; }
+        .child-history-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 16px; border-bottom: 1px solid #e0e0e0; }
+        .child-history-card h2 { margin: 0; font-size: 1.1rem; }
+        .child-history-close { background: transparent; border: none; font-size: 1.3rem; cursor: pointer; color: #555; }
+        .child-history-back { border: none; background: transparent; color: #424242; font-size: 1.1rem; cursor: pointer; display: none; }
+        .child-history-body { padding: 12px 16px 16px; overflow-y: auto; text-align: left; flex: 1; min-height: 0; display: grid; gap: 12px; }
+        .child-history-hero { display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 16px; background: #fff; border: 1px solid #eceff4; box-shadow: 0 8px 18px rgba(0,0,0,0.08); }
+        .child-history-avatar { width: 56px; height: 56px; border-radius: 50%; object-fit: cover; box-shadow: 0 2px 6px rgba(0,0,0,0.15); }
+        .child-history-name { font-weight: 700; color: #263238; }
+        .child-history-points { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; background: #e8f5e9; color: #2e7d32; font-weight: 700; margin-top: 6px; }
+        .child-history-filters { display: inline-flex; gap: 6px; padding: 10px; border-radius: 16px; border: 1px solid #eceff4; background: #fff; box-shadow: 0 8px 18px rgba(0,0,0,0.06); }
+        .history-filter { border: 2px solid #ffd28a; background: #fff; color: #ef6c00; font-weight: 600; padding: 6px 12px; border-radius: 10px; cursor: pointer; }
+        .history-filter.active { background: #ffd28a; color: #ef6c00; }
+        .points-history-title { color: #ef6c00; }
+        .child-history-empty { color: #9e9e9e; font-weight: 600; text-align: center; }
+        .child-history-timeline { display: grid; gap: 12px; }
+        .child-history-day { display: grid; gap: 10px; }
+        .child-history-day-title { font-weight: 700; color: #8d6e63; }
+        .child-history-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
+        .child-history-item { background: #fff; border: 1px solid #eceff4; border-radius: 14px; padding: 12px; display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+        .child-history-item-title { font-weight: 700; color: #3e2723; }
+        .child-history-item-meta { color: #6d4c41; font-size: 0.95rem; }
+        .child-history-item-points { background: #e8f5e9; color: #2e7d32; padding: 4px 10px; border-radius: 999px; font-weight: 700; white-space: nowrap; }
+        .child-history-item-points.is-negative { background: #ffebee; color: #d32f2f; }
         .help-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: none; align-items: center; justify-content: center; z-index: 4300; padding: 14px; }
         .help-modal.open { display: flex; }
         .help-card { background: #fff; border-radius: 12px; max-width: 720px; width: min(720px, 100%); max-height: 85vh; overflow: hidden; box-shadow: 0 12px 32px rgba(0,0,0,0.25); display: grid; grid-template-rows: auto 1fr; }
@@ -407,12 +421,16 @@ $buildChildNotificationViewLink = static function (array $note): ?string {
         .help-body { padding: 12px 16px 16px; overflow-y: auto; display: grid; gap: 12px; }
         .help-section h3 { margin: 0 0 6px; font-size: 1rem; color: #37474f; }
         .help-section ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; color: #455a64; }
-        .history-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
-        .history-item { background: #fff7e6; border: 1px solid #ffd28a; border-radius: 10px; padding: 10px 12px; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-        .history-item-title { font-weight: 700; color: #3e2723; }
-        .history-item-meta { color: #6d4c41; font-size: 0.95rem; }
-        .history-item-points { font-weight: 700; color: #00bb01; white-space: nowrap; }
-        .history-item-points.is-negative { color: #d32f2f; }
+        @media (max-width: 768px) {
+            .child-history-modal { padding: 0; align-items: stretch; }
+            .child-history-card { max-width: none; width: 100%; height: 100%; min-height: 100vh; border-radius: 0; box-shadow: none; background: #f6f3f0; }
+            .child-history-header { padding: 12px 16px; background: #f6f3f0; }
+            .child-history-back { display: inline-flex; }
+            .child-history-close { display: none; }
+            .child-history-body { padding: 12px 16px; overflow-y: auto; flex: 1; min-height: 0; }
+            .child-history-filters { width: 100%; justify-content: space-between; }
+            .history-filter { flex: 1; text-align: center; }
+        }
     </style>
     <script>
         document.addEventListener('DOMContentLoaded', function () {
@@ -517,11 +535,46 @@ $buildChildNotificationViewLink = static function (array $note): ?string {
 
             const historyOpen = document.querySelector('[data-points-history-open]');
             const historyModal = document.querySelector('[data-points-history-modal]');
-            const historyClose = historyModal ? historyModal.querySelector('[data-points-history-close]') : null;
+            const historyCloseButtons = historyModal ? historyModal.querySelectorAll('[data-points-history-close]') : [];
+            const historyFilterButtons = historyModal ? Array.from(historyModal.querySelectorAll('[data-history-filter]')) : [];
+            const applyHistoryFilter = (filter) => {
+                if (!historyModal) return;
+                const items = Array.from(historyModal.querySelectorAll('[data-history-item]'));
+                const groups = Array.from(historyModal.querySelectorAll('[data-history-day]'));
+                const empty = historyModal.querySelector('[data-history-empty]');
+                if (!items.length) {
+                    if (empty) {
+                        empty.style.display = 'none';
+                    }
+                    return;
+                }
+                let anyVisible = false;
+                items.forEach(item => {
+                    const type = (item.dataset.historyType || '').toLowerCase();
+                    const show = filter === 'all' ? true : type === filter;
+                    item.style.display = show ? '' : 'none';
+                    item.dataset.hidden = show ? '0' : '1';
+                    if (show) {
+                        anyVisible = true;
+                    }
+                });
+                groups.forEach(group => {
+                    const groupItems = Array.from(group.querySelectorAll('[data-history-item]'));
+                    const hasVisible = groupItems.some(item => item.dataset.hidden !== '1');
+                    group.style.display = hasVisible ? '' : 'none';
+                });
+                if (empty) {
+                    empty.style.display = anyVisible ? 'none' : 'block';
+                }
+            };
             const openHistoryModal = () => {
                 if (!historyModal) return;
                 historyModal.classList.add('open');
                 document.body.classList.add('no-scroll');
+                historyFilterButtons.forEach(button => {
+                    button.classList.toggle('active', (button.dataset.historyFilter || 'all') === 'all');
+                });
+                applyHistoryFilter('all');
             };
             const closeHistoryModal = () => {
                 if (!historyModal) return;
@@ -530,9 +583,19 @@ $buildChildNotificationViewLink = static function (array $note): ?string {
             };
             if (historyOpen && historyModal) {
                 historyOpen.addEventListener('click', openHistoryModal);
-                if (historyClose) historyClose.addEventListener('click', closeHistoryModal);
+                historyCloseButtons.forEach(btn => btn.addEventListener('click', closeHistoryModal));
                 historyModal.addEventListener('click', (e) => { if (e.target === historyModal) closeHistoryModal(); });
                 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeHistoryModal(); });
+            }
+            if (historyFilterButtons.length) {
+                historyFilterButtons.forEach(button => {
+                    button.addEventListener('click', () => {
+                        historyFilterButtons.forEach(btn => btn.classList.toggle('active', btn === button));
+                        const filter = button.dataset.historyFilter || 'all';
+                        applyHistoryFilter(filter);
+                    });
+                });
+                applyHistoryFilter('all');
             }
 
             const helpOpen = document.querySelector('[data-help-open]');
@@ -1223,6 +1286,28 @@ foreach ($taskCountStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
          } catch (Exception $e) {
             $historyItems = $historyItems;
          }
+         try {
+            $rewardStmt = $db->prepare("
+                SELECT title, point_cost, redeemed_on
+                FROM rewards
+                WHERE redeemed_by = :child_id AND redeemed_on IS NOT NULL
+            ");
+            $rewardStmt->execute([':child_id' => $_SESSION['user_id']]);
+            foreach ($rewardStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+               $cost = (int) ($row['point_cost'] ?? 0);
+               if ($cost <= 0 || empty($row['redeemed_on'])) {
+                  continue;
+               }
+               $historyItems[] = [
+                  'type' => 'Reward',
+                  'title' => 'Redeemed: ' . ($row['title'] ?? 'Reward'),
+                  'points' => -abs($cost),
+                  'date' => $row['redeemed_on']
+               ];
+            }
+         } catch (Exception $e) {
+            $historyItems = $historyItems;
+         }
          usort($historyItems, static function ($a, $b) {
             return strtotime($b['date']) <=> strtotime($a['date']);
          });
@@ -1250,11 +1335,6 @@ foreach ($taskCountStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
                   <button type="button" class="notification-trigger avatar-notification" data-child-notify-trigger aria-label="Notifications"><i class="fa-solid fa-bell"></i><?php if ($notificationCount > 0): ?><span class="notification-badge"><?php echo (int)$notificationCount; ?></span><?php endif; ?></button>
                </div>
                <div class="child-first-name"><?php echo htmlspecialchars($childFirstName); ?></div>
-               <div class="child-edit-wrapper">
-                  <a class="child-edit-button" href="profile.php?self=1" aria-label="Edit profile">
-                     <i class="fa-solid fa-pen"></i>
-                  </a>
-               </div>
             </div>
             <div class="points-total">
                <span class="points-total-label">Total Points</span>
@@ -1384,33 +1464,50 @@ foreach ($taskCountStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
             </div>
          </div>
       </div>
-      <div class="points-history-modal" data-points-history-modal id="points-history-modal">
-         <div class="points-history-card" role="dialog" aria-modal="true" aria-labelledby="points-history-title">
-            <header>
-               <h2 id="points-history-title">Points History</h2>
-               <button type="button" class="points-history-close" aria-label="Close points history" data-points-history-close>&times;</button>
+      <div class="child-history-modal" data-points-history-modal id="points-history-modal">
+         <div class="child-history-card" role="dialog" aria-modal="true" aria-labelledby="points-history-title">
+            <header class="child-history-header">
+               <button type="button" class="child-history-back" aria-label="Close points history" data-points-history-close>
+                  <i class="fa-solid fa-arrow-left"></i>
+               </button>
+               <h2 id="points-history-title" class="points-history-title">Points History</h2>
+               <button type="button" class="child-history-close" aria-label="Close points history" data-points-history-close>&times;</button>
             </header>
-            <div class="points-history-body">
-               <?php if (!empty($historyByDay)): ?>
-                  <?php foreach ($historyByDay as $day => $items): ?>
-                     <div class="history-day">
-                        <div class="history-day-title"><?php echo htmlspecialchars(date('M j', strtotime($day))); ?></div>
-                        <ul class="history-list">
-                           <?php foreach ($items as $item): ?>
-                              <li class="history-item">
-                                 <div>
-                                    <div class="history-item-title"><?php echo htmlspecialchars($item['type']); ?>: <?php echo htmlspecialchars($item['title']); ?></div>
-                                    <div class="history-item-meta"><?php echo htmlspecialchars(date('g:i A', strtotime($item['date']))); ?></div>
-                                 </div>
-                                 <div class="history-item-points<?php echo ($item['points'] < 0 ? ' is-negative' : ''); ?>"><?php echo ($item['points'] >= 0 ? '+' : '') . (int)$item['points']; ?> pts</div>
-                              </li>
-                           <?php endforeach; ?>
-                        </ul>
-                     </div>
-                  <?php endforeach; ?>
-               <?php else: ?>
-                  <p>No points history yet.</p>
-               <?php endif; ?>
+            <div class="child-history-body">
+               <div class="child-history-hero">
+                  <img class="child-history-avatar" src="<?php echo htmlspecialchars($childAvatar); ?>" alt="<?php echo htmlspecialchars($childFirstName !== '' ? $childFirstName : 'Child'); ?>">
+                  <div class="child-history-info">
+                     <div class="child-history-name"><?php echo htmlspecialchars($childFirstName !== '' ? $childFirstName : 'Child'); ?></div>
+                     <div class="child-history-points"><i class="fa-solid fa-star"></i> <?php echo (int)$childTotalPoints; ?> pts</div>
+                  </div>
+               </div>
+               <div class="child-history-filters" data-history-filters>
+                  <button type="button" class="history-filter active" data-history-filter="all">All</button>
+                  <button type="button" class="history-filter" data-history-filter="reward">Rewards Only</button>
+               </div>
+               <p class="child-history-empty" data-history-empty style="display:none;">No history for this filter.</p>
+               <div class="child-history-timeline">
+                  <?php if (!empty($historyByDay)): ?>
+                     <?php foreach ($historyByDay as $day => $items): ?>
+                        <div class="child-history-day" data-history-day>
+                           <div class="child-history-day-title"><?php echo htmlspecialchars(date('M j, Y', strtotime($day))); ?></div>
+                           <ul class="child-history-list">
+                              <?php foreach ($items as $item): ?>
+                                 <li class="child-history-item" data-history-item data-history-type="<?php echo htmlspecialchars(strtolower($item['type'])); ?>">
+                                    <div>
+                                       <div class="child-history-item-title"><?php echo htmlspecialchars($item['title']); ?></div>
+                                       <div class="child-history-item-meta"><?php echo htmlspecialchars(date('M j, Y, g:i A', strtotime($item['date']))); ?></div>
+                                    </div>
+                                    <div class="child-history-item-points<?php echo ($item['points'] < 0 ? ' is-negative' : ''); ?>"><?php echo ($item['points'] >= 0 ? '+' : '') . (int)$item['points']; ?> pts</div>
+                                 </li>
+                              <?php endforeach; ?>
+                           </ul>
+                        </div>
+                     <?php endforeach; ?>
+                  <?php else: ?>
+                     <p class="child-history-empty">No points history yet.</p>
+                  <?php endif; ?>
+               </div>
             </div>
          </div>
       </div>
