@@ -1399,7 +1399,7 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                         <?php endif; ?>
                     </div>
                 </details>
-                <details class="task-section-toggle" <?php echo !empty($rejected_goals) ? 'open' : ''; ?>>
+                <details class="task-section-toggle">
                     <summary>
                         <span class="task-section-title">Inactive Goals <span class="task-count-badge"><?php echo count($rejected_goals); ?></span></span>
                     </summary>

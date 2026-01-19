@@ -970,7 +970,7 @@ $formatParentNotificationMessage = static function (array $note): string {
         .dashboard { padding: 20px; max-width: 900px; margin: 0 auto; }
         .children-overview, .management-links, .active-rewards, .redeemed-rewards, .manage-family { margin-top: 20px; }
         .children-overview-grid { display: grid; grid-template-columns: 1fr; gap: 20px; }
-        .child-info-card, .reward-item, .goal-item { background-color: #f5f5f5; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        .child-info-card, .reward-item, .goal-item { background-color: #f5f5f5; padding: 15px; border-radius: 8px; box-shadow: 0 8px 20px rgba(0,0,0,0.08); }
         .child-info-card { width: 100%; display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 20px; align-items: start; min-height: 100%; background-color: #fff; margin: 20px 0;}
         .child-info-left { display: contents; }
         .child-info-header { display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; }
@@ -1004,17 +1004,20 @@ $formatParentNotificationMessage = static function (array $note): string {
         .child-reward-badge-link:hover { text-decoration: none;}
         .badge-count { font-size: 1.6em; font-weight: 700; color: #2e7d32; line-height: 1.1; }
         .child-reward-badge-link .badge-label { font-size: 0.85em; color: #666; }
-        .points-progress-wrapper { display: flex; flex-direction: column; align-items: center; gap: 6px; flex: 1; }
-        .points-progress-label { font-size: 1.1em; font-weight: 600; color: #555; text-align: center; }
-        .points-number { font-size: 1.6em; font-weight: 700; color: #2e7d32; line-height: 1; }
+        .points-progress-wrapper { display: flex; flex-direction: column; align-items: center; gap: 12px; flex: 1; /* background: linear-gradient(180deg, #fbfaf9 0%, #f3efea 100%);*/ border-radius: 18px; padding: 16px; border: 1px solid #e9e9e9; box-shadow: 0 8px 18px rgba(0,0,0,0.08); }
+        .points-progress-label { font-size: 0.8em; font-weight: 700; color: #7a7a7a; text-align: center; text-transform: none; letter-spacing: 0.03em; }
+        .points-number { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 2px 4px; border-radius: 999px; background: transparent; border: none; box-shadow: none; font-size: 1.5rem; font-weight: 600; color: #4a7a42; line-height: 1; }
+        .points-number i { color: #5f8a57; font-size: 0.9em; }
+        .points-number-value { font-weight: 600; }
+        .points-number-suffix { font-size: 0.78em; font-weight: 600; color: #4a7a42; }
         .child-badge-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 6px; }
         .badge-pill { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 8px; background: transparent; color: #0d47a1; font-weight: 700; border: 1px solid #d5def0; font-size: 0.95em; text-decoration: none; }
         .badge-pill:hover { background: #eef4ff; text-decoration: none; }
         .badge-pill i { font-size: 0.95em; }
-        .adjust-button { background: #ff9800 !important; color: #fff; display: block; gap: 4px; justify-items: center; font-weight: 700; min-width: -webkit-fill-available;}
+        .adjust-button { background: linear-gradient(180deg, #ffb244 0%, #f38a0c 100%) !important; color: #fff; display: inline-flex; align-items: center; justify-content: center; gap: 10px; font-weight: 500; border-radius: 12px; padding: 12px 16px; width: 100%; box-shadow: none; border: 1px solid rgba(0,0,0,0.06); }
         .adjust-button .label { font-size: 0.95em; }
-        .adjust-button .icon { font-size: 1.1em; line-height: 1; }
-        .history-button { background: #5384ca !important; min-width:-webkit-fill-available; color: #fff; }
+        .adjust-button i { font-size: 1.05em; line-height: 1; }
+        .history-button { background: linear-gradient(180deg, #6f8fe3 0%, #4f6cc8 100%) !important; color: #fff; display: inline-flex; align-items: center; justify-content: center; gap: 10px; border-radius: 12px; padding: 12px 16px; width: 100%; font-weight: 500; box-shadow: none; border: 1px solid rgba(0,0,0,0.06); }
         .history-button i { color: inherit; }
         .points-adjust-card { border: 1px dashed #c8e6c9; background: #fdfefb; padding: 10px 12px; border-radius: 6px; display: grid; gap: 8px; }
         .points-adjust-card .button { width: 100%; }
@@ -1445,6 +1448,8 @@ $formatParentNotificationMessage = static function (array $note): string {
             // Animate points numbers
             const pointEls = document.querySelectorAll('.points-number');
             pointEls.forEach(el => {
+                const valueEl = el.querySelector('.points-number-value');
+                if (!valueEl) return;
                 const target = parseInt(el.dataset.points, 10) || 0;
                 let current = 0;
                 const duration = 800;
@@ -1452,11 +1457,11 @@ $formatParentNotificationMessage = static function (array $note): string {
                 const step = (now) => {
                     const progress = Math.min(1, (now - start) / duration);
                     current = Math.floor(progress * target);
-                    el.textContent = `${current} pts`;
+                    valueEl.textContent = `${current}`;
                     if (progress < 1) {
                         requestAnimationFrame(step);
                     } else {
-                        el.textContent = `${target} pts`;
+                        valueEl.textContent = `${target}`;
                     }
                 };
                 requestAnimationFrame(step);
@@ -2652,8 +2657,12 @@ $formatParentNotificationMessage = static function (array $note): string {
                             </div>
                           </div>
                           <div class="points-progress-wrapper">
-                              <div class="points-progress-label">Points Earned</div>
-                              <div class="points-number" data-points="<?php echo (int)($child['points_earned'] ?? 0); ?>">0</div>
+                              <div class="points-progress-label">Total points</div>
+                              <div class="points-number" data-points="<?php echo (int)($child['points_earned'] ?? 0); ?>">
+                                  <i class="fa-solid fa-star"></i>
+                                  <span class="points-number-value">0</span>
+                                  <span class="points-number-suffix">pts</span>
+                              </div>
                               <?php if (in_array($role_type, ['main_parent', 'secondary_parent'], true)): ?>
                                   <button type="button"
                                       class="button adjust-button"
@@ -2663,7 +2672,8 @@ $formatParentNotificationMessage = static function (array $note): string {
                                       data-child-avatar="<?php echo htmlspecialchars($child['avatar'] ?? 'images/default-avatar.png'); ?>"
                                       data-child-points="<?php echo (int)($child['points_earned'] ?? 0); ?>"
                                       data-history='<?php echo htmlspecialchars(json_encode($child['point_adjustments'] ?? [], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT)); ?>'>
-                                      <span class="icon">+ / -</span>
+                                      <i class="fa-solid fa-plus"></i>
+                                      <span class="label">Add / Remove Points</span>
                                   </button>
                               <?php endif; ?>
                               <button type="button"
@@ -2672,6 +2682,7 @@ $formatParentNotificationMessage = static function (array $note): string {
                                       data-child-history-id="<?php echo (int)$child['child_user_id']; ?>"
                                       data-child-history-name="<?php echo htmlspecialchars($child['child_name']); ?>">
                                   <i class="fa-solid fa-clock-rotate-left"></i>
+                                  <span class="label">History</span>
                               </button>
                           </div>
                       </div>
