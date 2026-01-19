@@ -90,6 +90,78 @@ $formatDuration = function($seconds) {
     $remaining = $seconds % 60;
     return sprintf('%02d:%02d', $minutes, $remaining);
 };
+$formatDurationOrDash = function($seconds) use ($formatDuration) {
+    if ($seconds === null) {
+        return '--:--';
+    }
+    $seconds = (int) $seconds;
+    if ($seconds <= 0) {
+        return '--:--';
+    }
+    return $formatDuration($seconds);
+};
+$routineCompletionSessions = [];
+$routineCompletionTasks = [];
+try {
+    ensureRoutineCompletionTables();
+    $completionStmt = $db->prepare("
+        SELECT
+            rcl.id,
+            rcl.routine_id,
+            rcl.child_user_id,
+            rcl.completed_by,
+            rcl.started_at,
+            rcl.completed_at,
+            r.title AS routine_title,
+            COALESCE(
+                NULLIF(TRIM(CONCAT(COALESCE(u.first_name, ''), ' ', COALESCE(u.last_name, ''))), ''),
+                NULLIF(u.name, ''),
+                u.username,
+                'Unknown'
+            ) AS child_display_name
+        FROM routine_completion_logs rcl
+        JOIN routines r ON rcl.routine_id = r.id
+        LEFT JOIN users u ON rcl.child_user_id = u.id
+        WHERE rcl.parent_user_id = :parent_id
+        ORDER BY rcl.completed_at DESC
+        LIMIT 15
+    ");
+    $completionStmt->execute([':parent_id' => $main_parent_id]);
+    $routineCompletionSessions = $completionStmt->fetchAll(PDO::FETCH_ASSOC);
+    $sessionIds = array_values(array_filter(array_map(static function ($row) {
+        return (int) ($row['id'] ?? 0);
+    }, $routineCompletionSessions)));
+    if (!empty($sessionIds)) {
+        $placeholders = implode(',', array_fill(0, count($sessionIds), '?'));
+        $taskStmt = $db->prepare("
+            SELECT
+                rct.completion_log_id,
+                rct.routine_task_id,
+                rct.sequence_order,
+                rct.completed_at,
+                rct.status_screen_seconds,
+                rct.scheduled_seconds,
+                rct.actual_seconds,
+                rt.title AS task_title
+            FROM routine_completion_tasks rct
+            LEFT JOIN routine_tasks rt ON rct.routine_task_id = rt.id
+            WHERE rct.completion_log_id IN ($placeholders)
+            ORDER BY rct.completion_log_id DESC, rct.sequence_order ASC, rct.id ASC
+        ");
+        $taskStmt->execute($sessionIds);
+        foreach ($taskStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $logId = (int) ($row['completion_log_id'] ?? 0);
+            if ($logId) {
+                if (!isset($routineCompletionTasks[$logId])) {
+                    $routineCompletionTasks[$logId] = [];
+                }
+                $routineCompletionTasks[$logId][] = $row;
+            }
+        }
+    }
+} catch (Exception $e) {
+    error_log("Failed to load routine completion logs: " . $e->getMessage());
+}
 
 $welcome_role_label = getUserRoleLabel($_SESSION['user_id']);
 if (!$welcome_role_label) {
@@ -1181,6 +1253,29 @@ $formatParentNotificationMessage = static function (array $note): string {
         .upload-preview { max-width: 100px; max-height: 100px; border-radius: 50%; }
         .mother-badge { background: #e91e63; color: white; padding: 2px 6px; border-radius: 3px; font-size: 0.8em; }
         .father-badge { background: #2196f3; color: white; padding: 2px 6px; border-radius: 3px; font-size: 0.8em; }
+        .routine-completion-section { margin-top: 20px; background: #ffffff; border-radius: 8px; padding: 20px; box-shadow: 0 2px 6px rgba(0,0,0,0.08); }
+        .routine-completion-section h2 { margin-top: 0; }
+        .routine-completion-list { display: grid; gap: 12px; margin-top: 12px; }
+        .routine-completion-card { border: 1px solid #e3e7eb; border-radius: 10px; overflow: hidden; background: #fff; }
+        .routine-completion-card > summary { padding: 12px 16px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; gap: 12px; list-style: none; background: #f5f8fb; }
+        .routine-completion-card > summary::-webkit-details-marker { display: none; }
+        .completion-summary { display: grid; gap: 4px; }
+        .completion-title { font-weight: 700; color: #0d47a1; }
+        .completion-child { color: #455a64; font-size: 0.9rem; }
+        .completion-meta { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; color: #546e7a; font-size: 0.9rem; }
+        .completion-badge { padding: 2px 8px; border-radius: 999px; font-size: 0.75rem; font-weight: 700; }
+        .completion-badge.child { background: #e3f2fd; color: #0d47a1; }
+        .completion-badge.parent { background: #ffe0b2; color: #bf360c; }
+        .completion-body { padding: 12px 16px; display: grid; gap: 12px; }
+        .completion-times { display: grid; gap: 6px; color: #37474f; }
+        .completion-note { color: #bf360c; font-weight: 600; }
+        .completion-task-list { display: grid; gap: 8px; }
+        .completion-task-row { display: grid; gap: 6px; padding: 10px; border: 1px solid #e9edf2; border-radius: 8px; background: #f9fbfd; }
+        .completion-task-header { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+        .completion-task-title { font-weight: 600; color: #263238; }
+        .completion-task-meta { font-size: 0.9rem; color: #37474f; display: flex; gap: 10px; flex-wrap: wrap; }
+        .completion-task-meta strong { color: #455a64; }
+        .completion-task-empty { color: #666; font-style: italic; }
         .routine-analytics { margin-top: 20px; background: #fafafa; border-radius: 8px; padding: 20px; box-shadow: 0 2px 6px rgba(0,0,0,0.08); }
         .routine-analytics h2 { margin-top: 0; }
         .overtime-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin-top: 16px; }
@@ -1229,6 +1324,8 @@ $formatParentNotificationMessage = static function (array $note): string {
         @media (max-width: 768px) {
             .overtime-date > summary, .overtime-routine > summary { padding: 12px; }
             .ot-row-header { flex-direction: column; align-items: flex-start; }
+            .routine-completion-card > summary { flex-direction: column; align-items: flex-start; }
+            .completion-task-header { flex-direction: column; align-items: flex-start; }
         }
         @media (max-width: 768px) {
             .manage-family { padding: 8px; }
@@ -3237,6 +3334,73 @@ $formatParentNotificationMessage = static function (array $note): string {
                </div>
          <?php else: ?>
                <p>No children added yet. Add your first child below!</p>
+         <?php endif; ?>
+      </div>
+      <div class="routine-completion-section" id="routine-completion-section">
+         <h2>Routine Completion Timeline</h2>
+         <p>See when routines start and finish, task completion times, and status screen time between tasks.</p>
+         <?php if (empty($routineCompletionSessions)): ?>
+             <p class="completion-task-empty">No routine completion data yet.</p>
+         <?php else: ?>
+             <div class="routine-completion-list">
+                 <?php foreach ($routineCompletionSessions as $index => $session): ?>
+                     <?php
+                         $sessionId = (int) ($session['id'] ?? 0);
+                         $tasks = $routineCompletionTasks[$sessionId] ?? [];
+                         $startedAt = !empty($session['started_at']) ? date('m/d/Y g:i A', strtotime($session['started_at'])) : '--';
+                         $completedAt = !empty($session['completed_at']) ? date('m/d/Y g:i A', strtotime($session['completed_at'])) : '--';
+                         $completedBy = ($session['completed_by'] ?? '') === 'parent' ? 'parent' : 'child';
+                         $badgeLabel = $completedBy === 'parent' ? 'Manual' : 'Child';
+                         $openAttr = $index === 0 ? ' open' : '';
+                     ?>
+                     <details class="routine-completion-card"<?php echo $openAttr; ?>>
+                         <summary>
+                             <div class="completion-summary">
+                                 <div class="completion-title"><?php echo htmlspecialchars($session['routine_title'] ?? 'Routine'); ?></div>
+                                 <div class="completion-child"><?php echo htmlspecialchars($session['child_display_name'] ?? 'Child'); ?></div>
+                             </div>
+                             <div class="completion-meta">
+                                 <span>Ended: <?php echo htmlspecialchars($completedAt); ?></span>
+                                 <span class="completion-badge <?php echo $completedBy; ?>"><?php echo $badgeLabel; ?></span>
+                             </div>
+                         </summary>
+                         <div class="completion-body">
+                             <div class="completion-times">
+                                 <span>Started: <?php echo htmlspecialchars($startedAt); ?></span>
+                                 <span>Ended: <?php echo htmlspecialchars($completedAt); ?></span>
+                                 <?php if ($completedBy === 'parent'): ?>
+                                     <span class="completion-note">Completed by parent (no timing data).</span>
+                                 <?php endif; ?>
+                             </div>
+                             <div class="completion-task-list">
+                                 <?php if (empty($tasks)): ?>
+                                     <div class="completion-task-empty">No task timing data recorded.</div>
+                                 <?php else: ?>
+                                     <?php foreach ($tasks as $taskRow): ?>
+                                         <?php
+                                             $taskDoneAt = !empty($taskRow['completed_at']) ? date('g:i A', strtotime($taskRow['completed_at'])) : '--';
+                                             $statusSeconds = (int) ($taskRow['status_screen_seconds'] ?? 0);
+                                             $scheduledLabel = $formatDurationOrDash($taskRow['scheduled_seconds'] ?? null);
+                                             $actualLabel = $formatDurationOrDash($taskRow['actual_seconds'] ?? null);
+                                         ?>
+                                         <div class="completion-task-row">
+                                             <div class="completion-task-header">
+                                                 <span class="completion-task-title"><?php echo htmlspecialchars($taskRow['task_title'] ?? 'Task'); ?></span>
+                                                 <span class="completion-task-time">Task done: <?php echo htmlspecialchars($taskDoneAt); ?></span>
+                                             </div>
+                                             <div class="completion-task-meta">
+                                                 <span><strong>Scheduled:</strong> <?php echo htmlspecialchars($scheduledLabel); ?></span>
+                                                 <span><strong>Actual:</strong> <?php echo htmlspecialchars($actualLabel); ?></span>
+                                                 <span><strong>Status screen:</strong> <?php echo $formatDuration($statusSeconds); ?></span>
+                                             </div>
+                                         </div>
+                                     <?php endforeach; ?>
+                                 <?php endif; ?>
+                             </div>
+                         </div>
+                     </details>
+                 <?php endforeach; ?>
+             </div>
          <?php endif; ?>
       </div>
       <div class="routine-analytics">

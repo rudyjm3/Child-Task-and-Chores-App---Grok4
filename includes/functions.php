@@ -1209,6 +1209,117 @@ function logRoutinePointsAward($routine_id, $child_id, $task_points, $bonus_poin
     ]);
 }
 
+function ensureRoutineCompletionTables() {
+    global $db;
+    $db->exec("
+        CREATE TABLE IF NOT EXISTS routine_completion_logs (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            routine_id INT NOT NULL,
+            child_user_id INT NOT NULL,
+            parent_user_id INT NOT NULL,
+            completed_by ENUM('child','parent') NOT NULL DEFAULT 'child',
+            started_at DATETIME NULL,
+            completed_at DATETIME NOT NULL,
+            status_screen_seconds INT NOT NULL DEFAULT 0,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_routine_completion_parent (parent_user_id, completed_at),
+            INDEX idx_routine_completion_child (child_user_id, completed_at),
+            FOREIGN KEY (routine_id) REFERENCES routines(id) ON DELETE CASCADE,
+            FOREIGN KEY (child_user_id) REFERENCES users(id) ON DELETE CASCADE,
+            FOREIGN KEY (parent_user_id) REFERENCES users(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    ");
+    $db->exec("
+        CREATE TABLE IF NOT EXISTS routine_completion_tasks (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            completion_log_id INT NOT NULL,
+            routine_task_id INT NOT NULL,
+            sequence_order INT NOT NULL DEFAULT 0,
+            completed_at DATETIME NULL,
+            scheduled_seconds INT NULL,
+            actual_seconds INT NULL,
+            status_screen_seconds INT NOT NULL DEFAULT 0,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_routine_completion_task (completion_log_id, sequence_order),
+            FOREIGN KEY (completion_log_id) REFERENCES routine_completion_logs(id) ON DELETE CASCADE,
+            FOREIGN KEY (routine_task_id) REFERENCES routine_tasks(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    ");
+    try {
+        $db->exec("ALTER TABLE routine_completion_tasks ADD COLUMN IF NOT EXISTS scheduled_seconds INT NULL");
+    } catch (PDOException $e) {
+        // ignore if not supported
+    }
+    try {
+        $db->exec("ALTER TABLE routine_completion_tasks ADD COLUMN IF NOT EXISTS actual_seconds INT NULL");
+    } catch (PDOException $e) {
+        // ignore if not supported
+    }
+}
+
+function logRoutineCompletionSession($routine_id, $child_id, $parent_id, $completed_by, $started_at, $completed_at, array $tasks = []) {
+    global $db;
+    ensureRoutineCompletionTables();
+    $completed_by = in_array($completed_by, ['child', 'parent'], true) ? $completed_by : 'child';
+    $completed_at = $completed_at ?: date('Y-m-d H:i:s');
+    $statusTotal = 0;
+    foreach ($tasks as $task) {
+        $statusTotal += max(0, (int) ($task['status_screen_seconds'] ?? 0));
+    }
+    try {
+        $db->beginTransaction();
+        $stmt = $db->prepare("
+            INSERT INTO routine_completion_logs
+                (routine_id, child_user_id, parent_user_id, completed_by, started_at, completed_at, status_screen_seconds)
+            VALUES
+                (:routine_id, :child_id, :parent_id, :completed_by, :started_at, :completed_at, :status_total)
+        ");
+        $stmt->execute([
+            ':routine_id' => (int) $routine_id,
+            ':child_id' => (int) $child_id,
+            ':parent_id' => (int) $parent_id,
+            ':completed_by' => $completed_by,
+            ':started_at' => $started_at ?: null,
+            ':completed_at' => $completed_at,
+            ':status_total' => $statusTotal
+        ]);
+        $logId = (int) $db->lastInsertId();
+        if ($logId && !empty($tasks)) {
+            $taskStmt = $db->prepare("
+                INSERT INTO routine_completion_tasks
+                    (completion_log_id, routine_task_id, sequence_order, completed_at, scheduled_seconds, actual_seconds, status_screen_seconds)
+                VALUES
+                    (:log_id, :task_id, :sequence_order, :completed_at, :scheduled_seconds, :actual_seconds, :status_seconds)
+            ");
+            foreach ($tasks as $task) {
+                $scheduledSeconds = null;
+                if (array_key_exists('scheduled_seconds', $task)) {
+                    $scheduledSeconds = (int) ($task['scheduled_seconds'] ?? 0);
+                }
+                $actualSeconds = null;
+                if (array_key_exists('actual_seconds', $task)) {
+                    $actualSeconds = (int) ($task['actual_seconds'] ?? 0);
+                }
+                $taskStmt->execute([
+                    ':log_id' => $logId,
+                    ':task_id' => (int) ($task['routine_task_id'] ?? 0),
+                    ':sequence_order' => (int) ($task['sequence_order'] ?? 0),
+                    ':completed_at' => $task['completed_at'] ?: null,
+                    ':scheduled_seconds' => $scheduledSeconds,
+                    ':actual_seconds' => $actualSeconds,
+                    ':status_seconds' => max(0, (int) ($task['status_screen_seconds'] ?? 0))
+                ]);
+            }
+        }
+        $db->commit();
+        return $logId;
+    } catch (Exception $e) {
+        $db->rollBack();
+        error_log("Failed to log routine completion for routine $routine_id: " . $e->getMessage());
+        return false;
+    }
+}
+
 // Approve a task
 function approveTask($task_id, $instance_date = null) {
     global $db;
@@ -2959,10 +3070,11 @@ function createRoutine($parent_user_id, $child_user_id, $title, $start_time, $en
     return $db->lastInsertId();
 }
 
-function updateRoutine($routine_id, $title, $start_time, $end_time, $recurrence, $bonus_points, $time_of_day, $recurrence_days, $routine_date, $parent_user_id) {
+function updateRoutine($routine_id, $child_user_id, $title, $start_time, $end_time, $recurrence, $bonus_points, $time_of_day, $recurrence_days, $routine_date, $parent_user_id) {
     global $db;
-    $stmt = $db->prepare("UPDATE routines SET title = :title, start_time = :start_time, end_time = :end_time, recurrence = :recurrence, bonus_points = :bonus_points, time_of_day = :time_of_day, recurrence_days = :recurrence_days, routine_date = :routine_date WHERE id = :id AND parent_user_id = :parent_id");
+    $stmt = $db->prepare("UPDATE routines SET child_user_id = :child_id, title = :title, start_time = :start_time, end_time = :end_time, recurrence = :recurrence, bonus_points = :bonus_points, time_of_day = :time_of_day, recurrence_days = :recurrence_days, routine_date = :routine_date WHERE id = :id AND parent_user_id = :parent_id");
     return $stmt->execute([
+        ':child_id' => $child_user_id,
         ':title' => $title,
         ':start_time' => $start_time,
         ':end_time' => $end_time,

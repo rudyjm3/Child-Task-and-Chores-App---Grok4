@@ -401,7 +401,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 if ($tid > 0 && !isset($metricsById[$tid])) {
                     $metricsById[$tid] = [
                         'actual_seconds' => max(0, (int) ($entry['actual_seconds'] ?? 0)),
-                        'scheduled_seconds' => max(0, (int) ($entry['scheduled_seconds'] ?? 0))
+                        'scheduled_seconds' => max(0, (int) ($entry['scheduled_seconds'] ?? 0)),
+                        'completed_at_ms' => max(0, (int) ($entry['completed_at_ms'] ?? 0)),
+                        'status_screen_seconds' => max(0, (int) ($entry['status_screen_seconds'] ?? 0))
                     ];
                 }
             }
@@ -456,6 +458,45 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         logRoutinePointsAward($routineId, $childId, $taskPointsAwarded, $bonusAwarded);
   
           refreshRoutineGoalsForChild($childId, $routineId);
+        $parentIdForLog = (int) ($routine['parent_user_id'] ?? 0);
+        $startedAt = null;
+        if (!empty($flowStartTs)) {
+            $startedAt = date('Y-m-d H:i:s', (int) floor($flowStartTs / 1000));
+        }
+        $completedAt = null;
+        if (!empty($flowEndTs)) {
+            $completedAt = date('Y-m-d H:i:s', (int) floor($flowEndTs / 1000));
+        }
+        if (!$completedAt) {
+            $completedAt = date('Y-m-d H:i:s');
+        }
+        $completionTasks = [];
+        foreach ($taskLookup as $taskId => $taskRow) {
+            $metric = $metricsById[$taskId] ?? [];
+            $taskCompletedAt = null;
+            if (!empty($metric['completed_at_ms'])) {
+                $taskCompletedAt = date('Y-m-d H:i:s', (int) floor($metric['completed_at_ms'] / 1000));
+            }
+            $scheduledSeconds = null;
+            if (array_key_exists('scheduled_seconds', $metric)) {
+                $scheduledSeconds = (int) ($metric['scheduled_seconds'] ?? 0);
+            }
+            $actualSeconds = null;
+            if (array_key_exists('actual_seconds', $metric)) {
+                $actualSeconds = (int) ($metric['actual_seconds'] ?? 0);
+            }
+            $completionTasks[] = [
+                'routine_task_id' => $taskId,
+                'sequence_order' => (int) ($taskRow['sequence_order'] ?? 0),
+                'completed_at' => $taskCompletedAt,
+                'scheduled_seconds' => $scheduledSeconds,
+                'actual_seconds' => $actualSeconds,
+                'status_screen_seconds' => max(0, (int) ($metric['status_screen_seconds'] ?? 0))
+            ];
+        }
+        if ($parentIdForLog > 0) {
+            logRoutineCompletionSession($routineId, $childId, $parentIdForLog, 'child', $startedAt, $completedAt, $completionTasks);
+        }
 
         if (!empty($routine['parent_user_id'])) {
             $parentIdForNote = (int) $routine['parent_user_id'];
@@ -496,7 +537,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($isParentContext && isset($_POST['create_routine'])) {
         $childIds = array_values(array_filter(array_map('intval', $_POST['child_user_ids'] ?? [])));
+        if (empty($childIds)) {
+            $duplicateChildId = filter_input(INPUT_POST, 'duplicate_child_id', FILTER_VALIDATE_INT);
+            if ($duplicateChildId) {
+                $childIds = [(int) $duplicateChildId];
+            }
+        }
         $title = trim((string) filter_input(INPUT_POST, 'title', FILTER_SANITIZE_STRING));
+        $childIds = array_values(array_filter(array_map('intval', $_POST['child_user_ids'] ?? [])));
+        if (empty($childIds)) {
+            $child_id = filter_input(INPUT_POST, 'child_user_id', FILTER_VALIDATE_INT);
+            if ($child_id) {
+                $childIds = [(int) $child_id];
+            }
+        }
         $start_time = filter_input(INPUT_POST, 'start_time', FILTER_SANITIZE_STRING);
         $end_time = filter_input(INPUT_POST, 'end_time', FILTER_SANITIZE_STRING);
         $recurrence = filter_input(INPUT_POST, 'recurrence', FILTER_SANITIZE_STRING);
@@ -572,6 +626,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif ($isParentContext && isset($_POST['update_routine'])) {
         $routine_id = filter_input(INPUT_POST, 'routine_id', FILTER_VALIDATE_INT);
         $title = trim((string) filter_input(INPUT_POST, 'title', FILTER_SANITIZE_STRING));
+        $childIds = array_values(array_filter(array_map('intval', $_POST['child_user_ids'] ?? [])));
+        if (empty($childIds)) {
+            $child_id = filter_input(INPUT_POST, 'child_user_id', FILTER_VALIDATE_INT);
+            if ($child_id) {
+                $childIds = [(int) $child_id];
+            }
+        }
         $start_time = filter_input(INPUT_POST, 'start_time', FILTER_SANITIZE_STRING);
         $end_time = filter_input(INPUT_POST, 'end_time', FILTER_SANITIZE_STRING);
         $recurrence = filter_input(INPUT_POST, 'recurrence', FILTER_SANITIZE_STRING);
@@ -597,6 +658,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!$routine_id || !routineBelongsToParent($routine_id, $family_root_id)) {
             $errors[] = 'Unable to locate that routine for editing.';
         }
+        if (empty($childIds)) {
+            $errors[] = 'Select a child from your family for this routine.';
+        } else {
+            $childIds = array_values(array_filter($childIds, static function ($id) use ($family_root_id) {
+                return $id > 0 && routineChildBelongsToFamily($id, $family_root_id);
+            }));
+            if (empty($childIds)) {
+                $errors[] = 'Select a child from your family for this routine.';
+            }
+        }
         if ($title === '') {
             $errors[] = 'Provide a title for the routine.';
         }
@@ -615,10 +686,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             global $db;
             try {
                 $db->beginTransaction();
-                updateRoutine($routine_id, $title, $start_time, $end_time, $recurrence, $bonus_points, $time_of_day, $recurrence_days, $routine_date, $family_root_id);
+                $currentChildId = null;
+                $childStmt = $db->prepare("SELECT child_user_id FROM routines WHERE id = :id AND parent_user_id = :parent_id");
+                $childStmt->execute([':id' => $routine_id, ':parent_id' => $family_root_id]);
+                $currentChildId = (int) $childStmt->fetchColumn();
+
+                $primaryChildId = $childIds[0];
+                if ($currentChildId && in_array($currentChildId, $childIds, true)) {
+                    $primaryChildId = $currentChildId;
+                }
+                updateRoutine($routine_id, $primaryChildId, $title, $start_time, $end_time, $recurrence, $bonus_points, $time_of_day, $recurrence_days, $routine_date, $family_root_id);
                 replaceRoutineTasks($routine_id, $normalizedTasks);
+                $extraChildren = array_values(array_filter($childIds, static function ($id) use ($primaryChildId) {
+                    return (int) $id !== (int) $primaryChildId;
+                }));
+                foreach ($extraChildren as $cid) {
+                    $newRoutineId = createRoutine($family_root_id, $cid, $title, $start_time, $end_time, $recurrence, $bonus_points, $time_of_day, $recurrence_days, $routine_date, $_SESSION['user_id']);
+                    replaceRoutineTasks($newRoutineId, $normalizedTasks);
+                }
                 $db->commit();
-                $messages[] = ['type' => 'success', 'text' => 'Routine updated successfully.'];
+                if (!empty($extraChildren)) {
+                    $messages[] = ['type' => 'success', 'text' => 'Routine updated and copied to additional children.'];
+                } else {
+                    $messages[] = ['type' => 'success', 'text' => 'Routine updated successfully.'];
+                }
             } catch (Exception $e) {
                 $db->rollBack();
                 error_log('Routine update failed: ' . $e->getMessage());
@@ -626,6 +717,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $editRoutineStates[$routine_id] = $sanitizedStructure;
                 $editFormErrors[$routine_id] = true;
                 $editFieldOverrides[$routine_id] = [
+                    'child_user_ids' => $childIds,
                     'title' => $title,
                     'start_time' => $start_time,
                     'end_time' => $end_time,
@@ -642,6 +734,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $editRoutineStates[$routine_id] = $sanitizedStructure;
                 $editFormErrors[$routine_id] = true;
                 $editFieldOverrides[$routine_id] = [
+                    'child_user_ids' => $childIds,
                     'title' => $title,
                     'start_time' => $start_time,
                     'end_time' => $end_time,
@@ -879,6 +972,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $shouldLogCompletion = $childId > 0 && $allSelected && $pendingBefore > 0;
                 if ($childId > 0 && ($awardedPoints > 0 || $bonusAwarded > 0 || $shouldLogCompletion)) {
                     logRoutinePointsAward($routine_id, $childId, $awardedPoints, $bonusAwarded);
+                }
+                if ($shouldLogCompletion) {
+                    $parentIdForLog = (int) ($routineData['parent_user_id'] ?? 0);
+                    if ($parentIdForLog > 0) {
+                        $completionTasks = [];
+                        foreach ($tasks as $task) {
+                            $completionTasks[] = [
+                                'routine_task_id' => (int) ($task['id'] ?? 0),
+                                'sequence_order' => (int) ($task['sequence_order'] ?? 0),
+                                'completed_at' => null,
+                                'scheduled_seconds' => null,
+                                'actual_seconds' => null,
+                                'status_screen_seconds' => 0
+                            ];
+                        }
+                        logRoutineCompletionSession($routine_id, $childId, $parentIdForLog, 'parent', null, date('Y-m-d H:i:s'), $completionTasks);
+                    }
                 }
                 $summaryParts = [];
                 if ($awardedPoints > 0) {
@@ -1184,11 +1294,11 @@ margin-bottom: 20px;}
         .collapsible-card summary::marker { display: none; }
         .child-select-grid { /*display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 14px;*/ display: flex; gap: 15px;}
         .child-select-card { border: none; border-radius: 50%; padding: 0; background: transparent; display: grid; justify-items: center; gap: 8px; cursor: pointer; position: relative; }
-        .child-select-card input[type="checkbox"] { position: absolute; opacity: 0; width: 0; height: 0; pointer-events: none; }
+        .child-select-card input[type="checkbox"], .child-select-card input[type="radio"] { position: absolute; opacity: 0; width: 0; height: 0; pointer-events: none; }
         .child-select-card img { width: 52px; height: 52px; border-radius: 50%; object-fit: cover; box-shadow: 0 2px 6px rgba(0,0,0,0.15); transition: box-shadow 150ms ease, transform 150ms ease; }
         .child-select-card strong { font-size: 13px; width: min-content; text-align: center; transition: color 150ms ease, text-shadow 150ms ease; }
-        .child-select-card:has(input[type="checkbox"]:checked) img { box-shadow: 0 0 0 4px rgba(100,181,246,0.8), 0 0 14px rgba(100,181,246,0.8); transform: translateY(-2px); }
-        .child-select-card:has(input[type="checkbox"]:checked) strong { color: #0d47a1; text-shadow: 0 1px 8px rgba(100,181,246,0.8); }
+        .child-select-card:has(input[type="checkbox"]:checked) img, .child-select-card:has(input[type="radio"]:checked) img { box-shadow: 0 0 0 4px rgba(100,181,246,0.8), 0 0 14px rgba(100,181,246,0.8); transform: translateY(-2px); }
+        .child-select-card:has(input[type="checkbox"]:checked) strong, .child-select-card:has(input[type="radio"]:checked) strong { color: #0d47a1; text-shadow: 0 1px 8px rgba(100,181,246,0.8); }
         .collapse-toggle { background: #1e88e5; color: #fff; border: none; padding: 8px 14px; border-radius: 6px; cursor: pointer; font-weight: 600; display: inline-flex; align-items: center; gap: 8px; }
         .collapsible-card[open] .collapse-toggle { background: #1565c0; }
         .collapsible-content { margin-top: 12px; display: none; }
@@ -1644,6 +1754,7 @@ margin-bottom: 20px;}
                                             <?php endforeach; ?>
                                         </div>
                                     </div>
+                                    <input type="hidden" name="duplicate_child_id" data-role="duplicate-child-id" value="">
                                     <div class="form-group">
                                         <label for="title">Routine Title</label>
                                         <input type="text" id="title" name="title" required <?php echo $createFormHasErrors ? 'value="' . htmlspecialchars($_POST['title'] ?? '', ENT_QUOTES) . '"' : ''; ?>>
@@ -2244,6 +2355,14 @@ margin-bottom: 20px;}
                                     $recurrenceDaysRaw = $override['recurrence_days'] ?? ($routine['recurrence_days'] ?? '');
                                     $recurrenceDays = array_values(array_filter(array_map('trim', explode(',', (string) $recurrenceDaysRaw))));
                                     $routineDateValue = $override['routine_date'] ?? ($routine['routine_date'] ?? '');
+                                    $childOverride = $override['child_user_ids'] ?? null;
+                                    $selectedChildIds = [];
+                                    if (is_array($childOverride)) {
+                                        $selectedChildIds = array_values(array_filter(array_map('intval', $childOverride)));
+                                    }
+                                    if (empty($selectedChildIds)) {
+                                        $selectedChildIds = [(int) ($routine['child_user_id'] ?? 0)];
+                                    }
                                     if ($routineDateValue === '' && !empty($routine['created_at'])) {
                                         $routineDateValue = date('Y-m-d', strtotime($routine['created_at']));
                                     }
@@ -2258,6 +2377,30 @@ margin-bottom: 20px;}
                                             <form method="POST" autocomplete="off">
                                                 <input type="hidden" name="routine_id" value="<?php echo (int) $routine['id']; ?>">
                                                 <div class="form-grid">
+                                                    <?php if (!empty($children)): ?>
+                                                        <div class="form-group child-select-group">
+                                                            <label>Assign to Child(ren)</label>
+                                                            <div class="child-select-grid">
+                                                                <?php foreach ($children as $child): ?>
+                                                                    <?php
+                                                                        $cid = (int) ($child['child_user_id'] ?? 0);
+                                                                        $checked = in_array($cid, $selectedChildIds, true) ? 'checked' : '';
+                                                                        $avatar = !empty($child['child_avatar']) ? $child['child_avatar'] : 'images/default-avatar.png';
+                                                                        $childName = trim((string) ($child['child_name'] ?? ''));
+                                                                        $childParts = $childName === '' ? [] : preg_split('/\s+/', $childName);
+                                                                        $childFirst = $childParts[0] ?? $childName;
+                                                                    ?>
+                                                                    <label class="child-select-card">
+                                                                        <input type="checkbox" name="child_user_ids[]" value="<?php echo $cid; ?>" <?php echo $checked; ?>>
+                                                                        <img src="<?php echo htmlspecialchars($avatar); ?>" alt="<?php echo htmlspecialchars($child['child_name'] ?? ''); ?>">
+                                                                        <strong><?php echo htmlspecialchars($childFirst); ?></strong>
+                                                                    </label>
+                                                                <?php endforeach; ?>
+                                                            </div>
+                                                        </div>
+                                                    <?php else: ?>
+                                                        <p class="no-data">Add children to your family profile before editing routines.</p>
+                                                    <?php endif; ?>
                                                     <div class="form-group">
                                                         <label>Title</label>
                                                         <input type="text" name="title" value="<?php echo $titleValue; ?>" required>
@@ -2623,8 +2766,12 @@ margin-bottom: 20px;}
                 }
                 const routineDate = routine.routine_date || routine.created_at || '';
                 if (routineDate) {
-                    const parsed = new Date(routineDate);
-                    const dateKey = Number.isNaN(parsed.getTime()) ? routineDate.slice(0, 10) : getLocalDateKey(parsed);
+                    const rawDate = String(routineDate);
+                    const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(rawDate);
+                    const parsed = dateOnly ? null : new Date(rawDate);
+                    const dateKey = dateOnly
+                        ? rawDate
+                        : (Number.isNaN(parsed.getTime()) ? rawDate.slice(0, 10) : getLocalDateKey(parsed));
                     return { scheduled: dateKey === todayKey, dateKey };
                 }
                 return { scheduled: true };
@@ -3042,6 +3189,8 @@ margin-bottom: 20px;}
                     this.starAnimationTimers = [];
                     this.summaryPlayed = false;
                     this.flowStartTs = null;
+                    this.statusScreenStartTs = null;
+                    this.pendingStatusTaskId = null;
 
                     this.initializeTaskDurations();
                     this.resetWarningState();
@@ -3911,6 +4060,8 @@ margin-bottom: 20px;}
                     this.taskResults = [];
                     this.totalEarnedPoints = 0;
                     this.overtimeBuffer = [];
+                    this.statusScreenStartTs = null;
+                    this.pendingStatusTaskId = null;
                     if (this.openButton) {
                         this.openButton.textContent = 'Start Routine';
                     }
@@ -3979,6 +4130,8 @@ margin-bottom: 20px;}
                     this.showScene('task');
                     this.startTask(this.currentIndex);
                     this.flowStartTs = Date.now();
+                    this.statusScreenStartTs = null;
+                    this.pendingStatusTaskId = null;
                     if (this.summaryBonusTotalEl) {
                         this.summaryBonusTotalEl.textContent = '0';
                     }
@@ -4119,14 +4272,18 @@ margin-bottom: 20px;}
                     }
                     this.resetWarningState();
                     this.totalEarnedPoints += awardedPoints;
+                    const completedAtMs = Date.now();
                     this.taskResults.push({
                         id: parseInt(this.currentTask.id, 10) || 0,
                         title: this.currentTask.title,
                         point_value: pointValue,
                         actual_seconds: actualSeconds,
                         scheduled_seconds: scheduled,
-                        awarded_points: awardedPoints
+                        awarded_points: awardedPoints,
+                        completed_at_ms: completedAtMs,
+                        status_screen_seconds: 0
                     });
+                    this.pendingStatusTaskId = parseInt(this.currentTask.id, 10) || 0;
 
                     this.updateTaskStatus(this.currentTask.id, 'completed');
                     this.currentTask.status = 'completed';
@@ -4178,6 +4335,23 @@ margin-bottom: 20px;}
                     if (this.statusNextButton) {
                         const label = this.currentIndex + 1 < this.tasks.length ? 'Next Task' : 'Summary';
                         this.statusNextButton.textContent = label;
+                    }
+                }
+
+                captureStatusDuration() {
+                    if (!this.statusScreenStartTs || !this.pendingStatusTaskId) {
+                        this.statusScreenStartTs = null;
+                        return;
+                    }
+                    const durationSeconds = Math.max(0, Math.round((Date.now() - this.statusScreenStartTs) / 1000));
+                    this.statusScreenStartTs = null;
+                    const taskId = this.pendingStatusTaskId;
+                    this.pendingStatusTaskId = null;
+                    for (let i = this.taskResults.length - 1; i >= 0; i--) {
+                        if (this.taskResults[i].id === taskId) {
+                            this.taskResults[i].status_screen_seconds = durationSeconds;
+                            break;
+                        }
                     }
                 }
 
@@ -4243,7 +4417,9 @@ margin-bottom: 20px;}
                     const metrics = this.taskResults.map(result => ({
                         id: result.id,
                         actual_seconds: result.actual_seconds,
-                        scheduled_seconds: result.scheduled_seconds
+                        scheduled_seconds: result.scheduled_seconds,
+                        completed_at_ms: result.completed_at_ms || 0,
+                        status_screen_seconds: result.status_screen_seconds || 0
                     }));
                     const overtimeCount = this.taskResults.filter(result => result.scheduled_seconds > 0 && result.actual_seconds > result.scheduled_seconds).length;
                     payload.append('task_metrics', JSON.stringify(metrics));
@@ -4318,6 +4494,10 @@ margin-bottom: 20px;}
                 }
 
                 showScene(name) {
+                    const previousScene = this.currentScene;
+                    if (previousScene === 'status' && name !== 'status') {
+                        this.captureStatusDuration();
+                    }
                     this.currentScene = name;
                     this.sceneMap.forEach((scene, key) => {
                         if (key === name) {
@@ -4354,6 +4534,7 @@ margin-bottom: 20px;}
                         this.resetWarningState();
                     }
                     if (name === 'status') {
+                        this.statusScreenStartTs = Date.now();
                         this.handleStatusSceneEnter();
                     } else {
                         this.clearStatusAnimations();
@@ -4633,6 +4814,35 @@ margin-bottom: 20px;}
                 childInputs.forEach(input => {
                     input.checked = String(input.value) === String(payload.child_user_id || '');
                 });
+                const duplicateChildInput = form.querySelector('[data-role="duplicate-child-id"]');
+                if (duplicateChildInput) {
+                    duplicateChildInput.value = payload.child_user_id ? String(payload.child_user_id) : '';
+                }
+                if (!form.dataset.duplicateChildBound) {
+                    form.addEventListener('change', (event) => {
+                        const target = event.target;
+                        if (!(target instanceof HTMLInputElement)) {
+                            return;
+                        }
+                        if (target.name !== 'child_user_ids[]') {
+                            return;
+                        }
+                        const holder = form.querySelector('[data-role="duplicate-child-id"]');
+                        if (!holder) {
+                            return;
+                        }
+                        if (target.checked) {
+                            holder.value = String(target.value || '');
+                        } else {
+                            const anyChecked = Array.from(form.querySelectorAll('input[name="child_user_ids[]"]'))
+                                .some(input => input.checked);
+                            if (!anyChecked) {
+                                holder.value = '';
+                            }
+                        }
+                    });
+                    form.dataset.duplicateChildBound = '1';
+                }
 
                 const titleInput = form.querySelector('input[name="title"]');
                 const timeOfDaySelect = form.querySelector('select[name="time_of_day"]');
