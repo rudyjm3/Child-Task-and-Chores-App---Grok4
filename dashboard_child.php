@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 // dashboard_child.php - Child dashboard
 // Purpose: Display child dashboard with progress and task/reward links
 // Inputs: Session data
@@ -13,6 +13,7 @@ if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'child') {
     header("Location: login.php");
     exit;
 }
+$currentPage = basename($_SERVER['PHP_SELF']);
 
 // Ensure friendly display name
 if (!isset($_SESSION['name'])) {
@@ -20,6 +21,8 @@ if (!isset($_SESSION['name'])) {
 }
 
 $data = getDashboardData($_SESSION['user_id']);
+
+require_once __DIR__ . '/includes/notifications_bootstrap.php';
 
 // Fetch routines for child dashboard
 $routines = getRoutines($_SESSION['user_id']);
@@ -311,40 +314,39 @@ $buildChildNotificationViewLink = static function (array $note): ?string {
             .points-summary { display: flex; flex-direction: column; align-items: center; text-align: center; }
             .points-left { display: contents; }
         }
-        /* Notifications Modal */
-        .notification-trigger { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; background: #fff; border: 2px solid #ffd28a; border-radius: 50%; box-shadow: 0 2px 4px rgba(0,0,0,0.12); cursor: pointer; }
-        .notification-trigger i { font-size: 18px; color: #ef6c00; }
-        .notification-badge { position: absolute; top: -6px; right: -8px; background: #d32f2f; color: #fff; border-radius: 12px; padding: 2px 6px; font-size: 0.75rem; font-weight: 700; min-width: 22px; text-align: center; }
-        .avatar-notification { position: absolute; top: 0; right: 0; transform: translate(35%, -35%); }
         .week-item-badge { display: inline-flex; align-items: center; gap: 4px; margin-left: 8px; padding: 2px 8px; border-radius: 999px; font-size: 0.7rem; font-weight: 700; background: #4caf50; color: #fff; text-transform: uppercase; }
         .week-item-badge.compact { justify-content: center; margin-left: 6px; width: 20px; height: 20px; padding: 0; border-radius: 50%; font-size: 0.65rem; }
         .week-item-badge.overdue { background: #d9534f; }
         .week-item-badge-group { display: inline-flex; align-items: center; }
-        .nav-links { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: center; margin-top: 8px; }
-        .nav-button { display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; background: #eef4ff; border: 1px solid #d5def0; border-radius: 8px; color: #0d47a1; font-weight: 700; text-decoration: none; }
-        .nav-button:hover { background: #dce8ff; }
+        .page-header { padding: 18px 16px 12px; display: grid; gap: 12px; text-align: left; }
+        .page-header-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+        .page-header-title { display: grid; gap: 6px; }
+        .page-header-title h1 { margin: 0; font-size: 1.1rem; color: #2c2c2c; }
+        .page-header-meta { margin: 0; color: #616161; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 0.6rem; }
+        .page-header-actions { display: flex; gap: 10px; align-items: center; }
+        .page-header-action { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 50%; border: 1px solid #dfe8df; background: #fff; color: #6d6d6d; box-shadow: 0 6px 14px rgba(0,0,0,0.08); cursor: pointer; }
+        .page-header-action i { font-size: 1.1rem; }
+        .page-header-action:hover { color: #4caf50; border-color: #c8e6c9; }
+        .nav-links { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: center; padding: 10px 12px; border-radius: 18px; background: #fff; border: 1px solid #eceff4; box-shadow: 0 8px 18px rgba(0,0,0,0.06); }
+        .nav-link,
+        .nav-mobile-link { flex: 1 1 90px; display: grid; justify-items: center; gap: 4px; text-decoration: none; color: #6d6d6d; font-weight: 600; font-size: 0.75rem; border-radius: 12px; padding: 6px 4px; }
+        .nav-link i,
+        .nav-mobile-link i { font-size: 1.2rem; }
+        .nav-link.is-active,
+        .nav-mobile-link.is-active { color: #4caf50; }
+        .nav-link.is-active i,
+        .nav-mobile-link.is-active i { color: #4caf50; }
+        .nav-link:hover,
+        .nav-mobile-link:hover { color: #4caf50; }
+        .nav-link-button { background: transparent; border: none; cursor: pointer; }
+        .nav-mobile-bottom { display: none; gap: 6px; padding: 10px 12px; border-top: 1px solid #e0e0e0; background: #fff; position: fixed; left: 0; right: 0; bottom: 0; z-index: 900; }
+        .nav-mobile-bottom .nav-mobile-link { flex: 1; }
+        @media (max-width: 768px) {
+            .nav-links { display: none; }
+            .nav-mobile-bottom { display: flex; justify-content: space-between; }
+            body { padding-bottom: 72px; }
+        }
         .no-scroll { overflow: hidden; }
-        .notifications-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: none; align-items: center; justify-content: center; z-index: 4000; padding: 14px; }
-        .notifications-modal.open { display: flex; }
-        .notifications-card { background: #fff; border-radius: 10px; max-width: 620px; width: min(620px, 100%); max-height: 80vh; overflow: hidden; box-shadow: 0 12px 32px rgba(0,0,0,0.25); display: grid; grid-template-rows: auto auto 1fr; }
-        .notifications-card header { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid #e0e0e0; }
-        .notifications-card h2 { margin: 0; font-size: 1.05rem; }
-        .notifications-close { background: transparent; border: none; font-size: 1.3rem; cursor: pointer; color: #555; }
-        .notification-tabs { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 8px; padding: 10px 14px 0 14px; }
-        .tab-button { padding: 8px; border: 1px solid #ffd28a; background: #fff; border-radius: 8px; font-weight: 700; color: #ef6c00; cursor: pointer; }
-        .tab-button.active { background: #ffe0b2; }
-        .notification-body { padding: 0 14px 14px 14px; overflow-y: auto; }
-        .notification-panel { display: none; }
-        .notification-panel.active { display: block; }
-        .notification-list { list-style: none; padding: 0; margin: 12px 0; display: grid; gap: 10px; }
-        .notification-bulk { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-weight: 600; color: #37474f; }
-        .notification-bulk input { width: 18px; height: 18px; }
-        .notification-item { padding: 10px; background: #fff; border: 1px solid #e0e0e0; border-radius: 8px; display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
-        .notification-item input[type="checkbox"] { width: 19.8px; height: 19.8px; }
-        .notification-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 8px; }
-        .notification-actions .button.danger { background-color: #d32f2f; }
-        .notification-title { font-weight: 700; color: #ef6c00; }
-        .notification-action-summary { margin-top: 10px; padding: 8px 10px; border-radius: 8px; background: #fff3e0; color: #ef6c00; font-weight: 700; }
         .goal-celebration { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(255, 248, 225, 0.92); z-index: 5000; }
         .goal-celebration.active { display: flex; }
         .goal-celebration-card { background: #fff; border-radius: 18px; padding: 24px 26px; text-align: center; box-shadow: 0 18px 40px rgba(0,0,0,0.25); position: relative; animation: pop-in 300ms ease; }
@@ -434,57 +436,6 @@ $buildChildNotificationViewLink = static function (array $note): ?string {
     </style>
     <script>
         document.addEventListener('DOMContentLoaded', function () {
-            const childNotifyTrigger = document.querySelector('[data-child-notify-trigger]');
-            const childModal = document.querySelector('[data-child-notifications-modal]');
-            const childClose = childModal ? childModal.querySelector('[data-child-notifications-close]') : null;
-            const childTabButtons = childModal ? childModal.querySelectorAll('.tab-button') : [];
-            const childPanels = childModal ? childModal.querySelectorAll('.notification-panel') : [];
-            const childAction = {
-                summary: <?php echo json_encode($notificationActionSummary); ?>,
-                tab: <?php echo json_encode($notificationActionTab); ?>
-            };
-            const setChildTab = (target) => {
-                childTabButtons.forEach(btn => btn.classList.toggle('active', btn.getAttribute('data-tab') === target));
-                childPanels.forEach(panel => panel.classList.toggle('active', panel.getAttribute('data-tab-panel') === target));
-            };
-            if (childModal) {
-                childModal.querySelectorAll('[data-child-bulk-action]').forEach((bulk) => {
-                    bulk.addEventListener('change', () => {
-                        const form = bulk.closest('form');
-                        if (!form) return;
-                        const shouldCheck = bulk.checked;
-                        form.querySelectorAll('input[name="notification_ids[]"]').forEach((input) => {
-                            input.checked = shouldCheck;
-                        });
-                    });
-                });
-            }
-        const openChildModal = () => {
-            if (!childModal) return;
-            childModal.classList.add('open');
-            document.body.classList.add('no-scroll');
-        };
-        const closeChildModal = () => {
-            if (!childModal) return;
-            childModal.classList.remove('open');
-            document.body.classList.remove('no-scroll');
-        };
-            if (childNotifyTrigger && childModal) {
-                childNotifyTrigger.addEventListener('click', openChildModal);
-                if (childClose) childClose.addEventListener('click', closeChildModal);
-                childModal.addEventListener('click', (e) => { if (e.target === childModal) closeChildModal(); });
-                document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeChildModal(); });
-                childTabButtons.forEach(btn => {
-                    btn.addEventListener('click', () => setChildTab(btn.getAttribute('data-tab')));
-                });
-            }
-            if (childAction.summary && childModal) {
-                openChildModal();
-                if (childAction.tab) {
-                    setChildTab(childAction.tab);
-                }
-            }
-
             const rewardsOpen = document.querySelector('[data-rewards-open]');
             const rewardsModal = document.querySelector('[data-rewards-modal]');
             const rewardsClose = rewardsModal ? rewardsModal.querySelector('[data-rewards-close]') : null;
@@ -732,127 +683,62 @@ $buildChildNotificationViewLink = static function (array $note): ?string {
     </script>
 </head>
 <body class="child-theme">
-    <header>
-     <h1>Child Dashboard</h1>
-     <div class="nav-links">
-        <a class="nav-button" href="logout.php">Logout</a>
-        <button type="button" class="nav-button" data-help-open>Help</button>
+    <?php
+        $dashboardActive = $currentPage === 'dashboard_child.php';
+        $routinesActive = $currentPage === 'routine.php';
+        $tasksActive = $currentPage === 'task.php';
+        $goalsActive = $currentPage === 'goal.php';
+        $rewardsActive = $currentPage === 'rewards.php';
+        $profileActive = $currentPage === 'profile.php';
+    ?>
+    <header class="page-header">
+     <div class="page-header-top">
+        <div class="page-header-title">
+            <h1>Child Dashboard</h1>
+            <p class="page-header-meta">Welcome back, <?php echo htmlspecialchars($_SESSION['name'] ?? $_SESSION['username']); ?></p>
+        </div>
+        <div class="page-header-actions">
+            <button type="button" class="page-header-action notification-trigger" data-child-notify-trigger aria-label="Notifications">
+                <i class="fa-solid fa-bell"></i>
+                <?php if ($notificationCount > 0): ?>
+                    <span class="notification-badge"><?php echo (int)$notificationCount; ?></span>
+                <?php endif; ?>
+            </button>
+            <a class="page-header-action" href="logout.php" aria-label="Logout">
+                <i class="fa-solid fa-right-from-bracket"></i>
+            </a>
+        </div>
      </div>
+     <nav class="nav-links" aria-label="Primary">
+        <a class="nav-link<?php echo $dashboardActive ? ' is-active' : ''; ?>" href="dashboard_child.php"<?php echo $dashboardActive ? ' aria-current="page"' : ''; ?>>
+            <i class="fa-solid fa-house"></i>
+            <span>Dashboard</span>
+        </a>
+        <a class="nav-link<?php echo $routinesActive ? ' is-active' : ''; ?>" href="routine.php"<?php echo $routinesActive ? ' aria-current="page"' : ''; ?>>
+            <i class="fa-solid fa-rotate"></i>
+            <span>Routines</span>
+        </a>
+        <a class="nav-link<?php echo $tasksActive ? ' is-active' : ''; ?>" href="task.php"<?php echo $tasksActive ? ' aria-current="page"' : ''; ?>>
+            <i class="fa-solid fa-list-check"></i>
+            <span>Tasks</span>
+        </a>
+        <a class="nav-link<?php echo $goalsActive ? ' is-active' : ''; ?>" href="goal.php"<?php echo $goalsActive ? ' aria-current="page"' : ''; ?>>
+            <i class="fa-solid fa-bullseye"></i>
+            <span>Goals</span>
+        </a>
+        <a class="nav-link<?php echo $rewardsActive ? ' is-active' : ''; ?>" href="rewards.php"<?php echo $rewardsActive ? ' aria-current="page"' : ''; ?>>
+            <i class="fa-solid fa-gift"></i>
+            <span>Rewards</span>
+        </a>
+        <a class="nav-link<?php echo $profileActive ? ' is-active' : ''; ?>" href="profile.php?self=1"<?php echo $profileActive ? ' aria-current="page"' : ''; ?>>
+            <i class="fa-solid fa-user"></i>
+            <span>Profile</span>
+        </a>
+      </nav>
     </header>
-      <div class="notifications-modal" data-child-notifications-modal>
-      <div class="notifications-card">
-         <header>
-            <h2>Notifications</h2>
-            <button type="button" class="notifications-close" aria-label="Close notifications" data-child-notifications-close>&times;</button>
-         </header>
-         <div class="notification-tabs" data-role="notification-tabs">
-            <button type="button" class="tab-button active" data-tab="new">New (<?php echo count($notificationsNew); ?>)</button>
-            <button type="button" class="tab-button" data-tab="read">Read (<?php echo count($notificationsRead); ?>)</button>
-            <button type="button" class="tab-button" data-tab="deleted">Deleted (<?php echo count($notificationsDeleted); ?>)</button>
-         </div>
-         <div class="notification-body">
-            <?php if (!empty($notificationActionSummary)): ?>
-               <div class="notification-action-summary"><?php echo htmlspecialchars($notificationActionSummary); ?></div>
-            <?php endif; ?>
-            <form method="POST" action="dashboard_child.php" data-tab-panel="new" class="notification-panel active">
-               <?php if (!empty($notificationsNew)): ?>
-                  <label class="notification-bulk">
-                     <input type="checkbox" data-child-bulk-action="mark_notifications_read">
-                     Mark all as read
-                  </label>
-                  <ul class="notification-list">
-                     <?php foreach ($notificationsNew as $note): ?>
-                        <li class="notification-item">
-                           <input type="checkbox" name="notification_ids[]" value="<?php echo (int)$note['id']; ?>" aria-label="Mark notification as read">
-                           <div>
-                              <div><?php echo $formatChildNotificationMessage($note); ?></div>
-                              <div class="notification-meta">
-                                 <?php echo htmlspecialchars(date('m/d/Y h:i A', strtotime($note['created_at']))); ?>
-                                 <?php if (!empty($note['type'])): ?> | <?php echo htmlspecialchars(str_replace('_', ' ', $note['type'])); ?><?php endif; ?>
-                                 <?php
-                                    $viewLink = $buildChildNotificationViewLink($note);
-                                    if (!empty($viewLink)) {
-                                        echo ' | <a href="' . htmlspecialchars($viewLink) . '">View</a>';
-                                    }
-                                 ?>
-                              </div>
-                           </div>
-                        </li>
-                     <?php endforeach; ?>
-                  </ul>
-                  <div class="notification-actions">
-                     <button type="submit" name="mark_notifications_read" class="button">Mark Selected as Read</button>
-                  </div>
-               <?php else: ?>
-                  <p class="notification-meta" style="margin: 12px 0;">No new notifications.</p>
-               <?php endif; ?>
-            </form>
+    <?php include __DIR__ . "/includes/notifications_child.php"; ?>
 
-            <form method="POST" action="dashboard_child.php" data-tab-panel="read" class="notification-panel">
-               <?php if (!empty($notificationsRead)): ?>
-                  <label class="notification-bulk">
-                     <input type="checkbox" data-child-bulk-action="move_notifications_trash">
-                     Move all to deleted
-                  </label>
-                  <ul class="notification-list">
-                     <?php foreach ($notificationsRead as $note): ?>
-                        <li class="notification-item">
-                           <input type="checkbox" name="notification_ids[]" value="<?php echo (int)$note['id']; ?>" aria-label="Move to deleted">
-                           <div>
-                              <div><?php echo $formatChildNotificationMessage($note); ?></div>
-                              <div class="notification-meta">
-                                 <?php echo htmlspecialchars(date('m/d/Y h:i A', strtotime($note['created_at']))); ?>
-                                 <?php if (!empty($note['type'])): ?> | <?php echo htmlspecialchars(str_replace('_', ' ', $note['type'])); ?><?php endif; ?>
-                                 <?php
-                                    $viewLink = $buildChildNotificationViewLink($note);
-                                    if (!empty($viewLink)) {
-                                        echo ' | <a href="' . htmlspecialchars($viewLink) . '">View</a>';
-                                    }
-                                 ?>
-                              </div>
-                           </div>
-                           <button type="submit" name="trash_single" value="<?php echo (int)$note['id']; ?>" class="trash-button" aria-label="Move to deleted"><i class="fa-solid fa-trash"></i></button>
-                        </li>
-                     <?php endforeach; ?>
-                  </ul>
-                  <div class="notification-actions">
-                     <button type="submit" name="move_notifications_trash" class="button">Move Selected to Deleted</button>
-                  </div>
-               <?php else: ?>
-                  <p class="notification-meta" style="margin: 12px 0;">No read notifications.</p>
-               <?php endif; ?>
-            </form>
-
-            <form method="POST" action="dashboard_child.php" data-tab-panel="deleted" class="notification-panel">
-               <?php if (!empty($notificationsDeleted)): ?>
-                  <label class="notification-bulk">
-                     <input type="checkbox" data-child-bulk-action="delete_notifications_perm">
-                     Delete all
-                  </label>
-                  <ul class="notification-list">
-                     <?php foreach ($notificationsDeleted as $note): ?>
-                        <li class="notification-item">
-                           <input type="checkbox" name="notification_ids[]" value="<?php echo (int)$note['id']; ?>" aria-label="Delete permanently">
-                           <div>
-                              <div><?php echo $formatChildNotificationMessage($note); ?></div>
-                              <div class="notification-meta">
-                                 Deleted: <?php echo htmlspecialchars(date('m/d/Y h:i A', strtotime($note['deleted_at']))); ?>
-                              </div>
-                           </div>
-                           <button type="submit" name="delete_single_perm" value="<?php echo (int)$note['id']; ?>" class="trash-button" aria-label="Delete permanently"><i class="fa-solid fa-trash"></i></button>
-                        </li>
-                     <?php endforeach; ?>
-                  </ul>
-                  <div class="notification-actions">
-                     <button type="submit" name="delete_notifications_perm" class="button danger">Delete Selected</button>
-                  </div>
-               <?php else: ?>
-                  <p class="notification-meta" style="margin: 12px 0;">Deleted is empty.</p>
-               <?php endif; ?>
-            </form>
-         </div>
-      </div>
-   </div><main class="dashboard">
+<main class="dashboard">
       <?php if (isset($message)) echo "<p>$message</p>"; ?>
       <?php
          $childTotalPoints = isset($data['remaining_points']) ? max(0, (int)$data['remaining_points']) : 0;
@@ -1332,7 +1218,6 @@ foreach ($taskCountStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
             <div class="child-identity">
                <div class="child-avatar-wrap">
                   <img class="child-avatar" src="<?php echo htmlspecialchars($childAvatar); ?>" alt="<?php echo htmlspecialchars($childFirstName !== '' ? $childFirstName : 'Child'); ?>">
-                  <button type="button" class="notification-trigger avatar-notification" data-child-notify-trigger aria-label="Notifications"><i class="fa-solid fa-bell"></i><?php if ($notificationCount > 0): ?><span class="notification-badge"><?php echo (int)$notificationCount; ?></span><?php endif; ?></button>
                </div>
                <div class="child-first-name"><?php echo htmlspecialchars($childFirstName); ?></div>
             </div>
@@ -1347,7 +1232,7 @@ foreach ($taskCountStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
           <div class="goal-summary">
              <div class="goal-summary-header">
                 <h3 class="goal-summary-title">Goals</h3>
-                <a class="nav-button" href="goal.php">View</a>
+                <a class="button" href="goal.php">View</a>
              </div>
              <?php if (empty($dashboardGoals)): ?>
                 <div class="goal-item">
@@ -1370,7 +1255,7 @@ foreach ($taskCountStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
                       <?php if (!empty($goal['description'])): ?>
                          <div class="goal-item-desc"><?php echo nl2br(htmlspecialchars($goal['description'])); ?></div>
                       <?php endif; ?>
-                      <div class="goal-item-meta"><?php echo htmlspecialchars($typeLabel); ?> • <?php echo (int) $progress['current']; ?> / <?php echo (int) $progress['target']; ?></div>
+                      <div class="goal-item-meta"><?php echo htmlspecialchars($typeLabel); ?> â€¢ <?php echo (int) $progress['current']; ?> / <?php echo (int) $progress['target']; ?></div>
                       <div class="goal-progress-bar">
                          <span style="width: <?php echo (int) $progress['percent']; ?>%;"></span>
                       </div>
@@ -1550,12 +1435,35 @@ foreach ($taskCountStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
          const celebrationQueue = <?php echo json_encode($goalCelebrations, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP); ?>;
       </script>
    <?php endif; ?>
+   <nav class="nav-mobile-bottom" aria-label="Primary">
+      <a class="nav-mobile-link<?php echo $dashboardActive ? ' is-active' : ''; ?>" href="dashboard_child.php"<?php echo $dashboardActive ? ' aria-current="page"' : ''; ?>>
+         <i class="fa-solid fa-house"></i>
+         <span>Dashboard</span>
+      </a>
+      <a class="nav-mobile-link<?php echo $routinesActive ? ' is-active' : ''; ?>" href="routine.php"<?php echo $routinesActive ? ' aria-current="page"' : ''; ?>>
+         <i class="fa-solid fa-rotate"></i>
+         <span>Routines</span>
+      </a>
+      <a class="nav-mobile-link<?php echo $tasksActive ? ' is-active' : ''; ?>" href="task.php"<?php echo $tasksActive ? ' aria-current="page"' : ''; ?>>
+         <i class="fa-solid fa-list-check"></i>
+         <span>Tasks</span>
+      </a>
+      <a class="nav-mobile-link<?php echo $goalsActive ? ' is-active' : ''; ?>" href="goal.php"<?php echo $goalsActive ? ' aria-current="page"' : ''; ?>>
+         <i class="fa-solid fa-bullseye"></i>
+         <span>Goals</span>
+      </a>
+      <a class="nav-mobile-link<?php echo $rewardsActive ? ' is-active' : ''; ?>" href="rewards.php"<?php echo $rewardsActive ? ' aria-current="page"' : ''; ?>>
+         <i class="fa-solid fa-gift"></i>
+         <span>Rewards</span>
+      </a>
+   </nav>
    <footer>
    <p>Child Task and Chore App - Ver 3.17.6</p>
 </footer>
   <script src="js/number-stepper.js" defer></script>
 </body>
 </html>
+
 
 
 

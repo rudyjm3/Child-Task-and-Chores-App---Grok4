@@ -1180,6 +1180,23 @@ function getParentNotifications($parent_user_id) {
     ];
 }
 
+function getChildNotifications($child_user_id) {
+    global $db;
+    ensureChildNotificationsTable();
+    $db->prepare("DELETE FROM child_notifications WHERE child_user_id = :child_id AND deleted_at IS NOT NULL AND deleted_at <= (NOW() - INTERVAL 1 WEEK)")
+        ->execute([':child_id' => $child_user_id]);
+
+    $stmt = $db->prepare("SELECT id, type, message, link_url, is_read, created_at, deleted_at FROM child_notifications WHERE child_user_id = :child_id ORDER BY created_at DESC LIMIT 150");
+    $stmt->execute([':child_id' => $child_user_id]);
+    $all = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    return [
+        'new' => array_values(array_filter($all, static fn($n) => empty($n['is_read']) && empty($n['deleted_at']))),
+        'read' => array_values(array_filter($all, static fn($n) => !empty($n['is_read']) && empty($n['deleted_at']))),
+        'deleted' => array_values(array_filter($all, static fn($n) => !empty($n['deleted_at'])))
+    ];
+}
+
 function ensureRoutinePointsLogsTable() {
     global $db;
     $db->exec("

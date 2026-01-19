@@ -6,10 +6,13 @@ if (!isset($_SESSION['user_id']) || !canCreateContent($_SESSION['user_id'])) {
     header("Location: login.php");
     exit;
 }
+$currentPage = basename($_SERVER['PHP_SELF']);
 
 $role_type = getEffectiveRole($_SESSION['user_id']);
 $main_parent_id = getFamilyRootId($_SESSION['user_id']);
 $messages = [];
+
+require_once __DIR__ . '/includes/notifications_bootstrap.php';
 
 // Load children for this family
 $childStmt = $db->prepare("SELECT child_user_id, child_name, avatar FROM child_profiles WHERE parent_user_id = :parent_id AND deleted_at IS NULL ORDER BY child_name");
@@ -347,9 +350,34 @@ foreach ($activeRewards as $reward) {
             .child-meta { width: 100%; }
             .add-child-reward-btn { width: 100%; justify-content: center; }
         }
-        .nav-links { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: center; margin-top: 8px; }
-        .nav-button { display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; background: #eef4ff; border: 1px solid #d5def0; border-radius: 8px; color: #0d47a1; font-weight: 700; text-decoration: none; }
-        .nav-button:hover { background: #dce8ff; }
+        .page-header { padding: 18px 16px 12px; display: grid; gap: 12px; text-align: left; }
+        .page-header-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+        .page-header-title { display: grid; gap: 6px; }
+        .page-header-title h1 { margin: 0; font-size: 1.1rem; color: #2c2c2c; }
+        .page-header-meta { margin: 0; color: #616161; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 0.6rem; }
+        .page-header-actions { display: flex; gap: 10px; align-items: center; }
+        .page-header-action { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 50%; border: 1px solid #dfe8df; background: #fff; color: #6d6d6d; box-shadow: 0 6px 14px rgba(0,0,0,0.08); cursor: pointer; }
+        .page-header-action i { font-size: 1.1rem; }
+        .page-header-action:hover { color: #4caf50; border-color: #c8e6c9; }
+        .nav-links { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: center; padding: 10px 12px; border-radius: 18px; background: #fff; border: 1px solid #eceff4; box-shadow: 0 8px 18px rgba(0,0,0,0.06); }
+        .nav-link,
+        .nav-mobile-link { flex: 1 1 90px; display: grid; justify-items: center; gap: 4px; text-decoration: none; color: #6d6d6d; font-weight: 600; font-size: 0.75rem; border-radius: 12px; padding: 6px 4px; }
+        .nav-link i,
+        .nav-mobile-link i { font-size: 1.2rem; }
+        .nav-link.is-active,
+        .nav-mobile-link.is-active { color: #4caf50; }
+        .nav-link.is-active i,
+        .nav-mobile-link.is-active i { color: #4caf50; }
+        .nav-link:hover,
+        .nav-mobile-link:hover { color: #4caf50; }
+        .nav-link-button { background: transparent; border: none; cursor: pointer; }
+        .nav-mobile-bottom { display: none; gap: 6px; padding: 10px 12px; border-top: 1px solid #e0e0e0; background: #fff; position: fixed; left: 0; right: 0; bottom: 0; z-index: 900; }
+        .nav-mobile-bottom .nav-mobile-link { flex: 1; }
+        @media (max-width: 768px) {
+            .nav-links { display: none; }
+            .nav-mobile-bottom { display: flex; justify-content: space-between; }
+            body { padding-bottom: 72px; }
+        }
         .help-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: none; align-items: center; justify-content: center; z-index: 1200; padding: 16px; }
         .help-modal.open { display: flex; }
         .help-card { background: #fff; border-radius: 12px; max-width: 720px; width: min(720px, 100%); max-height: 85vh; overflow: hidden; box-shadow: 0 12px 30px rgba(0,0,0,0.18); display: grid; grid-template-rows: auto 1fr; }
@@ -362,22 +390,72 @@ foreach ($activeRewards as $reward) {
     </style>
 </head>
 <body>
-    <div class="page">
-        <div style="display:flex; flex-direction:column; gap:8px;">
-            <div style="display:flex; justify-content: space-between; align-items:center; gap:12px;">
+    <?php
+        $dashboardPage = canCreateContent($_SESSION['user_id']) ? 'dashboard_parent.php' : 'dashboard_child.php';
+        $dashboardActive = $currentPage === $dashboardPage;
+        $routinesActive = $currentPage === 'routine.php';
+        $tasksActive = $currentPage === 'task.php';
+        $goalsActive = $currentPage === 'goal.php';
+        $rewardsActive = $currentPage === 'rewards.php';
+        $profileActive = $currentPage === 'profile.php';
+    ?>
+    <header class="page-header">
+        <div class="page-header-top">
+            <div class="page-header-title">
                 <h1>Rewards</h1>
+                <p class="page-header-meta">Welcome back, <?php echo htmlspecialchars($_SESSION['name'] ?? $_SESSION['username'] ?? 'User'); ?></p>
             </div>
-            <div class="nav-links">
-                <a class="nav-button" href="dashboard_parent.php">Dashboard</a>
-                <a class="nav-button" href="goal.php">Goals</a>
-                <a class="nav-button" href="task.php">Tasks</a>
-                <a class="nav-button" href="routine.php">Routines</a>
-                <a class="nav-button" href="rewards.php">Rewards</a>
-                <a class="nav-button" href="profile.php?self=1">Profile</a>
-                <a class="nav-button" href="logout.php">Logout</a>
-                <button type="button" class="nav-button" data-help-open>Help</button>
+            <div class="page-header-actions">
+                <?php if (!empty($isParentNotificationUser)): ?>
+                    <button type="button" class="page-header-action parent-notification-trigger" data-parent-notify-trigger aria-label="Notifications">
+                        <i class="fa-solid fa-bell"></i>
+                        <?php if ($parentNotificationCount > 0): ?>
+                            <span class="parent-notification-badge"><?php echo (int) $parentNotificationCount; ?></span>
+                        <?php endif; ?>
+                    </button>
+                    <a class="page-header-action" href="dashboard_parent.php#manage-family" aria-label="Family settings">
+                        <i class="fa-solid fa-gear"></i>
+                    </a>
+                <?php elseif (!empty($isChildNotificationUser)): ?>
+                    <button type="button" class="page-header-action notification-trigger" data-child-notify-trigger aria-label="Notifications">
+                        <i class="fa-solid fa-bell"></i>
+                        <?php if ($notificationCount > 0): ?>
+                            <span class="notification-badge"><?php echo (int) $notificationCount; ?></span>
+                        <?php endif; ?>
+                    </button>
+                <?php endif; ?>
+                <a class="page-header-action" href="logout.php" aria-label="Logout">
+                    <i class="fa-solid fa-right-from-bracket"></i>
+                </a>
             </div>
         </div>
+        <nav class="nav-links" aria-label="Primary">
+                <a class="nav-link<?php echo $dashboardActive ? ' is-active' : ''; ?>" href="<?php echo htmlspecialchars($dashboardPage); ?>"<?php echo $dashboardActive ? ' aria-current="page"' : ''; ?>>
+                    <i class="fa-solid fa-house"></i>
+                    <span>Dashboard</span>
+                </a>
+                <a class="nav-link<?php echo $routinesActive ? ' is-active' : ''; ?>" href="routine.php"<?php echo $routinesActive ? ' aria-current="page"' : ''; ?>>
+                    <i class="fa-solid fa-rotate"></i>
+                    <span>Routines</span>
+                </a>
+                <a class="nav-link<?php echo $tasksActive ? ' is-active' : ''; ?>" href="task.php"<?php echo $tasksActive ? ' aria-current="page"' : ''; ?>>
+                    <i class="fa-solid fa-list-check"></i>
+                    <span>Tasks</span>
+                </a>
+                <a class="nav-link<?php echo $goalsActive ? ' is-active' : ''; ?>" href="goal.php"<?php echo $goalsActive ? ' aria-current="page"' : ''; ?>>
+                    <i class="fa-solid fa-bullseye"></i>
+                    <span>Goals</span>
+                </a>
+                <a class="nav-link<?php echo $rewardsActive ? ' is-active' : ''; ?>" href="rewards.php"<?php echo $rewardsActive ? ' aria-current="page"' : ''; ?>>
+                    <i class="fa-solid fa-gift"></i>
+                    <span>Rewards</span>
+                </a>
+                <a class="nav-link<?php echo $profileActive ? ' is-active' : ''; ?>" href="profile.php?self=1"<?php echo $profileActive ? ' aria-current="page"' : ''; ?>>
+                    <i class="fa-solid fa-user"></i>
+                    <span>Profile</span>
+                </a>
+            </nav>
+        </header>
 
         <?php foreach ($messages as $msg): ?>
             <div class="message"><?php echo htmlspecialchars($msg); ?></div>
@@ -720,8 +798,6 @@ $hasRecentMore = $recentTotal > $recentLimit;
                 <button type="submit" name="create_template" class="button">Save Template</button>
             </form>
         </div>
-
-    </div>
     <div class="help-modal" data-help-modal>
         <div class="help-card" role="dialog" aria-modal="true" aria-labelledby="help-title">
             <header>
@@ -740,7 +816,35 @@ $hasRecentMore = $recentTotal > $recentLimit;
             </div>
         </div>
     </div>
+    <nav class="nav-mobile-bottom" aria-label="Primary">
+        <a class="nav-mobile-link<?php echo $dashboardActive ? ' is-active' : ''; ?>" href="<?php echo htmlspecialchars($dashboardPage); ?>"<?php echo $dashboardActive ? ' aria-current="page"' : ''; ?>>
+            <i class="fa-solid fa-house"></i>
+            <span>Dashboard</span>
+        </a>
+        <a class="nav-mobile-link<?php echo $routinesActive ? ' is-active' : ''; ?>" href="routine.php"<?php echo $routinesActive ? ' aria-current="page"' : ''; ?>>
+            <i class="fa-solid fa-rotate"></i>
+            <span>Routines</span>
+        </a>
+        <a class="nav-mobile-link<?php echo $tasksActive ? ' is-active' : ''; ?>" href="task.php"<?php echo $tasksActive ? ' aria-current="page"' : ''; ?>>
+            <i class="fa-solid fa-list-check"></i>
+            <span>Tasks</span>
+        </a>
+        <a class="nav-mobile-link<?php echo $goalsActive ? ' is-active' : ''; ?>" href="goal.php"<?php echo $goalsActive ? ' aria-current="page"' : ''; ?>>
+            <i class="fa-solid fa-bullseye"></i>
+            <span>Goals</span>
+        </a>
+        <a class="nav-mobile-link<?php echo $rewardsActive ? ' is-active' : ''; ?>" href="rewards.php"<?php echo $rewardsActive ? ' aria-current="page"' : ''; ?>>
+            <i class="fa-solid fa-gift"></i>
+            <span>Rewards</span>
+        </a>
+    </nav>
   <script src="js/number-stepper.js" defer></script>
+<?php if (!empty($isParentNotificationUser)): ?>
+    <?php include __DIR__ . '/includes/notifications_parent.php'; ?>
+<?php endif; ?>
+<?php if (!empty($isChildNotificationUser)): ?>
+    <?php include __DIR__ . '/includes/notifications_child.php'; ?>
+<?php endif; ?>
 </body>
 <div class="modal-backdrop" id="modal-backdrop" aria-hidden="true">
     <div class="modal" role="dialog" aria-modal="true">
