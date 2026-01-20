@@ -970,6 +970,7 @@ $formatParentNotificationMessage = static function (array $note): string {
     <style>
         .dashboard { padding: 20px; max-width: 1200px; margin: 0 auto; }
         .children-overview, .management-links, .active-rewards, .redeemed-rewards, .manage-family { margin-top: 20px; }
+        .children-overview { margin-bottom: 20px; padding-bottom: 20px; }
         .children-overview-grid { display: grid; grid-template-columns: 1fr; gap: 20px; }
         .child-info-card, .reward-item, .goal-item { background-color: #f5f5f5; padding: 15px; border-radius: 8px; box-shadow: 0 8px 20px rgba(0,0,0,0.08); }
         .child-info-card { width: 100%; display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 20px; align-items: start; min-height: 100%; background-color: #fff; margin: 20px 0;}
