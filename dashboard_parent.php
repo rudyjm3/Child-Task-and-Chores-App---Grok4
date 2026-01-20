@@ -1144,7 +1144,7 @@ $formatParentNotificationMessage = static function (array $note): string {
         .adjust-modal h3 { margin: 0; font-size: 1.1rem; }
         .adjust-modal-close { background: transparent; border: none; font-size: 1.4rem; cursor: pointer; }
         .adjust-control { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: center; }
-        .adjust-control button { width: 44px; height: 44px; font-size: 1.2rem; }
+        .adjust-control button { width: 100%; height: 100%; font-size: 1.2rem; }
         .adjust-control input[type="number"] { width: 100%; padding: 10px; font-size: 1rem; text-align: center; }
         .adjust-control input[type="number"]::-webkit-outer-spin-button,
         .adjust-control input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
@@ -1209,7 +1209,7 @@ $formatParentNotificationMessage = static function (array $note): string {
             .adjust-modal-close,
             .child-history-close { display: none; }
             .adjust-modal-body,
-            .child-history-body { padding: 12px 16px; overflow-y: auto; flex: 1; min-height: 0; }
+            .child-history-body { padding: 12px 16px 96px; overflow-y: auto; flex: 1; min-height: 0; }
             .child-history-filters { width: 100%; justify-content: space-between; }
             .history-filter { flex: 1; text-align: center; }
             .adjust-history { background: #fff; border-color: #eceff4; border-radius: 16px; box-shadow: 0 8px 18px rgba(0,0,0,0.06); max-height: 360px; min-height: 160px; }
@@ -1364,6 +1364,7 @@ $formatParentNotificationMessage = static function (array $note): string {
         .nav-family-button { border: none; background: transparent; }
         .nav-mobile-bottom { display: none; gap: 6px; padding: 10px 12px; border-top: 1px solid #e0e0e0; background: #fff; position: fixed; left: 0; right: 0; bottom: 0; z-index: 900; }
         .nav-mobile-bottom .nav-mobile-link { flex: 1; }
+        body.show-mobile-nav .nav-mobile-bottom { z-index: 5200; }
         @media (max-width: 768px) {
             .nav-links { display: none; }
             .nav-mobile-bottom { display: flex; justify-content: space-between; }
@@ -1571,6 +1572,7 @@ $formatParentNotificationMessage = static function (array $note): string {
                     if (!modal) return;
                     modal.classList.add('open');
                     document.body.classList.add('no-scroll');
+                    document.body.classList.add('show-mobile-nav');
                     const filterButtons = Array.from(modal.querySelectorAll('[data-history-filter]'));
                     filterButtons.forEach(button => {
                         button.classList.toggle('active', (button.dataset.historyFilter || 'all') === 'all');
@@ -1584,6 +1586,7 @@ $formatParentNotificationMessage = static function (array $note): string {
                 const closeModal = () => {
                     modal.classList.remove('open');
                     document.body.classList.remove('no-scroll');
+                    document.body.classList.remove('show-mobile-nav');
                 };
                 closeButtons.forEach(btn => btn.addEventListener('click', closeModal));
                 modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
@@ -1604,6 +1607,7 @@ $formatParentNotificationMessage = static function (array $note): string {
                     if (modal.classList.contains('open')) {
                         modal.classList.remove('open');
                         document.body.classList.remove('no-scroll');
+                        document.body.classList.remove('show-mobile-nav');
                     }
                 });
             });
@@ -2041,6 +2045,7 @@ $formatParentNotificationMessage = static function (array $note): string {
             const setBodyScrollLocked = (locked) => {
                 if (!document.body) return;
                 document.body.classList.toggle('modal-open', !!locked);
+                document.body.classList.toggle('show-mobile-nav', !!locked);
             };
 
             const renderHistory = (history) => {
