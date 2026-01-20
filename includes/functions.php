@@ -3268,17 +3268,25 @@ function resetRoutineTaskStatuses($routine_id) {
     return $stmt->execute([':routine_id' => $routine_id]);
 }
 
-function setRoutineTaskStatus($routine_id, $routine_task_id, $status) {
+function setRoutineTaskStatus($routine_id, $routine_task_id, $status, $completed_at = null) {
     global $db;
     $allowed = ['pending', 'completed'];
     if (!in_array($status, $allowed, true)) {
         return false;
     }
+    $resolvedCompletedAt = null;
+    if ($status === 'completed') {
+        if (!empty($completed_at)) {
+            $resolvedCompletedAt = $completed_at;
+        } else {
+            $resolvedCompletedAt = date('Y-m-d H:i:s');
+        }
+    }
     $params = [
         ':routine_id' => $routine_id,
         ':routine_task_id' => $routine_task_id,
         ':status' => $status,
-        ':completed_at' => $status === 'completed' ? date('Y-m-d H:i:s') : null
+        ':completed_at' => $resolvedCompletedAt
     ];
     $stmt = $db->prepare("UPDATE routines_routine_tasks SET status = :status, completed_at = :completed_at WHERE routine_id = :routine_id AND routine_task_id = :routine_task_id");
     if (!$stmt->execute($params)) {

@@ -895,10 +895,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif ($isParentContext && isset($_POST['parent_complete_routine'])) {
         $routine_id = filter_input(INPUT_POST, 'routine_id', FILTER_VALIDATE_INT);
         $completedRaw = $_POST['parent_completed'] ?? [];
+        $completedAtRaw = $_POST['parent_completed_at'] ?? '';
         $selected = [];
         if (is_array($completedRaw)) {
             foreach ($completedRaw as $value) {
                 $selected[] = (int) $value;
+            }
+        }
+        $completedAtMap = [];
+        if (is_string($completedAtRaw) && $completedAtRaw !== '') {
+            $decoded = json_decode($completedAtRaw, true);
+            if (is_array($decoded)) {
+                foreach ($decoded as $taskId => $timestamp) {
+                    $taskKey = (int) $taskId;
+                    $timeValue = (int) $timestamp;
+                    if ($taskKey > 0 && $timeValue > 0) {
+                        $completedAtMap[$taskKey] = $timeValue;
+                    }
+                }
             }
         }
         if (!$routine_id || !routineBelongsToParent($routine_id, $family_root_id)) {
@@ -952,11 +966,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 })));
 
                 $awardedPoints = 0;
+                $completionTimestampMap = [];
                 foreach ($tasks as $task) {
                     $taskId = (int) $task['id'];
                     $isSelected = in_array($taskId, $selected, true);
                     $status = $isSelected ? 'completed' : 'pending';
-                    setRoutineTaskStatus($routine_id, $taskId, $status);
+                    $completedAtValue = null;
+                    if ($isSelected) {
+                        if (!empty($completedTodayMap[$taskId]) && !empty($taskMap[$taskId]['completed_at'])) {
+                            $completedAtValue = $taskMap[$taskId]['completed_at'];
+                        } elseif (!empty($completedAtMap[$taskId])) {
+                            $completedAtValue = date('Y-m-d H:i:s', (int) floor($completedAtMap[$taskId] / 1000));
+                        } else {
+                            $completedAtValue = date('Y-m-d H:i:s');
+                        }
+                        $completionTimestampMap[$taskId] = $completedAtValue;
+                    }
+                    setRoutineTaskStatus($routine_id, $taskId, $status, $completedAtValue);
                     if ($isSelected && empty($completedTodayMap[$taskId])) {
                         $awardedPoints += max(0, (int) ($task['point_value'] ?? $task['points'] ?? 0));
                     }
@@ -979,18 +1005,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if ($shouldLogCompletion) {
                     $parentIdForLog = (int) ($routineData['parent_user_id'] ?? 0);
                     if ($parentIdForLog > 0) {
+                        $parentStartedAt = null;
+                        $parentCompletedAt = null;
+                        if (!empty($completionTimestampMap)) {
+                            $timestampValues = [];
+                            foreach ($completionTimestampMap as $stamp) {
+                                $parsed = strtotime($stamp);
+                                if ($parsed !== false) {
+                                    $timestampValues[] = $parsed;
+                                }
+                            }
+                            if (!empty($timestampValues)) {
+                                $parentStartedAt = date('Y-m-d H:i:s', min($timestampValues));
+                                $parentCompletedAt = date('Y-m-d H:i:s', max($timestampValues));
+                            }
+                        }
                         $completionTasks = [];
                         foreach ($tasks as $task) {
+                            $taskId = (int) ($task['id'] ?? 0);
                             $completionTasks[] = [
-                                'routine_task_id' => (int) ($task['id'] ?? 0),
+                                'routine_task_id' => $taskId,
                                 'sequence_order' => (int) ($task['sequence_order'] ?? 0),
-                                'completed_at' => null,
+                                'completed_at' => $completionTimestampMap[$taskId] ?? null,
                                 'scheduled_seconds' => null,
                                 'actual_seconds' => null,
                                 'status_screen_seconds' => 0
                             ];
                         }
-                        logRoutineCompletionSession($routine_id, $childId, $parentIdForLog, 'parent', null, date('Y-m-d H:i:s'), $completionTasks);
+                        logRoutineCompletionSession($routine_id, $childId, $parentIdForLog, 'parent', $parentStartedAt, $parentCompletedAt, $completionTasks);
                     }
                 }
                 $summaryParts = [];
@@ -2268,7 +2310,14 @@ margin-bottom: 20px;}
                                                 <input class="task-checkbox" type="checkbox" <?php echo ($taskStatus === 'completed') ? 'checked' : ''; ?> disabled>
                                             <?php elseif ($isParentContext): ?>
                                                 <label class="task-checkbox">
-                                                    <input type="checkbox" name="parent_completed[]" value="<?php echo (int) $task['id']; ?>" form="parent-complete-form-<?php echo (int) $routine['id']; ?>" <?php echo $isCompleted ? 'checked' : ''; ?>>
+                                                    <input type="checkbox"
+                                                        name="parent_completed[]"
+                                                        value="<?php echo (int) $task['id']; ?>"
+                                                        form="parent-complete-form-<?php echo (int) $routine['id']; ?>"
+                                                        data-parent-complete-task
+                                                        data-task-id="<?php echo (int) $task['id']; ?>"
+                                                        data-completed-at="<?php echo !empty($task['completed_at']) ? htmlspecialchars($task['completed_at']) : ''; ?>"
+                                                        <?php echo $isCompleted ? 'checked' : ''; ?>>
                                                     <span class="sr-only">Mark <?php echo htmlspecialchars($task['title']); ?> completed</span>
                                                 </label>
                                             <?php endif; ?>
@@ -2290,6 +2339,7 @@ margin-bottom: 20px;}
                         <?php if ($isParentContext): ?>
                             <form method="POST" action="routine.php" class="parent-complete-form" id="parent-complete-form-<?php echo (int) $routine['id']; ?>">
                                 <input type="hidden" name="routine_id" value="<?php echo (int) $routine['id']; ?>">
+                                <input type="hidden" name="parent_completed_at" value="{}" data-role="parent-completed-at">
                                 <p class="parent-complete-note">Check the tasks completed to award points. Bonus points apply only when all tasks are checked.</p>
                             </form>
                             <div class="routine-card-footer">
@@ -4889,6 +4939,43 @@ margin-bottom: 20px;}
                     }
                 });
             }
+
+            const parentCompleteForms = document.querySelectorAll('.parent-complete-form');
+            parentCompleteForms.forEach((form) => {
+                const hiddenField = form.querySelector('[data-role="parent-completed-at"]');
+                if (!hiddenField || !form.id) {
+                    return;
+                }
+                const checkboxes = Array.from(document.querySelectorAll(`input[data-parent-complete-task][form="${form.id}"]`));
+                if (!checkboxes.length) {
+                    return;
+                }
+                const timestamps = {};
+                const syncField = () => {
+                    hiddenField.value = JSON.stringify(timestamps);
+                };
+                checkboxes.forEach((checkbox) => {
+                    const taskId = checkbox.dataset.taskId || '';
+                    const initialCompletedAt = checkbox.dataset.completedAt || '';
+                    if (checkbox.checked && initialCompletedAt) {
+                        const parsed = Date.parse(initialCompletedAt);
+                        if (!Number.isNaN(parsed)) {
+                            timestamps[taskId] = parsed;
+                        }
+                    }
+                    checkbox.addEventListener('change', () => {
+                        if (checkbox.checked) {
+                            if (!timestamps[taskId]) {
+                                timestamps[taskId] = Date.now();
+                            }
+                        } else {
+                            delete timestamps[taskId];
+                        }
+                        syncField();
+                    });
+                });
+                syncField();
+            });
 
             const routineBuilders = {};
             document.querySelectorAll('.routine-builder').forEach(container => {

@@ -143,7 +143,8 @@ try {
                 rct.status_screen_seconds,
                 rct.scheduled_seconds,
                 rct.actual_seconds,
-                rt.title AS task_title
+                rt.title AS task_title,
+                rt.time_limit AS task_time_limit
             FROM routine_completion_tasks rct
             LEFT JOIN routine_tasks rt ON rct.routine_task_id = rt.id
             WHERE rct.completion_log_id IN ($placeholders)
@@ -967,7 +968,7 @@ $formatParentNotificationMessage = static function (array $note): string {
     <link rel="stylesheet" href="css/main.css?v=3.17.6">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" integrity="Evv84Mr4kqVGRNSgIGL/F/aIDqQb7xQ2vcrdIwxfjThSH8CSR7PBEakCr51Ck+w+/U6swU2Im1vVX0SVk9ABhg==" crossorigin="anonymous" referrerpolicy="no-referrer">
     <style>
-        .dashboard { padding: 20px; max-width: 900px; margin: 0 auto; }
+        .dashboard { padding: 20px; max-width: 1200px; margin: 0 auto; }
         .children-overview, .management-links, .active-rewards, .redeemed-rewards, .manage-family { margin-top: 20px; }
         .children-overview-grid { display: grid; grid-template-columns: 1fr; gap: 20px; }
         .child-info-card, .reward-item, .goal-item { background-color: #f5f5f5; padding: 15px; border-radius: 8px; box-shadow: 0 8px 20px rgba(0,0,0,0.08); }
@@ -990,16 +991,21 @@ $formatParentNotificationMessage = static function (array $note): string {
         .member-action-icon.danger { color: #919191; }
         .member-action-icon.danger:hover { color: #7a7a7a; }
         .child-info-content { display: contents; }
-        .child-info-body { display: grid; gap: 12px; }
-        .child-stats-grid { display: grid; gap: 12px; }
-        .child-stats-row { display: grid; grid-template-columns: repeat(2, minmax(140px, 1fr)); gap: 12px; }
-        .child-stats-block { display: grid; gap: 6px; }
-        /* .child-info-stats .stat { } */
-        .child-info-stats .stat-label { display: block; font-size: 0.85em; color: #666; font-weight: 600; }
-        .child-info-stats .stat-value { font-size: 1.4em; font-weight: 600; color: #2e7d32; }
+        .child-info-body { display: grid; gap: 12px; margin-bottom: 25px; }
+        .child-stats-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; background: #fff; border-radius: 14px; border: 1px solid #ece7e1; box-shadow: 0 10px 22px rgba(0,0,0,0.08); overflow: hidden; }
+        .child-stat-link { text-decoration: none; color: inherit; display: grid; justify-items: center; gap: 6px; padding: 12px 10px; border-right: 1px solid #eee6dd; text-align: center; }
+        .child-stat-link:last-child { border-right: none; }
+        .child-stat-icon { width: 34px; height: 34px; border-radius: 50%; background: #eef3ee; display: inline-flex; align-items: center; justify-content: center; color: #4a7a42; font-size: 1.05rem; }
+        .child-stat-label { font-size: 0.82rem; color: #6f6f6f; font-weight: 600; line-height: 1.2; white-space: normal; }
+        .child-stat-badge { min-width: 34px; padding: 2px 10px; border-radius: 999px; background: #e7f2e7; color: #2f6f2a; font-weight: 700; font-size: 0.95rem; text-align: center; box-shadow: inset 0 0 0 1px rgba(47,111,42,0.08); }
+        @media (min-width: 900px) {
+            .child-stats-grid { grid-template-columns: 1fr; }
+            .child-stat-link { border-right: none; border-bottom: 1px solid #eee6dd; }
+            .child-stat-link:last-child { border-bottom: none; }
+        }
         .child-reward-badges { display: flex; justify-content: center; gap: 10px; flex-wrap: nowrap; margin-top: 4px; }
         .stat-link { color: inherit; text-decoration: none; }
-        .stat-link:hover { text-decoration: underline; }
+        .stat-link:hover { text-decoration: none; }
         .child-reward-badge-link { text-decoration: none; display: grid; gap: 2px; align-items: center; justify-items: center; padding: 4px 6px; border-radius: 8px; min-width: 73.25px;}
         .child-reward-badge-link:hover { text-decoration: none;}
         .badge-count { font-size: 1.6em; font-weight: 700; color: #2e7d32; line-height: 1.1; }
@@ -2792,42 +2798,21 @@ $formatParentNotificationMessage = static function (array $note): string {
                       ?>
                       <div class="child-info-body">
                          <div class="child-stats-grid">
-                            <div class="child-stats-row">
-                                 <div class="child-stats-block stat">
-                                    <span class="stat-label">Tasks Assigned</span>
-                                    <span class="stat-value"><a class="stat-link badge-count" href="task.php"><?php echo (int)($child['task_count'] ?? 0); ?></a></span>
-                                 </div>
-                                   <div class="child-stats-block stat">
-                                      <span class="stat-label">Goals</span>
-                                      <span class="stat-value"><a class="stat-link badge-count" href="goal.php"><?php echo (int)($child['goals_assigned'] ?? 0); ?></a></span>
-                                   </div>
-                            </div>
-                            <div class="child-stats-block stat">
-                               <span class="stat-label">Rewards</span>
-                               <?php
-                                  $childActiveRewards = $activeRewardCounts[$child['child_user_id']] ?? 0;
-                                  $childRedeemedRewards = $redeemedRewardCounts[$child['child_user_id']] ?? 0;
-                               ?>
-                               <div class="child-reward-badges">
-                                  <a class="child-reward-badge-link" href="rewards.php#active-child-<?php echo (int)$child['child_user_id']; ?>">
-                                     <span class="badge-count"><?php echo $childActiveRewards; ?></span>
-                                     <span class="badge-label">active</span>
-                                  </a>
-                                  <a class="child-reward-badge-link" href="rewards.php#redeemed-child-<?php echo (int)$child['child_user_id']; ?>">
-                                     <span class="badge-count"><?php echo $childRedeemedRewards; ?></span>
-                                     <span class="badge-label">redeemed</span>
-                                  </a>
-                                 <?php
-                                     $pendingRewards = (int)($pendingRewardCounts[$child['child_user_id']] ?? 0);
-                                 ?>
-                                 <?php if ($pendingRewards > 0): ?>
-                                     <a class="child-reward-badge-link" href="rewards.php#pending-child-<?php echo (int)$child['child_user_id']; ?>">
-                                         <span class="badge-count"><?php echo $pendingRewards; ?></span>
-                                         <span class="badge-label">awaiting fulfillment</span>
-                                     </a>
-                                 <?php endif; ?>
-                               </div>
-                            </div>
+                             <a class="child-stat-link" href="task.php">
+                                 <span class="child-stat-icon"><i class="fa-solid fa-list-check"></i></span>
+                                 <span class="child-stat-badge"><?php echo (int)($child['task_count'] ?? 0); ?></span>
+                                 <span class="child-stat-label">Tasks Assigned</span>
+                             </a>
+                             <a class="child-stat-link" href="goal.php">
+                                 <span class="child-stat-icon"><i class="fa-solid fa-bullseye"></i></span>
+                                 <span class="child-stat-badge"><?php echo (int)($child['goals_assigned'] ?? 0); ?></span>
+                                 <span class="child-stat-label">Goals</span>
+                             </a>
+                             <a class="child-stat-link" href="rewards.php#redeemed-child-<?php echo (int)$child['child_user_id']; ?>">
+                                 <span class="child-stat-icon"><i class="fa-solid fa-star"></i></span>
+                                 <span class="child-stat-badge"><?php echo (int)($redeemedRewardCounts[$child['child_user_id']] ?? 0); ?></span>
+                                 <span class="child-stat-label">Redeemed</span>
+                             </a>
                          </div>
                     </div>
                     <div class="child-schedule-card">
@@ -2982,7 +2967,7 @@ $formatParentNotificationMessage = static function (array $note): string {
                          $startedAt = !empty($session['started_at']) ? date('m/d/Y g:i A', strtotime($session['started_at'])) : '--';
                          $completedAt = !empty($session['completed_at']) ? date('m/d/Y g:i A', strtotime($session['completed_at'])) : '--';
                          $completedBy = ($session['completed_by'] ?? '') === 'parent' ? 'parent' : 'child';
-                         $badgeLabel = $completedBy === 'parent' ? 'Manual' : 'Child';
+                        $badgeLabel = $completedBy === 'parent' ? 'Parent Managed' : 'Child';
                          $openAttr = $index === 0 ? ' open' : '';
                      ?>
                      <details class="routine-completion-card"<?php echo $openAttr; ?>>
@@ -3012,7 +2997,12 @@ $formatParentNotificationMessage = static function (array $note): string {
                                          <?php
                                              $taskDoneAt = !empty($taskRow['completed_at']) ? date('g:i A', strtotime($taskRow['completed_at'])) : '--';
                                              $statusSeconds = (int) ($taskRow['status_screen_seconds'] ?? 0);
-                                             $scheduledLabel = $formatDurationOrDash($taskRow['scheduled_seconds'] ?? null);
+                                             $scheduledSeconds = $taskRow['scheduled_seconds'] ?? null;
+                                             if ($completedBy === 'parent') {
+                                                 $taskLimitMinutes = (int) ($taskRow['task_time_limit'] ?? 0);
+                                                 $scheduledSeconds = $taskLimitMinutes > 0 ? $taskLimitMinutes * 60 : null;
+                                             }
+                                             $scheduledLabel = $formatDurationOrDash($scheduledSeconds);
                                              $actualLabel = $formatDurationOrDash($taskRow['actual_seconds'] ?? null);
                                          ?>
                                          <div class="completion-task-row">
@@ -3022,8 +3012,10 @@ $formatParentNotificationMessage = static function (array $note): string {
                                              </div>
                                              <div class="completion-task-meta">
                                                  <span><strong>Scheduled:</strong> <?php echo htmlspecialchars($scheduledLabel); ?></span>
-                                                 <span><strong>Actual:</strong> <?php echo htmlspecialchars($actualLabel); ?></span>
-                                                 <span><strong>Status screen:</strong> <?php echo $formatDuration($statusSeconds); ?></span>
+                                                 <?php if ($completedBy === 'child'): ?>
+                                                     <span><strong>Actual:</strong> <?php echo htmlspecialchars($actualLabel); ?></span>
+                                                     <span><strong>Status screen:</strong> <?php echo $formatDuration($statusSeconds); ?></span>
+                                                 <?php endif; ?>
                                              </div>
                                          </div>
                                      <?php endforeach; ?>
