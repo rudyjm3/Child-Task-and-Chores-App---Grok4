@@ -3025,7 +3025,7 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                                 <div class="task-pill"><?php echo (int)$task['points']; ?> pts</div>
                             </div>
                               <?php if (!empty($task['description'])): ?>
-                                  <div class="task-description text"><i class="fa-solid fa-align-center task-desc-icon"></i><span><?php echo htmlspecialchars($task['description']); ?></span></div>
+                                  <div class="task-description text"><i class="fa-solid fa-align-center task-desc-icon"></i><span><?php echo htmlspecialchars(html_entity_decode($task['description'], ENT_QUOTES)); ?></span></div>
                               <?php endif; ?>
                               <div class="task-meta">
                                 <?php

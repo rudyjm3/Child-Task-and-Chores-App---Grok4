@@ -1255,7 +1255,7 @@ foreach ($taskCountStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
                       <?php if (!empty($goal['description'])): ?>
                          <div class="goal-item-desc"><?php echo nl2br(htmlspecialchars($goal['description'])); ?></div>
                       <?php endif; ?>
-                      <div class="goal-item-meta"><?php echo htmlspecialchars($typeLabel); ?> â€¢ <?php echo (int) $progress['current']; ?> / <?php echo (int) $progress['target']; ?></div>
+                      <div class="goal-item-meta"><?php echo htmlspecialchars($typeLabel); ?> &bull; <?php echo (int) $progress['current']; ?> / <?php echo (int) $progress['target']; ?></div>
                       <div class="goal-progress-bar">
                          <span style="width: <?php echo (int) $progress['percent']; ?>%;"></span>
                       </div>
