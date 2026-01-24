@@ -290,6 +290,94 @@ if (!canCreateContent($_SESSION['user_id'])) {
 }
 
 $tasks = getTasks($_SESSION['user_id']);
+$selectedChildId = filter_input(INPUT_GET, 'child_id', FILTER_VALIDATE_INT);
+$selectedChildId = $selectedChildId ? (int) $selectedChildId : 0;
+if (!empty($selectedChildId) && canCreateContent($_SESSION['user_id']) && !empty($children)) {
+    $allowedChildIds = array_map(static function ($child) {
+        return (int) ($child['child_user_id'] ?? 0);
+    }, $children);
+    if (!in_array($selectedChildId, $allowedChildIds, true)) {
+        $selectedChildId = 0;
+    }
+}
+if (!empty($selectedChildId)) {
+    $tasks = array_values(array_filter($tasks, static function ($task) use ($selectedChildId) {
+        return (int) ($task['child_user_id'] ?? 0) === $selectedChildId;
+    }));
+}
+$availableCategories = [];
+if (!empty($tasks)) {
+    $availableCategories = array_values(array_unique(array_filter(array_map(static function ($task) {
+        return $task['category'] ?? '';
+    }, $tasks))));
+    sort($availableCategories);
+}
+$filterStatus = trim((string) filter_input(INPUT_GET, 'status', FILTER_UNSAFE_RAW));
+$filterCategory = trim((string) filter_input(INPUT_GET, 'category', FILTER_UNSAFE_RAW));
+$filterTimeOfDay = trim((string) filter_input(INPUT_GET, 'time_of_day', FILTER_UNSAFE_RAW));
+$filterPhoto = trim((string) filter_input(INPUT_GET, 'photo_required', FILTER_UNSAFE_RAW));
+$filterTimed = trim((string) filter_input(INPUT_GET, 'timed', FILTER_UNSAFE_RAW));
+$filterRepeat = trim((string) filter_input(INPUT_GET, 'repeat', FILTER_UNSAFE_RAW));
+$statusAllowed = ['pending', 'completed', 'approved', 'expired'];
+if (!in_array($filterStatus, $statusAllowed, true)) {
+    $filterStatus = '';
+}
+if ($filterCategory !== '' && !in_array($filterCategory, $availableCategories, true)) {
+    $filterCategory = '';
+}
+$timeAllowed = ['anytime', 'morning', 'afternoon', 'evening'];
+if ($filterTimeOfDay !== '' && !in_array($filterTimeOfDay, $timeAllowed, true)) {
+    $filterTimeOfDay = '';
+}
+$photoAllowed = ['required', 'not_required'];
+if ($filterPhoto !== '' && !in_array($filterPhoto, $photoAllowed, true)) {
+    $filterPhoto = '';
+}
+$timedAllowed = ['timed', 'not_timed'];
+if ($filterTimed !== '' && !in_array($filterTimed, $timedAllowed, true)) {
+    $filterTimed = '';
+}
+$repeatAllowed = ['once', 'everyday', 'specific_days'];
+if ($filterRepeat !== '' && !in_array($filterRepeat, $repeatAllowed, true)) {
+    $filterRepeat = '';
+}
+if ($filterCategory || $filterTimeOfDay || $filterPhoto || $filterTimed || $filterRepeat) {
+    $tasks = array_values(array_filter($tasks, static function ($task) use ($filterCategory, $filterTimeOfDay, $filterPhoto, $filterTimed, $filterRepeat) {
+        if ($filterCategory && ($task['category'] ?? '') !== $filterCategory) {
+            return false;
+        }
+        if ($filterTimeOfDay && ($task['time_of_day'] ?? 'anytime') !== $filterTimeOfDay) {
+            return false;
+        }
+        $photoRequired = !empty($task['photo_proof_required']);
+        if ($filterPhoto === 'required' && !$photoRequired) {
+            return false;
+        }
+        if ($filterPhoto === 'not_required' && $photoRequired) {
+            return false;
+        }
+        $timed = ($task['timing_mode'] ?? '') === 'timer';
+        if ($filterTimed === 'timed' && !$timed) {
+            return false;
+        }
+        if ($filterTimed === 'not_timed' && $timed) {
+            return false;
+        }
+        $recurrence = $task['recurrence'] ?? '';
+        if ($filterRepeat === 'once' && $recurrence !== '') {
+            return false;
+        }
+        if ($filterRepeat === 'everyday' && $recurrence !== 'daily') {
+            return false;
+        }
+        if ($filterRepeat === 'specific_days' && $recurrence !== 'weekly') {
+            return false;
+        }
+        return true;
+    }));
+}
+$tasksCount = count($tasks);
+$filtersActive = !empty($filterStatus) || !empty($filterCategory) || !empty($filterTimeOfDay) || !empty($filterPhoto) || !empty($filterTimed) || !empty($filterRepeat);
 // Format due_date for display
 foreach ($tasks as &$task) {
     $task['due_date_formatted'] = !empty($task['due_date']) ? date('m/d/Y h:i A', strtotime($task['due_date'])) : 'No date set';
@@ -389,6 +477,21 @@ foreach ($tasks as $task) {
     }
     $expired_tasks[] = $task;
 }
+$statusSections = [
+    'pending' => &$pending_tasks,
+    'completed' => &$completed_tasks,
+    'approved' => &$approved_tasks,
+    'expired' => &$expired_tasks
+];
+if ($filterStatus !== '') {
+    foreach ($statusSections as $key => &$section) {
+        if ($key !== $filterStatus) {
+            $section = [];
+        }
+    }
+    unset($section);
+    $tasksCount = isset($statusSections[$filterStatus]) ? count($statusSections[$filterStatus]) : 0;
+}
 
 $welcome_role_label = getUserRoleLabel($_SESSION['user_id']);
 if (!$welcome_role_label) {
@@ -445,10 +548,15 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
     <link rel="icon" type="image/svg+xml" href="images/favicon.svg">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" integrity="Evv84Mr4kqVGRNSgIGL/F/aIDqQb7xQ2vcrdIwxfjThSH8CSR7PBEakCr51Ck+w+/U6swU2Im1vVX0SVk9ABhg==" crossorigin="anonymous" referrerpolicy="no-referrer">
     <style>
-        .task-form, .task-list {
+        .task-form {
             padding: 20px;
             max-width: 900px;
             margin: 0 auto;
+        }
+        .task-list {
+            padding: 0 20px;
+            max-width: 100%;
+            margin: 0 auto 24px;
         }
         .routine-section { background: #fff; border-radius: 10px; box-shadow: 0 2px 6px rgba(0,0,0,0.08); padding: 20px; margin-bottom: 24px; }
         .routine-section-header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
@@ -582,16 +690,51 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
         .calendar-task-meta .task-meta-icon { color: #919191; margin-right: 6px; }
         .calendar-task-child { display: inline-flex; align-items: center; gap: 6px; font-size: 0.8rem; color: #455a64; font-weight: 600; }
         .calendar-task-child-avatar { width: 20px; height: 20px; border-radius: 50%; object-fit: cover; border: 1px solid #e0e0e0; }
-        .task-section-toggle { margin: 18px 0 10px; border: 1px solid #e0e0e0; border-radius: 10px; padding: 8px 12px; background: #fff; overflow: hidden; transition: border-color 200ms ease, box-shadow 200ms ease; }
-        .task-section-toggle > summary { cursor: pointer; font-weight: 700; color: #37474f; display: flex; align-items: center; justify-content: space-between; gap: 10px; list-style: none; }
-        .task-section-title { display: inline-flex; align-items: center; gap: 8px; }
+        .task-list-header { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 8px 16px; margin-bottom: 14px; text-align: left; }
+        .task-list-subtitle { margin: 0; color: #7a869a; font-weight: 600; grid-column: 1; }
+        .task-create-fab { grid-column: 2; grid-row: 1 / span 2; display: flex; justify-content: flex-end; padding: 0; margin: 0; position: static; }
+        @media (max-width: 768px) {
+            .task-create-fab { top: 16px; right: 16px; }
+        }
+        .task-list-title { margin: 0; font-size: 1.8rem; color: #263238; }
+        .task-list-subtitle { margin: 0; color: #7a869a; font-weight: 600; }
+        .task-list-subtitle strong { color: #0d47a1; }
+        .task-filter-row { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; margin-bottom: 18px; }
+        .task-child-grid { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; }
+        .task-child-card { border: none; border-radius: 50%; padding: 0; background: transparent; display: grid; justify-items: center; gap: 6px; cursor: pointer; position: relative; text-decoration: none; color: #455a64; font-weight: 700; font-size: 0.75rem; }
+        .task-child-card img,
+        .task-child-icon { width: 52px; height: 52px; border-radius: 50%; object-fit: cover; box-shadow: 0 2px 6px rgba(0,0,0,0.15); display: inline-flex; align-items: center; justify-content: center; background: #f5f7fb; color: #607d8b; transition: box-shadow 150ms ease, transform 150ms ease; }
+        .task-child-card.is-active img,
+        .task-child-card.is-active .task-child-icon { box-shadow: 0 0 0 4px rgba(100,181,246,0.8), 0 0 14px rgba(100,181,246,0.8); transform: translateY(-2px); color: #0d47a1; }
+        .task-child-card span { text-align: center; }
+        .task-filter-pill.has-icon { display: inline-flex; align-items: center; gap: 8px; }
+        .task-filter-form { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); margin-bottom: 18px; }
+        .task-filter-field { display: grid; gap: 6px; }
+        .task-filter-field label { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: #90a4ae; }
+        .task-filter-field select { padding: 8px 10px; border: 1px solid #d5def0; border-radius: 10px; font-size: 0.9rem; }
+        .task-filter-actions { display: flex; align-items: flex-end; }
+        .task-filter-actions .button { margin: 0; width: 100%; }
+        .task-filter-toggle { border: 1px solid #d5def0; background: #fff; color: #607d8b; border-radius: 999px; padding: 8px 14px; font-weight: 700; font-size: 0.85rem; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; }
+        .task-filter-form { display: none; }
+        .task-filter-form.is-open { display: grid; }
+        .task-reject-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; }
+        .task-reject-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+        .task-section-toggle { margin: 18px 0 10px; border-radius: 10px; padding: 0; background: transparent; box-shadow: none; overflow: hidden; }
+        .task-section-toggle > summary { cursor: pointer; font-weight: 700; color: #37474f; display: flex; align-items: center; justify-content: space-between; gap: 10px; list-style: none; padding: 8px 4px; transition: color 150ms ease; }
+        .task-section-toggle > summary:hover .task-section-title { color: #0d47a1; }
+        .task-section-title { display: inline-flex; align-items: center; gap: 10px; font-size: 1.1rem; font-weight: 700; }
+        .task-section-icon { width: 36px; height: 36px; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; font-size: 1rem; color: #fff; box-shadow: 0 6px 14px rgba(0,0,0,0.12); }
+        .task-section-icon.is-active { background: #4caf50; }
+        .task-section-icon.is-pending { background: #f59e0b; }
+        .task-section-icon.is-approved { background: #22c55e; }
+        .task-section-icon.is-expired { background: #ef4444; }
         .task-section-toggle > summary::-webkit-details-marker { display: none !important; }
         .task-section-toggle > summary::marker { content: '' !important; }
         .task-section-toggle > summary { list-style: none !important; }
         .task-section-toggle > summary::-moz-list-bullet { list-style-type: none; }
         .task-section-toggle > summary::after { content: '\f054'; font-family: 'Font Awesome 6 Free'; font-weight: 900; font-size: 0.85rem; color: #607d8b; transition: transform 200ms ease; }
         .task-section-toggle[open] > summary::after { transform: rotate(90deg); }
-        .task-section-toggle[open] { border-color: #ffd28a; box-shadow: 0 6px 16px rgba(255, 210, 138, 0.25); }
+        .task-section-toggle[open] { border-color: transparent; box-shadow: none; }
         .task-section-content { overflow: hidden; max-height: 0; opacity: 0; transform: translateY(-6px); transition: max-height 280ms ease, opacity 200ms ease, transform 200ms ease; margin-top: 15px; }
         .task-section-toggle[open] .task-section-content { max-height: 12000px; opacity: 1; transform: translateY(0); }
         .task-approved-view-more { display: flex; justify-content: center; margin: 12px 0 4px; }
@@ -956,6 +1099,8 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
         floatingOpenBtn = floatingTimerEl ? floatingTimerEl.querySelector('[data-floating-open]') : null;
         floatingCloseBtn = floatingTimerEl ? floatingTimerEl.querySelector('[data-floating-close]') : null;
         floatingFinishBtn = floatingTimerEl ? floatingTimerEl.querySelector('[data-floating-finish]') : null;
+        const filterToggle = document.querySelector('[data-filter-toggle]');
+        const filterForm = document.querySelector('[data-filter-form]');
 
         const closeTaskMenus = () => {
             document.querySelectorAll('[data-task-menu].open').forEach((menu) => {
@@ -990,6 +1135,21 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                 closeTaskMenus();
             }
         });
+        if (filterToggle && filterForm) {
+            const storageKey = 'taskFiltersOpen';
+            const storedValue = localStorage.getItem(storageKey);
+            const shouldOpen = storedValue === 'true';
+            filterForm.classList.toggle('is-open', shouldOpen);
+            filterToggle.setAttribute('aria-expanded', shouldOpen ? 'true' : 'false');
+            if (storedValue === null) {
+                localStorage.setItem(storageKey, 'false');
+            }
+            filterToggle.addEventListener('click', () => {
+                const isOpen = filterForm.classList.toggle('is-open');
+                filterToggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+                localStorage.setItem(storageKey, isOpen ? 'true' : 'false');
+            });
+        }
 
         const openModal = (data) => {
             if (!modal || !modalForm) return;
@@ -2760,7 +2920,7 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                     approveButton.type = 'submit';
                     approveButton.name = 'approve_task';
                     approveButton.className = 'button';
-                    approveButton.textContent = 'Approve Task';
+                    approveButton.textContent = 'Review & Approve';
                     approveForm.appendChild(hidden);
                     approveForm.appendChild(approveButton);
                     body.appendChild(approveForm);
@@ -2996,77 +3156,129 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
     </header>
     <main>
         <?php if (isset($message)) echo "<p>$message</p>"; ?>
-        <?php if (canCreateContent($_SESSION['user_id'])): ?>
-            <div class="task-create-fab">
-                <button type="button" class="task-create-button" data-task-create-open aria-label="Create Task">
-                    <i class="fa-solid fa-plus"></i>
-                </button>
-            </div>
-        <?php endif; ?>
-        <?php if (canCreateContent($_SESSION['user_id'])): ?>
-        <?php endif; ?>
-        <section class="task-calendar-section">
-            <div class="task-calendar-card">
-                <div class="calendar-header">
-                    <div>
-                        <h2>Weekly Calendar</h2>
-                        <p class="calendar-subtitle">Tap children to filter tasks in the week view.</p>
-                    </div>
-                    <div class="calendar-nav">
-                        <div class="calendar-view-toggle" role="group" aria-label="Calendar view">
-                            <button type="button" class="calendar-view-button active" data-calendar-view="calendar" aria-pressed="true" title="Calendar view">
-                                <i class="fa-solid fa-calendar-days"></i>
-                            </button>
-                            <button type="button" class="calendar-view-button" data-calendar-view="list" aria-pressed="false" title="List view">
-                                <i class="fa-solid fa-list"></i>
-                            </button>
-                        </div>
-                        <button type="button" class="calendar-nav-button" data-week-nav="-1">Previous Week</button>
-                        <div class="calendar-range" data-week-range></div>
-                        <button type="button" class="calendar-nav-button" data-week-nav="1">Next Week</button>
-                        <?php if (!$calendarPremium): ?>
-                            <span class="calendar-premium-note">Premium feature</span>
-                        <?php endif; ?>
-                    </div>
-                </div>
+        <div class="task-list">
+            <div class="task-list-header">
+                <h2 class="task-list-title">Task Inventory</h2>
                 <?php if (canCreateContent($_SESSION['user_id'])): ?>
-                    <div class="calendar-filters">
-                        <div class="calendar-filter-header">
-                            <span class="calendar-filter-title">Filter by child</span>
-                            <label class="calendar-select-all">
-                                <input type="checkbox" data-calendar-select-all <?php echo !empty($children) ? 'checked' : ''; ?>>
-                                Select all
-                            </label>
-                        </div>
-                        <div class="calendar-child-grid">
-                            <?php foreach ($children as $child): ?>
-                                <label class="calendar-child-card">
-                                    <input type="checkbox" data-calendar-child value="<?php echo (int) $child['child_user_id']; ?>" checked>
-                                    <img src="<?php echo htmlspecialchars($child['avatar']); ?>" alt="<?php echo htmlspecialchars($child['first_name'] ?? $child['child_name']); ?>">
-                                    <span><?php echo htmlspecialchars($child['first_name'] ?? $child['child_name']); ?></span>
-                                </label>
-                            <?php endforeach; ?>
-                        </div>
+                    <p class="task-list-subtitle">Managing <strong><?php echo (int) $tasksCount; ?> tasks</strong> across the family</p>
+                <?php endif; ?>
+                <?php if (canCreateContent($_SESSION['user_id'])): ?>
+                    <div class="task-create-fab">
+                        <button type="button" class="task-create-button" data-task-create-open aria-label="Create Task">
+                            <i class="fa-solid fa-plus"></i>
+                        </button>
                     </div>
                 <?php endif; ?>
-                <div class="task-week-calendar" data-task-calendar>
-                    <div class="task-week-scroll">
-                        <div class="week-days week-days-header" data-week-days></div>
-                        <div class="week-grid" data-week-grid></div>
-                    </div>
-                    <div class="calendar-empty" data-calendar-empty>No tasks match the selected children for this week.</div>
-                </div>
-                <div class="task-week-list" data-task-list></div>
             </div>
-        </section>
-        <div class="task-list">
-            <h2><?php echo (canCreateContent($_SESSION['user_id'])) ? 'Created Tasks' : 'Assigned Tasks'; ?></h2>
+            <?php
+                $filterParams = array_filter([
+                    'status' => $filterStatus,
+                    'category' => $filterCategory,
+                    'time_of_day' => $filterTimeOfDay,
+                    'photo_required' => $filterPhoto,
+                    'timed' => $filterTimed,
+                    'repeat' => $filterRepeat
+                ]);
+                $filterQuery = http_build_query($filterParams);
+                $filterPrefix = $filterQuery ? ('?' . $filterQuery) : '';
+            ?>
+            <?php if (canCreateContent($_SESSION['user_id']) && !empty($children)): ?>
+                <div class="task-filter-row" aria-label="Filter tasks by child">
+                    <div class="task-child-grid">
+                        <a class="task-child-card<?php echo empty($selectedChildId) ? ' is-active' : ''; ?>" href="task.php<?php echo $filterPrefix; ?>">
+                            <span class="task-child-icon"><i class="fa-solid fa-layer-group"></i></span>
+                            <span>All Tasks</span>
+                        </a>
+                        <?php foreach ($children as $child): ?>
+                            <?php $childIdValue = (int) ($child['child_user_id'] ?? 0); ?>
+                            <?php
+                                $childParams = $filterParams;
+                                $childParams['child_id'] = $childIdValue;
+                                $childQuery = http_build_query($childParams);
+                                $childName = $child['first_name'] ?? $child['child_name'];
+                            ?>
+                            <a class="task-child-card<?php echo $selectedChildId === $childIdValue ? ' is-active' : ''; ?>" href="task.php?<?php echo htmlspecialchars($childQuery, ENT_QUOTES); ?>">
+                                <img src="<?php echo htmlspecialchars($child['avatar']); ?>" alt="<?php echo htmlspecialchars($childName); ?>">
+                                <span><?php echo htmlspecialchars($childName); ?></span>
+                            </a>
+                        <?php endforeach; ?>
+                    </div>
+                    <button type="button" class="task-filter-toggle" data-filter-toggle aria-expanded="<?php echo $filtersActive ? 'true' : 'false'; ?>">
+                        <i class="fa-solid fa-filter"></i>
+                        More Filters
+                    </button>
+                </div>
+                <form class="task-filter-form" method="get" action="task.php" data-filter-form>
+                    <?php if (!empty($selectedChildId)): ?>
+                        <input type="hidden" name="child_id" value="<?php echo (int) $selectedChildId; ?>">
+                    <?php endif; ?>
+                    <div class="task-filter-field">
+                        <label for="task-filter-status">Status</label>
+                        <select id="task-filter-status" name="status">
+                            <option value="">All</option>
+                            <option value="pending"<?php echo $filterStatus === 'pending' ? ' selected' : ''; ?>>Pending</option>
+                            <option value="completed"<?php echo $filterStatus === 'completed' ? ' selected' : ''; ?>>Completed</option>
+                            <option value="approved"<?php echo $filterStatus === 'approved' ? ' selected' : ''; ?>>Approved</option>
+                            <option value="expired"<?php echo $filterStatus === 'expired' ? ' selected' : ''; ?>>Expired</option>
+                        </select>
+                    </div>
+                    <div class="task-filter-field">
+                        <label for="task-filter-category">Category</label>
+                        <select id="task-filter-category" name="category">
+                            <option value="">All</option>
+                            <?php foreach ($availableCategories as $category): ?>
+                                <option value="<?php echo htmlspecialchars($category); ?>"<?php echo $filterCategory === $category ? ' selected' : ''; ?>>
+                                    <?php echo htmlspecialchars(ucfirst($category)); ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="task-filter-field">
+                        <label for="task-filter-time">Due By</label>
+                        <select id="task-filter-time" name="time_of_day">
+                            <option value="">All</option>
+                            <option value="anytime"<?php echo $filterTimeOfDay === 'anytime' ? ' selected' : ''; ?>>Anytime</option>
+                            <option value="morning"<?php echo $filterTimeOfDay === 'morning' ? ' selected' : ''; ?>>Morning</option>
+                            <option value="afternoon"<?php echo $filterTimeOfDay === 'afternoon' ? ' selected' : ''; ?>>Afternoon</option>
+                            <option value="evening"<?php echo $filterTimeOfDay === 'evening' ? ' selected' : ''; ?>>Evening</option>
+                        </select>
+                    </div>
+                    <div class="task-filter-field">
+                        <label for="task-filter-photo">Photo Required</label>
+                        <select id="task-filter-photo" name="photo_required">
+                            <option value="">All</option>
+                            <option value="required"<?php echo $filterPhoto === 'required' ? ' selected' : ''; ?>>Required</option>
+                            <option value="not_required"<?php echo $filterPhoto === 'not_required' ? ' selected' : ''; ?>>Not required</option>
+                        </select>
+                    </div>
+                    <div class="task-filter-field">
+                        <label for="task-filter-timed">Timer</label>
+                        <select id="task-filter-timed" name="timed">
+                            <option value="">All</option>
+                            <option value="timed"<?php echo $filterTimed === 'timed' ? ' selected' : ''; ?>>Timed</option>
+                            <option value="not_timed"<?php echo $filterTimed === 'not_timed' ? ' selected' : ''; ?>>Not timed</option>
+                        </select>
+                    </div>
+                    <div class="task-filter-field">
+                        <label for="task-filter-repeat">Repeat</label>
+                        <select id="task-filter-repeat" name="repeat">
+                            <option value="">All</option>
+                            <option value="once"<?php echo $filterRepeat === 'once' ? ' selected' : ''; ?>>Once</option>
+                            <option value="everyday"<?php echo $filterRepeat === 'everyday' ? ' selected' : ''; ?>>Every day</option>
+                            <option value="specific_days"<?php echo $filterRepeat === 'specific_days' ? ' selected' : ''; ?>>Specific days</option>
+                        </select>
+                    </div>
+                    <div class="task-filter-actions">
+                        <button type="submit" class="button secondary">Apply Filters</button>
+                    </div>
+                </form>
+            <?php endif; ?>
             <?php if (empty($tasks)): ?>
                 <p>No tasks available.</p>
             <?php else: ?>
                 <details class="task-section-toggle">
                     <summary>
-                        <span class="task-section-title">Active Tasks <span class="task-count-badge"><?php echo count($pending_tasks); ?></span></span>
+                        <span class="task-section-title"><span class="task-section-icon is-active"><i class="fa-solid fa-list-check"></i></span>Active Tasks <span class="task-count-badge"><?php echo count($pending_tasks); ?></span></span>
                     </summary>
                     <div class="task-section-content">
                         <?php if (empty($pending_tasks)): ?>
@@ -3287,7 +3499,7 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
 
                 <details class="task-section-toggle" <?php echo !empty($completed_tasks) ? 'open' : ''; ?>>
                     <summary>
-                        <span class="task-section-title">Pending Approval <span class="task-count-badge"><?php echo count($completed_tasks); ?></span></span>
+                        <span class="task-section-title"><span class="task-section-icon is-pending"><i class="fa-solid fa-square-check"></i></span>Pending Approval <span class="task-count-badge"><?php echo count($completed_tasks); ?></span></span>
                     </summary>
                     <div class="task-section-content">
                         <?php if (empty($completed_tasks)): ?>
@@ -3396,57 +3608,56 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                                         </div>
                                     <?php endif; ?>
                                     <?php if (canCreateContent($_SESSION['user_id']) && canAddEditChild($_SESSION['user_id'])): ?>
-                                        <form method="POST" action="task.php">
-                                            <input type="hidden" name="task_id" value="<?php echo $task['id']; ?>">
-                                            <?php if (!empty($task['instance_date'])): ?>
-                                                <input type="hidden" name="instance_date" value="<?php echo htmlspecialchars($task['instance_date']); ?>">
-                                            <?php endif; ?>
-                                            <button type="submit" name="approve_task" class="button">Approve Task</button>
-                                        </form>
-                                        <form method="POST" action="task.php" class="task-reject-form">
-                                            <input type="hidden" name="task_id" value="<?php echo $task['id']; ?>">
-                                            <input type="hidden" name="reject_task" value="1">
-                                            <?php if (!empty($task['instance_date'])): ?>
-                                                <input type="hidden" name="instance_date" value="<?php echo htmlspecialchars($task['instance_date']); ?>">
-                                            <?php endif; ?>
-                                            <label for="reject_note_<?php echo (int) $task['id']; ?>">Rejection note (optional)</label>
-                                            <textarea id="reject_note_<?php echo (int) $task['id']; ?>" name="reject_note" placeholder="Explain why this task was rejected."></textarea>
-                                            <div class="task-reject-actions">
-                                                <button type="submit" name="reject_action" value="reactivate" class="button secondary">Reject &amp; Reactivate</button>
-                                                <button type="submit" name="reject_action" value="close" class="button danger">Reject &amp; Close</button>
-                                            </div>
-                                        </form>
-                                        <div class="task-card-footer">
-                                            <div></div>
-                                            <div class="task-card-menu" data-task-menu>
-                                                <button type="button" class="task-card-menu-toggle" aria-label="Open task actions" data-task-menu-toggle>
-                                                    <i class="fa-solid fa-ellipsis-vertical"></i>
-                                                </button>
-                                                <div class="task-card-menu-list">
-                                                    <button type="button"
-                                                            class="task-card-menu-item"
-                                                            data-task-duplicate-open
-                                                            data-task-id="<?php echo $task['id']; ?>"
-                                                            data-child-id="<?php echo (int)$task['child_user_id']; ?>"
-                                                            data-child-name="<?php echo htmlspecialchars($childName, ENT_QUOTES); ?>"
-                                                            data-title="<?php echo htmlspecialchars($task['title'], ENT_QUOTES); ?>"
-                                                            data-description="<?php echo htmlspecialchars($task['description'], ENT_QUOTES); ?>"
-                                                            data-start-date="<?php echo htmlspecialchars($dueDateValue, ENT_QUOTES); ?>"
-                                                            data-due-time="<?php echo htmlspecialchars($dueTimeValue, ENT_QUOTES); ?>"
-                                                            data-end-date="<?php echo !empty($task['end_date']) ? htmlspecialchars($task['end_date'], ENT_QUOTES) : ''; ?>"
-                                                            data-points="<?php echo (int)$task['points']; ?>"
-                                                            data-time-of-day="<?php echo htmlspecialchars($task['time_of_day'] ?? 'anytime', ENT_QUOTES); ?>"
-                                                            data-recurrence="<?php echo htmlspecialchars($repeatValue, ENT_QUOTES); ?>"
-                                                            data-recurrence-days="<?php echo htmlspecialchars($task['recurrence_days'] ?? '', ENT_QUOTES); ?>"
-                                                            data-category="<?php echo htmlspecialchars($task['category'] ?? '', ENT_QUOTES); ?>"
-                                                            data-timing-mode="<?php echo htmlspecialchars($task['timing_mode'] ?? '', ENT_QUOTES); ?>"
-                                                            data-timer-minutes="<?php echo (int)($task['timer_minutes'] ?? 0); ?>"
-                                                            data-photo-required="<?php echo (int)($task['photo_proof_required'] ?? 0); ?>">
-                                                        <i class="fa-solid fa-clone"></i> Duplicate Task
-                                                    </button>
-                                                </div>
-                                            </div>
+                                <form method="POST" action="task.php" id="approve-form-<?php echo (int) $task['id']; ?>">
+                                    <input type="hidden" name="task_id" value="<?php echo $task['id']; ?>">
+                                    <?php if (!empty($task['instance_date'])): ?>
+                                        <input type="hidden" name="instance_date" value="<?php echo htmlspecialchars($task['instance_date']); ?>">
+                                    <?php endif; ?>
+                                    <button type="submit" name="approve_task" class="button">Review &amp; Approve</button>
+                                </form>
+                                <form method="POST" action="task.php" class="task-reject-form" id="reject-form-<?php echo (int) $task['id']; ?>">
+                                    <input type="hidden" name="task_id" value="<?php echo $task['id']; ?>">
+                                    <input type="hidden" name="reject_task" value="1">
+                                    <?php if (!empty($task['instance_date'])): ?>
+                                        <input type="hidden" name="instance_date" value="<?php echo htmlspecialchars($task['instance_date']); ?>">
+                                    <?php endif; ?>
+                                    <label for="reject_note_<?php echo (int) $task['id']; ?>">Rejection note (optional)</label>
+                                    <textarea id="reject_note_<?php echo (int) $task['id']; ?>" name="reject_note" placeholder="Explain why this task was rejected."></textarea>
+                                </form>
+                                <div class="task-reject-bar">
+                                    <div class="task-reject-actions">
+                                        <button type="submit" name="reject_action" value="reactivate" class="button secondary" form="reject-form-<?php echo (int) $task['id']; ?>">Reject &amp; Reactivate</button>
+                                        <button type="submit" name="reject_action" value="close" class="button danger" form="reject-form-<?php echo (int) $task['id']; ?>">Reject &amp; Close</button>
+                                    </div>
+                                    <div class="task-card-menu" data-task-menu>
+                                        <button type="button" class="task-card-menu-toggle" aria-label="Open task actions" data-task-menu-toggle>
+                                            <i class="fa-solid fa-ellipsis-vertical"></i>
+                                        </button>
+                                        <div class="task-card-menu-list">
+                                            <button type="button"
+                                                    class="task-card-menu-item"
+                                                    data-task-duplicate-open
+                                                    data-task-id="<?php echo $task['id']; ?>"
+                                                    data-child-id="<?php echo (int)$task['child_user_id']; ?>"
+                                                    data-child-name="<?php echo htmlspecialchars($childName, ENT_QUOTES); ?>"
+                                                    data-title="<?php echo htmlspecialchars($task['title'], ENT_QUOTES); ?>"
+                                                    data-description="<?php echo htmlspecialchars($task['description'], ENT_QUOTES); ?>"
+                                                    data-start-date="<?php echo htmlspecialchars($dueDateValue, ENT_QUOTES); ?>"
+                                                    data-due-time="<?php echo htmlspecialchars($dueTimeValue, ENT_QUOTES); ?>"
+                                                    data-end-date="<?php echo !empty($task['end_date']) ? htmlspecialchars($task['end_date'], ENT_QUOTES) : ''; ?>"
+                                                    data-points="<?php echo (int)$task['points']; ?>"
+                                                    data-time-of-day="<?php echo htmlspecialchars($task['time_of_day'] ?? 'anytime', ENT_QUOTES); ?>"
+                                                    data-recurrence="<?php echo htmlspecialchars($repeatValue, ENT_QUOTES); ?>"
+                                                    data-recurrence-days="<?php echo htmlspecialchars($task['recurrence_days'] ?? '', ENT_QUOTES); ?>"
+                                                    data-category="<?php echo htmlspecialchars($task['category'] ?? '', ENT_QUOTES); ?>"
+                                                    data-timing-mode="<?php echo htmlspecialchars($task['timing_mode'] ?? '', ENT_QUOTES); ?>"
+                                                    data-timer-minutes="<?php echo (int)($task['timer_minutes'] ?? 0); ?>"
+                                                    data-photo-required="<?php echo (int)($task['photo_proof_required'] ?? 0); ?>">
+                                                <i class="fa-solid fa-clone"></i> Duplicate Task
+                                            </button>
                                         </div>
+                                    </div>
+                                </div>
                                     <?php else: ?>
                                         <p class="waiting-label">Waiting for approval</p>
                                     <?php endif; ?>
@@ -3459,7 +3670,7 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
 
                 <details class="task-section-toggle" data-approved-section>
                     <summary>
-                        <span class="task-section-title">Approved Tasks <span class="task-count-badge"><?php echo count($approved_tasks); ?></span></span>
+                        <span class="task-section-title"><span class="task-section-icon is-approved"><i class="fa-solid fa-circle-check"></i></span>Approved Tasks <span class="task-count-badge"><?php echo count($approved_tasks); ?></span></span>
                     </summary>
                     <div class="task-section-content">
                         <?php if (empty($approved_tasks)): ?>
@@ -3578,7 +3789,7 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                 </details>
                 <details class="task-section-toggle">
                     <summary>
-                        <span class="task-section-title">Expired Tasks <span class="task-count-badge"><?php echo count($expired_tasks); ?></span></span>
+                        <span class="task-section-title"><span class="task-section-icon is-expired"><i class="fa-solid fa-calendar-xmark"></i></span>Expired Tasks <span class="task-count-badge"><?php echo count($expired_tasks); ?></span></span>
                     </summary>
                     <div class="task-section-content">
                         <?php if (empty($expired_tasks)): ?>
@@ -3628,8 +3839,64 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                 </details>
             <?php endif; ?>
         </div>
+<section class="task-calendar-section">
+            <div class="task-calendar-card">
+                <div class="calendar-header">
+                    <div>
+                        <h2>Weekly Calendar</h2>
+                        <?php if (canCreateContent($_SESSION['user_id'])): ?>
+                            <p class="calendar-subtitle">Tap children to filter tasks in the week view.</p>
+                        <?php endif; ?>
+                    </div>
+                    <div class="calendar-nav">
+                        <div class="calendar-view-toggle" role="group" aria-label="Calendar view">
+                            <button type="button" class="calendar-view-button active" data-calendar-view="calendar" aria-pressed="true" title="Calendar view">
+                                <i class="fa-solid fa-calendar-days"></i>
+                            </button>
+                            <button type="button" class="calendar-view-button" data-calendar-view="list" aria-pressed="false" title="List view">
+                                <i class="fa-solid fa-list"></i>
+                            </button>
+                        </div>
+                        <button type="button" class="calendar-nav-button" data-week-nav="-1">Previous Week</button>
+                        <div class="calendar-range" data-week-range></div>
+                        <button type="button" class="calendar-nav-button" data-week-nav="1">Next Week</button>
+                        <?php if (!$calendarPremium): ?>
+                            <span class="calendar-premium-note">Premium feature</span>
+                        <?php endif; ?>
+                    </div>
+                </div>
+                <?php if (canCreateContent($_SESSION['user_id'])): ?>
+                    <div class="calendar-filters">
+                        <div class="calendar-filter-header">
+                            <span class="calendar-filter-title">Filter by child</span>
+                            <label class="calendar-select-all">
+                                <input type="checkbox" data-calendar-select-all <?php echo !empty($children) ? 'checked' : ''; ?>>
+                                Select all
+                            </label>
+                        </div>
+                        <div class="calendar-child-grid">
+                            <?php foreach ($children as $child): ?>
+                                <label class="calendar-child-card">
+                                    <input type="checkbox" data-calendar-child value="<?php echo (int) $child['child_user_id']; ?>" checked>
+                                    <img src="<?php echo htmlspecialchars($child['avatar']); ?>" alt="<?php echo htmlspecialchars($child['first_name'] ?? $child['child_name']); ?>">
+                                    <span><?php echo htmlspecialchars($child['first_name'] ?? $child['child_name']); ?></span>
+                                </label>
+                            <?php endforeach; ?>
+                        </div>
+                    </div>
+                <?php endif; ?>
+                <div class="task-week-calendar" data-task-calendar>
+                    <div class="task-week-scroll">
+                        <div class="week-days week-days-header" data-week-days></div>
+                        <div class="week-grid" data-week-grid></div>
+                    </div>
+                    <div class="calendar-empty" data-calendar-empty>No tasks match the selected children for this week.</div>
+                </div>
+                <div class="task-week-list" data-task-list></div>
+            </div>
+        </section>
         <?php if (canCreateContent($_SESSION['user_id']) && canAddEditChild($_SESSION['user_id'])): ?>
-            <div class="task-modal" data-task-edit-modal>
+        <div class="task-modal" data-task-edit-modal>
                 <div class="task-modal-card" role="dialog" aria-modal="true" aria-labelledby="task-edit-title">
                     <header>
                         <h2 id="task-edit-title">Edit Task</h2>
@@ -3989,7 +4256,7 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                 </div>
             </div>
         </div>
-    <?php endif; ?>
+        <?php endif; ?>
     <nav class="nav-mobile-bottom" aria-label="Primary">
         <a class="nav-mobile-link<?php echo $dashboardActive ? ' is-active' : ''; ?>" href="<?php echo htmlspecialchars($dashboardPage); ?>"<?php echo $dashboardActive ? ' aria-current="page"' : ''; ?>>
             <i class="fa-solid fa-house"></i>
@@ -4024,6 +4291,7 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
 <?php endif; ?>
 </body>
 </html>
+
 
 
 
