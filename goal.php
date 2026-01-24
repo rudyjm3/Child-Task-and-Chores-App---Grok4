@@ -1219,7 +1219,7 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                                         <?php endif; ?>
                                     </div>
                                     <?php if (!empty($goal['description'])): ?>
-                                        <p class="goal-description"><span class="goal-info-label"><i class="fa-solid fa-align-center"></i></span><?php echo nl2br(htmlspecialchars($goal['description'])); ?></p>
+                                        <p class="goal-description"><span class="goal-info-label"><i class="fa-solid fa-message"></i></span><?php echo nl2br(htmlspecialchars($goal['description'])); ?></p>
                                     <?php endif; ?>
                                     <p class="goal-info-row"><span class="goal-info-label"><i class="fa-regular fa-calendar-days"></i></span><?php echo htmlspecialchars($goal['start_date_formatted']); ?> to <?php echo htmlspecialchars($goal['end_date_formatted']); ?></p>
                                     <p class="goal-info-row"><span class="goal-info-label"><i class="fa-solid fa-gift"></i></span><?php echo htmlspecialchars($goal['reward_title'] ?? 'None'); ?></p>
@@ -1375,7 +1375,7 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                                 <span class="goal-status-badge completed">Completed</span>
                             </div>
                             <?php if (!empty($goal['description'])): ?>
-                                <p class="goal-description"><span class="goal-info-label"><i class="fa-solid fa-align-center"></i></span><?php echo nl2br(htmlspecialchars($goal['description'])); ?></p>
+                                <p class="goal-description"><span class="goal-info-label"><i class="fa-solid fa-message"></i></span><?php echo nl2br(htmlspecialchars($goal['description'])); ?></p>
                             <?php endif; ?>
                             <p class="goal-info-row"><span class="goal-info-label"><i class="fa-regular fa-calendar-days"></i></span><?php echo htmlspecialchars($goal['start_date_formatted']); ?> to <?php echo htmlspecialchars($goal['end_date_formatted']); ?></p>
                             <p class="goal-info-row"><span class="goal-info-label"><i class="fa-solid fa-gift"></i></span><?php echo htmlspecialchars($goal['reward_title'] ?? 'None'); ?></p>
@@ -1451,7 +1451,7 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                                         <span class="goal-status-badge rejected"><?php echo htmlspecialchars($inactiveLabel); ?></span>
                                     </div>
                                     <?php if (!empty($goal['description'])): ?>
-                                        <p class="goal-description"><span class="goal-info-label"><i class="fa-solid fa-align-center"></i></span><?php echo nl2br(htmlspecialchars($goal['description'])); ?></p>
+                                        <p class="goal-description"><span class="goal-info-label"><i class="fa-solid fa-message"></i></span><?php echo nl2br(htmlspecialchars($goal['description'])); ?></p>
                                     <?php endif; ?>
                                     <p class="goal-info-row"><span class="goal-info-label"><i class="fa-regular fa-calendar-days"></i></span><?php echo htmlspecialchars($goal['start_date_formatted']); ?> to <?php echo htmlspecialchars($goal['end_date_formatted']); ?></p>
                                     <p class="goal-info-row"><span class="goal-info-label"><i class="fa-solid fa-gift"></i></span><?php echo htmlspecialchars($goal['reward_title'] ?? 'None'); ?></p>
@@ -2515,6 +2515,7 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
 <?php endif; ?>
 </body>
 </html>
+
 
 
 

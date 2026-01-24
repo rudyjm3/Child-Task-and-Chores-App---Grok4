@@ -526,26 +526,55 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
         }
         .button.secondary { background: #619fd0; }
         .button.danger { background: #e53935; }
-        /* Improved task card styling for spacing and readability */
+        /* Task card layout aligned to parent mockups */
         .task-card {
-            padding: 15px;
             margin-bottom: 20px;
-            border: 1px solid #ddd;
-            border-radius: 8px;
+            border: 1px solid #e3e7eb;
+            border-radius: 18px;
             background: #fff;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            box-shadow: 0 6px 16px rgba(0,0,0,0.08);
+            overflow: hidden;
         }
-        .task-card-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
-        .task-card-badges { display: inline-flex; align-items: center; gap: 8px; }
-        .task-approved-badge { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; color: #4caf50; }
-        .task-card-title-wrapper { flex: 1; text-align: left; }
-        .task-card-title { font-weight: 700; font-size: 1.2rem; color: #37474f; }
-        .task-pill { background-color: #4caf50; color: #fff; padding: 2px 8px; border-radius: 50px; font-size: 0.7rem; font-weight: 700; white-space: nowrap; }
-        .task-meta { display: grid; gap: 4px; color: #455a64; font-size: 0.95rem; }
+        .task-card[open] { box-shadow: 0 10px 24px rgba(0,0,0,0.12); }
+        .task-card summary { list-style: none; cursor: pointer; }
+        .task-card summary::-webkit-details-marker { display: none !important; }
+        .task-card summary::marker { content: '' !important; }
+        .task-card summary { list-style: none !important; }
+        .task-card summary::-moz-list-bullet { list-style-type: none; }
+        .task-card-summary { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 18px; }
+        .task-card-summary-left { display: flex; align-items: center; gap: 12px; min-width: 0; flex: 1; }
+        .task-card-icon { width: 46px; height: 46px; border-radius: 14px; background: #f5f7fb; color: #4caf50; display: inline-flex; align-items: center; justify-content: center; font-size: 1.1rem; box-shadow: inset 0 0 0 1px #eef1f5; flex: 0 0 auto; }
+        .task-card-title-block { min-width: 0; display: grid; gap: 4px; }
+        .task-card-title-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+        .task-card-title { font-weight: 700; font-size: 1.05rem; color: #37474f; }
+        .task-card-child-pill { background: #eef1f5; color: #607d8b; padding: 2px 8px; border-radius: 999px; font-size: 0.72rem; font-weight: 700; white-space: nowrap; }
+        .task-card-subtitle { font-size: 0.9rem; color: #8a94a6; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+        .task-card-status { font-weight: 700; font-size: 0.72rem; padding: 2px 8px; border-radius: 999px; background: #fff3e0; color: #ef6c00; text-transform: uppercase; letter-spacing: 0.02em; }
+        .task-card-status.is-overdue { background: #ffebee; color: #d32f2f; }
+        .task-card-status.is-success { background: #e8f5e9; color: #2e7d32; }
+        .task-card-status.is-muted { background: #eceff1; color: #607d8b; }
+        .task-card-summary-right { display: flex; align-items: center; gap: 12px; }
+        .task-card-points { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; color: #0d47a1; }
+        .task-card-points i { color: #0d47a1; }
+        .task-card-chevron { color: #90a4ae; transition: transform 200ms ease; }
+        .task-card[open] .task-card-chevron { transform: rotate(90deg); }
+        .task-card-body { padding: 16px 18px 18px; display: grid; gap: 12px; border-top: 1px solid #eef1f5; }
+        .task-card-note { background: #f7f9fc; border: 1px solid #eef1f5; border-radius: 12px; padding: 12px 14px; color: #546e7a; }
+        .task-card-note.text { display: flex; align-items: flex-start; gap: 8px; }
+        .task-card-footer { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; }
+        .task-card-primary { width: 100%; margin: 0; border-radius: 999px; padding: 12px 16px; font-weight: 700; }
+        .task-card-menu { position: relative; }
+        .task-card-menu-toggle { width: 42px; height: 42px; border-radius: 14px; border: 1px solid #e0e0e0; background: #f5f7fb; color: #546e7a; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+        .task-card-menu-list { position: absolute; bottom: calc(100% + 10px); right: 0; background: #fff; border: 1px solid #e6ebf1; border-radius: 12px; box-shadow: 0 10px 20px rgba(0,0,0,0.12); padding: 8px; display: none; min-width: 190px; z-index: 10; }
+        .task-card-menu.open .task-card-menu-list { display: grid; gap: 4px; }
+        .task-card-menu-item { width: 100%; border: none; background: transparent; padding: 8px 10px; border-radius: 10px; text-align: left; font-weight: 600; color: #455a64; cursor: pointer; display: flex; align-items: center; gap: 8px; }
+        .task-card-menu-item:hover { background: #f5f7fb; }
+        .task-card-menu-item.danger { color: #d32f2f; }
+        .task-meta { display: grid; gap: 8px; color: #455a64; font-size: 0.95rem; background: #f7f9fc; border: 1px solid #eef1f5; border-radius: 12px; padding: 12px 14px; }
         .task-meta-row { display: flex; flex-wrap: wrap; gap: 10px; }
         .task-meta-row > span { display: flex; align-items: center; gap: 6px; }
         .task-meta-label { font-weight: 600; color: #37474f; display: inline-flex; align-items: center; gap: 6px; }
-        .task-description { margin-top: 8px; color: #546e7a; text-align: left; }
+        .task-description { margin-top: 0; color: #546e7a; text-align: left; }
         .task-description.text { display: flex; align-items: flex-start; gap: 8px; }
         .task-desc-icon { color: #919191; font-size: 0.95rem; margin-top: 2px; }
         .task-meta-icon { color: #919191; }
@@ -554,11 +583,14 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
         .calendar-task-child { display: inline-flex; align-items: center; gap: 6px; font-size: 0.8rem; color: #455a64; font-weight: 600; }
         .calendar-task-child-avatar { width: 20px; height: 20px; border-radius: 50%; object-fit: cover; border: 1px solid #e0e0e0; }
         .task-section-toggle { margin: 18px 0 10px; border: 1px solid #e0e0e0; border-radius: 10px; padding: 8px 12px; background: #fff; overflow: hidden; transition: border-color 200ms ease, box-shadow 200ms ease; }
-        .task-section-toggle summary { cursor: pointer; font-weight: 700; color: #37474f; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+        .task-section-toggle > summary { cursor: pointer; font-weight: 700; color: #37474f; display: flex; align-items: center; justify-content: space-between; gap: 10px; list-style: none; }
         .task-section-title { display: inline-flex; align-items: center; gap: 8px; }
-        .task-section-toggle summary::-webkit-details-marker { display: none; }
-        .task-section-toggle summary::after { content: '\f078'; font-family: 'Font Awesome 6 Free'; font-weight: 900; font-size: 0.85rem; color: #607d8b; transition: transform 200ms ease; }
-        .task-section-toggle[open] summary::after { transform: rotate(180deg); }
+        .task-section-toggle > summary::-webkit-details-marker { display: none !important; }
+        .task-section-toggle > summary::marker { content: '' !important; }
+        .task-section-toggle > summary { list-style: none !important; }
+        .task-section-toggle > summary::-moz-list-bullet { list-style-type: none; }
+        .task-section-toggle > summary::after { content: '\f054'; font-family: 'Font Awesome 6 Free'; font-weight: 900; font-size: 0.85rem; color: #607d8b; transition: transform 200ms ease; }
+        .task-section-toggle[open] > summary::after { transform: rotate(90deg); }
         .task-section-toggle[open] { border-color: #ffd28a; box-shadow: 0 6px 16px rgba(255, 210, 138, 0.25); }
         .task-section-content { overflow: hidden; max-height: 0; opacity: 0; transform: translateY(-6px); transition: max-height 280ms ease, opacity 200ms ease, transform 200ms ease; margin-top: 15px; }
         .task-section-toggle[open] .task-section-content { max-height: 12000px; opacity: 1; transform: translateY(0); }
@@ -690,8 +722,6 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
         .icon-button.danger { border: none;
          background-color: rgba(0, 0, 0, 0.0);
          color: #9f9f9f; /*background: #f5f5f5; border-color: #d5def0; color: #757575;*/ }
-        .task-card-actions { margin-top: 10px; display: flex; gap: 8px; }
-        .task-card-actions.right { justify-content: flex-end; }
         .task-reject-form { margin-top: 12px; display: grid; gap: 8px; }
         .task-reject-form textarea { width: 100%; min-height: 70px; resize: vertical; }
         .task-reject-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
@@ -926,6 +956,40 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
         floatingOpenBtn = floatingTimerEl ? floatingTimerEl.querySelector('[data-floating-open]') : null;
         floatingCloseBtn = floatingTimerEl ? floatingTimerEl.querySelector('[data-floating-close]') : null;
         floatingFinishBtn = floatingTimerEl ? floatingTimerEl.querySelector('[data-floating-finish]') : null;
+
+        const closeTaskMenus = () => {
+            document.querySelectorAll('[data-task-menu].open').forEach((menu) => {
+                menu.classList.remove('open');
+            });
+        };
+        document.addEventListener('click', (event) => {
+            const toggle = event.target.closest('[data-task-menu-toggle]');
+            const menu = event.target.closest('[data-task-menu]');
+            const menuItem = event.target.closest('.task-card-menu-item');
+            if (toggle) {
+                event.preventDefault();
+                const menuRoot = toggle.closest('[data-task-menu]');
+                if (!menuRoot) return;
+                const isOpen = menuRoot.classList.contains('open');
+                closeTaskMenus();
+                if (!isOpen) {
+                    menuRoot.classList.add('open');
+                }
+                return;
+            }
+            if (menuItem) {
+                closeTaskMenus();
+                return;
+            }
+            if (!menu) {
+                closeTaskMenus();
+            }
+        });
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') {
+                closeTaskMenus();
+            }
+        });
 
         const openModal = (data) => {
             if (!modal || !modalForm) return;
@@ -2356,7 +2420,7 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
         }
 
         function buildTaskPreviewCard(task, dateKey = null) {
-            const card = document.createElement('div');
+            const card = document.createElement('details');
             card.className = 'task-card';
             const isRecurring = !!(task.recurrence || '');
             const viewDateKey = dateKey || formatDateKey(new Date());
@@ -2369,10 +2433,10 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
             if (timeParts) {
                 dueTimeValue = `${String(timeParts.hours).padStart(2, '0')}:${String(timeParts.minutes).padStart(2, '0')}`;
             }
-            const buildDuplicateButton = () => {
+            const buildDuplicateButton = (options = {}) => {
                 const duplicateButton = document.createElement('button');
                 duplicateButton.type = 'button';
-                duplicateButton.className = 'icon-button';
+                duplicateButton.className = options.className || 'icon-button';
                 duplicateButton.setAttribute('aria-label', 'Duplicate task');
                 duplicateButton.dataset.taskDuplicateOpen = '';
                 duplicateButton.dataset.taskId = String(task.id);
@@ -2390,69 +2454,80 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                 duplicateButton.dataset.timingMode = task.timing_mode || '';
                 duplicateButton.dataset.timerMinutes = String(task.timer_minutes || 0);
                 duplicateButton.dataset.photoRequired = task.photo_proof_required ? '1' : '0';
-                duplicateButton.innerHTML = '<i class="fa-solid fa-clone"></i>';
+                if (options.label) {
+                    duplicateButton.innerHTML = `<i class="fa-solid fa-clone"></i> ${options.label}`;
+                } else {
+                    duplicateButton.innerHTML = '<i class="fa-solid fa-clone"></i>';
+                }
                 return duplicateButton;
             };
 
-            const header = document.createElement('div');
-            header.className = 'task-card-header';
-
-              const titleWrapper = document.createElement('div');
-              titleWrapper.className = 'task-card-title-wrapper';
-              const title = document.createElement('div');
-              title.className = 'task-card-title';
-              title.textContent = task.title || 'Task';
-              titleWrapper.appendChild(title);
-
-            const points = document.createElement('div');
-            points.className = 'task-pill';
-            points.textContent = `${task.points || 0} pts`;
+            const summary = document.createElement('summary');
+            summary.className = 'task-card-summary';
+            const summaryLeft = document.createElement('div');
+            summaryLeft.className = 'task-card-summary-left';
+            const iconWrap = document.createElement('div');
+            iconWrap.className = 'task-card-icon';
+            iconWrap.innerHTML = '<i class="fa-solid fa-list-check"></i>';
+            const titleBlock = document.createElement('div');
+            titleBlock.className = 'task-card-title-block';
+            const titleRow = document.createElement('div');
+            titleRow.className = 'task-card-title-row';
+            const title = document.createElement('div');
+            title.className = 'task-card-title';
+            title.textContent = task.title || 'Task';
+            titleRow.appendChild(title);
+            if (task.child_name) {
+                const childPill = document.createElement('span');
+                childPill.className = 'task-card-child-pill';
+                childPill.textContent = task.child_name;
+                titleRow.appendChild(childPill);
+            }
+            const subtitle = document.createElement('div');
+            subtitle.className = 'task-card-subtitle';
             const isCompleted = isTaskCompleted(task, viewDateKey);
-            const isCompletedLate = isTaskCompletedLate(task, viewDateKey);
             const isOverdue = !isCompleted && isTaskOverdue(task, viewDateKey);
-            let badge = null;
-            if (isCompleted && isCompletedLate) {
-                badge = document.createElement('span');
-                badge.className = 'calendar-task-badge-group';
-                const doneBadge = document.createElement('span');
-                doneBadge.className = 'calendar-task-badge completed compact';
-                doneBadge.title = 'Done';
-                const doneIcon = document.createElement('i');
-                doneIcon.className = 'fa-solid fa-check';
-                doneBadge.appendChild(doneIcon);
-                const lateBadge = document.createElement('span');
-                lateBadge.className = 'calendar-task-badge overdue compact';
-                lateBadge.title = 'Overdue';
-                const lateIcon = document.createElement('i');
-                lateIcon.className = 'fa-solid fa-triangle-exclamation';
-                lateBadge.appendChild(lateIcon);
-                badge.appendChild(doneBadge);
-                badge.appendChild(lateBadge);
-            } else if (isCompleted) {
-                badge = document.createElement('span');
-                badge.className = 'calendar-task-badge completed';
-                badge.title = 'Done';
-                const icon = document.createElement('i');
-                icon.className = 'fa-solid fa-check';
-                badge.appendChild(icon);
-                badge.appendChild(document.createTextNode(' Done'));
+            const dueDisplay = getTaskDueDisplay(task);
+            subtitle.textContent = dueDisplay;
+            if (statusForView === 'completed') {
+                const status = document.createElement('span');
+                status.className = 'task-card-status';
+                status.textContent = 'Pending Approval';
+                subtitle.appendChild(status);
+            } else if (statusForView === 'approved') {
+                const status = document.createElement('span');
+                status.className = 'task-card-status is-success';
+                status.textContent = 'Approved';
+                subtitle.appendChild(status);
             } else if (isOverdue) {
-                badge = document.createElement('span');
-                badge.className = 'calendar-task-badge overdue';
-                badge.title = 'Overdue';
-                badge.textContent = 'Overdue';
+                const status = document.createElement('span');
+                status.className = 'task-card-status is-overdue';
+                status.textContent = 'Overdue';
+                subtitle.appendChild(status);
             }
+            titleBlock.appendChild(titleRow);
+            titleBlock.appendChild(subtitle);
+            summaryLeft.appendChild(iconWrap);
+            summaryLeft.appendChild(titleBlock);
+            const summaryRight = document.createElement('div');
+            summaryRight.className = 'task-card-summary-right';
+            const points = document.createElement('div');
+            points.className = 'task-card-points';
+            points.innerHTML = `<i class="fa-solid fa-star"></i> ${task.points || 0}`;
+            const chevron = document.createElement('span');
+            chevron.className = 'task-card-chevron';
+            chevron.innerHTML = '<i class="fa-solid fa-chevron-right"></i>';
+            summaryRight.appendChild(points);
+            summaryRight.appendChild(chevron);
+            summary.appendChild(summaryLeft);
+            summary.appendChild(summaryRight);
+            card.appendChild(summary);
 
-              header.appendChild(titleWrapper);
-            header.appendChild(points);
-            if (badge) {
-                header.appendChild(badge);
-            }
-            card.appendChild(header);
+            const body = document.createElement('div');
+            body.className = 'task-card-body';
 
             const meta = document.createElement('div');
             meta.className = 'task-meta';
-            const dueDisplay = getTaskDueDisplay(task);
             meta.appendChild(buildMetaRow('Due', dueDisplay));
 
             const infoRow = document.createElement('div');
@@ -2473,17 +2548,17 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
 
             if (task.description) {
                 const desc = document.createElement('div');
-                desc.className = 'task-description text';
+                desc.className = 'task-card-note text';
                 const descIcon = document.createElement('i');
-                descIcon.className = 'fa-solid fa-align-center task-desc-icon';
+                descIcon.className = 'fa-solid fa-message task-desc-icon';
                 const descText = document.createElement('span');
                 descText.textContent = task.description;
                 desc.appendChild(descIcon);
                 desc.appendChild(descText);
-                card.appendChild(desc);
+                body.appendChild(desc);
             }
 
-            card.appendChild(meta);
+            body.appendChild(meta);
 
             if (task.photo_proof_required && proofSrc) {
                 const proofWrap = document.createElement('div');
@@ -2503,7 +2578,7 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                 img.dataset.taskPhotoSrc = proofSrc;
                 proofWrap.appendChild(label);
                 proofWrap.appendChild(img);
-                card.appendChild(proofWrap);
+                body.appendChild(proofWrap);
             }
 
             if (task.timing_mode === 'timer' && task.timer_minutes && statusForView === 'pending') {
@@ -2512,7 +2587,7 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                 timerText.dataset.timerDisplay = '';
                 timerText.dataset.taskId = String(task.id);
                 timerText.textContent = `${String(task.timer_minutes).padStart(2, '0')}:00`;
-                card.appendChild(timerText);
+                body.appendChild(timerText);
 
                 const controls = document.createElement('div');
                 controls.className = 'timer-controls';
@@ -2537,8 +2612,26 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                 controls.appendChild(countdown);
                 controls.appendChild(startButton);
                 controls.appendChild(cancelButton);
-                card.appendChild(controls);
+                body.appendChild(controls);
             }
+
+            const buildMenu = (items) => {
+                const menu = document.createElement('div');
+                menu.className = 'task-card-menu';
+                menu.dataset.taskMenu = '';
+                const toggle = document.createElement('button');
+                toggle.type = 'button';
+                toggle.className = 'task-card-menu-toggle';
+                toggle.dataset.taskMenuToggle = '';
+                toggle.setAttribute('aria-label', 'Open task actions');
+                toggle.innerHTML = '<i class="fa-solid fa-ellipsis-vertical"></i>';
+                const list = document.createElement('div');
+                list.className = 'task-card-menu-list';
+                items.forEach((item) => list.appendChild(item));
+                menu.appendChild(toggle);
+                menu.appendChild(list);
+                return menu;
+            };
 
             if (!isParentView) {
                 if (statusForView === 'pending') {
@@ -2553,7 +2646,7 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                             finishButton.dataset.dateKey = viewDateKey;
                         }
                         finishButton.textContent = 'Finish Task';
-                        card.appendChild(finishButton);
+                        body.appendChild(finishButton);
                     } else {
                         const form = document.createElement('form');
                         form.method = 'POST';
@@ -2576,18 +2669,18 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                         button.textContent = 'Finish Task';
                         form.appendChild(hidden);
                         form.appendChild(button);
-                        card.appendChild(form);
+                        body.appendChild(form);
                     }
                 } else if (statusForView === 'completed') {
                     const waiting = document.createElement('p');
                     waiting.className = 'waiting-label';
                     waiting.textContent = 'Waiting for approval';
-                    card.appendChild(waiting);
+                    body.appendChild(waiting);
                 } else if (statusForView === 'approved') {
                     const approved = document.createElement('p');
                     approved.className = 'completed';
                     approved.innerHTML = '<span class="completed-icon"><i class="fa-regular fa-circle-check"></i></span>Approved';
-                    card.appendChild(approved);
+                    body.appendChild(approved);
                 }
             } else if (canManageTasks) {
                 if (statusForView === 'pending') {
@@ -2612,13 +2705,14 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                     button.textContent = 'Finish Task';
                     form.appendChild(hidden);
                     form.appendChild(button);
-                    card.appendChild(form);
-                    const actions = document.createElement('div');
-                    actions.className = 'task-card-actions right';
+                    body.appendChild(form);
+
+                    const footer = document.createElement('div');
+                    footer.className = 'task-card-footer';
                     const editButton = document.createElement('button');
                     editButton.type = 'button';
-                    editButton.className = 'icon-button';
-                    editButton.setAttribute('aria-label', 'Edit task');
+                    editButton.className = 'button task-card-primary';
+                    editButton.textContent = 'Edit Task';
                     editButton.dataset.taskEditOpen = '';
                     editButton.dataset.taskId = String(task.id);
                     editButton.dataset.childId = String(task.child_user_id || '');
@@ -2635,20 +2729,18 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                     editButton.dataset.timingMode = task.timing_mode || '';
                     editButton.dataset.timerMinutes = String(task.timer_minutes || 0);
                     editButton.dataset.photoRequired = task.photo_proof_required ? '1' : '0';
-                    editButton.innerHTML = '<i class="fa-solid fa-pen"></i>';
+                    const duplicateMenuItem = buildDuplicateButton({ className: 'task-card-menu-item', label: 'Duplicate Task' });
                     const deleteButton = document.createElement('button');
                     deleteButton.type = 'button';
-                    deleteButton.className = 'icon-button danger';
-                    deleteButton.setAttribute('aria-label', 'Delete task');
+                    deleteButton.className = 'task-card-menu-item danger';
                     deleteButton.dataset.taskDeleteOpen = '';
                     deleteButton.dataset.taskId = String(task.id);
                     deleteButton.dataset.childName = task.child_name || '';
                     deleteButton.dataset.title = task.title || '';
-                    deleteButton.innerHTML = '<i class="fa-solid fa-trash"></i>';
-                    actions.appendChild(editButton);
-                    actions.appendChild(buildDuplicateButton());
-                    actions.appendChild(deleteButton);
-                    card.appendChild(actions);
+                    deleteButton.innerHTML = '<i class="fa-regular fa-trash-can"></i> Delete Forever';
+                    footer.appendChild(editButton);
+                    footer.appendChild(buildMenu([duplicateMenuItem, deleteButton]));
+                    body.appendChild(footer);
                 } else if (statusForView === 'completed') {
                     const approveForm = document.createElement('form');
                     approveForm.method = 'POST';
@@ -2671,7 +2763,7 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                     approveButton.textContent = 'Approve Task';
                     approveForm.appendChild(hidden);
                     approveForm.appendChild(approveButton);
-                    card.appendChild(approveForm);
+                    body.appendChild(approveForm);
 
                     const rejectForm = document.createElement('form');
                     rejectForm.method = 'POST';
@@ -2720,19 +2812,17 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                     rejectForm.appendChild(rejectLabel);
                     rejectForm.appendChild(rejectNote);
                     rejectForm.appendChild(rejectActions);
-                    card.appendChild(rejectForm);
-                    const actions = document.createElement('div');
-                    actions.className = 'task-card-actions right';
-                    actions.appendChild(buildDuplicateButton());
-                    card.appendChild(actions);
-                } else if (statusForView === 'approved') {
-                    const approved = document.createElement('p');
-                    approved.className = 'completed';
-                    approved.innerHTML = '<span class="completed-icon"><i class="fa-regular fa-circle-check"></i></span>Approved';
-                    card.appendChild(approved);
+                    body.appendChild(rejectForm);
+                    const footer = document.createElement('div');
+                    footer.className = 'task-card-footer';
+                    footer.appendChild(document.createElement('div'));
+                    const duplicateMenuItem = buildDuplicateButton({ className: 'task-card-menu-item', label: 'Duplicate Task' });
+                    footer.appendChild(buildMenu([duplicateMenuItem]));
+                    body.appendChild(footer);
                 }
             }
 
+            card.appendChild(body);
             return card;
         }
 
@@ -3019,152 +3109,177 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                             $is_overdue = false;
                         }
                         ?>
-                        <div class="task-card" id="task-<?php echo (int) $task['id']; ?>" data-task-id="<?php echo $task['id']; ?>">
-                            <div class="task-card-header">
-                                <div class="task-card-title"><?php echo htmlspecialchars($task['title']); ?></div>
-                                <div class="task-pill"><?php echo (int)$task['points']; ?> pts</div>
-                            </div>
-                              <?php if (!empty($task['description'])): ?>
-                                  <div class="task-description text"><i class="fa-solid fa-align-center task-desc-icon"></i><span><?php echo htmlspecialchars(html_entity_decode($task['description'], ENT_QUOTES)); ?></span></div>
-                              <?php endif; ?>
-                              <div class="task-meta">
-                                <?php
-                                    $timeOfDay = $task['time_of_day'] ?? 'anytime';
-                                    $isOnce = empty($task['recurrence']);
-                                    if ($isOnce) {
-                                        $dueDisplay = $task['due_date_formatted'];
-                                    } else {
-                                        $timeText = !empty($task['due_date']) ? date('g:i A', strtotime($task['due_date'])) : '';
-                                        if ($timeText === '12:00 AM') {
-                                            $timeText = '';
-                                        }
-                                        if ($timeText !== '') {
-                                            $dueDisplay = $timeText;
-                                        } elseif ($timeOfDay === 'anytime') {
-                                            $dueDisplay = 'Anytime';
-                                        } else {
-                                            $dueDisplay = ucfirst($timeOfDay);
-                                        }
-                                    }
-                                ?>
-                                <div class="task-meta-row">
-                                    <span><span class="task-meta-label"><i class="fa-solid fa-clock task-meta-icon"></i></span> <?php echo htmlspecialchars($dueDisplay); ?></span>
+                        <?php
+                            $timeOfDay = $task['time_of_day'] ?? 'anytime';
+                            $isOnce = empty($task['recurrence']);
+                            if ($isOnce) {
+                                $dueDisplay = $task['due_date_formatted'];
+                            } else {
+                                $timeText = !empty($task['due_date']) ? date('g:i A', strtotime($task['due_date'])) : '';
+                                if ($timeText === '12:00 AM') {
+                                    $timeText = '';
+                                }
+                                if ($timeText !== '') {
+                                    $dueDisplay = $timeText;
+                                } elseif ($timeOfDay === 'anytime') {
+                                    $dueDisplay = 'Anytime';
+                                } else {
+                                    $dueDisplay = ucfirst($timeOfDay);
+                                }
+                            }
+                            $childDisplayName = $task['child_display_name'] ?? ($childNameById[(int)($task['child_user_id'] ?? 0)] ?? '');
+                        ?>
+                        <details class="task-card" id="task-<?php echo (int) $task['id']; ?>" data-task-id="<?php echo $task['id']; ?>">
+                            <summary class="task-card-summary">
+                                <div class="task-card-summary-left">
+                                    <div class="task-card-icon"><i class="fa-solid fa-list-check"></i></div>
+                                    <div class="task-card-title-block">
+                                        <div class="task-card-title-row">
+                                            <div class="task-card-title"><?php echo htmlspecialchars($task['title']); ?></div>
+                                            <?php if (!empty($childDisplayName)): ?>
+                                                <span class="task-card-child-pill"><?php echo htmlspecialchars($childDisplayName); ?></span>
+                                            <?php endif; ?>
+                                        </div>
+                                        <div class="task-card-subtitle">
+                                            <?php echo htmlspecialchars($dueDisplay); ?>
+                                            <?php if ($is_overdue): ?>
+                                                <span class="task-card-status is-overdue">Overdue</span>
+                                            <?php endif; ?>
+                                        </div>
+                                    </div>
                                 </div>
-                                <?php if (!empty($task['end_date'])): ?>
+                                <div class="task-card-summary-right">
+                                    <div class="task-card-points"><i class="fa-solid fa-star"></i> <?php echo (int)$task['points']; ?></div>
+                                    <span class="task-card-chevron"><i class="fa-solid fa-chevron-right"></i></span>
+                                </div>
+                            </summary>
+                            <div class="task-card-body">
+                                <?php if (!empty($task['description'])): ?>
+                                    <div class="task-card-note text"><i class="fa-solid fa-message task-desc-icon"></i><span><?php echo htmlspecialchars(html_entity_decode($task['description'], ENT_QUOTES)); ?></span></div>
+                                <?php endif; ?>
+                                <div class="task-meta">
                                     <div class="task-meta-row">
-                                        <span><span class="task-meta-label">End Date:</span> <?php echo htmlspecialchars(date('m/d/Y', strtotime($task['end_date']))); ?></span>
+                                        <span><span class="task-meta-label"><i class="fa-solid fa-clock task-meta-icon"></i></span> <?php echo htmlspecialchars($dueDisplay); ?></span>
+                                    </div>
+                                    <?php if (!empty($task['end_date'])): ?>
+                                        <div class="task-meta-row">
+                                            <span><span class="task-meta-label">End Date:</span> <?php echo htmlspecialchars(date('m/d/Y', strtotime($task['end_date']))); ?></span>
+                                        </div>
+                                    <?php endif; ?>
+                                    <div class="task-meta-row">
+                                        <span><span class="task-meta-label"><i class="fa-solid fa-table-list task-meta-icon"></i></span> <?php echo htmlspecialchars($task['category']); ?></span>
+                                        <span><span class="task-meta-label"><i class="fa-solid fa-stopwatch task-meta-icon"></i></span> <?php echo htmlspecialchars($task['timing_mode'] === 'no_limit' ? 'None' : ucfirst($task['timing_mode'])); ?></span>
+                                        <span>
+                                            <?php
+                                                $repeatLabel = 'Once';
+                                                if ($task['recurrence'] === 'daily') {
+                                                    $repeatLabel = 'Every Day';
+                                                } elseif ($task['recurrence'] === 'weekly') {
+                                                    $days = !empty($task['recurrence_days']) ? str_replace(',', ', ', $task['recurrence_days']) : 'Specific Days';
+                                                    $repeatLabel = 'Specific Days (' . $days . ')';
+                                                }
+                                                $repeatIconClass = str_starts_with($repeatLabel, 'Specific Days') ? 'fa-solid fa-calendar-day' : 'fa-regular fa-calendar-days';
+                                            ?>
+                                            <span class="task-meta-label"><i class="<?php echo $repeatIconClass; ?> task-meta-icon"></i></span>
+                                            <?php echo htmlspecialchars($repeatLabel); ?>
+                                        </span>
+                                    </div>
+                                    <div class="task-meta-row">
+                                        <span><span class="task-meta-label"><i class="fa-solid fa-camera task-meta-icon"></i></span> <?php echo !empty($task['photo_proof_required']) ? 'Required' : 'Not required'; ?></span>
+                                    </div>
+                                    <?php if (!empty($task['creator_display_name'])): ?>
+                                        <div class="task-meta-row">
+                                            <span><span class="task-meta-label"><i class="fa-solid fa-user-pen task-meta-icon"></i></span> <?php echo htmlspecialchars($task['creator_display_name']); ?></span>
+                                        </div>
+                                    <?php endif; ?>
+                                    <?php if (!empty($task['child_display_name'])): ?>
+                                        <div class="task-meta-row">
+                                            <?php $assignedAvatar = $childAvatarById[(int)($task['child_user_id'] ?? 0)] ?? 'images/default-avatar.png'; ?>
+                                            <span><span class="task-meta-label"><img class="task-meta-avatar" src="<?php echo htmlspecialchars($assignedAvatar); ?>" alt="<?php echo htmlspecialchars($task['child_display_name']); ?>"></span> <?php echo htmlspecialchars($task['child_display_name']); ?></span>
+                                        </div>
+                                    <?php endif; ?>
+                                </div>
+                                <?php if (!empty($task['photo_proof'])): ?>
+                                    <div class="task-description">
+                                        <img src="<?php echo htmlspecialchars($task['photo_proof']); ?>" alt="Photo proof" class="task-photo-thumb" data-task-photo-src="<?php echo htmlspecialchars($task['photo_proof'], ENT_QUOTES); ?>">
                                     </div>
                                 <?php endif; ?>
-                                <div class="task-meta-row">
-                                    <span><span class="task-meta-label"><i class="fa-solid fa-table-list task-meta-icon"></i></span> <?php echo htmlspecialchars($task['category']); ?></span>
-                                    <span><span class="task-meta-label"><i class="fa-solid fa-stopwatch task-meta-icon"></i></span> <?php echo htmlspecialchars($task['timing_mode'] === 'no_limit' ? 'None' : ucfirst($task['timing_mode'])); ?></span>
-                                    <span>
-                                        <?php
-                                            $repeatLabel = 'Once';
-                                            if ($task['recurrence'] === 'daily') {
-                                                $repeatLabel = 'Every Day';
-                                            } elseif ($task['recurrence'] === 'weekly') {
-                                                $days = !empty($task['recurrence_days']) ? str_replace(',', ', ', $task['recurrence_days']) : 'Specific Days';
-                                                $repeatLabel = 'Specific Days (' . $days . ')';
-                                            }
-                                            $repeatIconClass = str_starts_with($repeatLabel, 'Specific Days') ? 'fa-solid fa-calendar-day' : 'fa-regular fa-calendar-days';
-                                        ?>
-                                        <span class="task-meta-label"><i class="<?php echo $repeatIconClass; ?> task-meta-icon"></i></span>
-                                        <?php echo htmlspecialchars($repeatLabel); ?>
-                                    </span>
-                                </div>
-                                <div class="task-meta-row">
-                                    <span><span class="task-meta-label"><i class="fa-solid fa-camera task-meta-icon"></i></span> <?php echo !empty($task['photo_proof_required']) ? 'Required' : 'Not required'; ?></span>
-                                </div>
-                                <?php if (!empty($task['creator_display_name'])): ?>
-                                    <div class="task-meta-row">
-                                        <span><span class="task-meta-label"><i class="fa-solid fa-user-pen task-meta-icon"></i></span> <?php echo htmlspecialchars($task['creator_display_name']); ?></span>
-                                    </div>
-                                <?php endif; ?>
-                                <?php if (!empty($task['child_display_name'])): ?>
-                                    <div class="task-meta-row">
-                                        <?php $assignedAvatar = $childAvatarById[(int)($task['child_user_id'] ?? 0)] ?? 'images/default-avatar.png'; ?>
-                                        <span><span class="task-meta-label"><img class="task-meta-avatar" src="<?php echo htmlspecialchars($assignedAvatar); ?>" alt="<?php echo htmlspecialchars($task['child_display_name']); ?>"></span> <?php echo htmlspecialchars($task['child_display_name']); ?></span>
-                                    </div>
-                                <?php endif; ?>
-                            </div>
-                            <?php if (!empty($task['photo_proof'])): ?>
-                                <div class="task-description">
-                                    <img src="<?php echo htmlspecialchars($task['photo_proof']); ?>" alt="Photo proof" class="task-photo-thumb" data-task-photo-src="<?php echo htmlspecialchars($task['photo_proof'], ENT_QUOTES); ?>">
-                                </div>
-                            <?php endif; ?>
                                 <?php if (!canCreateContent($_SESSION['user_id'])): ?>
                                     <?php if ($instance_status === 'completed'): ?>
                                         <p class="waiting-label">Waiting for approval</p>
-                                    <?php elseif ($instance_status === 'approved'): ?>
                                     <?php elseif ($instance_status === 'rejected'): ?>
                                         <p class="waiting-label">Rejected</p>
                                     <?php endif; ?>
                                 <?php endif; ?>
-                            <?php if (canCreateContent($_SESSION['user_id']) && canAddEditChild($_SESSION['user_id'])): ?>
-                                <div class="task-card-actions right">
+                                <?php if (canCreateContent($_SESSION['user_id']) && canAddEditChild($_SESSION['user_id'])): ?>
                                     <?php $childName = $childNameById[(int)$task['child_user_id']] ?? 'Child'; ?>
                                     <?php
                                         $dueDateValue = !empty($task['due_date']) ? date('Y-m-d', strtotime($task['due_date'])) : date('Y-m-d');
                                         $dueTimeValue = !empty($task['due_date']) ? date('H:i', strtotime($task['due_date'])) : '';
                                         $repeatValue = $task['recurrence'] === 'daily' ? 'daily' : ($task['recurrence'] === 'weekly' ? 'weekly' : '');
                                     ?>
-                                    <button type="button"
-                                            class="icon-button"
-                                            aria-label="Edit task"
-                                            data-task-edit-open
-                                            data-task-id="<?php echo $task['id']; ?>"
-                                            data-child-id="<?php echo (int)$task['child_user_id']; ?>"
-                                            data-child-name="<?php echo htmlspecialchars($childName, ENT_QUOTES); ?>"
-                                            data-title="<?php echo htmlspecialchars($task['title'], ENT_QUOTES); ?>"
-                                            data-description="<?php echo htmlspecialchars($task['description'], ENT_QUOTES); ?>"
-                                            data-start-date="<?php echo htmlspecialchars($dueDateValue, ENT_QUOTES); ?>"
-                                            data-due-time="<?php echo htmlspecialchars($dueTimeValue, ENT_QUOTES); ?>"
-                                            data-end-date="<?php echo !empty($task['end_date']) ? htmlspecialchars($task['end_date'], ENT_QUOTES) : ''; ?>"
-                                            data-points="<?php echo (int)$task['points']; ?>"
-                                            data-time-of-day="<?php echo htmlspecialchars($task['time_of_day'] ?? 'anytime', ENT_QUOTES); ?>"
-                                            data-recurrence="<?php echo htmlspecialchars($repeatValue, ENT_QUOTES); ?>"
-                                            data-recurrence-days="<?php echo htmlspecialchars($task['recurrence_days'] ?? '', ENT_QUOTES); ?>"
-                                            data-category="<?php echo htmlspecialchars($task['category'] ?? '', ENT_QUOTES); ?>"
-                                            data-timing-mode="<?php echo htmlspecialchars($task['timing_mode'] ?? '', ENT_QUOTES); ?>"
-                                            data-timer-minutes="<?php echo (int)($task['timer_minutes'] ?? 0); ?>"
-                                            data-photo-required="<?php echo (int)($task['photo_proof_required'] ?? 0); ?>">
-                                        <i class="fa-solid fa-pen"></i>
-                                    </button>
-                                    <button type="button"
-                                            class="icon-button"
-                                            aria-label="Duplicate task"
-                                            data-task-duplicate-open
-                                            data-task-id="<?php echo $task['id']; ?>"
-                                            data-child-id="<?php echo (int)$task['child_user_id']; ?>"
-                                            data-child-name="<?php echo htmlspecialchars($childName, ENT_QUOTES); ?>"
-                                            data-title="<?php echo htmlspecialchars($task['title'], ENT_QUOTES); ?>"
-                                            data-description="<?php echo htmlspecialchars($task['description'], ENT_QUOTES); ?>"
-                                            data-start-date="<?php echo htmlspecialchars($dueDateValue, ENT_QUOTES); ?>"
-                                            data-due-time="<?php echo htmlspecialchars($dueTimeValue, ENT_QUOTES); ?>"
-                                            data-end-date="<?php echo !empty($task['end_date']) ? htmlspecialchars($task['end_date'], ENT_QUOTES) : ''; ?>"
-                                            data-points="<?php echo (int)$task['points']; ?>"
-                                            data-time-of-day="<?php echo htmlspecialchars($task['time_of_day'] ?? 'anytime', ENT_QUOTES); ?>"
-                                            data-recurrence="<?php echo htmlspecialchars($repeatValue, ENT_QUOTES); ?>"
-                                            data-recurrence-days="<?php echo htmlspecialchars($task['recurrence_days'] ?? '', ENT_QUOTES); ?>"
-                                            data-category="<?php echo htmlspecialchars($task['category'] ?? '', ENT_QUOTES); ?>"
-                                            data-timing-mode="<?php echo htmlspecialchars($task['timing_mode'] ?? '', ENT_QUOTES); ?>"
-                                            data-timer-minutes="<?php echo (int)($task['timer_minutes'] ?? 0); ?>"
-                                            data-photo-required="<?php echo (int)($task['photo_proof_required'] ?? 0); ?>">
-                                        <i class="fa-solid fa-clone"></i>
-                                    </button>
-                                    <button type="button"
-                                            class="icon-button danger"
-                                            aria-label="Delete task"
-                                            data-task-delete-open
-                                            data-task-id="<?php echo $task['id']; ?>"
-                                            data-child-name="<?php echo htmlspecialchars($childName, ENT_QUOTES); ?>"
-                                            data-title="<?php echo htmlspecialchars($task['title'], ENT_QUOTES); ?>">
-                                        <i class="fa-solid fa-trash"></i>
-                                    </button>
-                                </div>
-                            <?php endif; ?>
-                        </div>
+                                    <div class="task-card-footer">
+                                        <button type="button"
+                                                class="button task-card-primary"
+                                                data-task-edit-open
+                                                data-task-id="<?php echo $task['id']; ?>"
+                                                data-child-id="<?php echo (int)$task['child_user_id']; ?>"
+                                                data-child-name="<?php echo htmlspecialchars($childName, ENT_QUOTES); ?>"
+                                                data-title="<?php echo htmlspecialchars($task['title'], ENT_QUOTES); ?>"
+                                                data-description="<?php echo htmlspecialchars($task['description'], ENT_QUOTES); ?>"
+                                                data-start-date="<?php echo htmlspecialchars($dueDateValue, ENT_QUOTES); ?>"
+                                                data-due-time="<?php echo htmlspecialchars($dueTimeValue, ENT_QUOTES); ?>"
+                                                data-end-date="<?php echo !empty($task['end_date']) ? htmlspecialchars($task['end_date'], ENT_QUOTES) : ''; ?>"
+                                                data-points="<?php echo (int)$task['points']; ?>"
+                                                data-time-of-day="<?php echo htmlspecialchars($task['time_of_day'] ?? 'anytime', ENT_QUOTES); ?>"
+                                                data-recurrence="<?php echo htmlspecialchars($repeatValue, ENT_QUOTES); ?>"
+                                                data-recurrence-days="<?php echo htmlspecialchars($task['recurrence_days'] ?? '', ENT_QUOTES); ?>"
+                                                data-category="<?php echo htmlspecialchars($task['category'] ?? '', ENT_QUOTES); ?>"
+                                                data-timing-mode="<?php echo htmlspecialchars($task['timing_mode'] ?? '', ENT_QUOTES); ?>"
+                                                data-timer-minutes="<?php echo (int)($task['timer_minutes'] ?? 0); ?>"
+                                                data-photo-required="<?php echo (int)($task['photo_proof_required'] ?? 0); ?>">
+                                            Edit Task
+                                        </button>
+                                        <div class="task-card-menu" data-task-menu>
+                                            <button type="button" class="task-card-menu-toggle" aria-label="Open task actions" data-task-menu-toggle>
+                                                <i class="fa-solid fa-ellipsis-vertical"></i>
+                                            </button>
+                                            <div class="task-card-menu-list">
+                                                <button type="button"
+                                                        class="task-card-menu-item"
+                                                        data-task-duplicate-open
+                                                        data-task-id="<?php echo $task['id']; ?>"
+                                                        data-child-id="<?php echo (int)$task['child_user_id']; ?>"
+                                                        data-child-name="<?php echo htmlspecialchars($childName, ENT_QUOTES); ?>"
+                                                        data-title="<?php echo htmlspecialchars($task['title'], ENT_QUOTES); ?>"
+                                                        data-description="<?php echo htmlspecialchars($task['description'], ENT_QUOTES); ?>"
+                                                        data-start-date="<?php echo htmlspecialchars($dueDateValue, ENT_QUOTES); ?>"
+                                                        data-due-time="<?php echo htmlspecialchars($dueTimeValue, ENT_QUOTES); ?>"
+                                                        data-end-date="<?php echo !empty($task['end_date']) ? htmlspecialchars($task['end_date'], ENT_QUOTES) : ''; ?>"
+                                                        data-points="<?php echo (int)$task['points']; ?>"
+                                                        data-time-of-day="<?php echo htmlspecialchars($task['time_of_day'] ?? 'anytime', ENT_QUOTES); ?>"
+                                                        data-recurrence="<?php echo htmlspecialchars($repeatValue, ENT_QUOTES); ?>"
+                                                        data-recurrence-days="<?php echo htmlspecialchars($task['recurrence_days'] ?? '', ENT_QUOTES); ?>"
+                                                        data-category="<?php echo htmlspecialchars($task['category'] ?? '', ENT_QUOTES); ?>"
+                                                        data-timing-mode="<?php echo htmlspecialchars($task['timing_mode'] ?? '', ENT_QUOTES); ?>"
+                                                        data-timer-minutes="<?php echo (int)($task['timer_minutes'] ?? 0); ?>"
+                                                        data-photo-required="<?php echo (int)($task['photo_proof_required'] ?? 0); ?>">
+                                                    <i class="fa-solid fa-clone"></i> Duplicate Task
+                                                </button>
+                                                <button type="button"
+                                                        class="task-card-menu-item danger"
+                                                        data-task-delete-open
+                                                        data-task-id="<?php echo $task['id']; ?>"
+                                                        data-child-name="<?php echo htmlspecialchars($childName, ENT_QUOTES); ?>"
+                                                        data-title="<?php echo htmlspecialchars($task['title'], ENT_QUOTES); ?>">
+                                                    <i class="fa-regular fa-trash-can"></i> Delete Forever
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                <?php endif; ?>
+                            </div>
+                        </details>
                             <?php endforeach; ?>
                         <?php endif; ?>
                     </div>
@@ -3172,18 +3287,13 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
 
                 <details class="task-section-toggle" <?php echo !empty($completed_tasks) ? 'open' : ''; ?>>
                     <summary>
-                        <span class="task-section-title">Tasks Waiting Approval <span class="task-count-badge"><?php echo count($completed_tasks); ?></span></span>
+                        <span class="task-section-title">Pending Approval <span class="task-count-badge"><?php echo count($completed_tasks); ?></span></span>
                     </summary>
                     <div class="task-section-content">
                         <?php if (empty($completed_tasks)): ?>
                             <p>No tasks waiting approval.</p>
                         <?php else: ?>
                             <?php foreach ($completed_tasks as $task): ?>
-                            <div class="task-card" id="task-<?php echo (int) $task['id']; ?>" data-task-id="<?php echo $task['id']; ?>">
-                            <div class="task-card-header">
-                                <div class="task-card-title"><?php echo htmlspecialchars($task['title']); ?></div>
-                                <div class="task-pill"><?php echo (int)$task['points']; ?> pts</div>
-                            </div>
                             <?php
                                 $timeOfDay = $task['time_of_day'] ?? 'anytime';
                                 $isOnce = empty($task['recurrence']);
@@ -3198,6 +3308,7 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                                         : date('m/d/Y', strtotime($completedStamp));
                                 }
                                 $childName = $childNameById[(int)$task['child_user_id']] ?? 'Child';
+                                $childDisplayName = $task['child_display_name'] ?? $childName;
                                 $dueDateValue = !empty($task['due_date']) ? date('Y-m-d', strtotime($task['due_date'])) : date('Y-m-d');
                                 $dueTimeValue = !empty($task['due_date']) ? date('H:i', strtotime($task['due_date'])) : '';
                                 $repeatValue = $task['recurrence'] === 'daily' ? 'daily' : ($task['recurrence'] === 'weekly' ? 'weekly' : '');
@@ -3213,104 +3324,134 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                                     $dueDisplay = $timeText !== '' ? $timeText : ucfirst($timeOfDay);
                                 }
                               ?>
-                              <?php if (!empty($task['description'])): ?>
-                                  <div class="task-description text"><i class="fa-solid fa-align-center task-desc-icon"></i><span><?php echo htmlspecialchars($task['description']); ?></span></div>
-                              <?php endif; ?>
-                              <div class="task-meta">
-                                <?php if ($completedLabel !== ''): ?>
-                                    <div class="task-meta-row">
-                                        <span><span class="task-meta-label">Completed:</span> <?php echo htmlspecialchars($completedLabel); ?></span>
+                            <details class="task-card" id="task-<?php echo (int) $task['id']; ?>" data-task-id="<?php echo $task['id']; ?>">
+                                <summary class="task-card-summary">
+                                    <div class="task-card-summary-left">
+                                        <div class="task-card-icon"><i class="fa-solid fa-hourglass-half"></i></div>
+                                        <div class="task-card-title-block">
+                                            <div class="task-card-title-row">
+                                                <div class="task-card-title"><?php echo htmlspecialchars($task['title']); ?></div>
+                                                <?php if (!empty($childDisplayName)): ?>
+                                                    <span class="task-card-child-pill"><?php echo htmlspecialchars($childDisplayName); ?></span>
+                                                <?php endif; ?>
+                                            </div>
+                                            <div class="task-card-subtitle">
+                                                <span class="task-card-status">Pending Approval</span>
+                                            </div>
+                                        </div>
                                     </div>
-                                <?php endif; ?>
-                                <div class="task-meta-row">
-                                    <span><span class="task-meta-label"><i class="fa-solid fa-clock task-meta-icon"></i></span> <?php echo htmlspecialchars($dueDisplay); ?></span>
-                                </div>
-                                <?php if (!empty($task['end_date'])): ?>
-                                    <div class="task-meta-row">
-                                        <span><span class="task-meta-label">End Date:</span> <?php echo htmlspecialchars(date('m/d/Y', strtotime($task['end_date']))); ?></span>
+                                    <div class="task-card-summary-right">
+                                        <div class="task-card-points"><i class="fa-solid fa-star"></i> <?php echo (int)$task['points']; ?></div>
+                                        <span class="task-card-chevron"><i class="fa-solid fa-chevron-right"></i></span>
                                     </div>
-                                <?php endif; ?>
-                                <div class="task-meta-row">
-                                    <span><span class="task-meta-label"><i class="fa-solid fa-table-list task-meta-icon"></i></span> <?php echo htmlspecialchars($task['category']); ?></span>
-                                    <span><span class="task-meta-label"><i class="fa-solid fa-stopwatch task-meta-icon"></i></span> <?php echo htmlspecialchars($task['timing_mode'] === 'no_limit' ? 'None' : ucfirst($task['timing_mode'])); ?></span>
-                                    <span>
-                                        <?php
-                                            $repeatLabel = 'Once';
-                                            if ($task['recurrence'] === 'daily') {
-                                                $repeatLabel = 'Every Day';
-                                            } elseif ($task['recurrence'] === 'weekly') {
-                                                $days = !empty($task['recurrence_days']) ? str_replace(',', ', ', $task['recurrence_days']) : 'Specific Days';
-                                                $repeatLabel = 'Specific Days (' . $days . ')';
-                                            }
-                                            $repeatIconClass = str_starts_with($repeatLabel, 'Specific Days') ? 'fa-solid fa-calendar-day' : 'fa-regular fa-calendar-days';
-                                        ?>
-                                        <span class="task-meta-label"><i class="<?php echo $repeatIconClass; ?> task-meta-icon"></i></span>
-                                        <?php echo htmlspecialchars($repeatLabel); ?>
-                                    </span>
-                                </div>
-                                <div class="task-meta-row">
-                                    <span><span class="task-meta-label"><i class="fa-solid fa-camera task-meta-icon"></i></span> <?php echo !empty($task['photo_proof_required']) ? 'Required' : 'Not required'; ?></span>
-                                </div>
-                                <?php if (!empty($task['creator_display_name'])): ?>
-                                    <div class="task-meta-row">
-                                        <span><span class="task-meta-label"><i class="fa-solid fa-user-pen task-meta-icon"></i></span> <?php echo htmlspecialchars($task['creator_display_name']); ?></span>
-                                    </div>
-                                <?php endif; ?>
-                            </div>
-                            <?php if (!empty($task['photo_proof'])): ?>
-                                <div class="task-description">
-                                    <img src="<?php echo htmlspecialchars($task['photo_proof']); ?>" alt="Photo proof" class="task-photo-thumb" data-task-photo-src="<?php echo htmlspecialchars($task['photo_proof'], ENT_QUOTES); ?>">
-                                </div>
-                            <?php endif; ?>
-                            <?php if (canCreateContent($_SESSION['user_id']) && canAddEditChild($_SESSION['user_id'])): ?>
-                                <form method="POST" action="task.php">
-                                    <input type="hidden" name="task_id" value="<?php echo $task['id']; ?>">
-                                    <?php if (!empty($task['instance_date'])): ?>
-                                        <input type="hidden" name="instance_date" value="<?php echo htmlspecialchars($task['instance_date']); ?>">
+                                </summary>
+                                <div class="task-card-body">
+                                    <?php if (!empty($task['description'])): ?>
+                                        <div class="task-card-note text"><i class="fa-solid fa-message task-desc-icon"></i><span><?php echo htmlspecialchars($task['description']); ?></span></div>
                                     <?php endif; ?>
-                                    <button type="submit" name="approve_task" class="button">Approve Task</button>
-                                </form>
-                                <form method="POST" action="task.php" class="task-reject-form">
-                                    <input type="hidden" name="task_id" value="<?php echo $task['id']; ?>">
-                                    <input type="hidden" name="reject_task" value="1">
-                                    <?php if (!empty($task['instance_date'])): ?>
-                                        <input type="hidden" name="instance_date" value="<?php echo htmlspecialchars($task['instance_date']); ?>">
-                                    <?php endif; ?>
-                                    <label for="reject_note_<?php echo (int) $task['id']; ?>">Rejection note (optional)</label>
-                                    <textarea id="reject_note_<?php echo (int) $task['id']; ?>" name="reject_note" placeholder="Explain why this task was rejected."></textarea>
-                                    <div class="task-reject-actions">
-                                        <button type="submit" name="reject_action" value="reactivate" class="button secondary">Reject &amp; Reactivate</button>
-                                        <button type="submit" name="reject_action" value="close" class="button danger">Reject &amp; Close</button>
+                                    <div class="task-meta">
+                                        <?php if ($completedLabel !== ''): ?>
+                                            <div class="task-meta-row">
+                                                <span><span class="task-meta-label">Completed:</span> <?php echo htmlspecialchars($completedLabel); ?></span>
+                                            </div>
+                                        <?php endif; ?>
+                                        <div class="task-meta-row">
+                                            <span><span class="task-meta-label"><i class="fa-solid fa-clock task-meta-icon"></i></span> <?php echo htmlspecialchars($dueDisplay); ?></span>
+                                        </div>
+                                        <?php if (!empty($task['end_date'])): ?>
+                                            <div class="task-meta-row">
+                                                <span><span class="task-meta-label">End Date:</span> <?php echo htmlspecialchars(date('m/d/Y', strtotime($task['end_date']))); ?></span>
+                                            </div>
+                                        <?php endif; ?>
+                                        <div class="task-meta-row">
+                                            <span><span class="task-meta-label"><i class="fa-solid fa-table-list task-meta-icon"></i></span> <?php echo htmlspecialchars($task['category']); ?></span>
+                                            <span><span class="task-meta-label"><i class="fa-solid fa-stopwatch task-meta-icon"></i></span> <?php echo htmlspecialchars($task['timing_mode'] === 'no_limit' ? 'None' : ucfirst($task['timing_mode'])); ?></span>
+                                            <span>
+                                                <?php
+                                                    $repeatLabel = 'Once';
+                                                    if ($task['recurrence'] === 'daily') {
+                                                        $repeatLabel = 'Every Day';
+                                                    } elseif ($task['recurrence'] === 'weekly') {
+                                                        $days = !empty($task['recurrence_days']) ? str_replace(',', ', ', $task['recurrence_days']) : 'Specific Days';
+                                                        $repeatLabel = 'Specific Days (' . $days . ')';
+                                                    }
+                                                    $repeatIconClass = str_starts_with($repeatLabel, 'Specific Days') ? 'fa-solid fa-calendar-day' : 'fa-regular fa-calendar-days';
+                                                ?>
+                                                <span class="task-meta-label"><i class="<?php echo $repeatIconClass; ?> task-meta-icon"></i></span>
+                                                <?php echo htmlspecialchars($repeatLabel); ?>
+                                            </span>
+                                        </div>
+                                        <div class="task-meta-row">
+                                            <span><span class="task-meta-label"><i class="fa-solid fa-camera task-meta-icon"></i></span> <?php echo !empty($task['photo_proof_required']) ? 'Required' : 'Not required'; ?></span>
+                                        </div>
+                                        <?php if (!empty($task['creator_display_name'])): ?>
+                                            <div class="task-meta-row">
+                                                <span><span class="task-meta-label"><i class="fa-solid fa-user-pen task-meta-icon"></i></span> <?php echo htmlspecialchars($task['creator_display_name']); ?></span>
+                                            </div>
+                                        <?php endif; ?>
                                     </div>
-                                </form>
-                                <div class="task-card-actions right">
-                                    <button type="button"
-                                            class="icon-button"
-                                            aria-label="Duplicate task"
-                                            data-task-duplicate-open
-                                            data-task-id="<?php echo $task['id']; ?>"
-                                            data-child-id="<?php echo (int)$task['child_user_id']; ?>"
-                                            data-child-name="<?php echo htmlspecialchars($childName, ENT_QUOTES); ?>"
-                                            data-title="<?php echo htmlspecialchars($task['title'], ENT_QUOTES); ?>"
-                                            data-description="<?php echo htmlspecialchars($task['description'], ENT_QUOTES); ?>"
-                                            data-start-date="<?php echo htmlspecialchars($dueDateValue, ENT_QUOTES); ?>"
-                                            data-due-time="<?php echo htmlspecialchars($dueTimeValue, ENT_QUOTES); ?>"
-                                            data-end-date="<?php echo !empty($task['end_date']) ? htmlspecialchars($task['end_date'], ENT_QUOTES) : ''; ?>"
-                                            data-points="<?php echo (int)$task['points']; ?>"
-                                            data-time-of-day="<?php echo htmlspecialchars($task['time_of_day'] ?? 'anytime', ENT_QUOTES); ?>"
-                                            data-recurrence="<?php echo htmlspecialchars($repeatValue, ENT_QUOTES); ?>"
-                                            data-recurrence-days="<?php echo htmlspecialchars($task['recurrence_days'] ?? '', ENT_QUOTES); ?>"
-                                            data-category="<?php echo htmlspecialchars($task['category'] ?? '', ENT_QUOTES); ?>"
-                                            data-timing-mode="<?php echo htmlspecialchars($task['timing_mode'] ?? '', ENT_QUOTES); ?>"
-                                            data-timer-minutes="<?php echo (int)($task['timer_minutes'] ?? 0); ?>"
-                                            data-photo-required="<?php echo (int)($task['photo_proof_required'] ?? 0); ?>">
-                                        <i class="fa-solid fa-clone"></i>
-                                    </button>
+                                    <?php if (!empty($task['photo_proof'])): ?>
+                                        <div class="task-description">
+                                            <img src="<?php echo htmlspecialchars($task['photo_proof']); ?>" alt="Photo proof" class="task-photo-thumb" data-task-photo-src="<?php echo htmlspecialchars($task['photo_proof'], ENT_QUOTES); ?>">
+                                        </div>
+                                    <?php endif; ?>
+                                    <?php if (canCreateContent($_SESSION['user_id']) && canAddEditChild($_SESSION['user_id'])): ?>
+                                        <form method="POST" action="task.php">
+                                            <input type="hidden" name="task_id" value="<?php echo $task['id']; ?>">
+                                            <?php if (!empty($task['instance_date'])): ?>
+                                                <input type="hidden" name="instance_date" value="<?php echo htmlspecialchars($task['instance_date']); ?>">
+                                            <?php endif; ?>
+                                            <button type="submit" name="approve_task" class="button">Approve Task</button>
+                                        </form>
+                                        <form method="POST" action="task.php" class="task-reject-form">
+                                            <input type="hidden" name="task_id" value="<?php echo $task['id']; ?>">
+                                            <input type="hidden" name="reject_task" value="1">
+                                            <?php if (!empty($task['instance_date'])): ?>
+                                                <input type="hidden" name="instance_date" value="<?php echo htmlspecialchars($task['instance_date']); ?>">
+                                            <?php endif; ?>
+                                            <label for="reject_note_<?php echo (int) $task['id']; ?>">Rejection note (optional)</label>
+                                            <textarea id="reject_note_<?php echo (int) $task['id']; ?>" name="reject_note" placeholder="Explain why this task was rejected."></textarea>
+                                            <div class="task-reject-actions">
+                                                <button type="submit" name="reject_action" value="reactivate" class="button secondary">Reject &amp; Reactivate</button>
+                                                <button type="submit" name="reject_action" value="close" class="button danger">Reject &amp; Close</button>
+                                            </div>
+                                        </form>
+                                        <div class="task-card-footer">
+                                            <div></div>
+                                            <div class="task-card-menu" data-task-menu>
+                                                <button type="button" class="task-card-menu-toggle" aria-label="Open task actions" data-task-menu-toggle>
+                                                    <i class="fa-solid fa-ellipsis-vertical"></i>
+                                                </button>
+                                                <div class="task-card-menu-list">
+                                                    <button type="button"
+                                                            class="task-card-menu-item"
+                                                            data-task-duplicate-open
+                                                            data-task-id="<?php echo $task['id']; ?>"
+                                                            data-child-id="<?php echo (int)$task['child_user_id']; ?>"
+                                                            data-child-name="<?php echo htmlspecialchars($childName, ENT_QUOTES); ?>"
+                                                            data-title="<?php echo htmlspecialchars($task['title'], ENT_QUOTES); ?>"
+                                                            data-description="<?php echo htmlspecialchars($task['description'], ENT_QUOTES); ?>"
+                                                            data-start-date="<?php echo htmlspecialchars($dueDateValue, ENT_QUOTES); ?>"
+                                                            data-due-time="<?php echo htmlspecialchars($dueTimeValue, ENT_QUOTES); ?>"
+                                                            data-end-date="<?php echo !empty($task['end_date']) ? htmlspecialchars($task['end_date'], ENT_QUOTES) : ''; ?>"
+                                                            data-points="<?php echo (int)$task['points']; ?>"
+                                                            data-time-of-day="<?php echo htmlspecialchars($task['time_of_day'] ?? 'anytime', ENT_QUOTES); ?>"
+                                                            data-recurrence="<?php echo htmlspecialchars($repeatValue, ENT_QUOTES); ?>"
+                                                            data-recurrence-days="<?php echo htmlspecialchars($task['recurrence_days'] ?? '', ENT_QUOTES); ?>"
+                                                            data-category="<?php echo htmlspecialchars($task['category'] ?? '', ENT_QUOTES); ?>"
+                                                            data-timing-mode="<?php echo htmlspecialchars($task['timing_mode'] ?? '', ENT_QUOTES); ?>"
+                                                            data-timer-minutes="<?php echo (int)($task['timer_minutes'] ?? 0); ?>"
+                                                            data-photo-required="<?php echo (int)($task['photo_proof_required'] ?? 0); ?>">
+                                                        <i class="fa-solid fa-clone"></i> Duplicate Task
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    <?php else: ?>
+                                        <p class="waiting-label">Waiting for approval</p>
+                                    <?php endif; ?>
                                 </div>
-                            <?php else: ?>
-                                <p class="waiting-label">Waiting for approval</p>
-                            <?php endif; ?>
-                            </div>
+                            </details>
                             <?php endforeach; ?>
                         <?php endif; ?>
                     </div>
@@ -3331,14 +3472,6 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                                 $approvedIndex++;
                                 $hideApproved = $isParentView && $approvedIndex > 5;
                             ?>
-                            <div class="task-card" id="task-<?php echo (int) $task['id']; ?>" data-task-id="<?php echo $task['id']; ?>" data-approved-card data-approved-index="<?php echo $approvedIndex; ?>"<?php echo $hideApproved ? ' style="display:none;"' : ''; ?>>
-                            <div class="task-card-header">
-                                <div class="task-card-title"><?php echo htmlspecialchars($task['title']); ?></div>
-                                <div class="task-card-badges">
-                                    <div class="task-pill"><?php echo (int)$task['points']; ?> pts</div>
-                                    <span class="task-approved-badge"><span class="completed-icon"><i class="fa-regular fa-circle-check"></i></span>Approved</span>
-                                </div>
-                            </div>
                             <?php
                                 $timeOfDay = $task['time_of_day'] ?? 'anytime';
                                 $isOnce = empty($task['recurrence']);
@@ -3355,61 +3488,85 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                                     }
                                     $dueDisplay = $timeText !== '' ? $timeText : ucfirst($timeOfDay);
                                 }
+                                $childDisplayName = $task['child_display_name'] ?? ($childNameById[(int)($task['child_user_id'] ?? 0)] ?? '');
                               ?>
-                              <?php if (!empty($task['description'])): ?>
-                                  <div class="task-description text"><i class="fa-solid fa-align-center task-desc-icon"></i><span><?php echo htmlspecialchars($task['description']); ?></span></div>
-                              <?php endif; ?>
-                              <div class="task-meta">
-                                <?php if (!$isOnce && $approvedDateLabel !== ''): ?>
-                                    <div class="task-meta-row">
-                                        <span><span class="task-meta-label">Approved date:</span> <?php echo htmlspecialchars($approvedDateLabel); ?></span>
+                            <details class="task-card" id="task-<?php echo (int) $task['id']; ?>" data-task-id="<?php echo $task['id']; ?>" data-approved-card data-approved-index="<?php echo $approvedIndex; ?>"<?php echo $hideApproved ? ' style="display:none;"' : ''; ?>>
+                                <summary class="task-card-summary">
+                                    <div class="task-card-summary-left">
+                                        <div class="task-card-icon"><i class="fa-regular fa-circle-check"></i></div>
+                                        <div class="task-card-title-block">
+                                            <div class="task-card-title-row">
+                                                <div class="task-card-title"><?php echo htmlspecialchars($task['title']); ?></div>
+                                                <?php if (!empty($childDisplayName)): ?>
+                                                    <span class="task-card-child-pill"><?php echo htmlspecialchars($childDisplayName); ?></span>
+                                                <?php endif; ?>
+                                            </div>
+                                            <div class="task-card-subtitle">
+                                                <span class="task-card-status is-success">Approved</span>
+                                            </div>
+                                        </div>
                                     </div>
-                                <?php endif; ?>
-                                  <div class="task-meta-row">
-                                      <span><span class="task-meta-label"><i class="fa-solid fa-clock task-meta-icon"></i></span> <?php echo htmlspecialchars($dueDisplay); ?></span>
-                                  </div>
-                                <?php if (!empty($task['end_date'])): ?>
-                                    <div class="task-meta-row">
-                                        <span><span class="task-meta-label">End Date:</span> <?php echo htmlspecialchars(date('m/d/Y', strtotime($task['end_date']))); ?></span>
+                                    <div class="task-card-summary-right">
+                                        <div class="task-card-points"><i class="fa-solid fa-star"></i> <?php echo (int)$task['points']; ?></div>
+                                        <span class="task-card-chevron"><i class="fa-solid fa-chevron-right"></i></span>
                                     </div>
-                                <?php endif; ?>
-                                  <div class="task-meta-row">
-                                      <span><span class="task-meta-label"><i class="fa-solid fa-table-list task-meta-icon"></i></span> <?php echo htmlspecialchars($task['category']); ?></span>
-                                      <span><span class="task-meta-label"><i class="fa-solid fa-stopwatch task-meta-icon"></i></span> <?php echo htmlspecialchars($task['timing_mode'] === 'no_limit' ? 'None' : ucfirst($task['timing_mode'])); ?></span>
-                                      <span>
-                                          <?php
-                                              $repeatLabel = 'Once';
-                                              if ($task['recurrence'] === 'daily') {
-                                                  $repeatLabel = 'Every Day';
-                                              } elseif ($task['recurrence'] === 'weekly') {
-                                                  $days = !empty($task['recurrence_days']) ? str_replace(',', ', ', $task['recurrence_days']) : 'Specific Days';
-                                                  $repeatLabel = 'Specific Days (' . $days . ')';
-                                              }
-                                              $repeatIconClass = str_starts_with($repeatLabel, 'Specific Days') ? 'fa-solid fa-calendar-day' : 'fa-regular fa-calendar-days';
-                                          ?>
-                                          <span class="task-meta-label"><i class="<?php echo $repeatIconClass; ?> task-meta-icon"></i></span>
-                                          <?php echo htmlspecialchars($repeatLabel); ?>
-                                      </span>
-                                  </div>
-                                  <div class="task-meta-row">
-                                      <span><span class="task-meta-label"><i class="fa-solid fa-camera task-meta-icon"></i></span> <?php echo !empty($task['photo_proof_required']) ? 'Required' : 'Not required'; ?></span>
-                                  </div>
-                                  <?php if (!empty($task['photo_proof_required']) && !empty($task['photo_proof'])): ?>
-                                      <div class="task-photo-proof">
-                                          <div class="task-photo-proof-label">
-                                              <i class="fa-solid fa-camera task-meta-icon"></i>
-                                              <span>Photo proof:</span>
-                                          </div>
-                                          <img src="<?php echo htmlspecialchars($task['photo_proof']); ?>" alt="Photo proof" class="task-photo-thumb" data-task-photo-src="<?php echo htmlspecialchars($task['photo_proof'], ENT_QUOTES); ?>">
-                                      </div>
-                                  <?php endif; ?>
-                                  <?php if (!empty($task['creator_display_name'])): ?>
-                                      <div class="task-meta-row">
-                                          <span><span class="task-meta-label"><i class="fa-solid fa-user-pen task-meta-icon"></i></span> <?php echo htmlspecialchars($task['creator_display_name']); ?></span>
-                                      </div>
-                                  <?php endif; ?>
-                            </div>
-                            </div>
+                                </summary>
+                                <div class="task-card-body">
+                                    <?php if (!empty($task['description'])): ?>
+                                        <div class="task-card-note text"><i class="fa-solid fa-message task-desc-icon"></i><span><?php echo htmlspecialchars($task['description']); ?></span></div>
+                                    <?php endif; ?>
+                                    <div class="task-meta">
+                                        <?php if (!$isOnce && $approvedDateLabel !== ''): ?>
+                                            <div class="task-meta-row">
+                                                <span><span class="task-meta-label">Approved date:</span> <?php echo htmlspecialchars($approvedDateLabel); ?></span>
+                                            </div>
+                                        <?php endif; ?>
+                                        <div class="task-meta-row">
+                                            <span><span class="task-meta-label"><i class="fa-solid fa-clock task-meta-icon"></i></span> <?php echo htmlspecialchars($dueDisplay); ?></span>
+                                        </div>
+                                        <?php if (!empty($task['end_date'])): ?>
+                                            <div class="task-meta-row">
+                                                <span><span class="task-meta-label">End Date:</span> <?php echo htmlspecialchars(date('m/d/Y', strtotime($task['end_date']))); ?></span>
+                                            </div>
+                                        <?php endif; ?>
+                                        <div class="task-meta-row">
+                                            <span><span class="task-meta-label"><i class="fa-solid fa-table-list task-meta-icon"></i></span> <?php echo htmlspecialchars($task['category']); ?></span>
+                                            <span><span class="task-meta-label"><i class="fa-solid fa-stopwatch task-meta-icon"></i></span> <?php echo htmlspecialchars($task['timing_mode'] === 'no_limit' ? 'None' : ucfirst($task['timing_mode'])); ?></span>
+                                            <span>
+                                                <?php
+                                                    $repeatLabel = 'Once';
+                                                    if ($task['recurrence'] === 'daily') {
+                                                        $repeatLabel = 'Every Day';
+                                                    } elseif ($task['recurrence'] === 'weekly') {
+                                                        $days = !empty($task['recurrence_days']) ? str_replace(',', ', ', $task['recurrence_days']) : 'Specific Days';
+                                                        $repeatLabel = 'Specific Days (' . $days . ')';
+                                                    }
+                                                    $repeatIconClass = str_starts_with($repeatLabel, 'Specific Days') ? 'fa-solid fa-calendar-day' : 'fa-regular fa-calendar-days';
+                                                ?>
+                                                <span class="task-meta-label"><i class="<?php echo $repeatIconClass; ?> task-meta-icon"></i></span>
+                                                <?php echo htmlspecialchars($repeatLabel); ?>
+                                            </span>
+                                        </div>
+                                        <div class="task-meta-row">
+                                            <span><span class="task-meta-label"><i class="fa-solid fa-camera task-meta-icon"></i></span> <?php echo !empty($task['photo_proof_required']) ? 'Required' : 'Not required'; ?></span>
+                                        </div>
+                                        <?php if (!empty($task['photo_proof_required']) && !empty($task['photo_proof'])): ?>
+                                            <div class="task-photo-proof">
+                                                <div class="task-photo-proof-label">
+                                                    <i class="fa-solid fa-camera task-meta-icon"></i>
+                                                    <span>Photo proof:</span>
+                                                </div>
+                                                <img src="<?php echo htmlspecialchars($task['photo_proof']); ?>" alt="Photo proof" class="task-photo-thumb" data-task-photo-src="<?php echo htmlspecialchars($task['photo_proof'], ENT_QUOTES); ?>">
+                                            </div>
+                                        <?php endif; ?>
+                                        <?php if (!empty($task['creator_display_name'])): ?>
+                                            <div class="task-meta-row">
+                                                <span><span class="task-meta-label"><i class="fa-solid fa-user-pen task-meta-icon"></i></span> <?php echo htmlspecialchars($task['creator_display_name']); ?></span>
+                                            </div>
+                                        <?php endif; ?>
+                                    </div>
+                                </div>
+                            </details>
                             <?php endforeach; ?>
                             <?php if ($isParentView && count($approved_tasks) > 5): ?>
                                 <div class="task-approved-view-more">
@@ -3431,25 +3588,40 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                                 <?php
                                     $dueLabel = !empty($task['due_date']) ? date('m/d/Y', strtotime($task['due_date'])) : 'No due date';
                                 ?>
-                                <div class="task-card" id="task-<?php echo (int) $task['id']; ?>" data-task-id="<?php echo $task['id']; ?>">
-                                    <div class="task-card-header">
-                                        <div class="task-card-title"><?php echo htmlspecialchars($task['title']); ?></div>
-                                        <div class="task-pill"><?php echo (int)$task['points']; ?> pts</div>
-                                    </div>
-                                    <?php if (!empty($task['description'])): ?>
-                                        <div class="task-description text"><i class="fa-solid fa-align-center task-desc-icon"></i><span><?php echo htmlspecialchars($task['description']); ?></span></div>
-                                    <?php endif; ?>
-                                    <div class="task-meta">
-                                        <div class="task-meta-row">
-                                            <span><span class="task-meta-label"><i class="fa-solid fa-clock task-meta-icon"></i></span> <?php echo htmlspecialchars($dueLabel); ?></span>
-                                        </div>
-                                        <?php if (!empty($task['end_date'])): ?>
-                                            <div class="task-meta-row">
-                                                <span><span class="task-meta-label">End Date:</span> <?php echo htmlspecialchars(date('m/d/Y', strtotime($task['end_date']))); ?></span>
+                                <details class="task-card" id="task-<?php echo (int) $task['id']; ?>" data-task-id="<?php echo $task['id']; ?>">
+                                    <summary class="task-card-summary">
+                                        <div class="task-card-summary-left">
+                                            <div class="task-card-icon"><i class="fa-regular fa-calendar-xmark"></i></div>
+                                            <div class="task-card-title-block">
+                                                <div class="task-card-title-row">
+                                                    <div class="task-card-title"><?php echo htmlspecialchars($task['title']); ?></div>
+                                                </div>
+                                                <div class="task-card-subtitle">
+                                                    <span class="task-card-status is-muted">Expired</span>
+                                                </div>
                                             </div>
+                                        </div>
+                                        <div class="task-card-summary-right">
+                                            <div class="task-card-points"><i class="fa-solid fa-star"></i> <?php echo (int)$task['points']; ?></div>
+                                            <span class="task-card-chevron"><i class="fa-solid fa-chevron-right"></i></span>
+                                        </div>
+                                    </summary>
+                                    <div class="task-card-body">
+                                        <?php if (!empty($task['description'])): ?>
+                                            <div class="task-card-note text"><i class="fa-solid fa-message task-desc-icon"></i><span><?php echo htmlspecialchars($task['description']); ?></span></div>
                                         <?php endif; ?>
+                                        <div class="task-meta">
+                                            <div class="task-meta-row">
+                                                <span><span class="task-meta-label"><i class="fa-solid fa-clock task-meta-icon"></i></span> <?php echo htmlspecialchars($dueLabel); ?></span>
+                                            </div>
+                                            <?php if (!empty($task['end_date'])): ?>
+                                                <div class="task-meta-row">
+                                                    <span><span class="task-meta-label">End Date:</span> <?php echo htmlspecialchars(date('m/d/Y', strtotime($task['end_date']))); ?></span>
+                                                </div>
+                                            <?php endif; ?>
+                                        </div>
                                     </div>
-                                </div>
+                                </details>
                             <?php endforeach; ?>
                         <?php endif; ?>
                     </div>
