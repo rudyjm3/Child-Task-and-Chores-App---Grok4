@@ -508,7 +508,7 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                 <span>Dashboard</span>
             </a>
             <a class="nav-link<?php echo $routinesActive ? ' is-active' : ''; ?>" href="routine.php"<?php echo $routinesActive ? ' aria-current="page"' : ''; ?>>
-                <i class="fa-solid fa-rotate"></i>
+                <i class="fa-solid fa-repeat week-item-icon"></i>
                 <span>Routines</span>
             </a>
             <a class="nav-link<?php echo $tasksActive ? ' is-active' : ''; ?>" href="task.php"<?php echo $tasksActive ? ' aria-current="page"' : ''; ?>>
@@ -746,7 +746,7 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
             <span>Dashboard</span>
         </a>
         <a class="nav-mobile-link<?php echo $routinesActive ? ' is-active' : ''; ?>" href="routine.php"<?php echo $routinesActive ? ' aria-current="page"' : ''; ?>>
-            <i class="fa-solid fa-rotate"></i>
+            <i class="fa-solid fa-repeat week-item-icon"></i>
             <span>Routines</span>
         </a>
         <a class="nav-mobile-link<?php echo $tasksActive ? ' is-active' : ''; ?>" href="task.php"<?php echo $tasksActive ? ' aria-current="page"' : ''; ?>>

@@ -803,6 +803,9 @@ function getDashboardData($user_id) {
             $childPoints = $pointsMap[$childId] ?? 0;
             $child['points_earned'] = $childPoints;
             $child['points_progress_percent'] = $maxChildPoints > 0 ? min(100, (int)round(($childPoints / $maxChildPoints) * 100)) : 0;
+            $levelState = getChildLevelState($childId, (int) $main_parent_id);
+            $child['level'] = $levelState['level'] ?? 1;
+            $child['stars_to_next_level'] = max(0, (int) ($levelState['stars_to_next_level'] ?? 0));
             $childGoalStats = $goalStats[$childId] ?? ['goal_count' => 0];
             $child['goals_assigned'] = $childGoalStats['goal_count'];
             $child['rewards_claimed'] = $rewardsClaimed[$childId] ?? 0;
@@ -924,6 +927,9 @@ function getDashboardData($user_id) {
         $parentStmt->execute([':child_id' => $user_id]);
         $parent_id = $parentStmt->fetchColumn();
         if ($parent_id) {
+            $levelState = getChildLevelState((int) $user_id, (int) $parent_id);
+            $data['child_level'] = $levelState['level'] ?? 1;
+            $data['level_pending'] = (int) ($levelState['pending'] ?? 0);
             $stmt = $db->prepare("SELECT id, title, description, point_cost
                                   FROM rewards
                                   WHERE parent_user_id = :parent_id
@@ -1256,6 +1262,7 @@ function ensureRoutineCompletionTables() {
             scheduled_seconds INT NULL,
             actual_seconds INT NULL,
             status_screen_seconds INT NOT NULL DEFAULT 0,
+            stars_awarded TINYINT NOT NULL DEFAULT 0,
             created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
             INDEX idx_routine_completion_task (completion_log_id, sequence_order),
             FOREIGN KEY (completion_log_id) REFERENCES routine_completion_logs(id) ON DELETE CASCADE,
@@ -1272,6 +1279,209 @@ function ensureRoutineCompletionTables() {
     } catch (PDOException $e) {
         // ignore if not supported
     }
+    try {
+        $db->exec("ALTER TABLE routine_completion_tasks ADD COLUMN IF NOT EXISTS stars_awarded TINYINT NOT NULL DEFAULT 0");
+    } catch (PDOException $e) {
+        // ignore if not supported
+    }
+}
+
+function ensureFamilyLevelSettingsTable() {
+    global $db;
+    $db->exec("
+        CREATE TABLE IF NOT EXISTS family_level_settings (
+            parent_user_id INT PRIMARY KEY,
+            stars_per_level INT NOT NULL DEFAULT 10,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            FOREIGN KEY (parent_user_id) REFERENCES users(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    ");
+}
+
+function ensureChildLevelsTable() {
+    global $db;
+    $db->exec("
+        CREATE TABLE IF NOT EXISTS child_levels (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            parent_user_id INT NOT NULL,
+            child_user_id INT NOT NULL,
+            current_level INT NOT NULL DEFAULT 1,
+            pending_level_up TINYINT(1) NOT NULL DEFAULT 0,
+            last_calculated_at DATETIME NULL,
+            updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            UNIQUE KEY uniq_child_level (parent_user_id, child_user_id),
+            FOREIGN KEY (parent_user_id) REFERENCES users(id) ON DELETE CASCADE,
+            FOREIGN KEY (child_user_id) REFERENCES users(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    ");
+}
+
+function getFamilyStarsPerLevel(int $parent_user_id): int {
+    global $db;
+    ensureFamilyLevelSettingsTable();
+    $stmt = $db->prepare("SELECT stars_per_level FROM family_level_settings WHERE parent_user_id = :parent_id");
+    $stmt->execute([':parent_id' => $parent_user_id]);
+    $stars = $stmt->fetchColumn();
+    if ($stars === false) {
+        $insert = $db->prepare("INSERT INTO family_level_settings (parent_user_id, stars_per_level) VALUES (:parent_id, 10)");
+        $insert->execute([':parent_id' => $parent_user_id]);
+        return 10;
+    }
+    $stars = (int) $stars;
+    return $stars > 0 ? $stars : 10;
+}
+
+function updateFamilyStarsPerLevel(int $parent_user_id, int $stars_per_level): bool {
+    global $db;
+    ensureFamilyLevelSettingsTable();
+    $stars = max(1, $stars_per_level);
+    $stmt = $db->prepare("
+        INSERT INTO family_level_settings (parent_user_id, stars_per_level)
+        VALUES (:parent_id, :stars)
+        ON DUPLICATE KEY UPDATE stars_per_level = VALUES(stars_per_level)
+    ");
+    return $stmt->execute([
+        ':parent_id' => $parent_user_id,
+        ':stars' => $stars
+    ]);
+}
+
+function calculateRoutineTaskStars(int $scheduledSeconds, int $actualSeconds): int {
+    if ($scheduledSeconds <= 0) {
+        return 3;
+    }
+    $overtime = $actualSeconds - $scheduledSeconds;
+    if ($overtime <= 0) {
+        return 3;
+    }
+    if ($overtime <= 60) {
+        return 2;
+    }
+    return 1;
+}
+
+function getChildRollingStarsAverage(int $child_user_id, int $parent_user_id, int $weeks = 4): float {
+    global $db;
+    ensureRoutineCompletionTables();
+    $weeks = max(1, $weeks);
+    $today = new DateTimeImmutable('today');
+    $startOfWeek = $today->modify('monday this week');
+    $totalStars = 0;
+    $weekCount = 0;
+
+    $stmt = $db->prepare("
+        SELECT SUM(rct.stars_awarded)
+        FROM routine_completion_tasks rct
+        JOIN routine_completion_logs rcl ON rct.completion_log_id = rcl.id
+        WHERE rcl.child_user_id = :child_id
+          AND rcl.parent_user_id = :parent_id
+          AND rcl.completed_at >= :week_start
+          AND rcl.completed_at <= :week_end
+    ");
+
+    for ($i = 0; $i < $weeks; $i++) {
+        $weekStart = $startOfWeek->modify("-{$i} week");
+        $weekEnd = $weekStart->modify('+6 days 23:59:59');
+        $stmt->execute([
+            ':child_id' => $child_user_id,
+            ':parent_id' => $parent_user_id,
+            ':week_start' => $weekStart->format('Y-m-d H:i:s'),
+            ':week_end' => $weekEnd->format('Y-m-d H:i:s')
+        ]);
+        $stars = (int) ($stmt->fetchColumn() ?: 0);
+        $totalStars += $stars;
+        $weekCount++;
+    }
+
+    if ($weekCount === 0) {
+        return 0.0;
+    }
+    return $totalStars / $weekCount;
+}
+
+function updateChildLevelState(int $child_user_id, int $parent_user_id, bool $triggerCelebration = false): array {
+    global $db;
+    ensureChildLevelsTable();
+    $starsPerLevel = getFamilyStarsPerLevel($parent_user_id);
+    $rollingAverage = getChildRollingStarsAverage($child_user_id, $parent_user_id, 4);
+    $newLevel = max(1, (int) floor($rollingAverage / $starsPerLevel) + 1);
+    $nextThreshold = $starsPerLevel * max(1, $newLevel);
+    $starsToNext = max(0, (int) ceil($nextThreshold - $rollingAverage));
+
+    $stmt = $db->prepare("SELECT id, current_level, pending_level_up FROM child_levels WHERE parent_user_id = :parent_id AND child_user_id = :child_id LIMIT 1");
+    $stmt->execute([':parent_id' => $parent_user_id, ':child_id' => $child_user_id]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    $pending = 0;
+    $currentLevel = 1;
+
+    if (!$row) {
+        $pending = ($triggerCelebration && $newLevel > 1) ? 1 : 0;
+        $insert = $db->prepare("
+            INSERT INTO child_levels (parent_user_id, child_user_id, current_level, pending_level_up, last_calculated_at)
+            VALUES (:parent_id, :child_id, :level, :pending, NOW())
+        ");
+        $insert->execute([
+            ':parent_id' => $parent_user_id,
+            ':child_id' => $child_user_id,
+            ':level' => $newLevel,
+            ':pending' => $pending
+        ]);
+        return [
+            'level' => $newLevel,
+            'pending' => $pending,
+            'stars_per_level' => $starsPerLevel,
+            'rolling_average' => $rollingAverage,
+            'stars_to_next_level' => $starsToNext
+        ];
+    }
+
+    $currentLevel = (int) ($row['current_level'] ?? 1);
+    $pending = (int) ($row['pending_level_up'] ?? 0);
+    $levelChanged = $newLevel !== $currentLevel;
+    if ($levelChanged) {
+        if ($triggerCelebration && $newLevel > $currentLevel) {
+            $pending = 1;
+        } elseif ($newLevel < $currentLevel) {
+            $pending = 0;
+        }
+        $update = $db->prepare("
+            UPDATE child_levels
+            SET current_level = :level, pending_level_up = :pending, last_calculated_at = NOW()
+            WHERE id = :id
+        ");
+        $update->execute([
+            ':level' => $newLevel,
+            ':pending' => $pending,
+            ':id' => (int) $row['id']
+        ]);
+    } else {
+        $db->prepare("UPDATE child_levels SET last_calculated_at = NOW() WHERE id = :id")
+           ->execute([':id' => (int) $row['id']]);
+    }
+
+    return [
+        'level' => $newLevel,
+        'pending' => $pending,
+        'stars_per_level' => $starsPerLevel,
+        'rolling_average' => $rollingAverage,
+        'stars_to_next_level' => $starsToNext
+    ];
+}
+
+function getChildLevelState(int $child_user_id, int $parent_user_id): array {
+    return updateChildLevelState($child_user_id, $parent_user_id, false);
+}
+
+function clearChildLevelCelebration(int $child_user_id, int $parent_user_id): void {
+    global $db;
+    ensureChildLevelsTable();
+    $stmt = $db->prepare("
+        UPDATE child_levels
+        SET pending_level_up = 0
+        WHERE parent_user_id = :parent_id AND child_user_id = :child_id
+    ");
+    $stmt->execute([':parent_id' => $parent_user_id, ':child_id' => $child_user_id]);
 }
 
 function logRoutineCompletionSession($routine_id, $child_id, $parent_id, $completed_by, $started_at, $completed_at, array $tasks = []) {
@@ -1304,9 +1514,9 @@ function logRoutineCompletionSession($routine_id, $child_id, $parent_id, $comple
         if ($logId && !empty($tasks)) {
             $taskStmt = $db->prepare("
                 INSERT INTO routine_completion_tasks
-                    (completion_log_id, routine_task_id, sequence_order, completed_at, scheduled_seconds, actual_seconds, status_screen_seconds)
+                    (completion_log_id, routine_task_id, sequence_order, completed_at, scheduled_seconds, actual_seconds, status_screen_seconds, stars_awarded)
                 VALUES
-                    (:log_id, :task_id, :sequence_order, :completed_at, :scheduled_seconds, :actual_seconds, :status_seconds)
+                    (:log_id, :task_id, :sequence_order, :completed_at, :scheduled_seconds, :actual_seconds, :status_seconds, :stars_awarded)
             ");
             foreach ($tasks as $task) {
                 $scheduledSeconds = null;
@@ -1317,6 +1527,10 @@ function logRoutineCompletionSession($routine_id, $child_id, $parent_id, $comple
                 if (array_key_exists('actual_seconds', $task)) {
                     $actualSeconds = (int) ($task['actual_seconds'] ?? 0);
                 }
+                $starsAwarded = 0;
+                if (array_key_exists('stars_awarded', $task)) {
+                    $starsAwarded = (int) ($task['stars_awarded'] ?? 0);
+                }
                 $taskStmt->execute([
                     ':log_id' => $logId,
                     ':task_id' => (int) ($task['routine_task_id'] ?? 0),
@@ -1324,7 +1538,8 @@ function logRoutineCompletionSession($routine_id, $child_id, $parent_id, $comple
                     ':completed_at' => $task['completed_at'] ?: null,
                     ':scheduled_seconds' => $scheduledSeconds,
                     ':actual_seconds' => $actualSeconds,
-                    ':status_seconds' => max(0, (int) ($task['status_screen_seconds'] ?? 0))
+                    ':status_seconds' => max(0, (int) ($task['status_screen_seconds'] ?? 0)),
+                    ':stars_awarded' => max(0, min(3, $starsAwarded))
                 ]);
             }
         }
@@ -1511,16 +1726,18 @@ function deleteReward($parent_user_id, $reward_id) {
 }
 
 // Reward library helpers
-function createRewardTemplate($parent_user_id, $title, $description, $point_cost, $creator_user_id = null) {
+function createRewardTemplate($parent_user_id, $title, $description, $point_cost, $level_required = 1, $creator_user_id = null) {
     global $db;
-    $stmt = $db->prepare("INSERT INTO reward_templates (parent_user_id, title, description, point_cost, created_by) VALUES (:parent_id, :title, :description, :point_cost, :created_by)");
-    return $stmt->execute([
+    $stmt = $db->prepare("INSERT INTO reward_templates (parent_user_id, title, description, point_cost, level_required, created_by) VALUES (:parent_id, :title, :description, :point_cost, :level_required, :created_by)");
+    $success = $stmt->execute([
         ':parent_id' => $parent_user_id,
         ':title' => trim((string)$title),
         ':description' => trim((string)$description),
         ':point_cost' => max(1, (int)$point_cost),
+        ':level_required' => max(1, (int)$level_required),
         ':created_by' => $creator_user_id ?: $parent_user_id
     ]);
+    return $success ? (int) $db->lastInsertId() : false;
 }
 
 function deleteRewardTemplate($parent_user_id, $template_id) {
@@ -1533,31 +1750,160 @@ function deleteRewardTemplate($parent_user_id, $template_id) {
     return $stmt->rowCount() > 0;
 }
 
-function updateRewardTemplate($parent_user_id, $template_id, $title, $description, $point_cost) {
+function updateRewardTemplate($parent_user_id, $template_id, $title, $description, $point_cost, $level_required = 1) {
     global $db;
     $title = trim((string)$title);
     $description = trim((string)$description);
     $point_cost = max(1, (int)$point_cost);
+    $level_required = max(1, (int)$level_required);
     $stmt = $db->prepare("UPDATE reward_templates
                           SET title = :title,
                               description = :description,
-                              point_cost = :point_cost
+                              point_cost = :point_cost,
+                              level_required = :level_required
                           WHERE id = :template_id AND parent_user_id = :parent_id");
     $stmt->execute([
         ':title' => $title,
         ':description' => $description,
         ':point_cost' => $point_cost,
+        ':level_required' => $level_required,
         ':template_id' => $template_id,
         ':parent_id' => $parent_user_id
     ]);
     return $stmt->rowCount() > 0;
 }
 
+function duplicateRewardTemplate($parent_user_id, $template_id, $creator_user_id = null) {
+    global $db;
+    $template_id = (int) $template_id;
+    if ($template_id <= 0) {
+        return 0;
+    }
+
+    $fetch = $db->prepare("SELECT title, description, point_cost, level_required
+                           FROM reward_templates
+                           WHERE id = :template_id AND parent_user_id = :parent_id");
+    $fetch->execute([
+        ':template_id' => $template_id,
+        ':parent_id' => (int) $parent_user_id
+    ]);
+    $template = $fetch->fetch(PDO::FETCH_ASSOC);
+    if (!$template) {
+        return 0;
+    }
+
+    $newTitle = 'Copy of ' . ($template['title'] ?? 'Reward');
+    $insert = $db->prepare("INSERT INTO reward_templates (parent_user_id, title, description, point_cost, level_required, created_by)
+                            VALUES (:parent_id, :title, :description, :point_cost, :level_required, :created_by)");
+    $ok = $insert->execute([
+        ':parent_id' => (int) $parent_user_id,
+        ':title' => $newTitle,
+        ':description' => $template['description'] ?? '',
+        ':point_cost' => (int) ($template['point_cost'] ?? 1),
+        ':level_required' => max(1, (int) ($template['level_required'] ?? 1)),
+        ':created_by' => $creator_user_id ?? $parent_user_id
+    ]);
+    if (!$ok) {
+        return 0;
+    }
+    $newId = (int) $db->lastInsertId();
+    if ($newId <= 0) {
+        return 0;
+    }
+
+    ensureRewardTemplateDisabledChildrenTable();
+    $disabled = $db->prepare("SELECT child_user_id
+                              FROM reward_template_disabled_children
+                              WHERE parent_user_id = :parent_id AND template_id = :template_id");
+    $disabled->execute([
+        ':parent_id' => (int) $parent_user_id,
+        ':template_id' => $template_id
+    ]);
+    $childIds = $disabled->fetchAll(PDO::FETCH_COLUMN) ?: [];
+    if (!empty($childIds)) {
+        setRewardTemplateDisabledChildren($parent_user_id, $newId, $childIds);
+    }
+
+    return $newId;
+}
+
 function getRewardTemplates($parent_user_id) {
     global $db;
-    $stmt = $db->prepare("SELECT id, title, description, point_cost, created_at FROM reward_templates WHERE parent_user_id = :parent_id ORDER BY created_at DESC");
+    $stmt = $db->prepare("SELECT id, title, description, point_cost, level_required, created_at FROM reward_templates WHERE parent_user_id = :parent_id ORDER BY created_at DESC");
     $stmt->execute([':parent_id' => $parent_user_id]);
     return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+}
+
+function ensureRewardTemplateDisabledChildrenTable() {
+    global $db;
+    $db->exec("
+        CREATE TABLE IF NOT EXISTS reward_template_disabled_children (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            parent_user_id INT NOT NULL,
+            template_id INT NOT NULL,
+            child_user_id INT NOT NULL,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE KEY uniq_template_child (template_id, child_user_id),
+            INDEX idx_parent_template (parent_user_id, template_id),
+            FOREIGN KEY (parent_user_id) REFERENCES users(id) ON DELETE CASCADE,
+            FOREIGN KEY (template_id) REFERENCES reward_templates(id) ON DELETE CASCADE,
+            FOREIGN KEY (child_user_id) REFERENCES users(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    ");
+}
+
+function getRewardTemplateDisabledMap($parent_user_id, array $child_user_ids = []) {
+    global $db;
+    ensureRewardTemplateDisabledChildrenTable();
+    $child_user_ids = array_values(array_unique(array_filter(array_map('intval', $child_user_ids))));
+    if (empty($child_user_ids)) {
+        return [];
+    }
+    $placeholders = implode(',', array_fill(0, count($child_user_ids), '?'));
+    $params = array_merge([(int) $parent_user_id], $child_user_ids);
+    $stmt = $db->prepare("SELECT template_id, child_user_id
+                          FROM reward_template_disabled_children
+                          WHERE parent_user_id = ? AND child_user_id IN ($placeholders)");
+    $stmt->execute($params);
+    $map = [];
+    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+        $childId = (int) ($row['child_user_id'] ?? 0);
+        $templateId = (int) ($row['template_id'] ?? 0);
+        if ($childId && $templateId) {
+            if (!isset($map[$childId])) {
+                $map[$childId] = [];
+            }
+            $map[$childId][] = $templateId;
+        }
+    }
+    return $map;
+}
+
+function setRewardTemplateDisabledChildren($parent_user_id, $template_id, array $child_user_ids): bool {
+    global $db;
+    ensureRewardTemplateDisabledChildrenTable();
+    $template_id = (int) $template_id;
+    if ($template_id <= 0) {
+        return false;
+    }
+    $child_user_ids = array_values(array_unique(array_filter(array_map('intval', $child_user_ids))));
+    $delete = $db->prepare("DELETE FROM reward_template_disabled_children WHERE parent_user_id = :parent_id AND template_id = :template_id");
+    $delete->execute([
+        ':parent_id' => (int) $parent_user_id,
+        ':template_id' => $template_id
+    ]);
+    if (empty($child_user_ids)) {
+        return true;
+    }
+    $insert = $db->prepare("INSERT INTO reward_template_disabled_children (parent_user_id, template_id, child_user_id) VALUES (:parent_id, :template_id, :child_id)");
+    foreach ($child_user_ids as $child_id) {
+        $insert->execute([
+            ':parent_id' => (int) $parent_user_id,
+            ':template_id' => $template_id,
+            ':child_id' => (int) $child_id
+        ]);
+    }
+    return true;
 }
 
 function assignTemplateToChildren($parent_user_id, $template_id, array $child_user_ids, $creator_user_id = null) {
@@ -1656,7 +2002,7 @@ function redeemReward($child_user_id, $reward_id) {
         // Notify parent
         $childName = getDisplayName($child_user_id);
         $title = $rewardRow['title'] ?? 'Reward';
-        $message = ($childName ?: 'Child') . " redeemed \"" . $title . "\" (" . (int)$point_cost . " pts).";
+        $message = ($childName ?: 'Child') . " purchased \"" . $title . "\" (" . (int)$point_cost . " pts). Awaiting fulfillment.";
         $link = "dashboard_parent.php?highlight_reward=" . (int)$reward_id . "#reward-" . (int)$reward_id;
         addParentNotification($parent_id, 'reward_redeemed', $message, $link);
         return true;
@@ -1664,6 +2010,105 @@ function redeemReward($child_user_id, $reward_id) {
         $db->rollBack();
         return false;
     }
+}
+
+// Purchase a reward directly from a template (child shop flow)
+function purchaseRewardTemplate($child_user_id, $template_id, &$error = null) {
+    global $db;
+    $error = null;
+    $child_id = (int) $child_user_id;
+    $template_id = (int) $template_id;
+    if ($child_id <= 0 || $template_id <= 0) {
+        $error = 'invalid';
+        return false;
+    }
+    $parent_id = getFamilyRootId($child_id);
+    if (!$parent_id) {
+        $error = 'invalid_parent';
+        return false;
+    }
+
+    $templateStmt = $db->prepare("SELECT id, title, description, point_cost, level_required
+                                  FROM reward_templates
+                                  WHERE id = :template_id AND parent_user_id = :parent_id");
+    $templateStmt->execute([
+        ':template_id' => $template_id,
+        ':parent_id' => (int) $parent_id
+    ]);
+    $template = $templateStmt->fetch(PDO::FETCH_ASSOC);
+    if (!$template) {
+        $error = 'not_found';
+        return false;
+    }
+
+    ensureRewardTemplateDisabledChildrenTable();
+    $disabledStmt = $db->prepare("SELECT 1 FROM reward_template_disabled_children
+                                  WHERE parent_user_id = :parent_id
+                                    AND template_id = :template_id
+                                    AND child_user_id = :child_id
+                                  LIMIT 1");
+    $disabledStmt->execute([
+        ':parent_id' => (int) $parent_id,
+        ':template_id' => $template_id,
+        ':child_id' => $child_id
+    ]);
+    if ($disabledStmt->fetchColumn()) {
+        $error = 'disabled';
+        return false;
+    }
+
+    $levelState = getChildLevelState($child_id, (int) $parent_id);
+    $childLevel = (int) ($levelState['level'] ?? 1);
+    $requiredLevel = max(1, (int) ($template['level_required'] ?? 1));
+    if ($childLevel < $requiredLevel) {
+        $error = 'level';
+        return false;
+    }
+
+    $point_cost = (int) ($template['point_cost'] ?? 0);
+    if ($point_cost <= 0) {
+        $error = 'invalid_cost';
+        return false;
+    }
+
+    $total_points = getChildTotalPoints($child_id);
+    if ($total_points < $point_cost) {
+        $error = 'points';
+        return false;
+    }
+
+    $db->beginTransaction();
+    try {
+        $insert = $db->prepare("INSERT INTO rewards (parent_user_id, child_user_id, template_id, title, description, point_cost, status, redeemed_by, redeemed_on, created_by)
+                                VALUES (:parent_id, :child_id, :template_id, :title, :description, :point_cost, 'redeemed', :redeemed_by, NOW(), :created_by)");
+        $insert->execute([
+            ':parent_id' => (int) $parent_id,
+            ':child_id' => $child_id,
+            ':template_id' => $template_id,
+            ':title' => $template['title'],
+            ':description' => $template['description'],
+            ':point_cost' => $point_cost,
+            ':redeemed_by' => $child_id,
+            ':created_by' => $child_id
+        ]);
+        $reward_id = (int) $db->lastInsertId();
+        if (!$reward_id || !updateChildPoints($child_id, -$point_cost)) {
+            throw new Exception('points_update');
+        }
+        $db->commit();
+    } catch (Exception $e) {
+        $db->rollBack();
+        $error = 'failed';
+        return false;
+    }
+
+    $childName = getDisplayName($child_id);
+    $title = $template['title'] ?? 'Reward';
+    $message = ($childName ?: 'Child') . " purchased \"" . $title . "\" (" . (int) $point_cost . " pts). Awaiting fulfillment.";
+    $link = "dashboard_parent.php?highlight_reward=" . (int) $reward_id . "#reward-" . (int) $reward_id;
+    addParentNotification((int) $parent_id, 'reward_redeemed', $message, $link);
+
+    return $reward_id;
 }
 
 function fulfillReward($reward_id, $parent_user_id, $actor_user_id) {
@@ -3519,6 +3964,7 @@ try {
       description TEXT DEFAULT NULL,
       description TEXT,
       point_cost INT NOT NULL,
+      level_required INT NOT NULL DEFAULT 1,
       created_by INT NULL,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (parent_user_id) REFERENCES users(id) ON DELETE CASCADE,
@@ -3526,6 +3972,7 @@ try {
    )";
    $db->exec($sql);
    error_log("Created/verified reward_templates table successfully");
+   $db->exec("ALTER TABLE reward_templates ADD COLUMN IF NOT EXISTS level_required INT NOT NULL DEFAULT 1");
 
    // Create rewards table if not exists (added created_by)
    $sql = "CREATE TABLE IF NOT EXISTS rewards (

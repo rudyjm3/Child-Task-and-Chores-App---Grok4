@@ -143,6 +143,7 @@ try {
                 rct.status_screen_seconds,
                 rct.scheduled_seconds,
                 rct.actual_seconds,
+                rct.stars_awarded,
                 rt.title AS task_title,
                 rt.time_limit AS task_time_limit
             FROM routine_completion_tasks rct
@@ -586,17 +587,6 @@ foreach (($data['active_rewards'] ?? []) as $ar) {
         $activeRewardCounts[$cid] = ($activeRewardCounts[$cid] ?? 0) + 1;
     }
 }
-$redeemedRewardCounts = [];
- $pendingRewardCounts = [];
-foreach (($data['redeemed_rewards'] ?? []) as $rr) {
-    $cid = (int)($rr['child_user_id'] ?? 0);
-    if ($cid > 0) {
-        $redeemedRewardCounts[$cid] = ($redeemedRewardCounts[$cid] ?? 0) + 1;
-        if (empty($rr['fulfilled_on'])) {
-            $pendingRewardCounts[$cid] = ($pendingRewardCounts[$cid] ?? 0) + 1;
-        }
-    }
-}
 $todayDate = date('Y-m-d');
 ensureRoutinePointsLogsTable();
 $isRoutineCompletedOnDate = static function (array $routine, string $dateKey, array $completionMap = []): bool {
@@ -974,6 +964,7 @@ $formatParentNotificationMessage = static function (array $note): string {
         .children-overview-grid { display: grid; grid-template-columns: 1fr; gap: 20px; }
         .child-info-card, .reward-item, .goal-item { background-color: #f5f5f5; padding: 15px; border-radius: 8px; box-shadow: 0 8px 20px rgba(0,0,0,0.08); }
         .child-info-card { width: 100%; display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 20px; align-items: start; min-height: 100%; background-color: #fff; margin: 20px 0;}
+        .level-badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; background: #fffbeb; color: #b45309; font-weight: 700; font-size: 0.85rem; border: 1px solid #fde68a; }
         .child-info-left { display: contents; }
         .child-info-header { display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; }
         .child-info-header img { width: 72px; height: 72px; border-radius: 50%; object-fit: cover; border: 2px solid #ececec; }
@@ -2407,7 +2398,7 @@ $formatParentNotificationMessage = static function (array $note): string {
             <span>Dashboard</span>
          </a>
          <a class="nav-link<?php echo $routinesActive ? ' is-active' : ''; ?>" href="routine.php"<?php echo $routinesActive ? ' aria-current="page"' : ''; ?>>
-            <i class="fa-solid fa-rotate"></i>
+            <i class="fa-solid fa-repeat week-item-icon"></i>
             <span>Routines</span>
          </a>
          <a class="nav-link<?php echo $tasksActive ? ' is-active' : ''; ?>" href="task.php"<?php echo $tasksActive ? ' aria-current="page"' : ''; ?>>
@@ -2420,7 +2411,7 @@ $formatParentNotificationMessage = static function (array $note): string {
          </a>
          <a class="nav-link<?php echo $rewardsActive ? ' is-active' : ''; ?>" href="rewards.php"<?php echo $rewardsActive ? ' aria-current="page"' : ''; ?>>
             <i class="fa-solid fa-gift"></i>
-            <span>Rewards</span>
+            <span>Rewards Shop</span>
          </a>
          <a class="nav-link<?php echo $profileActive ? ' is-active' : ''; ?>" href="profile.php?self=1"<?php echo $profileActive ? ' aria-current="page"' : ''; ?>>
             <i class="fa-solid fa-user"></i>
@@ -2696,6 +2687,10 @@ $formatParentNotificationMessage = static function (array $note): string {
                              <img src="<?php echo htmlspecialchars($child['avatar'] ?? 'default-avatar.png'); ?>" alt="Avatar for <?php echo htmlspecialchars($child['child_name']); ?>">
                              <div class="child-info-header-details">
                                 <p class="child-info-name"><?php echo htmlspecialchars($child['child_name']); ?></p>
+                                <div class="level-badge">
+                                    <i class="fa-solid fa-star"></i>
+                                    <span>Level <?php echo (int) ($child['level'] ?? 1); ?></span>
+                                </div>
                             </div>
                           </div>
                           <div class="points-progress-wrapper">
@@ -2804,7 +2799,7 @@ $formatParentNotificationMessage = static function (array $note): string {
                                   }
                                   $historyItems[] = [
                                       'type' => 'Reward',
-                                      'title' => 'Redeemed: ' . ($row['title'] ?? 'Reward'),
+                                      'title' => 'Purchased Reward: ' . ($row['title'] ?? 'Reward'),
                                       'points' => -abs($cost),
                                       'date' => $row['redeemed_on']
                                   ];
@@ -2839,11 +2834,11 @@ $formatParentNotificationMessage = static function (array $note): string {
                                  <span class="child-stat-badge"><?php echo (int)($child['goals_assigned'] ?? 0); ?></span>
                                  <span class="child-stat-label">Goals</span>
                              </a>
-                             <a class="child-stat-link" href="rewards.php#redeemed-child-<?php echo (int)$child['child_user_id']; ?>">
+                             <div class="child-stat-link">
                                  <span class="child-stat-icon"><i class="fa-solid fa-star"></i></span>
-                                 <span class="child-stat-badge"><?php echo (int)($redeemedRewardCounts[$child['child_user_id']] ?? 0); ?></span>
-                                 <span class="child-stat-label">Redeemed</span>
-                             </a>
+                                 <span class="child-stat-badge"><?php echo (int) ($child['stars_to_next_level'] ?? 0); ?></span>
+                                 <span class="child-stat-label">Stars to Next Level</span>
+                             </div>
                          </div>
                     </div>
                     <div class="child-schedule-card">
@@ -3047,6 +3042,7 @@ $formatParentNotificationMessage = static function (array $note): string {
                                                      <span><strong>Actual:</strong> <?php echo htmlspecialchars($actualLabel); ?></span>
                                                      <span><strong>Status screen:</strong> <?php echo $formatDuration($statusSeconds); ?></span>
                                                  <?php endif; ?>
+                                                 <span><strong>Stars:</strong> <?php echo (int) ($taskRow['stars_awarded'] ?? 0); ?> <i class="fa-solid fa-star"></i></span>
                                              </div>
                                          </div>
                                      <?php endforeach; ?>
@@ -3270,7 +3266,7 @@ $formatParentNotificationMessage = static function (array $note): string {
          <span>Dashboard</span>
       </a>
       <a class="nav-mobile-link<?php echo $routinesActive ? ' is-active' : ''; ?>" href="routine.php"<?php echo $routinesActive ? ' aria-current="page"' : ''; ?>>
-         <i class="fa-solid fa-rotate"></i>
+         <i class="fa-solid fa-repeat week-item-icon"></i>
          <span>Routines</span>
       </a>
       <a class="nav-mobile-link<?php echo $tasksActive ? ' is-active' : ''; ?>" href="task.php"<?php echo $tasksActive ? ' aria-current="page"' : ''; ?>>
@@ -3283,7 +3279,7 @@ $formatParentNotificationMessage = static function (array $note): string {
       </a>
       <a class="nav-mobile-link<?php echo $rewardsActive ? ' is-active' : ''; ?>" href="rewards.php"<?php echo $rewardsActive ? ' aria-current="page"' : ''; ?>>
          <i class="fa-solid fa-gift"></i>
-         <span>Rewards</span>
+         <span>Rewards Shop</span>
       </a>
    </nav>
     <footer>

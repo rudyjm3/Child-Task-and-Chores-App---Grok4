@@ -42,6 +42,10 @@ function resolveGoalRewardId($parent_id, $child_id, $reward_selection) {
         if ($template_id <= 0 || $child_id <= 0) {
             return null;
         }
+        $disabledMap = getRewardTemplateDisabledMap($parent_id, [$child_id]);
+        if (!empty($disabledMap[$child_id]) && in_array($template_id, $disabledMap[$child_id], true)) {
+            return null;
+        }
         assignTemplateToChildren($parent_id, $template_id, [$child_id]);
         $stmt = $db->prepare("SELECT id FROM rewards WHERE parent_user_id = :parent_id AND child_user_id = :child_id AND template_id = :template_id AND status = 'available' ORDER BY created_on DESC LIMIT 1");
         $stmt->execute([
@@ -570,12 +574,26 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
     $goalTasks = $taskStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
     $goalRewardTemplates = getRewardTemplates($family_root_id);
+    $goalChildIds = array_values(array_unique(array_filter(array_map('intval', array_column($goalChildren, 'child_user_id')))));
+    $rewardDisabledMap = getRewardTemplateDisabledMap($family_root_id, $goalChildIds);
+    $rewardDisabledByTemplate = [];
+    foreach ($rewardDisabledMap as $childId => $templateIds) {
+        foreach ($templateIds as $templateId) {
+            $rewardDisabledByTemplate[$templateId][] = $childId;
+        }
+    }
+    foreach ($rewardDisabledByTemplate as $templateId => $childIds) {
+        $uniqueChildIds = array_values(array_unique(array_map('intval', $childIds)));
+        sort($uniqueChildIds);
+        $rewardDisabledByTemplate[$templateId] = $uniqueChildIds;
+    }
 
     $goalFormData = [
         'children' => $goalChildren,
         'routines' => $goalRoutines,
         'tasks' => $goalTasks,
-        'reward_templates' => $goalRewardTemplates
+        'reward_templates' => $goalRewardTemplates,
+        'reward_disabled_by_template' => $rewardDisabledByTemplate
     ];
 }
 ?>
@@ -1114,7 +1132,7 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                 <span>Dashboard</span>
             </a>
             <a class="nav-link<?php echo $routinesActive ? ' is-active' : ''; ?>" href="routine.php"<?php echo $routinesActive ? ' aria-current="page"' : ''; ?>>
-                <i class="fa-solid fa-rotate"></i>
+                <i class="fa-solid fa-repeat week-item-icon"></i>
                 <span>Routines</span>
             </a>
             <a class="nav-link<?php echo $tasksActive ? ' is-active' : ''; ?>" href="task.php"<?php echo $tasksActive ? ' aria-current="page"' : ''; ?>>
@@ -1127,7 +1145,7 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
             </a>
             <a class="nav-link<?php echo $rewardsActive ? ' is-active' : ''; ?>" href="rewards.php"<?php echo $rewardsActive ? ' aria-current="page"' : ''; ?>>
                 <i class="fa-solid fa-gift"></i>
-                <span>Rewards</span>
+                <span>Rewards Shop</span>
             </a>
             <a class="nav-link<?php echo $profileActive ? ' is-active' : ''; ?>" href="profile.php?self=1"<?php echo $profileActive ? ' aria-current="page"' : ''; ?>>
                 <i class="fa-solid fa-user"></i>
@@ -1603,6 +1621,7 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                         $routines = $goalFormData['routines'] ?? [];
                         $goalTasks = $goalFormData['tasks'] ?? [];
                         $goalRewardTemplates = $goalFormData['reward_templates'] ?? [];
+                        $rewardDisabledByTemplate = $goalFormData['reward_disabled_by_template'] ?? [];
                         ?>
                         <div class="form-grid">
                             <div class="form-group">
@@ -1826,15 +1845,22 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                             </div>
                             <div class="form-group">
                                 <label for="goal_reward_id">Reward (optional)
-                                    <span class="tooltip tooltip-right" tabindex="0" aria-label="Reward to grant on completion. Required if reward is part of the award mode.">
+                                    <span class="tooltip tooltip-right" tabindex="0" aria-label="Rewards Shop item to grant on completion. Cost/level are ignored for goals. Disabled rewards for the selected child are hidden.">
                                         <i class="fa-solid fa-circle-info"></i>
-                                        <span class="tooltip-text">Reward to grant on completion. Required if reward is part of the award mode.</span>
+                                        <span class="tooltip-text">Rewards Shop item to grant on completion. Cost/level are ignored for goals. Disabled rewards for the selected child are hidden.</span>
                                     </span>
                                 </label>
                                 <select id="goal_reward_id" name="reward_id" data-goal-reward>
                                     <option value="">None</option>
                                     <?php foreach ($goalRewardTemplates as $template): ?>
-                                        <option value="template:<?php echo (int) $template['id']; ?>">
+                                        <?php
+                                        $templateId = (int) $template['id'];
+                                        $disabledChildren = $rewardDisabledByTemplate[$templateId] ?? [];
+                                        $disabledAttr = !empty($disabledChildren)
+                                            ? ' data-disabled-children="' . htmlspecialchars(implode(',', $disabledChildren)) . '"'
+                                            : '';
+                                        ?>
+                                        <option value="template:<?php echo $templateId; ?>"<?php echo $disabledAttr; ?>>
                                             <?php echo htmlspecialchars($template['title']); ?> (<?php echo (int) $template['point_cost']; ?> pts)
                                         </option>
                                     <?php endforeach; ?>
@@ -1879,6 +1905,7 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                         $routines = $goalFormData['routines'] ?? [];
                         $goalTasks = $goalFormData['tasks'] ?? [];
                         $goalRewardTemplates = $goalFormData['reward_templates'] ?? [];
+                        $rewardDisabledByTemplate = $goalFormData['reward_disabled_by_template'] ?? [];
                         ?>
                         <div class="form-grid">
                             <div class="form-group">
@@ -2102,15 +2129,22 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                             </div>
                             <div class="form-group">
                                 <label for="edit_goal_reward_id">Reward (optional)
-                                    <span class="tooltip tooltip-right" tabindex="0" aria-label="Reward to grant on completion. Required if reward is part of the award mode.">
+                                    <span class="tooltip tooltip-right" tabindex="0" aria-label="Rewards Shop item to grant on completion. Cost/level are ignored for goals. Disabled rewards for the selected child are hidden.">
                                         <i class="fa-solid fa-circle-info"></i>
-                                        <span class="tooltip-text">Reward to grant on completion. Required if reward is part of the award mode.</span>
+                                        <span class="tooltip-text">Rewards Shop item to grant on completion. Cost/level are ignored for goals. Disabled rewards for the selected child are hidden.</span>
                                     </span>
                                 </label>
                                 <select id="edit_goal_reward_id" name="reward_id" data-goal-reward>
                                     <option value="">None</option>
                                     <?php foreach ($goalRewardTemplates as $template): ?>
-                                        <option value="template:<?php echo (int) $template['id']; ?>">
+                                        <?php
+                                        $templateId = (int) $template['id'];
+                                        $disabledChildren = $rewardDisabledByTemplate[$templateId] ?? [];
+                                        $disabledAttr = !empty($disabledChildren)
+                                            ? ' data-disabled-children="' . htmlspecialchars(implode(',', $disabledChildren)) . '"'
+                                            : '';
+                                        ?>
+                                        <option value="template:<?php echo $templateId; ?>"<?php echo $disabledAttr; ?>>
                                             <?php echo htmlspecialchars($template['title']); ?> (<?php echo (int) $template['point_cost']; ?> pts)
                                         </option>
                                     <?php endforeach; ?>
@@ -2164,7 +2198,7 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
             <span>Dashboard</span>
         </a>
         <a class="nav-mobile-link<?php echo $routinesActive ? ' is-active' : ''; ?>" href="routine.php"<?php echo $routinesActive ? ' aria-current="page"' : ''; ?>>
-            <i class="fa-solid fa-rotate"></i>
+            <i class="fa-solid fa-repeat week-item-icon"></i>
             <span>Routines</span>
         </a>
         <a class="nav-mobile-link<?php echo $tasksActive ? ' is-active' : ''; ?>" href="task.php"<?php echo $tasksActive ? ' aria-current="page"' : ''; ?>>
@@ -2177,7 +2211,7 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
         </a>
         <a class="nav-mobile-link<?php echo $rewardsActive ? ' is-active' : ''; ?>" href="rewards.php"<?php echo $rewardsActive ? ' aria-current="page"' : ''; ?>>
             <i class="fa-solid fa-gift"></i>
-            <span>Rewards</span>
+            <span>Rewards Shop</span>
         </a>
     </nav>
     <footer>
@@ -2283,6 +2317,21 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                       if (!matches) {
                           const box = card.querySelector('input[type="checkbox"]');
                           if (box) box.checked = false;
+                      }
+                  });
+              }
+              if (rewardSelect) {
+                  rewardSelect.querySelectorAll('option[data-disabled-children]').forEach(opt => {
+                      const disabledList = opt.getAttribute('data-disabled-children')
+                          .split(',')
+                          .map(item => item.trim())
+                          .filter(Boolean);
+                      const isDisabled = childId !== '' && disabledList.includes(childId);
+                      opt.disabled = isDisabled;
+                      opt.hidden = isDisabled;
+                      if (isDisabled && opt.selected) {
+                          opt.selected = false;
+                          rewardSelect.value = '';
                       }
                   });
               }

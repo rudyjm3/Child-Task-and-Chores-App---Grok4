@@ -425,6 +425,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 $actualSeconds = max(0, (int) $metricsById[$taskId]['actual_seconds']);
             }
             $awardedPoints = calculateRoutineTaskAwardPoints($pointValue, $scheduledSeconds, $actualSeconds);
+            $starsAwarded = calculateRoutineTaskStars($scheduledSeconds, $actualSeconds);
             if ($scheduledSeconds > 0 && $actualSeconds > $scheduledSeconds) {
                 $allWithinLimits = false;
                 $overtimeCount++;
@@ -436,7 +437,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 'point_value' => $pointValue,
                 'scheduled_seconds' => $scheduledSeconds,
                 'actual_seconds' => $actualSeconds,
-                'awarded_points' => $awardedPoints
+                'awarded_points' => $awardedPoints,
+                'stars_awarded' => $starsAwarded
             ];
             setRoutineTaskStatus($routineId, $taskId, 'completed');
         }
@@ -494,11 +496,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 'completed_at' => $taskCompletedAt,
                 'scheduled_seconds' => $scheduledSeconds,
                 'actual_seconds' => $actualSeconds,
-                'status_screen_seconds' => max(0, (int) ($metric['status_screen_seconds'] ?? 0))
+                'status_screen_seconds' => max(0, (int) ($metric['status_screen_seconds'] ?? 0)),
+                'stars_awarded' => calculateRoutineTaskStars((int) ($scheduledSeconds ?? 0), (int) ($actualSeconds ?? 0))
             ];
         }
         if ($parentIdForLog > 0) {
             logRoutineCompletionSession($routineId, $childId, $parentIdForLog, 'child', $startedAt, $completedAt, $completionTasks);
+            updateChildLevelState($childId, $parentIdForLog, true);
         }
 
         if (!empty($routine['parent_user_id'])) {
@@ -1029,10 +1033,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 'completed_at' => $completionTimestampMap[$taskId] ?? null,
                                 'scheduled_seconds' => null,
                                 'actual_seconds' => null,
-                                'status_screen_seconds' => 0
+                                'status_screen_seconds' => 0,
+                                'stars_awarded' => 3
                             ];
                         }
                         logRoutineCompletionSession($routine_id, $childId, $parentIdForLog, 'parent', $parentStartedAt, $parentCompletedAt, $completionTasks);
+                        updateChildLevelState($childId, $parentIdForLog, true);
                     }
                 }
                 $summaryParts = [];
@@ -1739,7 +1745,7 @@ margin-bottom: 20px;}
                 <span>Dashboard</span>
             </a>
             <a class="nav-link<?php echo $routinesActive ? ' is-active' : ''; ?>" href="routine.php"<?php echo $routinesActive ? ' aria-current="page"' : ''; ?>>
-                <i class="fa-solid fa-rotate"></i>
+                <i class="fa-solid fa-repeat week-item-icon"></i>
                 <span>Routines</span>
             </a>
             <a class="nav-link<?php echo $tasksActive ? ' is-active' : ''; ?>" href="task.php"<?php echo $tasksActive ? ' aria-current="page"' : ''; ?>>
@@ -2694,7 +2700,7 @@ margin-bottom: 20px;}
             <span>Dashboard</span>
         </a>
         <a class="nav-mobile-link<?php echo $routinesActive ? ' is-active' : ''; ?>" href="routine.php"<?php echo $routinesActive ? ' aria-current="page"' : ''; ?>>
-            <i class="fa-solid fa-rotate"></i>
+            <i class="fa-solid fa-repeat week-item-icon"></i>
             <span>Routines</span>
         </a>
         <a class="nav-mobile-link<?php echo $tasksActive ? ' is-active' : ''; ?>" href="task.php"<?php echo $tasksActive ? ' aria-current="page"' : ''; ?>>

@@ -16,6 +16,11 @@ body {
   padding: 20px;
 }
 
+.nav-links .week-item-icon,
+.nav-mobile-bottom .week-item-icon {
+  color: inherit;
+}
+
 /* Global form controls */
 input,
 textarea,

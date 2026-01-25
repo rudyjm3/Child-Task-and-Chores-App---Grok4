@@ -57,6 +57,16 @@ foreach ($goalRows as &$goalRow) {
     }
 }
 unset($goalRow);
+$levelCelebrations = [];
+if (!empty($data['level_pending'])) {
+    $levelCelebrations[] = [
+        'level' => (int) ($data['child_level'] ?? 1)
+    ];
+    $parentForLevel = getFamilyRootId($_SESSION['user_id']);
+    if ($parentForLevel) {
+        clearChildLevelCelebration((int) $_SESSION['user_id'], (int) $parentForLevel);
+    }
+}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['request_completion'])) {
@@ -125,8 +135,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $reward_id = filter_input(INPUT_POST, 'reward_id', FILTER_VALIDATE_INT);
         $success = ($reward_id && redeemReward($_SESSION['user_id'], $reward_id));
         $_SESSION['flash_message'] = $success
-            ? "Reward redeemed successfully!"
-            : "Not enough points to redeem this reward.";
+            ? "Reward purchased successfully! Awaiting parent fulfillment."
+            : "Not enough points to purchase this reward.";
         header("Location: dashboard_child.php?open_rewards=1&reward_tab=available");
         exit;
     }
@@ -250,6 +260,7 @@ $buildChildNotificationViewLink = static function (array $note): ?string {
     <style>
         .dashboard { padding: 20px; /*max-width: 720px;*/ max-width: 100%; margin: 0 auto; text-align: center; }
         .points-summary { margin: 20px 0; display: flex; align-items: flex-start; gap: 25px; text-align: left; }
+        .level-badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; background: #fffbeb; color: #b45309; font-weight: 700; font-size: 0.85rem; border: 1px solid #fde68a; }
         .points-left { display: contents; }
         .child-identity { display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 120px; }
         .child-avatar-wrap { position: relative; display: inline-block; }
@@ -293,6 +304,8 @@ $buildChildNotificationViewLink = static function (array $note): ?string {
         .week-item:hover { background: #ffefcc; }
         .week-item-main { display: flex; align-items: center; gap: 8px; }
         .week-item-icon { color: #ef6c00; }
+        .nav-links .week-item-icon,
+        .nav-mobile-bottom .week-item-icon { color: inherit; }
         .week-item-title { font-weight: 700; color: #3e2723; }
         .week-item-meta { color: #6d4c41; font-size: 0.9rem; }
         .week-item-points { display: inline-flex; align-items: center; gap: 6px; color: #f59e0b; font-size: 0.7rem; font-weight: 700; border-radius: 999px; background-color: #fffbeb; padding: 4px 8px; white-space: nowrap; }
@@ -645,6 +658,8 @@ $buildChildNotificationViewLink = static function (array $note): ?string {
               if (typeof celebrationQueue !== 'undefined' && celebrationQueue.length) {
                   const celebrationModal = document.querySelector('[data-goal-celebration]');
                   const celebrationTitle = document.querySelector('[data-goal-celebration-title]');
+                  const celebrationHeading = celebrationModal ? celebrationModal.querySelector('.goal-celebration-title') : null;
+                  const celebrationIcon = celebrationModal ? celebrationModal.querySelector('.goal-celebration-icon i') : null;
                   const confettiHost = document.querySelector('[data-goal-confetti]');
                   const celebrationClose = document.querySelector('[data-goal-celebration-close]');
                   const colors = ['#ff7043', '#ffd54f', '#4caf50', '#29b6f6', '#ab47bc'];
@@ -655,23 +670,41 @@ $buildChildNotificationViewLink = static function (array $note): ?string {
                       setTimeout(showNextCelebration, 300);
                   };
 
-                const dropConfetti = () => {
-                    if (!confettiHost) return;
-                    confettiHost.innerHTML = '';
-                    for (let i = 0; i < 18; i += 1) {
-                        const piece = document.createElement('span');
-                        piece.style.left = `${Math.random() * 100}%`;
-                        piece.style.background = colors[i % colors.length];
-                        piece.style.animationDelay = `${Math.random() * 0.4}s`;
-                        confettiHost.appendChild(piece);
-                    }
-                };
+                  const dropConfetti = () => {
+                      if (!confettiHost) return;
+                      confettiHost.innerHTML = '';
+                      for (let i = 0; i < 18; i += 1) {
+                          const piece = document.createElement('span');
+                          piece.style.left = `${Math.random() * 100}%`;
+                          piece.style.background = colors[i % colors.length];
+                          piece.style.animationDelay = `${Math.random() * 0.4}s`;
+                          confettiHost.appendChild(piece);
+                      }
+                  };
 
                   const showNextCelebration = () => {
                       const next = celebrationQueue.shift();
                       if (!next || !celebrationModal) return;
-                      if (celebrationTitle) {
-                          celebrationTitle.textContent = next.title || 'Goal achieved!';
+                      if (next.type === 'level') {
+                          if (celebrationHeading) {
+                              celebrationHeading.textContent = 'Level Up!';
+                          }
+                          if (celebrationTitle) {
+                              celebrationTitle.textContent = 'Level ' + (next.level || 1);
+                          }
+                          if (celebrationIcon) {
+                              celebrationIcon.className = 'fa-solid fa-star';
+                          }
+                      } else {
+                          if (celebrationHeading) {
+                              celebrationHeading.textContent = 'Goal Achieved!';
+                          }
+                          if (celebrationTitle) {
+                              celebrationTitle.textContent = next.title || 'Goal achieved!';
+                          }
+                          if (celebrationIcon) {
+                              celebrationIcon.className = 'fa-solid fa-trophy';
+                          }
                       }
                       dropConfetti();
                       celebrationModal.classList.add('active');
@@ -718,7 +751,7 @@ $buildChildNotificationViewLink = static function (array $note): ?string {
             <span>Dashboard</span>
         </a>
         <a class="nav-link<?php echo $routinesActive ? ' is-active' : ''; ?>" href="routine.php"<?php echo $routinesActive ? ' aria-current="page"' : ''; ?>>
-            <i class="fa-solid fa-rotate"></i>
+            <i class="fa-solid fa-repeat week-item-icon"></i>
             <span>Routines</span>
         </a>
         <a class="nav-link<?php echo $tasksActive ? ' is-active' : ''; ?>" href="task.php"<?php echo $tasksActive ? ' aria-current="page"' : ''; ?>>
@@ -731,7 +764,7 @@ $buildChildNotificationViewLink = static function (array $note): ?string {
         </a>
         <a class="nav-link<?php echo $rewardsActive ? ' is-active' : ''; ?>" href="rewards.php"<?php echo $rewardsActive ? ' aria-current="page"' : ''; ?>>
             <i class="fa-solid fa-gift"></i>
-            <span>Rewards</span>
+            <span>Rewards Shop</span>
         </a>
         <a class="nav-link<?php echo $profileActive ? ' is-active' : ''; ?>" href="profile.php?self=1"<?php echo $profileActive ? ' aria-current="page"' : ''; ?>>
             <i class="fa-solid fa-user"></i>
@@ -1189,7 +1222,7 @@ foreach ($taskCountStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
                }
                $historyItems[] = [
                   'type' => 'Reward',
-                  'title' => 'Redeemed: ' . ($row['title'] ?? 'Reward'),
+                  'title' => 'Purchased Reward: ' . ($row['title'] ?? 'Reward'),
                   'points' => -abs($cost),
                   'date' => $row['redeemed_on']
                ];
@@ -1223,6 +1256,10 @@ foreach ($taskCountStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
                   <img class="child-avatar" src="<?php echo htmlspecialchars($childAvatar); ?>" alt="<?php echo htmlspecialchars($childFirstName !== '' ? $childFirstName : 'Child'); ?>">
                </div>
                <div class="child-first-name"><?php echo htmlspecialchars($childFirstName); ?></div>
+               <div class="level-badge">
+                  <i class="fa-solid fa-star"></i>
+                  <span>Level <?php echo (int) ($data['child_level'] ?? 1); ?></span>
+               </div>
             </div>
             <div class="points-total">
                <span class="points-total-label">Total Points</span>
@@ -1298,15 +1335,14 @@ foreach ($taskCountStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
             <i class="fa-solid fa-bullseye"></i>Goals
             <?php if ($goalCount > 0): ?><span class="dashboard-card-count"><?php echo $goalCount; ?></span><?php endif; ?>
          </a>
-         <button type="button" class="dashboard-card" data-rewards-open aria-haspopup="dialog" aria-controls="rewards-modal">
-            <i class="fa-solid fa-gift"></i>Rewards
-            <?php if ($rewardCount > 0): ?><span class="dashboard-card-count"><?php echo $rewardCount; ?></span><?php endif; ?>
-         </button>
+        <a class="dashboard-card" href="rewards.php">
+            <i class="fa-solid fa-gift"></i>Rewards Shop
+        </a>
       </div>
       <div class="rewards-modal" data-rewards-modal id="rewards-modal">
          <div class="rewards-card" role="dialog" aria-modal="true" aria-labelledby="rewards-title">
             <header>
-               <h2 id="rewards-title">Rewards</h2>
+               <h2 id="rewards-title">Rewards Shop</h2>
                <button type="button" class="rewards-close" aria-label="Close rewards" data-rewards-close>&times;</button>
             </header>
             <div class="rewards-tabs">
@@ -1341,7 +1377,7 @@ foreach ($taskCountStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
                            <li class="reward-list-item" id="redeemed-reward-<?php echo (int) $reward['id']; ?>">
                               <div class="reward-title"><?php echo htmlspecialchars($reward['title']); ?> (<?php echo htmlspecialchars($reward['point_cost']); ?> points)</div>
                               <div><?php echo htmlspecialchars($reward['description']); ?></div>
-                              <div>Redeemed on: <?php echo !empty($reward['redeemed_on']) ? htmlspecialchars(date('m/d/Y h:i A', strtotime($reward['redeemed_on']))) : 'Date unavailable'; ?></div>
+                              <div>Purchased on: <?php echo !empty($reward['redeemed_on']) ? htmlspecialchars(date('m/d/Y h:i A', strtotime($reward['redeemed_on']))) : 'Date unavailable'; ?></div>
                            </li>
                         <?php endforeach; ?>
                      </ul>
@@ -1419,10 +1455,27 @@ foreach ($taskCountStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
          </div>
       </div>
    </main>
-   <?php if (!empty($goalCelebrations)): ?>
-      <?php foreach ($goalCelebrations as $goalCelebration) {
-         markGoalCelebrationShown((int) $goalCelebration['id']);
-      } ?>
+   <?php
+      $celebrationQueue = [];
+      if (!empty($goalCelebrations)) {
+          foreach ($goalCelebrations as $goalCelebration) {
+              markGoalCelebrationShown((int) $goalCelebration['id']);
+              $celebrationQueue[] = [
+                  'type' => 'goal',
+                  'title' => $goalCelebration['title'] ?? 'Goal achieved'
+              ];
+          }
+      }
+      if (!empty($levelCelebrations)) {
+          foreach ($levelCelebrations as $levelCelebration) {
+              $celebrationQueue[] = [
+                  'type' => 'level',
+                  'level' => (int) ($levelCelebration['level'] ?? 1)
+              ];
+          }
+      }
+   ?>
+   <?php if (!empty($celebrationQueue)): ?>
       <div class="goal-celebration" data-goal-celebration>
          <div class="goal-celebration-card">
             <div class="goal-confetti" data-goal-confetti></div>
@@ -1430,12 +1483,12 @@ foreach ($taskCountStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
                <i class="fa-solid fa-xmark"></i>
             </button>
             <div class="goal-celebration-icon"><i class="fa-solid fa-trophy"></i></div>
-            <h3 class="goal-celebration-title">Goal Achieved!</h3>
+            <h3 class="goal-celebration-title">Celebration!</h3>
             <p class="goal-celebration-goal" data-goal-celebration-title></p>
          </div>
       </div>
       <script>
-         const celebrationQueue = <?php echo json_encode($goalCelebrations, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP); ?>;
+         const celebrationQueue = <?php echo json_encode($celebrationQueue, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP); ?>;
       </script>
    <?php endif; ?>
    <nav class="nav-mobile-bottom" aria-label="Primary">
@@ -1444,7 +1497,7 @@ foreach ($taskCountStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
          <span>Dashboard</span>
       </a>
       <a class="nav-mobile-link<?php echo $routinesActive ? ' is-active' : ''; ?>" href="routine.php"<?php echo $routinesActive ? ' aria-current="page"' : ''; ?>>
-         <i class="fa-solid fa-rotate"></i>
+         <i class="fa-solid fa-repeat week-item-icon"></i>
          <span>Routines</span>
       </a>
       <a class="nav-mobile-link<?php echo $tasksActive ? ' is-active' : ''; ?>" href="task.php"<?php echo $tasksActive ? ' aria-current="page"' : ''; ?>>
@@ -1457,7 +1510,7 @@ foreach ($taskCountStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
       </a>
       <a class="nav-mobile-link<?php echo $rewardsActive ? ' is-active' : ''; ?>" href="rewards.php"<?php echo $rewardsActive ? ' aria-current="page"' : ''; ?>>
          <i class="fa-solid fa-gift"></i>
-         <span>Rewards</span>
+         <span>Rewards Shop</span>
       </a>
    </nav>
    <footer>
