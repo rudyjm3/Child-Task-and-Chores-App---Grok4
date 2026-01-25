@@ -1,7 +1,7 @@
 <?php
 // index.php - Landing page
 // Purpose: Welcome and login/register links
-// Version: 3.25.4
+// Version: 3.26.0
 
 session_start();
 if (isset($_SESSION['user_id'])) {
@@ -16,7 +16,7 @@ if (isset($_SESSION['user_id'])) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Child Task and Chore App</title>
-    <link rel="stylesheet" href="css/main.css?v=3.25.4">
+    <link rel="stylesheet" href="css/main.css?v=3.26.0">
     <style>
         .landing { text-align: center; padding: 50px 20px; max-width: 600px; margin: 0 auto; }
         .button { padding: 15px 30px; background: #4caf50; color: white; text-decoration: none; border-radius: 5px; display: inline-block; margin: 10px; font-size: 18px; }
@@ -34,6 +34,7 @@ if (isset($_SESSION['user_id'])) {
   <script src="js/number-stepper.js" defer></script>
 </body>
 </html>
+
 
 
 

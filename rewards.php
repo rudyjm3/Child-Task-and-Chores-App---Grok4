@@ -100,7 +100,7 @@ if ($role_type === 'child') {
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Rewards Shop</title>
-        <link rel="stylesheet" href="css/main.css?v=3.25.4">
+        <link rel="stylesheet" href="css/main.css?v=3.26.0">
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" integrity="Evv84Mr4kqVGRNSgIGL/F/aIDqQb7xQ2vcrdIwxfjThSH8CSR7PBEakCr51Ck+w+/U6swU2Im1vVX0SVk9ABhg==" crossorigin="anonymous" referrerpolicy="no-referrer">
         <style>
             body.rewards-shop-body {
@@ -767,7 +767,7 @@ foreach ($children as $child) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Rewards Shop</title>
-    <link rel="stylesheet" href="css/main.css?v=3.25.4">
+    <link rel="stylesheet" href="css/main.css?v=3.26.0">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" integrity="Evv84Mr4kqVGRNSgIGL/F/aIDqQb7xQ2vcrdIwxfjThSH8CSR7PBEakCr51Ck+w+/U6swU2Im1vVX0SVk9ABhg==" crossorigin="anonymous" referrerpolicy="no-referrer">
     <style>
         body { font-family: Arial, sans-serif; background: #f5f7fb; }
@@ -1857,6 +1857,7 @@ $hasRecentMore = $recentTotal > $recentLimit;
     })();
 </script>
 </html>
+
 
 
 

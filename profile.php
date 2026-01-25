@@ -1,7 +1,7 @@
 <?php
 // profile.php - User profile management
 // Purpose: Edit profile details based on role (child: avatar/password; parent: family)
-// Version: 3.25.4
+// Version: 3.26.0
 
 require_once __DIR__ . '/includes/functions.php';
 
@@ -334,7 +334,7 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Profile - Child Task and Chore App</title>
-    <link rel="stylesheet" href="css/main.css?v=3.25.4">
+    <link rel="stylesheet" href="css/main.css?v=3.26.0">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" integrity="Evv84Mr4kqVGRNSgIGL/F/aIDqQb7xQ2vcrdIwxfjThSH8CSR7PBEakCr51Ck+w+/U6swU2Im1vVX0SVk9ABhg==" crossorigin="anonymous" referrerpolicy="no-referrer">
     <style>
         .profile { padding: 20px; max-width: 600px; margin: 0 auto; text-align: center; }
@@ -797,6 +797,7 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
 <?php endif; ?>
 </body>
 </html>
+
 
 
 

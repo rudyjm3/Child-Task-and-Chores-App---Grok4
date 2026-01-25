@@ -3,7 +3,7 @@
 // Purpose: Display parent dashboard with child overview and management links
 // Inputs: Session data
 // Outputs: Dashboard interface
-// Version: 3.25.4 (Notifications moved to header-triggered modal, Font Awesome icons, routine/reward updates)
+// Version: 3.26.0 (Notifications moved to header-triggered modal, Font Awesome icons, routine/reward updates)
 
 require_once __DIR__ . '/includes/functions.php';
 
@@ -955,7 +955,7 @@ $formatParentNotificationMessage = static function (array $note): string {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Parent Dashboard</title>
-    <link rel="stylesheet" href="css/main.css?v=3.25.4">
+    <link rel="stylesheet" href="css/main.css?v=3.26.0">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" integrity="Evv84Mr4kqVGRNSgIGL/F/aIDqQb7xQ2vcrdIwxfjThSH8CSR7PBEakCr51Ck+w+/U6swU2Im1vVX0SVk9ABhg==" crossorigin="anonymous" referrerpolicy="no-referrer">
     <style>
         .dashboard { padding: 20px; max-width: 1200px; margin: 0 auto; }
@@ -3283,7 +3283,7 @@ $formatParentNotificationMessage = static function (array $note): string {
       </a>
    </nav>
     <footer>
-     <p>Child Task and Chores App - Ver 3.25.4</p>
+     <p>Child Task and Chores App - Ver 3.26.0</p>
    </footer>
 <div class="child-remove-backdrop" data-child-remove-modal aria-hidden="true">
     <div class="child-remove-modal" role="dialog" aria-modal="true" aria-labelledby="child-remove-title">
@@ -3315,6 +3315,7 @@ $formatParentNotificationMessage = static function (array $note): string {
   <script src="js/number-stepper.js" defer></script>
 </body>
 </html>
+
 
 
 
