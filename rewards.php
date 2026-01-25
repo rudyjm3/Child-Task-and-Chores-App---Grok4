@@ -269,7 +269,7 @@ foreach ($activeRewards as $reward) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Reward Library</title>
-    <link rel="stylesheet" href="css/main.css?v=3.17.6">
+    <link rel="stylesheet" href="css/main.css?v=3.25.4">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" integrity="Evv84Mr4kqVGRNSgIGL/F/aIDqQb7xQ2vcrdIwxfjThSH8CSR7PBEakCr51Ck+w+/U6swU2Im1vVX0SVk9ABhg==" crossorigin="anonymous" referrerpolicy="no-referrer">
     <style>
         body { font-family: Arial, sans-serif; background: #f5f7fb; }
@@ -294,6 +294,8 @@ foreach ($activeRewards as $reward) {
         .template-icon-button.danger { color: #9f9f9f; }
         .template-icon-button.danger:hover { background: rgba(0,0,0,0.04); color: #7a7a7a; }
         .badge { display: inline-block; background: #4caf50; color: #fff; padding: 4px 8px; border-radius: 12px; font-size: 0.85em; font-weight: 600; }
+        .points-badge { background: #fffbeb; color: #f59e0b; padding: 4px 10px; border-radius: 999px; font-weight: 700; font-size: 0.85rem; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+        .points-badge::before { content: '\f005'; font-family: 'Font Awesome 6 Free'; font-weight: 900; }
         [data-child-active-list] .badge { background: #4caf50; color: #fff; font-weight: 600; }
         .message { background: #e8f5e9; color: #2e7d32; border: 1px solid #c8e6c9; padding: 10px 12px; border-radius: 6px; margin-bottom: 10px; }
         .recent-list { display: grid; gap: 8px; }
@@ -326,7 +328,20 @@ foreach ($activeRewards as $reward) {
         .reward-list { width: 100%; }
         .reward-card { gap: 8px; width: 100%; max-width: none; }
         .reward-card-header { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+        .reward-card-meta { display: inline-flex; align-items: center; gap: 10px; margin-left: auto; }
         .reward-actions { display: inline-flex; gap: 8px; }
+        .reward-actions-menu { position: relative; }
+        .reward-actions-toggle { list-style: none; width: 42px; height: 42px; border-radius: 14px; border: 1px solid #e0e0e0; background: #f5f7fb; color: #546e7a; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+        .reward-actions-toggle::-webkit-details-marker,
+        .reward-actions-toggle::marker { display: none; }
+        .reward-actions-dropdown { position: absolute; right: 0; top: 44px; background: #fff; border: 1px solid #e0e0e0; border-radius: 12px; padding: 6px; box-shadow: 0 8px 18px rgba(0,0,0,0.12); display: grid; gap: 4px; min-width: 160px; z-index: 50; }
+        .reward-actions-menu:not([open]) .reward-actions-dropdown { display: none; }
+        .reward-actions-dropdown button { background: transparent; border: none; text-align: left; padding: 8px 10px; border-radius: 8px; display: flex; gap: 8px; align-items: center; font-weight: 600; color: #37474f; cursor: pointer; }
+        .reward-actions-dropdown button:hover { background: #f5f5f5; }
+        .reward-actions-dropdown .danger { color: #d32f2f; }
+        .reward-title-row { display: flex; align-items: center; gap: 10px; }
+        .reward-library-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+        .recent-meta { display: inline-flex; flex-direction: column; gap: 6px; align-items: flex-end; text-align: right; }
         .reward-card.highlight { border: 2px solid #f9a825; box-shadow: 0 0 0 3px rgba(249,168,37,0.2); }
         .icon-button { border: none; background: transparent; cursor: pointer; color: #919191; padding: 6px 8px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; }
         .icon-button:hover { background: rgba(0,0,0,0.04); color: #7a7a7a; }
@@ -500,13 +515,24 @@ foreach ($activeRewards as $reward) {
                                         <?php foreach ($childCard['rewards'] as $reward): ?>
                                             <div class="template-card reward-card" id="reward-<?php echo (int)$reward['id']; ?>" data-reward-card="<?php echo (int)$reward['id']; ?>" style="width:100%;">
                                                 <div class="reward-card-header">
-                                                    <div>
-                                                        <strong><?php echo htmlspecialchars($reward['title']); ?></strong>
-                                                        <span class="badge"><?php echo (int)$reward['point_cost']; ?> pts</span>
-                                                    </div>
-                                                    <div class="reward-actions">
-                                                        <button type="button" class="icon-button" data-action="edit-reward" data-reward-id="<?php echo (int)$reward['id']; ?>" aria-label="Edit reward"><i class="fa fa-pen"></i></button>
-                                                        <button type="button" class="icon-button danger" data-action="delete-reward" data-reward-id="<?php echo (int)$reward['id']; ?>" aria-label="Delete reward"><i class="fa fa-trash"></i></button>
+                                                    <strong><?php echo htmlspecialchars($reward['title']); ?></strong>
+                                                    <div class="reward-card-meta">
+                                                        <span class="points-badge"><?php echo (int)$reward['point_cost']; ?></span>
+                                                        <details class="reward-actions-menu">
+                                                            <summary class="reward-actions-toggle" aria-label="Reward actions">
+                                                                <i class="fa-solid fa-ellipsis-vertical"></i>
+                                                            </summary>
+                                                            <div class="reward-actions-dropdown">
+                                                                <button type="button" data-action="edit-reward" data-reward-id="<?php echo (int)$reward['id']; ?>">
+                                                                    <i class="fa fa-pen"></i>
+                                                                    Edit Reward
+                                                                </button>
+                                                                <button type="button" class="danger" data-action="delete-reward" data-reward-id="<?php echo (int)$reward['id']; ?>">
+                                                                    <i class="fa fa-trash"></i>
+                                                                    Delete Reward
+                                                                </button>
+                                                            </div>
+                                                        </details>
                                                     </div>
                                                 </div>
                                                 <?php if (!empty($reward['description'])): ?>
@@ -555,9 +581,9 @@ foreach ($activeRewards as $reward) {
                                         <?php foreach ($fulfilledList as $reward): ?>
                                             <div class="template-card reward-card" id="reward-<?php echo (int)$reward['id']; ?>" style="width:100%;">
                                                 <div class="reward-card-header">
-                                                    <div>
-                                                        <strong><?php echo htmlspecialchars($reward['title']); ?></strong>
-                                                        <span class="badge"><?php echo (int)$reward['point_cost']; ?> pts</span>
+                                                    <strong><?php echo htmlspecialchars($reward['title']); ?></strong>
+                                                    <div class="reward-card-meta">
+                                                        <span class="points-badge"><?php echo (int)$reward['point_cost']; ?></span>
                                                     </div>
                                                 </div>
                                                 <div class="reward-card-body">
@@ -593,9 +619,9 @@ foreach ($activeRewards as $reward) {
                                         <?php foreach ($pendingRewardsByChild[$cid] as $reward): ?>
                                             <div class="template-card reward-card" id="reward-<?php echo (int)$reward['id']; ?>" style="width:100%;">
                                                 <div class="reward-card-header">
-                                                    <div>
-                                                        <strong><?php echo htmlspecialchars($reward['title']); ?></strong>
-                                                        <span class="badge"><?php echo (int)$reward['point_cost']; ?> pts</span>
+                                                    <strong><?php echo htmlspecialchars($reward['title']); ?></strong>
+                                                    <div class="reward-card-meta">
+                                                        <span class="points-badge"><?php echo (int)$reward['point_cost']; ?></span>
                                                     </div>
                                                 </div>
                                                 <div class="reward-card-body">
@@ -646,30 +672,35 @@ foreach ($activeRewards as $reward) {
             <?php if (!empty($templates)): ?>
                 <div class="template-grid" data-template-grid>
                     <?php foreach ($templates as $template): ?>
-                        <div class="template-card" data-template-card="<?php echo (int)$template['id']; ?>">
-                            <div>
-                                <div style="display:flex; justify-content: space-between; align-items:center; gap:10px;">
-                                    <div>
+                            <div class="template-card" data-template-card="<?php echo (int)$template['id']; ?>">
+                                <div class="reward-library-header">
+                                    <div class="reward-title-row">
                                         <strong><?php echo htmlspecialchars($template['title']); ?></strong>
-                                        <span class="badge"><?php echo (int)$template['point_cost']; ?> pts</span>
+                                        <span class="points-badge"><?php echo (int)$template['point_cost']; ?></span>
                                     </div>
+                                    <details class="template-actions reward-actions-menu">
+                                        <summary class="reward-actions-toggle" aria-label="Reward template actions">
+                                            <i class="fa-solid fa-ellipsis-vertical"></i>
+                                        </summary>
+                                        <div class="reward-actions-dropdown">
+                                            <button type="button" data-action="edit-template" data-template-id="<?php echo (int)$template['id']; ?>">
+                                                <i class="fa fa-pen"></i>
+                                                Edit Reward
+                                            </button>
+                                            <form method="POST" action="rewards.php" onsubmit="return confirm('Delete this template?');">
+                                                <input type="hidden" name="template_id" value="<?php echo (int)$template['id']; ?>">
+                                                <button type="submit" name="delete_template" class="danger">
+                                                    <i class="fa fa-trash"></i>
+                                                    Delete Reward
+                                                </button>
+                                            </form>
+                                        </div>
+                                    </details>
                                 </div>
                                 <?php if (!empty($template['description'])): ?>
                                     <p><?php echo nl2br(htmlspecialchars($template['description'])); ?></p>
                                 <?php endif; ?>
-                            </div>
-                            <div class="template-actions">
-                                <button type="button" class="template-icon-button" data-action="edit-template" data-template-id="<?php echo (int)$template['id']; ?>" aria-label="Edit template">
-                                    <i class="fa fa-pen"></i>
-                                </button>
-                                <form method="POST" action="rewards.php" onsubmit="return confirm('Delete this template?');" style="margin:0;">
-                                    <input type="hidden" name="template_id" value="<?php echo (int)$template['id']; ?>">
-                                    <button type="submit" name="delete_template" class="template-icon-button danger" aria-label="Delete template">
-                                        <i class="fa fa-trash"></i>
-                                    </button>
-                                </form>
-                            </div>
-                            <form method="POST" action="rewards.php" class="reward-edit-form hidden" data-template-form="<?php echo (int)$template['id']; ?>" style="display:grid; gap:10px; margin-top:8px;">
+                                <form method="POST" action="rewards.php" class="reward-edit-form hidden" data-template-form="<?php echo (int)$template['id']; ?>" style="display:grid; gap:10px; margin-top:8px;">
                                 <input type="hidden" name="template_id" value="<?php echo (int)$template['id']; ?>">
                                 <div class="form-group">
                                     <label for="template_title_<?php echo (int)$template['id']; ?>">Title</label>
@@ -721,10 +752,12 @@ $hasRecentMore = $recentTotal > $recentLimit;
                 <div class="recent-item<?php echo $isExtra ? ' hidden' : ''; ?>" <?php if ($isExtra) echo 'data-recent-extra="1"'; ?>>
                     <div>
                         <strong><?php echo htmlspecialchars($reward['title']); ?></strong>
-                        <span class="badge"><?php echo (int)$reward['point_cost']; ?> pts</span>
                         <div style="font-size:0.9em; color:#555;">For: <?php echo htmlspecialchars($reward['child_name'] ?? 'All children'); ?></div>
                     </div>
-                    <div style="font-size:0.9em; color:#666; text-align:right;"><?php echo htmlspecialchars(date('m/d/Y', strtotime($reward['created_on']))); ?></div>
+                    <div class="recent-meta">
+                        <span class="points-badge"><?php echo (int)$reward['point_cost']; ?></span>
+                        <div style="font-size:0.9em; color:#666;"><?php echo htmlspecialchars(date('m/d/Y', strtotime($reward['created_on']))); ?></div>
+                    </div>
                 </div>
             <?php endforeach; ?>
         </div>
@@ -1105,6 +1138,34 @@ $hasRecentMore = $recentTotal > $recentLimit;
                     openConfirm('Delete this reward?', () => form.submit());
                 });
             });
+
+            const rewardMenus = (scope || document).querySelectorAll('.reward-actions-menu');
+            if (rewardMenus.length) {
+                const closeRewardMenus = (except) => {
+                    rewardMenus.forEach(menu => {
+                        if (menu !== except) menu.removeAttribute('open');
+                    });
+                };
+                document.addEventListener('click', (e) => {
+                    if (!e.target.closest('.reward-actions-menu')) {
+                        closeRewardMenus();
+                    }
+                });
+                rewardMenus.forEach(menu => {
+                    const toggle = menu.querySelector('.reward-actions-toggle');
+                    if (toggle) {
+                        toggle.addEventListener('click', (e) => {
+                            e.stopPropagation();
+                            closeRewardMenus(menu);
+                        });
+                    }
+                    menu.querySelectorAll('.reward-actions-dropdown button').forEach(btn => {
+                        btn.addEventListener('click', () => {
+                            menu.removeAttribute('open');
+                        });
+                    });
+                });
+            }
 
             const cancelButtons = (scope || document).querySelectorAll('[data-action="cancel-edit"]');
             cancelButtons.forEach(btn => {

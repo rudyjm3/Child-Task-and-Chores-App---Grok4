@@ -3,7 +3,7 @@
 // Purpose: Allow parents to create tasks and children to view/complete them
 // Inputs: POST data for task creation, task ID for completion
 // Outputs: Task management interface
-// Version: 3.17.6
+// Version: 3.25.4
 
 session_start(); // Ensure session is started to load existing session
 
@@ -544,7 +544,7 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Task Management</title>
-      <link rel="stylesheet" href="css/main.css?v=3.17.6">
+      <link rel="stylesheet" href="css/main.css?v=3.25.4">
     <link rel="icon" type="image/svg+xml" href="images/favicon.svg">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" integrity="Evv84Mr4kqVGRNSgIGL/F/aIDqQb7xQ2vcrdIwxfjThSH8CSR7PBEakCr51Ck+w+/U6swU2Im1vVX0SVk9ABhg==" crossorigin="anonymous" referrerpolicy="no-referrer">
     <style>
@@ -662,8 +662,8 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
         .task-card-status.is-success { background: #e8f5e9; color: #2e7d32; }
         .task-card-status.is-muted { background: #eceff1; color: #607d8b; }
         .task-card-summary-right { display: flex; align-items: center; gap: 12px; }
-        .task-card-points { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; color: #0d47a1; }
-        .task-card-points i { color: #0d47a1; }
+        .task-card-points { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; color: #f59e0b; background: #fffbeb; padding: 4px 10px; border-radius: 999px; }
+        .task-card-points i { color: #f59e0b; }
         .task-card-chevron { color: #90a4ae; transition: transform 200ms ease; }
         .task-card[open] .task-card-chevron { transform: rotate(90deg); }
         .task-card-body { padding: 16px 18px 18px; display: grid; gap: 12px; border-top: 1px solid #eef1f5; }
@@ -796,8 +796,10 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
         .calendar-task-item { border: 1px solid #ffd28a; background: #fff7e6; border-radius: 10px; padding: 8px; text-align: left; cursor: pointer; display: grid; gap: 4px; font-size: 0.9rem; }
         .calendar-task-item:hover { background: #ffe9c6; }
         .child-theme .calendar-task-item { font-family: inherit; }
-        .calendar-task-header { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+        .calendar-task-header { display: flex; align-items: center; justify-content: space-between; gap: 6px; flex-wrap: wrap; }
         .task-week-list .calendar-task-header { flex-direction: row; align-items: center; flex-wrap: wrap; }
+        .calendar-task-title-wrap { flex: 1; min-width: 0; }
+        .calendar-task-points { margin-left: auto; }
         .calendar-task-title-wrap { display: inline-flex; align-items: center; gap: 6px; flex: 1; min-width: 0; }
         .calendar-task-badge { display: inline-flex; align-items: center; gap: 4px; width: fit-content; padding: 2px 8px; border-radius: 999px; font-size: 0.7rem; font-weight: 700; letter-spacing: 0.02em; text-transform: uppercase; }
         .calendar-task-badge.overdue { background: #d9534f; color: #fff; }
@@ -805,7 +807,12 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
         .calendar-task-badge.compact { justify-content: center; width: 20px; height: 20px; padding: 0; border-radius: 50%; font-size: 0.65rem; }
         .calendar-task-badge-group { display: inline-flex; align-items: center; gap: 5px; }
         .calendar-task-title { font-weight: 700; color: #3e2723; }
-        .calendar-task-points { color: #fff; font-size: 0.7rem; font-weight: 700; border-radius: 50px; background-color: #4caf50; padding: 2px 8px; }
+        .calendar-task-points { color: #f59e0b; font-size: 0.7rem; font-weight: 700; border-radius: 999px; background: #fffbeb; padding: 4px 10px; display: inline-flex; align-items: center; gap: 6px; }
+        .calendar-task-points::before { content: '\f005'; font-family: 'Font Awesome 6 Free'; font-weight: 900; }
+        .child-theme .task-card-points { background: #fffbeb; color: #f59e0b; padding: 4px 10px; border-radius: 999px; }
+        .child-theme .task-card-points i { color: #f59e0b; }
+        .child-theme .calendar-task-points { background: #fffbeb; color: #f59e0b; padding: 4px 10px; border-radius: 999px; display: inline-flex; align-items: center; gap: 6px; }
+        .child-theme .calendar-task-points::before { content: '\f005'; font-family: 'Font Awesome 6 Free'; font-weight: 900; }
         .calendar-task-meta { color: #6d4c41; font-size: 0.85rem; }
         .calendar-task-child { }
         .calendar-day-empty { color: #9e9e9e; font-size: 0.85rem; text-align: center; padding: 8px 0; }
@@ -1599,7 +1606,7 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                 floatingTitleEl.textContent = task.title || 'Task';
             }
             if (floatingPointsEl) {
-                floatingPointsEl.textContent = `${task.points || 0} pts`;
+                floatingPointsEl.textContent = `${task.points || 0}`;
             }
             floatingTimerEl.querySelectorAll('[data-timer-display]').forEach((el) => {
                 el.dataset.taskId = String(taskId);
@@ -2192,7 +2199,7 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                   }
                 const points = document.createElement('span');
                 points.className = 'calendar-task-points';
-                points.textContent = `${task.points || 0} pts`;
+                points.textContent = `${task.points || 0}`;
                 const meta = document.createElement('span');
                 meta.className = 'calendar-task-meta';
                 const metaIcon = document.createElement('i');
@@ -4280,9 +4287,9 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
         </a>
     </nav>
     <footer>
-      <p>Child Task and Chore App - Ver 3.17.6</p>
+      <p>Child Task and Chore App - Ver 3.25.4</p>
    </footer>
-  <script src="js/number-stepper.js?v=3.17.6" defer></script>
+  <script src="js/number-stepper.js?v=3.25.4" defer></script>
 <?php if (!empty($isParentNotificationUser)): ?>
     <?php include __DIR__ . '/includes/notifications_parent.php'; ?>
 <?php endif; ?>

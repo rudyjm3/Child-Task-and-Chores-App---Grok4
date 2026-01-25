@@ -1,9 +1,9 @@
-﻿<?php
+<?php
 // dashboard_child.php - Child dashboard
 // Purpose: Display child dashboard with progress and task/reward links
 // Inputs: Session data
 // Outputs: Dashboard interface
-// Version: 3.17.6 (Notifications moved to header-triggered modal, Font Awesome icons)
+// Version: 3.25.4 (Notifications moved to header-triggered modal, Font Awesome icons)
 
 require_once __DIR__ . '/includes/functions.php';
 
@@ -245,7 +245,7 @@ $buildChildNotificationViewLink = static function (array $note): ?string {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Child Dashboard</title>
-   <link rel="stylesheet" href="css/main.css?v=3.17.6">
+   <link rel="stylesheet" href="css/main.css?v=3.25.4">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" integrity="Evv84Mr4kqVGRNSgIGL/F/aIDqQb7xQ2vcrdIwxfjThSH8CSR7PBEakCr51Ck+w+/U6swU2Im1vVX0SVk9ABhg==" crossorigin="anonymous" referrerpolicy="no-referrer">
     <style>
         .dashboard { padding: 20px; /*max-width: 720px;*/ max-width: 100%; margin: 0 auto; text-align: center; }
@@ -274,7 +274,7 @@ $buildChildNotificationViewLink = static function (array $note): ?string {
         .dashboard-card:hover { background: #ffe9c6; }
         .dashboard-card-count { position: absolute; top: 8px; right: 10px; background: #ff6f61; color: #fff; font-size: 0.8rem; min-width: 24px; height: 24px; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; padding: 0 6px; box-shadow: 0 2px 6px rgba(0,0,0,0.18); }
         .points-total-label { text-transform: uppercase; letter-spacing: 0.05em; color: #ff6f61; margin-right: 6px; font-size: 1.1rem; }
-        .points-total-value { color: #00bb01; font-size: 2rem; }
+        .points-total-value { color: #f59e0b; font-size: 2rem; }
         .points-history-button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; margin: 6px auto 0; background: #fff; border: 2px solid #ffd28a; border-radius: 999px; padding: 6px 12px; color: #ef6c00; font-weight: 700; cursor: pointer; }
         .points-history-button i { font-size: 1rem; }
         .week-calendar { flex: 1; min-width: 220px; text-align: left; }
@@ -295,7 +295,8 @@ $buildChildNotificationViewLink = static function (array $note): ?string {
         .week-item-icon { color: #ef6c00; }
         .week-item-title { font-weight: 700; color: #3e2723; }
         .week-item-meta { color: #6d4c41; font-size: 0.9rem; }
-        .week-item-points { color: #fff; font-size: 0.7rem; font-weight: 600; border-radius: 50px; background-color: #4caf50; padding: 2px 8px; white-space: nowrap; }
+        .week-item-points { display: inline-flex; align-items: center; gap: 6px; color: #f59e0b; font-size: 0.7rem; font-weight: 700; border-radius: 999px; background-color: #fffbeb; padding: 4px 8px; white-space: nowrap; }
+        .week-item-points::before { content: '\f005'; font-family: 'Font Awesome 6 Free'; font-weight: 900; }
         .button { padding: 10px 20px; margin: 5px; background-color: #ff9800; color: white; border: none; border-radius: 5px; cursor: pointer; text-decoration: none; display: inline-block; font-size: 16px; min-height: 44px; }
         .redeem-button { background-color: #2196f3; }
         
@@ -399,7 +400,8 @@ $buildChildNotificationViewLink = static function (array $note): ?string {
         .child-history-hero { display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 16px; background: #fff; border: 1px solid #eceff4; box-shadow: 0 8px 18px rgba(0,0,0,0.08); }
         .child-history-avatar { width: 56px; height: 56px; border-radius: 50%; object-fit: cover; box-shadow: 0 2px 6px rgba(0,0,0,0.15); }
         .child-history-name { font-weight: 700; color: #263238; }
-        .child-history-points { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; background: #e8f5e9; color: #2e7d32; font-weight: 700; margin-top: 6px; }
+        .child-history-points { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; background: #fffbeb; color: #f59e0b; font-weight: 700; margin-top: 6px; }
+        .child-history-points i { color: #f59e0b; }
         .child-history-filters { display: inline-flex; gap: 6px; padding: 10px; border-radius: 16px; border: 1px solid #eceff4; background: #fff; box-shadow: 0 8px 18px rgba(0,0,0,0.06); }
         .history-filter { border: 2px solid #ffd28a; background: #fff; color: #ef6c00; font-weight: 600; padding: 6px 12px; border-radius: 10px; cursor: pointer; }
         .history-filter.active { background: #ffd28a; color: #ef6c00; }
@@ -412,7 +414,8 @@ $buildChildNotificationViewLink = static function (array $note): ?string {
         .child-history-item { background: #fff; border: 1px solid #eceff4; border-radius: 14px; padding: 12px; display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
         .child-history-item-title { font-weight: 700; color: #3e2723; }
         .child-history-item-meta { color: #6d4c41; font-size: 0.95rem; }
-        .child-history-item-points { background: #e8f5e9; color: #2e7d32; padding: 4px 10px; border-radius: 999px; font-weight: 700; white-space: nowrap; }
+        .child-history-item-points { background: #fffbeb; color: #f59e0b; padding: 4px 10px; border-radius: 999px; font-weight: 700; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
+        .child-history-item-points::before { content: '\f005'; font-family: 'Font Awesome 6 Free'; font-weight: 900; }
         .child-history-item-points.is-negative { background: #ffebee; color: #d32f2f; }
         .help-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: none; align-items: center; justify-content: center; z-index: 4300; padding: 14px; }
         .help-modal.open { display: flex; }
@@ -1458,7 +1461,7 @@ foreach ($taskCountStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
       </a>
    </nav>
    <footer>
-   <p>Child Task and Chore App - Ver 3.17.6</p>
+   <p>Child Task and Chore App - Ver 3.25.4</p>
 </footer>
   <script src="js/number-stepper.js" defer></script>
 </body>

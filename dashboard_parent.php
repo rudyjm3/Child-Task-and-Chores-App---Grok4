@@ -1,9 +1,9 @@
-﻿<?php
+<?php
 // dashboard_parent.php - Parent dashboard
 // Purpose: Display parent dashboard with child overview and management links
 // Inputs: Session data
 // Outputs: Dashboard interface
-// Version: 3.17.6 (Notifications moved to header-triggered modal, Font Awesome icons, routine/reward updates)
+// Version: 3.25.4 (Notifications moved to header-triggered modal, Font Awesome icons, routine/reward updates)
 
 require_once __DIR__ . '/includes/functions.php';
 
@@ -965,7 +965,7 @@ $formatParentNotificationMessage = static function (array $note): string {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Parent Dashboard</title>
-    <link rel="stylesheet" href="css/main.css?v=3.17.6">
+    <link rel="stylesheet" href="css/main.css?v=3.25.4">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" integrity="Evv84Mr4kqVGRNSgIGL/F/aIDqQb7xQ2vcrdIwxfjThSH8CSR7PBEakCr51Ck+w+/U6swU2Im1vVX0SVk9ABhg==" crossorigin="anonymous" referrerpolicy="no-referrer">
     <style>
         .dashboard { padding: 20px; max-width: 1200px; margin: 0 auto; }
@@ -1013,10 +1013,10 @@ $formatParentNotificationMessage = static function (array $note): string {
         .child-reward-badge-link .badge-label { font-size: 0.85em; color: #666; }
         .points-progress-wrapper { display: flex; flex-direction: column; align-items: center; gap: 12px; flex: 1; /* background: linear-gradient(180deg, #fbfaf9 0%, #f3efea 100%);*/ border-radius: 18px; padding: 16px; border: 1px solid #e9e9e9; box-shadow: 0 8px 18px rgba(0,0,0,0.08); }
         .points-progress-label { font-size: 0.8em; font-weight: 700; color: #7a7a7a; text-align: center; text-transform: none; letter-spacing: 0.03em; }
-        .points-number { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 2px 4px; border-radius: 999px; background: transparent; border: none; box-shadow: none; font-size: 1.5rem; font-weight: 600; color: #4a7a42; line-height: 1; }
-        .points-number i { color: #5f8a57; font-size: 0.9em; }
+        .points-number { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 2px 6px; border-radius: 999px; background: #fffbeb; border: none; box-shadow: none; font-size: 1.5rem; font-weight: 600; color: #f59e0b; line-height: 1; }
+        .points-number i { color: #f59e0b; font-size: 0.9em; }
         .points-number-value { font-weight: 600; }
-        .points-number-suffix { font-size: 0.78em; font-weight: 600; color: #4a7a42; }
+        .points-number-suffix { font-size: 0.78em; font-weight: 600; color: #f59e0b; }
         .child-badge-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 6px; }
         .badge-pill { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 8px; background: transparent; color: #0d47a1; font-weight: 700; border: 1px solid #d5def0; font-size: 0.95em; text-decoration: none; }
         .badge-pill:hover { background: #eef4ff; text-decoration: none; }
@@ -1043,7 +1043,8 @@ $formatParentNotificationMessage = static function (array $note): string {
         .child-schedule-card .child-schedule-main > i.fa-repeat { color: #0d47a1; }
         .child-schedule-title { font-weight: 600; color: #3e2723; }
         .child-schedule-time { color: #6d4c41; font-size: 0.9rem; }
-        .child-schedule-points { background-color: #4caf50; color: #fff; border-radius: 12px; padding: 4px 8px; font-size: 0.85rem; font-weight: 600; white-space: nowrap; }
+        .child-schedule-points { background: #fffbeb; color: #f59e0b; border-radius: 999px; padding: 4px 10px; font-size: 0.85rem; font-weight: 700; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
+        .child-schedule-points::before { content: '\f005'; font-family: 'Font Awesome 6 Free'; font-weight: 900; }
         .child-schedule-badge { display: inline-flex; align-items: center; gap: 4px; margin-left: 8px; padding: 2px 8px; border-radius: 999px; font-size: 0.7rem; font-weight: 700; background: #4caf50; color: #fff; text-transform: uppercase; }
         .child-schedule-badge.compact { justify-content: center; margin-left: 6px; width: 20px; height: 20px; padding: 0; border-radius: 50%; font-size: 0.65rem; }
         .child-schedule-badge.overdue { background: #d9534f; }
@@ -1112,7 +1113,8 @@ $formatParentNotificationMessage = static function (array $note): string {
         .week-modal .calendar-task-badge.compact { justify-content: center; width: 20px; height: 20px; padding: 0; border-radius: 50%; font-size: 0.65rem; }
         .week-modal .calendar-task-badge-group { display: inline-flex; align-items: center; gap: 5px; }
         .week-modal .calendar-task-title { font-weight: 700; color: #3e2723; }
-        .week-modal .calendar-task-points { color: #fff; font-size: 0.7rem; font-weight: 700; border-radius: 50px; background-color: #4caf50; padding: 2px 8px; }
+        .week-modal .calendar-task-points { color: #f59e0b; font-size: 0.7rem; font-weight: 700; border-radius: 999px; background: #fffbeb; padding: 4px 10px; display: inline-flex; align-items: center; gap: 6px; }
+        .week-modal .calendar-task-points::before { content: '\f005'; font-family: 'Font Awesome 6 Free'; font-weight: 900; }
         .week-modal .calendar-task-meta { color: #919191; font-size: 0.85rem; }
         .week-modal .calendar-day-empty { color: #9e9e9e; font-size: 0.85rem; text-align: center; padding: 8px 0; }
         .week-modal .calendar-empty { display: none; text-align: center; color: #9e9e9e; font-weight: 600; padding: 18px; }
@@ -1143,7 +1145,8 @@ $formatParentNotificationMessage = static function (array $note): string {
         .child-history-item { background: #fff; border: 1px solid #eceff4; border-radius: 14px; padding: 12px; display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
         .child-history-item-title { font-weight: 700; color: #3e2723; }
         .child-history-item-meta { color: #6d4c41; font-size: 0.95rem; }
-        .child-history-item-points { background: #e8f5e9; color: #2e7d32; padding: 4px 10px; border-radius: 999px; font-weight: 700; white-space: nowrap; }
+        .child-history-item-points { background: #fffbeb; color: #f59e0b; padding: 4px 10px; border-radius: 999px; font-weight: 700; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
+        .child-history-item-points::before { content: '\f005'; font-family: 'Font Awesome 6 Free'; font-weight: 900; }
         .child-history-item-points.is-negative { background: #ffebee; color: #d32f2f; }
         .adjust-modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.55); display: none; align-items: center; justify-content: center; z-index: 3000; padding: 12px; }
         .adjust-modal-backdrop.open { display: flex; }
@@ -1160,11 +1163,12 @@ $formatParentNotificationMessage = static function (array $note): string {
         .adjust-history { background: #f9f9f9; border: 1px solid #e0e0e0; border-radius: 8px; padding: 10px; max-height: 180px; min-height: 110px; overflow-y: auto; }
         .adjust-history h4 { margin: 0 0 8px; font-size: 0.95rem; }
         .adjust-history ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
-        .adjust-history li { display: grid; gap: 2px; font-size: 0.9rem; }
-        .adjust-history .delta { font-weight: 700; display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 999px; background: #e8f5e9; color: #2e7d32; width: fit-content; }
-        .adjust-history .delta.positive { color: #2e7d32; }
-        .adjust-history .delta.negative { color: #c62828; background: #ffebee; }
-        .adjust-history .meta { color: #666; font-size: 0.85rem; }
+        .adjust-history li { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; font-size: 0.9rem; }
+        .adjust-history-item-info { display: grid; gap: 2px; }
+        .adjust-history-points { background: #fffbeb; color: #f59e0b; padding: 4px 10px; border-radius: 999px; font-weight: 700; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
+        .adjust-history-points::before { content: '\f005'; font-family: 'Font Awesome 6 Free'; font-weight: 900; }
+        .adjust-history-points.is-negative { background: #ffebee; color: #d32f2f; }
+        .adjust-history-meta { color: #666; font-size: 0.85rem; }
         .adjust-modal-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 0; }
         .adjust-modal-back { border: none; background: transparent; color: #424242; font-size: 1.1rem; cursor: pointer; display: none; }
         .adjust-modal-body { display: grid; gap: 14px; overflow-y: auto; flex: 1; min-height: 0; }
@@ -1173,8 +1177,9 @@ $formatParentNotificationMessage = static function (array $note): string {
         .adjust-child-name { font-weight: 700; color: #263238; }
         .adjust-form { display: grid; gap: 12px; }
         .adjust-points-panel { background: #fff; border: 1px solid #eceff4; border-radius: 16px; padding: 12px; display: grid; gap: 10px; box-shadow: 0 8px 18px rgba(0,0,0,0.06); }
-        .adjust-current-points { display: inline-flex; align-items: center; justify-content: center; gap: 6px; font-weight: 700; color: #2e7d32; font-size: 1.05rem; }
-        .adjust-current-points i { color: #4caf50; }
+        .adjust-current-points { display: inline-flex; align-items: center; justify-content: center; gap: 6px; font-weight: 700; color: #f59e0b; font-size: 1.4rem; }
+        .adjust-current-points i { color: #f59e0b; }
+        .adjust-points-warning { color: #d32f2f; font-weight: 600; font-size: 0.9rem; text-align: center; }
         .adjust-control { display: grid; grid-template-columns: 56px 1fr 56px; border-radius: 12px; overflow: hidden; border: 1px solid #e0e0e0; background: #f5f5f5; }
         .adjust-control input[type="number"] { border: none; background: #fff; font-size: 1.2rem; text-align: center; padding: 10px; }
         .adjust-control input[type="number"]:focus { outline: none; }
@@ -1190,7 +1195,7 @@ $formatParentNotificationMessage = static function (array $note): string {
         .child-history-hero { display: flex; align-items: center; gap: 12px; padding: 12px; margin-bottom: 10px; border-radius: 16px; background: #fff; border: 1px solid #eceff4; box-shadow: 0 8px 18px rgba(0,0,0,0.08); }
         .child-history-avatar { width: 56px; height: 56px; border-radius: 50%; object-fit: cover; box-shadow: 0 2px 6px rgba(0,0,0,0.15); }
         .child-history-name { font-weight: 700; color: #263238; }
-        .child-history-points { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; background: #e8f5e9; color: #2e7d32; font-weight: 700; margin-top: 6px; }
+        .child-history-points { display: inline-flex; align-items: center; gap: 6px; color: #f59e0b; font-weight: 700; margin-top: 6px; font-size: 1.4rem; }
         .child-history-filters { display: inline-flex; gap: 6px; padding: 10px; border-radius: 16px; border: 1px solid #eceff4; background: #fff; box-shadow: 0 8px 18px rgba(0,0,0,0.06); }
         .history-filter { border: none; background: transparent; color: #616161; font-weight: 600; padding: 6px 12px; border-radius: 10px; cursor: pointer; }
         .history-filter.active { background: #6e9bd5; color: #fff; }
@@ -1199,7 +1204,8 @@ $formatParentNotificationMessage = static function (array $note): string {
         .child-history-day { display: grid; gap: 10px; }
         .child-history-day-title { font-weight: 700; color: #8d6e63; }
         .child-history-item { background: #fff; border-radius: 14px; padding: 12px; border: 1px solid #eceff4; display: flex; gap: 12px; align-items: flex-start; justify-content: space-between; }
-        .child-history-item-points { background: #e8f5e9; color: #2e7d32; padding: 4px 10px; border-radius: 999px; font-weight: 700; white-space: nowrap; }
+        .child-history-item-points { background: #fffbeb; color: #f59e0b; padding: 4px 10px; border-radius: 999px; font-weight: 700; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
+        .child-history-item-points::before { content: '\f005'; font-family: 'Font Awesome 6 Free'; font-weight: 900; }
         .child-history-item-points.is-negative { background: #ffebee; color: #d32f2f; }
         .adjust-modal .button { margin: 0; }
 
@@ -1794,7 +1800,7 @@ $formatParentNotificationMessage = static function (array $note): string {
                     titleWrap.appendChild(title);
                     const points = document.createElement('span');
                     points.className = 'calendar-task-points';
-                    points.textContent = `${item.points || 0} pts`;
+                    points.textContent = `${item.points || 0}`;
                     const badge = buildBadge(item, useTextDual);
                     header.appendChild(typeIcon);
                     header.appendChild(titleWrap);
@@ -2048,12 +2054,25 @@ $formatParentNotificationMessage = static function (array $note): string {
             const adjustChildName = adjustModal ? adjustModal.querySelector('[data-role="adjust-child-name"]') : null;
             const adjustChildAvatar = adjustModal ? adjustModal.querySelector('[data-role="adjust-child-avatar"]') : null;
             const adjustCurrentPoints = adjustModal ? adjustModal.querySelector('[data-role="adjust-current-points"]') : null;
+            const adjustPointsWarning = adjustModal ? adjustModal.querySelector('[data-role="adjust-points-warning"]') : null;
             const pointsInput = adjustModal ? adjustModal.querySelector('#adjust_points_input') : null;
             const reasonInput = adjustModal ? adjustModal.querySelector('#adjust_reason_input') : null;
+            let adjustBasePoints = 0;
             const setBodyScrollLocked = (locked) => {
                 if (!document.body) return;
                 document.body.classList.toggle('modal-open', !!locked);
                 document.body.classList.toggle('show-mobile-nav', !!locked);
+            };
+
+            const updateAdjustTotal = () => {
+                if (!adjustCurrentPoints || !pointsInput) return;
+                const delta = parseInt(pointsInput.value || '0', 10) || 0;
+                const total = adjustBasePoints + delta;
+                const clampedTotal = Math.max(0, total);
+                adjustCurrentPoints.textContent = clampedTotal;
+                if (adjustPointsWarning) {
+                    adjustPointsWarning.style.display = total < 0 ? 'block' : 'none';
+                }
             };
 
             const renderHistory = (history) => {
@@ -2067,17 +2086,20 @@ $formatParentNotificationMessage = static function (array $note): string {
                 }
                 history.forEach(item => {
                     const li = document.createElement('li');
-                    const delta = document.createElement('span');
-                    delta.className = 'delta ' + (item.delta_points >= 0 ? 'positive' : 'negative');
-                    delta.textContent = (item.delta_points >= 0 ? '+' : '') + item.delta_points + ' pts';
+                    const info = document.createElement('div');
+                    info.className = 'adjust-history-item-info';
                     const reason = document.createElement('span');
                     reason.textContent = item.reason || 'No reason';
                     const meta = document.createElement('span');
-                    meta.className = 'meta';
+                    meta.className = 'adjust-history-meta';
                     meta.textContent = item.created_at ? new Date(item.created_at).toLocaleString() : '';
+                    info.appendChild(reason);
+                    info.appendChild(meta);
+                    const delta = document.createElement('span');
+                    delta.className = 'adjust-history-points' + (item.delta_points < 0 ? ' is-negative' : '');
+                    delta.textContent = (item.delta_points >= 0 ? '+' : '') + item.delta_points + ' pts';
+                    li.appendChild(info);
                     li.appendChild(delta);
-                    li.appendChild(reason);
-                    li.appendChild(meta);
                     adjustHistoryList.appendChild(li);
                 });
             };
@@ -2094,11 +2116,13 @@ $formatParentNotificationMessage = static function (array $note): string {
                     if (adjustTitle) { adjustTitle.textContent = 'Adjust Points'; }
                     if (adjustChildName) { adjustChildName.textContent = childName; }
                     if (adjustChildAvatar) { adjustChildAvatar.src = childAvatar; adjustChildAvatar.alt = childName; }
-                    if (adjustCurrentPoints) { adjustCurrentPoints.textContent = childPoints; }
+                    adjustBasePoints = parseInt(childPoints, 10) || 0;
+                    if (adjustCurrentPoints) { adjustCurrentPoints.textContent = adjustBasePoints; }
                     if (adjustChildIdInput) { adjustChildIdInput.value = childId; }
                     if (pointsInput) { pointsInput.value = 1; }
                     if (reasonInput) { reasonInput.value = ''; }
                     renderHistory(history);
+                    updateAdjustTotal();
                     if (adjustModal) {
                         adjustModal.classList.add('open');
                         setBodyScrollLocked(true);
@@ -2124,13 +2148,18 @@ $formatParentNotificationMessage = static function (array $note): string {
                     decBtn.addEventListener('click', () => {
                         const current = parseInt(pointsInput.value || '0', 10) || 0;
                         pointsInput.value = current - 1;
+                        updateAdjustTotal();
                     });
                 }
                 if (incBtn && pointsInput) {
                     incBtn.addEventListener('click', () => {
                         const current = parseInt(pointsInput.value || '0', 10) || 0;
                         pointsInput.value = current + 1;
+                        updateAdjustTotal();
                     });
+                }
+                if (pointsInput) {
+                    pointsInput.addEventListener('input', updateAdjustTotal);
                 }
             }
 
@@ -2875,7 +2904,7 @@ $formatParentNotificationMessage = static function (array $note): string {
                                                        <div class="child-schedule-time"><?php echo htmlspecialchars($item['time_label']); ?></div>
                                                     </div>
                                                  </div>
-                                                 <div class="child-schedule-points"><?php echo (int)$item['points']; ?> pts</div>
+                                                 <div class="child-schedule-points"><?php echo (int)$item['points']; ?></div>
                                               <?php if (!empty($itemLink)): ?>
                                                  </a>
                                               <?php else: ?>
@@ -3178,6 +3207,9 @@ $formatParentNotificationMessage = static function (array $note): string {
                             <i class="fa-solid fa-star"></i>
                             <span data-role="adjust-current-points">0</span> pts
                         </div>
+                        <div class="adjust-points-warning" data-role="adjust-points-warning" style="display:none;">
+                            Total points can't be less than 0.
+                        </div>
                         <label for="adjust_points_input" class="sr-only">Points adjustment</label>
                         <div class="adjust-control">
                             <button type="button" class="adjust-step adjust-step-minus" data-action="decrement-points">-</button>
@@ -3255,7 +3287,7 @@ $formatParentNotificationMessage = static function (array $note): string {
       </a>
    </nav>
     <footer>
-     <p>Child Task and Chores App - Ver 3.17.6</p>
+     <p>Child Task and Chores App - Ver 3.25.4</p>
    </footer>
 <div class="child-remove-backdrop" data-child-remove-modal aria-hidden="true">
     <div class="child-remove-modal" role="dialog" aria-modal="true" aria-labelledby="child-remove-title">

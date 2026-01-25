@@ -3,7 +3,7 @@
 // Purpose: Allow parents to create/edit/delete/reactivate goals and children to view/request completion
 // Inputs: POST for create/update/delete/reactivate, goal ID for request completion
 // Outputs: Goal management interface
-// Version: 3.17.6
+// Version: 3.25.4
 
 session_start();
 require_once __DIR__ . '/includes/functions.php';
@@ -585,7 +585,7 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Goal Management</title>
-    <link rel="stylesheet" href="css/main.css?v=3.17.6">
+    <link rel="stylesheet" href="css/main.css?v=3.25.4">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" integrity="Evv84Mr4kqVGRNSgIGL/F/aIDqQb7xQ2vcrdIwxfjThSH8CSR7PBEakCr51Ck+w+/U6swU2Im1vVX0SVk9ABhg==" crossorigin="anonymous" referrerpolicy="no-referrer">
     <style>
         .goal-list {
@@ -908,6 +908,18 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
         .goal-routine-badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; background: #f2f5f9; color: #37474f; font-weight: 700; font-size: 0.82rem; }
         .goal-routine-count { display: inline-flex; align-items: center; justify-content: center; min-width: 22px; padding: 2px 8px; border-radius: 999px; background: #1565c0; color: #fff; font-weight: 700; font-size: 0.78rem; }
         .goal-card-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
+        .goal-card-actions { display: inline-flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+        .goal-card-badges { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+        .goal-card-footer { display: flex; justify-content: flex-end; margin-top: 14px; }
+        .task-card-menu { position: relative; }
+        .task-card-menu-toggle { width: 42px; height: 42px; border-radius: 14px; border: 1px solid #e0e0e0; background: #f5f7fb; color: #546e7a; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; padding: 0; }
+        .task-card-menu-list { position: absolute; bottom: calc(100% + 10px); right: 0; background: #fff; border: 1px solid #e6ebf1; border-radius: 12px; box-shadow: 0 10px 20px rgba(0,0,0,0.12); padding: 8px; display: none; min-width: 190px; z-index: 10; }
+        .task-card-menu.open .task-card-menu-list { display: grid; gap: 4px; }
+        .task-card-menu-item { width: 100%; border: none; background: transparent; padding: 8px 10px; border-radius: 10px; text-align: left; font-weight: 600; color: #455a64; cursor: pointer; display: flex; align-items: center; gap: 8px; }
+        .task-card-menu-item:hover { background: #f5f7fb; }
+        .task-card-menu-item.danger { color: #d32f2f; }
+        .goal-points-badge { background: #fffbeb; color: #f59e0b; padding: 4px 10px; border-radius: 999px; font-weight: 700; font-size: 0.85rem; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+        .goal-points-badge::before { content: '\f005'; font-family: 'Font Awesome 6 Free'; font-weight: 900; }
         .goal-card-title-text { font-size: 1.2rem; font-weight: 600; text-align: left; margin: 0; }
         .goal-status-badge { color: #f9f9f9; font-weight: 600; font-size: 0.85rem; letter-spacing: 2px; border-radius: 50px; padding: 5px 10px; margin-left: 1%; }
         .goal-status-badge.active { background-color: #1db41d; }
@@ -974,6 +986,7 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
             border-radius: 8px;
             background: #f9f9f9;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            overflow: visible;
         }
         .button {
             padding: 10px 20px;
@@ -1211,12 +1224,17 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                                 ];
                                 $goalPayloadJson = htmlspecialchars(json_encode($goalPayload, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP), ENT_QUOTES, 'UTF-8');
                                 ?>
-                                <div class="goal-card" id="goal-<?php echo (int) $goal['id']; ?>">
+                                    <div class="goal-card" id="goal-<?php echo (int) $goal['id']; ?>">
                                     <div class="goal-card-header">
                                         <h3 class="goal-card-title-text"><?php echo htmlspecialchars($goal['title']); ?></h3>
-                                        <?php if ($displayStatus === 'active'): ?>
-                                            <span class="goal-status-badge active">Active</span>
-                                        <?php endif; ?>
+                                        <div class="goal-card-badges">
+                                            <?php if (!empty($goal['points_awarded'])): ?>
+                                                <span class="goal-points-badge"><?php echo (int) $goal['points_awarded']; ?></span>
+                                            <?php endif; ?>
+                                            <?php if ($displayStatus === 'active'): ?>
+                                                <span class="goal-status-badge active">Active</span>
+                                            <?php endif; ?>
+                                        </div>
                                     </div>
                                     <?php if (!empty($goal['description'])): ?>
                                         <p class="goal-description"><span class="goal-info-label"><i class="fa-solid fa-message"></i></span><?php echo nl2br(htmlspecialchars($goal['description'])); ?></p>
@@ -1284,11 +1302,34 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                                             <?php if (!empty($goal['require_on_time'])): ?>
                                                 <span class="goal-detail-pill">On-time required</span>
                                             <?php endif; ?>
-                                            <?php if (!empty($goal['points_awarded'])): ?>
-                                                <span class="goal-detail-pill">Points: <?php echo (int) $goal['points_awarded']; ?></span>
-                                            <?php endif; ?>
                                         </div>
                                     </div>
+                                    <?php if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])): ?>
+                                        <div class="goal-card-footer">
+                                            <div class="task-card-menu" data-goal-menu>
+                                                <button type="button" class="task-card-menu-toggle" aria-label="Open goal actions" data-goal-menu-toggle>
+                                                    <i class="fa-solid fa-ellipsis-vertical"></i>
+                                                </button>
+                                                <div class="task-card-menu-list">
+                                                    <button type="button" class="task-card-menu-item" data-goal-edit-open data-goal-payload="<?php echo $goalPayloadJson; ?>">
+                                                        <i class="fa-solid fa-pen"></i>
+                                                        Edit Goal
+                                                    </button>
+                                                    <button type="button" class="task-card-menu-item" data-goal-duplicate data-goal-payload="<?php echo $goalPayloadJson; ?>">
+                                                        <i class="fa-solid fa-clone"></i>
+                                                        Duplicate Goal
+                                                    </button>
+                                                    <form method="POST" action="goal.php" onsubmit="return confirm('Archive this goal?');">
+                                                        <input type="hidden" name="goal_id" value="<?php echo $goal['id']; ?>">
+                                                        <button type="submit" name="delete_goal" class="task-card-menu-item danger">
+                                                            <i class="fa-solid fa-box-archive"></i>
+                                                            Archive Goal
+                                                        </button>
+                                                    </form>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    <?php endif; ?>
                                     <?php if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])): ?>
                                         <?php if ($goal['status'] === 'pending_approval'): ?>
                                             <form method="POST" action="goal.php">
@@ -1301,17 +1342,6 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                                                 </div>
                                             </form>
                                         <?php endif; ?>
-                                <div class="edit-delete">
-                                    <button type="button" class="icon-button" data-goal-edit-open data-goal-payload="<?php echo $goalPayloadJson; ?>" aria-label="Edit goal">
-                                        <i class="fa-solid fa-pen"></i>
-                                    </button>
-                                    <form method="POST" action="goal.php" style="display:inline;">
-                                        <input type="hidden" name="goal_id" value="<?php echo $goal['id']; ?>">
-                                        <button type="submit" name="delete_goal" class="icon-button danger" aria-label="Delete goal">
-                                            <i class="fa-solid fa-trash"></i>
-                                        </button>
-                                    </form>
-                                </div>
                             <?php elseif ($_SESSION['role'] === 'child' && $goal['status'] === 'active' && ($goal['goal_type'] ?? 'manual') === 'manual'): ?>
                                         <form method="POST" action="goal.php">
                                             <input type="hidden" name="goal_id" value="<?php echo $goal['id']; ?>">
@@ -1368,11 +1398,41 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                                 'title' => $goal['title'] ?? 'Goal achieved'
                             ];
                         }
+                        $completedPayload = [
+                            'id' => (int) $goal['id'],
+                            'child_user_id' => (int) ($goal['child_user_id'] ?? 0),
+                            'title' => $goal['title'] ?? '',
+                            'description' => $goal['description'] ?? '',
+                            'start_date' => !empty($goal['start_date']) ? date('Y-m-d\\TH:i', strtotime($goal['start_date'])) : '',
+                            'end_date' => !empty($goal['end_date']) ? date('Y-m-d\\TH:i', strtotime($goal['end_date'])) : '',
+                            'reward_id' => (int) ($goal['reward_id'] ?? 0),
+                            'goal_type' => $goal['goal_type'] ?? 'manual',
+                            'routine_id' => (int) ($goal['routine_id'] ?? 0),
+                            'routine_ids' => array_values(array_filter(array_map('intval', $goal['routine_target_ids'] ?? []))),
+                            'task_category' => $goal['task_category'] ?? '',
+                            'target_count' => (int) ($goal['target_count'] ?? 0),
+                            'streak_required' => (int) ($goal['streak_required'] ?? 0),
+                            'time_window_type' => $goal['time_window_type'] ?? 'rolling',
+                            'time_window_days' => (int) ($goal['time_window_days'] ?? 0),
+                            'fixed_window_start' => $goal['fixed_window_start'] ?? '',
+                            'fixed_window_end' => $goal['fixed_window_end'] ?? '',
+                            'require_on_time' => (int) ($goal['require_on_time'] ?? 0),
+                            'points_awarded' => (int) ($goal['points_awarded'] ?? 0),
+                            'award_mode' => $goal['award_mode'] ?? 'both',
+                            'requires_parent_approval' => (int) ($goal['requires_parent_approval'] ?? 1),
+                            'task_target_ids' => getGoalTaskTargetIds((int) $goal['id'])
+                        ];
+                        $completedPayloadJson = htmlspecialchars(json_encode($completedPayload, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP), ENT_QUOTES, 'UTF-8');
                         ?>
                         <div class="goal-card" id="goal-<?php echo (int) $goal['id']; ?>">
                             <div class="goal-card-header">
                                 <h3 class="goal-card-title-text"><?php echo htmlspecialchars($goal['title']); ?></h3>
-                                <span class="goal-status-badge completed">Completed</span>
+                                <div class="goal-card-badges">
+                                    <?php if (!empty($goal['points_awarded'])): ?>
+                                        <span class="goal-points-badge"><?php echo (int) $goal['points_awarded']; ?></span>
+                                    <?php endif; ?>
+                                    <span class="goal-status-badge completed">Completed</span>
+                                </div>
                             </div>
                             <?php if (!empty($goal['description'])): ?>
                                 <p class="goal-description"><span class="goal-info-label"><i class="fa-solid fa-message"></i></span><?php echo nl2br(htmlspecialchars($goal['description'])); ?></p>
@@ -1394,6 +1454,28 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                                 <span style="width: <?php echo (int) $progressPercent; ?>%;"></span>
                             </div>
                             </div>
+                            <?php if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])): ?>
+                                <div class="goal-card-footer">
+                                    <div class="task-card-menu" data-goal-menu>
+                                        <button type="button" class="task-card-menu-toggle" aria-label="Open goal actions" data-goal-menu-toggle>
+                                            <i class="fa-solid fa-ellipsis-vertical"></i>
+                                        </button>
+                                        <div class="task-card-menu-list">
+                                            <button type="button" class="task-card-menu-item" data-goal-duplicate data-goal-payload="<?php echo $completedPayloadJson; ?>">
+                                                <i class="fa-solid fa-clone"></i>
+                                                Duplicate Goal
+                                            </button>
+                                            <form method="POST" action="goal.php" onsubmit="return confirm('Archive this goal?');">
+                                                <input type="hidden" name="goal_id" value="<?php echo $goal['id']; ?>">
+                                                <button type="submit" name="delete_goal" class="task-card-menu-item danger">
+                                                    <i class="fa-solid fa-box-archive"></i>
+                                                    Archive Goal
+                                                </button>
+                                            </form>
+                                        </div>
+                                    </div>
+                                </div>
+                            <?php endif; ?>
                         </div>
                     <?php endforeach; ?>
                         <?php endif; ?>
@@ -1448,7 +1530,12 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                                 <div class="goal-card rejected-card" id="goal-<?php echo (int) $goal['id']; ?>">
                                     <div class="goal-card-header">
                                         <h3 class="goal-card-title-text"><?php echo htmlspecialchars($goal['title']); ?></h3>
-                                        <span class="goal-status-badge rejected"><?php echo htmlspecialchars($inactiveLabel); ?></span>
+                                        <div class="goal-card-badges">
+                                            <?php if (!empty($goal['points_awarded'])): ?>
+                                                <span class="goal-points-badge"><?php echo (int) $goal['points_awarded']; ?></span>
+                                            <?php endif; ?>
+                                            <span class="goal-status-badge rejected"><?php echo htmlspecialchars($inactiveLabel); ?></span>
+                                        </div>
                                     </div>
                                     <?php if (!empty($goal['description'])): ?>
                                         <p class="goal-description"><span class="goal-info-label"><i class="fa-solid fa-message"></i></span><?php echo nl2br(htmlspecialchars($goal['description'])); ?></p>
@@ -1464,18 +1551,32 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                                     <p class="goal-info-row"><span class="goal-info-label"><i class="fa-regular fa-calendar-days"></i></span><?php echo htmlspecialchars($inactiveDateLabel); ?>: <?php echo htmlspecialchars($goal['rejected_at_formatted']); ?></p>
                                     <p class="goal-info-row"><span class="goal-info-label"><i class="fa-solid fa-comment"></i></span><?php echo htmlspecialchars($goal['rejection_comment'] ?? 'No comments available.'); ?></p>
                                     <?php if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])): ?>
-                                        <div class="edit-delete">
-                                            <button type="button" class="button" data-goal-edit-open data-goal-reactivate="1" data-goal-payload="<?php echo $inactivePayloadJson; ?>" aria-label="Reactivate goal">
-                                                Reactivate
-                                            </button>
-                                            <form method="POST" action="goal.php" style="display:inline;">
-                                                <input type="hidden" name="goal_id" value="<?php echo $goal['id']; ?>">
-                                                <button type="submit" name="delete_goal" class="icon-button danger" aria-label="Delete goal">
-                                                    <i class="fa-solid fa-trash"></i>
+                                        <div class="goal-card-footer">
+                                            <div class="task-card-menu" data-goal-menu>
+                                                <button type="button" class="task-card-menu-toggle" aria-label="Open goal actions" data-goal-menu-toggle>
+                                                    <i class="fa-solid fa-ellipsis-vertical"></i>
                                                 </button>
-                                            </form>
+                                                <div class="task-card-menu-list">
+                                                    <button type="button" class="task-card-menu-item" data-goal-edit-open data-goal-reactivate="1" data-goal-payload="<?php echo $inactivePayloadJson; ?>">
+                                                        <i class="fa-solid fa-rotate-left"></i>
+                                                        Reactivate Goal
+                                                    </button>
+                                                    <button type="button" class="task-card-menu-item" data-goal-duplicate data-goal-payload="<?php echo $inactivePayloadJson; ?>">
+                                                        <i class="fa-solid fa-clone"></i>
+                                                        Duplicate Goal
+                                                    </button>
+                                                    <form method="POST" action="goal.php" onsubmit="return confirm('Archive this goal?');">
+                                                        <input type="hidden" name="goal_id" value="<?php echo $goal['id']; ?>">
+                                                        <button type="submit" name="delete_goal" class="task-card-menu-item danger">
+                                                            <i class="fa-solid fa-box-archive"></i>
+                                                            Archive Goal
+                                                        </button>
+                                                    </form>
+                                                </div>
+                                            </div>
                                         </div>
-                                    <?php elseif ($_SESSION['role'] === 'child'): ?>
+                                    <?php endif; ?>
+                                    <?php if ($_SESSION['role'] === 'child'): ?>
                                         <p>Created on: <?php echo htmlspecialchars($goal['created_at_formatted']); ?></p>
                                     <?php endif; ?>
                                 </div>
@@ -2080,7 +2181,7 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
         </a>
     </nav>
     <footer>
-        <p>Child Task and Chore App - Ver 3.17.6</p>
+        <p>Child Task and Chore App - Ver 3.25.4</p>
     </footer>
   <script src="js/number-stepper.js" defer></script>
   <script>
@@ -2245,6 +2346,65 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
           goalEditModal.classList.remove('open');
           document.body.classList.remove('no-scroll');
       };
+      const populateGoalForm = (form, payload, formApi, includeId = false) => {
+          if (!form) return;
+          if (includeId) {
+              const idInput = form.querySelector('[name="goal_id"]');
+              if (idInput) idInput.value = payload.id || '';
+          }
+          form.querySelector('[name="title"]').value = payload.title || '';
+          form.querySelector('[name="description"]').value = payload.description || '';
+          form.querySelector('[name="start_date"]').value = payload.start_date || '';
+          form.querySelector('[name="end_date"]').value = payload.end_date || '';
+          form.querySelector('[name="goal_type"]').value = payload.goal_type || 'manual';
+          form.querySelector('[name="task_category"]').value = payload.task_category || '';
+          form.querySelector('[name="target_count"]').value = payload.target_count || 0;
+          form.querySelector('[name="streak_required"]').value = payload.streak_required || 0;
+          form.querySelector('[name="time_window_type"]').value = payload.time_window_type || 'rolling';
+          form.querySelector('[name="time_window_days"]').value = payload.time_window_days || 0;
+          form.querySelector('[name="fixed_window_start"]').value = payload.fixed_window_start || '';
+          form.querySelector('[name="fixed_window_end"]').value = payload.fixed_window_end || '';
+          form.querySelector('[name="require_on_time"]').checked = !!payload.require_on_time;
+          form.querySelector('[name="points_awarded"]').value = payload.points_awarded || 0;
+          form.querySelector('[name="award_mode"]').value = payload.award_mode || 'both';
+          form.querySelector('[name="reward_id"]').value = payload.reward_id || '';
+          form.querySelector('[name="requires_parent_approval"]').checked = payload.requires_parent_approval !== 0;
+
+          const childInputs = form.querySelectorAll('input[name="child_user_id"]');
+          childInputs.forEach(input => {
+              input.checked = String(input.value) === String(payload.child_user_id || '');
+          });
+          if (!Array.from(childInputs).some(input => input.checked)) {
+              const firstChild = childInputs[0];
+              if (firstChild) firstChild.checked = true;
+          }
+
+          const targetIds = Array.isArray(payload.task_target_ids) ? payload.task_target_ids.map(String) : [];
+          form.querySelectorAll('input[name="task_target_ids[]"]').forEach(box => {
+              box.checked = targetIds.includes(String(box.value));
+          });
+
+          if (formApi) {
+              formApi.setGoalTypeVisibility();
+              formApi.setAwardModeVisibility();
+          }
+
+          const routineSelect = form.querySelector('[data-goal-routine-select]');
+          const routineIds = Array.isArray(payload.routine_ids) ? payload.routine_ids.map(String) : [];
+          if (!routineIds.length && payload.routine_id) {
+              routineIds.push(String(payload.routine_id));
+          }
+          if (routineSelect) {
+              Array.from(routineSelect.options).forEach(option => {
+                  option.selected = routineIds.includes(option.value);
+              });
+          }
+
+          if (formApi) {
+              formApi.filterByChild();
+          }
+      };
+
       const openGoalEdit = (payload, reactivate = false) => {
           if (!goalEditModal || !goalEditForm) return;
           goalEditForm.reset();
@@ -2258,61 +2418,22 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
           if (reactivateField) {
               reactivateField.value = reactivate ? '1' : '0';
           }
-
-          goalEditForm.querySelector('[name="goal_id"]').value = payload.id || '';
-          goalEditForm.querySelector('[name="title"]').value = payload.title || '';
-          goalEditForm.querySelector('[name="description"]').value = payload.description || '';
-          goalEditForm.querySelector('[name="start_date"]').value = payload.start_date || '';
-          goalEditForm.querySelector('[name="end_date"]').value = payload.end_date || '';
-          goalEditForm.querySelector('[name="goal_type"]').value = payload.goal_type || 'manual';
-          goalEditForm.querySelector('[name="task_category"]').value = payload.task_category || '';
-          goalEditForm.querySelector('[name="target_count"]').value = payload.target_count || 0;
-          goalEditForm.querySelector('[name="streak_required"]').value = payload.streak_required || 0;
-          goalEditForm.querySelector('[name="time_window_type"]').value = payload.time_window_type || 'rolling';
-          goalEditForm.querySelector('[name="time_window_days"]').value = payload.time_window_days || 0;
-          goalEditForm.querySelector('[name="fixed_window_start"]').value = payload.fixed_window_start || '';
-          goalEditForm.querySelector('[name="fixed_window_end"]').value = payload.fixed_window_end || '';
-          goalEditForm.querySelector('[name="require_on_time"]').checked = !!payload.require_on_time;
-          goalEditForm.querySelector('[name="points_awarded"]').value = payload.points_awarded || 0;
-          goalEditForm.querySelector('[name="award_mode"]').value = payload.award_mode || 'both';
-          goalEditForm.querySelector('[name="reward_id"]').value = payload.reward_id || '';
-          goalEditForm.querySelector('[name="requires_parent_approval"]').checked = payload.requires_parent_approval !== 0;
-
-          const childInputs = goalEditForm.querySelectorAll('input[name="child_user_id"]');
-          childInputs.forEach(input => {
-              input.checked = String(input.value) === String(payload.child_user_id || '');
-          });
-          if (!Array.from(childInputs).some(input => input.checked)) {
-              const firstChild = childInputs[0];
-              if (firstChild) firstChild.checked = true;
-          }
-
-          const targetIds = Array.isArray(payload.task_target_ids) ? payload.task_target_ids.map(String) : [];
-          goalEditForm.querySelectorAll('input[name="task_target_ids[]"]').forEach(box => {
-              box.checked = targetIds.includes(String(box.value));
-          });
-
-          if (editFormApi) {
-              editFormApi.setGoalTypeVisibility();
-              editFormApi.setAwardModeVisibility();
-          }
-
-          const routineSelect = goalEditForm.querySelector('[data-goal-routine-select]');
-          const routineIds = Array.isArray(payload.routine_ids) ? payload.routine_ids.map(String) : [];
-          if (!routineIds.length && payload.routine_id) {
-              routineIds.push(String(payload.routine_id));
-          }
-          if (routineSelect) {
-              Array.from(routineSelect.options).forEach(option => {
-                  option.selected = routineIds.includes(option.value);
-              });
-          }
-
-          if (editFormApi) {
-              editFormApi.filterByChild();
-          }
+          populateGoalForm(goalEditForm, payload, editFormApi, true);
           goalEditModal.classList.add('open');
           document.body.classList.add('no-scroll');
+      };
+
+      const openGoalDuplicate = (payload) => {
+          if (!goalCreateModal || !goalCreateForm) return;
+          goalCreateForm.reset();
+          if (goalCreateError) {
+              goalCreateError.textContent = '';
+              goalCreateError.style.display = 'none';
+          }
+          goalCreateForm.querySelectorAll('.input-error').forEach(el => el.classList.remove('input-error'));
+          goalCreateForm.querySelectorAll('.child-select-grid').forEach(el => el.classList.remove('input-error'));
+          populateGoalForm(goalCreateForm, payload, createFormApi, false);
+          openGoalCreate();
       };
 
       if (goalEditModal) {
@@ -2338,6 +2459,48 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
               openGoalEdit(payload, reactivate);
           });
       });
+
+      document.querySelectorAll('[data-goal-duplicate]').forEach(button => {
+          button.addEventListener('click', () => {
+              let payload = {};
+              try {
+                  payload = JSON.parse(button.dataset.goalPayload || '{}');
+              } catch (err) {
+                  payload = {};
+              }
+              openGoalDuplicate(payload);
+          });
+      });
+
+      const goalMenus = document.querySelectorAll('[data-goal-menu]');
+      if (goalMenus.length) {
+          const closeGoalMenus = (except) => {
+              goalMenus.forEach(menu => {
+                  if (menu !== except) menu.classList.remove('open');
+              });
+          };
+          document.addEventListener('click', (event) => {
+              if (!event.target.closest('[data-goal-menu]')) {
+                  closeGoalMenus();
+              }
+          });
+          goalMenus.forEach(menu => {
+              const toggle = menu.querySelector('[data-goal-menu-toggle]');
+              if (toggle) {
+                  toggle.addEventListener('click', (event) => {
+                      event.stopPropagation();
+                      const isOpen = menu.classList.contains('open');
+                      closeGoalMenus(isOpen ? null : menu);
+                      menu.classList.toggle('open', !isOpen);
+                  });
+              }
+              menu.querySelectorAll('.task-card-menu-item').forEach(btn => {
+                  btn.addEventListener('click', () => {
+                      menu.classList.remove('open');
+                  });
+              });
+          });
+      }
 
       document.addEventListener('keydown', (event) => {
           if (event.key === 'Escape') {

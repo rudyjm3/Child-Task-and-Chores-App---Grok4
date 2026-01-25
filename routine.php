@@ -1206,7 +1206,7 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Routine Management</title>
-    <link rel="stylesheet" href="css/main.css?v=3.17.6">
+    <link rel="stylesheet" href="css/main.css?v=3.25.4">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" integrity="Evv84Mr4kqVGRNSgIGL/F/aIDqQb7xQ2vcrdIwxfjThSH8CSR7PBEakCr51Ck+w+/U6swU2Im1vVX0SVk9ABhg==" crossorigin="anonymous" referrerpolicy="no-referrer">
     <style>
         .page-messages { max-width: 960px; margin: 0 auto 20px; }
@@ -1289,7 +1289,7 @@ margin-bottom: 20px;}
         .selected-task-item { background: #fff; border: 1px solid #dcdcdc; border-radius: 8px; padding: 12px; display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 12px; margin-bottom: 10px; }
         .selected-task-item.error { border-color: #f44336; }
         .drag-handle { cursor: grab; font-size: 1.2rem; color: #9e9e9e; }
-        .task-meta { font-size: 0.85rem; color: #616161; }
+        .task-meta { font-size: 0.85rem; color: #616161; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
         .task-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.65); display: flex; align-items: center; justify-content: center; padding: 20px; z-index: 4400; opacity: 0; pointer-events: none; transition: opacity 200ms ease; }
         .task-modal-overlay.active { opacity: 1; pointer-events: auto; }
         .task-modal { background: #fff; border-radius: 14px; max-width: 520px; width: min(520px, 100%); max-height: 90vh; overflow: hidden; padding: 28px; position: relative; box-shadow: 0 18px 36px rgba(0,0,0,0.25); display: flex; flex-direction: column; }
@@ -1309,6 +1309,11 @@ margin-bottom: 20px;}
         .library-task-card header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
         .library-task-card h4 { margin: 0; font-size: 1.1rem; }
         .library-task-points { background-color: #4caf50; color: #fff; padding: 2px 8px; border-radius: 50px; font-size: 0.7rem; font-weight: 700; white-space: nowrap; }
+        .child-theme .library-task-points { background: #fffbeb; color: #f59e0b; padding: 4px 10px; border-radius: 999px; display: inline-flex; align-items: center; gap: 6px; }
+        .child-theme .library-task-points::before { content: '\f005'; font-family: 'Font Awesome 6 Free'; font-weight: 900; }
+        .points-badge { background: #fffbeb; color: #f59e0b; padding: 4px 10px; border-radius: 999px; font-weight: 700; font-size: 0.8rem; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+        .points-badge::before { content: '\f005'; font-family: 'Font Awesome 6 Free'; font-weight: 900; }
+        .points-badge.bonus { background: #e8f5e9; color: #2e7d32; }
         .library-task-description { margin: 0; font-size: 0.9rem; color: #546e7a; }
         .library-task-meta { display: flex; flex-wrap: wrap; gap: 8px; font-size: 0.85rem; color: #37474f; }
         .library-task-meta span { background: #f0f4f7; border-radius: 999px; padding: 4px 10px; }
@@ -1329,6 +1334,15 @@ margin-bottom: 20px;}
         .routine-card-actions { margin-top: 16px; display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: center; }
         .routine-card-actions .button { flex: 1 1 45%; min-width: 0; text-align: center; }
         .routine-card-title-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+        .routine-actions-menu { position: relative; }
+        .routine-actions-toggle { list-style: none; width: 42px; height: 42px; border-radius: 14px; border: 1px solid #e0e0e0; background: #f5f7fb; color: #546e7a; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+        .routine-actions-toggle::-webkit-details-marker,
+        .routine-actions-toggle::marker { display: none; }
+        .routine-actions-dropdown { position: absolute; right: 0; top: 44px; background: #fff; border: 1px solid #e0e0e0; border-radius: 12px; padding: 6px; box-shadow: 0 8px 18px rgba(0,0,0,0.12); display: grid; gap: 4px; min-width: 180px; z-index: 50; }
+        .routine-actions-menu:not([open]) .routine-actions-dropdown { display: none; }
+        .routine-actions-dropdown button { background: transparent; border: none; text-align: left; padding: 8px 10px; border-radius: 8px; display: flex; gap: 8px; align-items: center; font-weight: 600; color: #37474f; cursor: pointer; width: 100%; }
+        .routine-actions-dropdown button:hover { background: #f5f5f5; }
+        .routine-actions-dropdown .danger { color: #d32f2f; }
         .routine-action-icons { display: inline-flex; gap: 8px; align-items: center; }
         .routine-card-footer { display: flex; justify-content: flex-end; margin-top: 12px; }
         .icon-button { width: 36px; height: 36px; border: none; background: transparent; color: #919191; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
@@ -2266,6 +2280,30 @@ margin-bottom: 20px;}
                         <header>
                             <div class="routine-card-title-row">
                                 <h3><?php echo htmlspecialchars($routine['title']); ?></h3>
+                                <?php if ($isParentContext): ?>
+                                    <details class="routine-actions-menu">
+                                        <summary class="routine-actions-toggle" aria-label="Routine actions">
+                                            <i class="fa-solid fa-ellipsis-vertical"></i>
+                                        </summary>
+                                        <div class="routine-actions-dropdown">
+                                            <button type="button" data-routine-edit-open data-routine-id="<?php echo (int) $routine['id']; ?>">
+                                                <i class="fa-solid fa-pen"></i>
+                                                Edit Routine
+                                            </button>
+                                            <button type="button" data-routine-duplicate-open data-routine-payload="<?php echo $duplicatePayloadJson; ?>">
+                                                <i class="fa-solid fa-clone"></i>
+                                                Duplicate Routine
+                                            </button>
+                                            <form method="POST" action="routine.php">
+                                                <input type="hidden" name="routine_id" value="<?php echo (int) $routine['id']; ?>">
+                                                <button type="submit" name="delete_routine" class="danger" onclick="return confirm('Delete this routine?');">
+                                                    <i class="fa-solid fa-trash"></i>
+                                                    Delete Routine
+                                                </button>
+                                            </form>
+                                        </div>
+                                    </details>
+                                <?php endif; ?>
                             </div>
                             <div class="routine-details">
                                 <?php if (!empty($routine['child_display_name']) && !$isChildView): ?>
@@ -2275,7 +2313,13 @@ margin-bottom: 20px;}
                                       </span>
                                   <?php endif; ?>
                                   <span><i class="fa-solid fa-clock routine-meta-icon"></i><?php echo date('g:i A', strtotime($routine['start_time'])) . ' - ' . date('g:i A', strtotime($routine['end_time'])); ?></span>
-                                  <span><i class="fa-solid fa-list-check routine-meta-icon"></i><?php echo $totalRoutinePoints; ?> pts - Bonus: <?php echo (int) $routine['bonus_points']; ?> pts</span>
+                                  <span class="routine-points-row">
+                                      <i class="fa-solid fa-list-check routine-meta-icon"></i>
+                                      <span class="points-badge"><?php echo (int) $totalRoutinePoints; ?></span>
+                                      <?php if ((int) ($routine['bonus_points'] ?? 0) > 0): ?>
+                                          <span class="points-badge bonus">Bonus <?php echo (int) $routine['bonus_points']; ?></span>
+                                      <?php endif; ?>
+                                  </span>
                                   <span><i class="fa-regular fa-calendar-days routine-meta-icon"></i><?php echo htmlspecialchars($routine['recurrence'] ?: 'None'); ?></span>
                                   <?php if (!empty($routine['creator_display_name'])): ?>
                                       <span><i class="fa-solid fa-user-pen routine-meta-icon"></i><?php echo htmlspecialchars($routine['creator_display_name']); ?></span>
@@ -2323,7 +2367,8 @@ margin-bottom: 20px;}
                                             <?php endif; ?>
                                             <strong><?php echo htmlspecialchars($task['title']); ?></strong>
                                             <div class="task-meta">
-                                                <?php echo (int) $task['time_limit']; ?> min - <?php echo (int) ($task['point_value'] ?? $task['points'] ?? 0); ?> pts
+                                                <span><?php echo (int) $task['time_limit']; ?> min</span>
+                                                <span class="points-badge"><?php echo (int) ($task['point_value'] ?? $task['points'] ?? 0); ?></span>
                                                 <span class="status-pill status-<?php echo htmlspecialchars($taskStatus); ?> <?php echo htmlspecialchars($taskStatus); ?>">
                                                     <?php echo htmlspecialchars($taskStatus); ?>
                                                 </span>
@@ -2342,22 +2387,6 @@ margin-bottom: 20px;}
                                 <input type="hidden" name="parent_completed_at" value="{}" data-role="parent-completed-at">
                                 <p class="parent-complete-note">Check the tasks completed to award points. Bonus points apply only when all tasks are checked.</p>
                             </form>
-                            <div class="routine-card-footer">
-                                <div class="routine-action-icons">
-                                    <button type="button" class="icon-button" data-routine-edit-open data-routine-id="<?php echo (int) $routine['id']; ?>" aria-label="Edit routine">
-                                        <i class="fa-solid fa-pen"></i>
-                                    </button>
-                                    <button type="button" class="icon-button" data-routine-duplicate-open data-routine-payload="<?php echo $duplicatePayloadJson; ?>" aria-label="Duplicate routine">
-                                        <i class="fa-solid fa-clone"></i>
-                                    </button>
-                                    <form method="POST" action="routine.php">
-                                        <input type="hidden" name="routine_id" value="<?php echo (int) $routine['id']; ?>">
-                                        <button type="submit" name="delete_routine" class="icon-button danger" aria-label="Delete routine" onclick="return confirm('Delete this routine?');">
-                                            <i class="fa-solid fa-trash"></i>
-                                        </button>
-                                    </form>
-                                </div>
-                            </div>
                         <?php endif; ?>
                         <?php if ($isChildView): ?>
                         <div class="routine-flow-overlay"
@@ -2682,7 +2711,7 @@ margin-bottom: 20px;}
         </a>
     </nav>
     <footer>
-        <p>Child Task and Chore App - Ver 3.17.6</p>
+        <p>Child Task and Chore App - Ver 3.25.4</p>
     </footer>
     <script>
         window.RoutinePage = <?php echo json_encode($pageState, $jsonOptions); ?>;
@@ -5217,6 +5246,34 @@ margin-bottom: 20px;}
                 updateRoutineDateVisibility(selectEl, wrapper);
                 selectEl.addEventListener('change', () => updateRoutineDateVisibility(selectEl, wrapper));
             });
+
+            const routineMenus = document.querySelectorAll('.routine-actions-menu');
+            if (routineMenus.length) {
+                const closeRoutineMenus = (except) => {
+                    routineMenus.forEach(menu => {
+                        if (menu !== except) menu.removeAttribute('open');
+                    });
+                };
+                document.addEventListener('click', (event) => {
+                    if (!event.target.closest('.routine-actions-menu')) {
+                        closeRoutineMenus();
+                    }
+                });
+                routineMenus.forEach(menu => {
+                    const toggle = menu.querySelector('.routine-actions-toggle');
+                    if (toggle) {
+                        toggle.addEventListener('click', (event) => {
+                            event.stopPropagation();
+                            closeRoutineMenus(menu);
+                        });
+                    }
+                    menu.querySelectorAll('.routine-actions-dropdown button').forEach(btn => {
+                        btn.addEventListener('click', () => {
+                            menu.removeAttribute('open');
+                        });
+                    });
+                });
+            }
 
             const params = new URLSearchParams(window.location.search);
             const startParam = params.get('start');
