@@ -455,6 +455,19 @@ foreach ($taskInstancesByTask as $taskId => $instances) {
 }
 $completed_tasks = array_values(array_merge($completed_tasks, $completed_instances));
 $approved_tasks = array_values(array_merge($approved_tasks, $approved_instances));
+$weekStart = new DateTimeImmutable('monday this week');
+$weekEnd = $weekStart->modify('+6 days');
+$approved_tasks = array_values(array_filter($approved_tasks, function($task) use ($weekStart, $weekEnd) {
+    $stamp = $task['approved_at'] ?? $task['completed_at'] ?? null;
+    if (!$stamp && !empty($task['instance_date'])) {
+        $stamp = $task['instance_date'];
+    }
+    if (!$stamp) {
+        return false;
+    }
+    $dateKey = date('Y-m-d', strtotime($stamp));
+    return $dateKey >= $weekStart->format('Y-m-d') && $dateKey <= $weekEnd->format('Y-m-d');
+}));
 $expired_tasks = [];
 foreach ($tasks as $task) {
     $end_key = !empty($task['end_date']) ? $task['end_date'] : null;

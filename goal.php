@@ -209,6 +209,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $task_target_ids = array_values(array_filter(array_map('intval', $_POST['task_target_ids'] ?? [])));
         $reactivateOnSave = !empty($_POST['reactivate_on_save']);
 
+        if ($goal_type === 'task_quota') {
+            $time_window_type = 'fixed';
+            $time_window_days = 0;
+            $fixed_window_start = null;
+            $fixed_window_end = null;
+        }
+        if ($goal_type === 'task_quota') {
+            $time_window_type = 'fixed';
+            $time_window_days = 0;
+            $fixed_window_start = null;
+            $fixed_window_end = null;
+        }
         if (!in_array($goal_type, ['routine_streak', 'routine_count'], true)) {
             $routine_ids = [];
         }
@@ -569,7 +581,7 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
     $routineStmt->execute([':parent_id' => $family_root_id]);
     $goalRoutines = $routineStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
-    $taskStmt = $db->prepare("SELECT id, title, child_user_id, category FROM tasks WHERE parent_user_id = :parent_id ORDER BY title");
+    $taskStmt = $db->prepare("SELECT id, title, child_user_id, category, due_date, end_date, recurrence, recurrence_days, time_of_day FROM tasks WHERE parent_user_id = :parent_id ORDER BY title");
     $taskStmt->execute([':parent_id' => $family_root_id]);
     $goalTasks = $taskStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
@@ -709,21 +721,48 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
         }
         .form-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-            gap: 14px;
+            grid-template-columns: 1fr;
+            gap: 12px;
         }
         .form-group {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        .form-group.stack {
             display: grid;
             gap: 6px;
         }
         .form-group.full-span {
             grid-column: 1 / -1;
         }
+        .form-group > label {
+            min-width: 180px;
+        }
+        .goal-datetime-inputs {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex: 1;
+            min-width: 220px;
+        }
         .form-group input,
         .form-group select,
         .form-group textarea {
-            width: 100%;
             padding: 8px;
+        }
+        .form-group:not(.stack) input,
+        .form-group:not(.stack) select,
+        .form-group:not(.stack) textarea {
+            flex: 1;
+            min-width: 220px;
+        }
+        .form-group.stack input,
+        .form-group.stack select,
+        .form-group.stack textarea {
+            width: 100%;
         }
         .form-actions {
             display: flex;
@@ -826,7 +865,8 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
         }
         .toggle-row { display: inline-flex; align-items: center; justify-content: flex-start; }
         .toggle-row input[type="checkbox"] { width: 18px; height: 18px; }
-        .toggle-field { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+        .toggle-field { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+        .toggle-field .toggle-label { min-width: 180px; }
         .toggle-switch { position: relative; display: inline-flex; align-items: center; }
         .toggle-switch input { position: absolute; opacity: 0; width: 0; height: 0; }
         .toggle-slider { width: 44px; height: 24px; background: #cfd8dc; border-radius: 999px; position: relative; transition: background 150ms ease; display: inline-block; }
@@ -950,9 +990,16 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
         .goal-description { text-align: left; }
         .goal-info-row { text-align: left; }
         .goal-description { margin: 6px 0 0; color: #546e7a; }
-        .goal-task-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; max-height: 180px; overflow: auto; padding: 6px; border: 1px solid #e0e0e0; border-radius: 10px; background: #fafafa; }
-        .goal-task-card { border: 1px solid #d5def0; border-radius: 10px; padding: 8px; display: grid; gap: 6px; background: #fff; }
-        .goal-task-card input { margin-right: 6px; }
+        .goal-task-grid { display: grid; grid-template-columns: 1fr; gap: 8px; max-height: 220px; overflow: auto; padding: 6px; border: 1px solid #e0e0e0; border-radius: 10px; background: #fafafa; }
+        .goal-task-card { border: 1px solid #d5def0; border-radius: 10px; padding: 8px 10px; display: flex; align-items: center; justify-content: space-between; gap: 10px; background: #fff; }
+        .goal-task-main { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
+        .goal-task-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .goal-task-badges { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+        .goal-task-card input { margin: 0; }
+        @media (max-width: 720px) {
+            .goal-task-card { flex-wrap: wrap; justify-content: flex-start; }
+            .goal-task-badges { flex-wrap: wrap; white-space: normal; }
+        }
         .input-error { border-color: #d32f2f !important; box-shadow: 0 0 0 2px rgba(211, 47, 47, 0.2); }
         .form-error { color: #d32f2f; font-weight: 700; margin-bottom: 8px; }
         .child-select-grid.input-error { outline: 2px solid #d32f2f; border-radius: 12px; padding: 6px; }
@@ -1624,7 +1671,7 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                         $rewardDisabledByTemplate = $goalFormData['reward_disabled_by_template'] ?? [];
                         ?>
                         <div class="form-grid">
-                            <div class="form-group">
+                            <div class="form-group stack">
                                 <label>Child
                                     <span class="tooltip tooltip-left" tabindex="0" aria-label="Pick the child this goal is for. This filters routines and tasks.">
                                         <i class="fa-solid fa-circle-info"></i>
@@ -1656,7 +1703,7 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                                 </label>
                                 <input type="text" id="goal_title" name="title" required>
                             </div>
-                            <div class="form-group full-span">
+                            <div class="form-group stack full-span">
                                 <label for="goal_description">Description
                                     <span class="tooltip tooltip-left" tabindex="0" aria-label="Optional details or requirements shown on goal cards and the child dashboard.">
                                         <i class="fa-solid fa-circle-info"></i>
@@ -1666,13 +1713,62 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                                 <textarea id="goal_description" name="description" rows="3" placeholder="Optional details about the goal"></textarea>
                             </div>
                             <div class="form-group">
+                                <label>Points Awarded
+                                    <span class="tooltip" tabindex="0" aria-label="Points added when the goal is completed.">
+                                        <i class="fa-solid fa-circle-info"></i>
+                                        <span class="tooltip-text">Points added when the goal is completed.</span>
+                                    </span>
+                                </label>
+                                <input type="number" id="points_awarded" name="points_awarded" min="0" value="0" data-goal-points>
+                            </div>
+                            <div class="form-group">
+                                <label for="award_mode">Award Mode
+                                    <span class="tooltip" tabindex="0" aria-label="Choose points, reward, or both. Required fields change.">
+                                        <i class="fa-solid fa-circle-info"></i>
+                                        <span class="tooltip-text">Choose points, reward, or both. Required fields change.</span>
+                                    </span>
+                                </label>
+                                <select id="award_mode" name="award_mode" data-award-mode>
+                                    <option value="both" selected>Points + Reward</option>
+                                    <option value="points">Points only</option>
+                                    <option value="reward">Reward only</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="goal_reward_id">Reward (optional)
+                                    <span class="tooltip tooltip-right" tabindex="0" aria-label="Rewards Shop item to grant on completion. Cost/level are ignored for goals. Disabled rewards for the selected child are hidden.">
+                                        <i class="fa-solid fa-circle-info"></i>
+                                        <span class="tooltip-text">Rewards Shop item to grant on completion. Cost/level are ignored for goals. Disabled rewards for the selected child are hidden.</span>
+                                    </span>
+                                </label>
+                                <select id="goal_reward_id" name="reward_id" data-goal-reward>
+                                    <option value="">None</option>
+                                    <?php foreach ($goalRewardTemplates as $template): ?>
+                                        <?php
+                                        $templateId = (int) $template['id'];
+                                        $disabledChildren = $rewardDisabledByTemplate[$templateId] ?? [];
+                                        $disabledAttr = !empty($disabledChildren)
+                                            ? ' data-disabled-children="' . htmlspecialchars(implode(',', $disabledChildren)) . '"'
+                                            : '';
+                                        ?>
+                                        <option value="template:<?php echo $templateId; ?>"<?php echo $disabledAttr; ?>>
+                                            <?php echo htmlspecialchars($template['title']); ?> (<?php echo (int) $template['point_cost']; ?> pts)
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            <div class="form-group">
                                 <label for="goal_start_date">Start Date/Time
                                     <span class="tooltip" tabindex="0" aria-label="When the goal becomes active. Progress before this does not count.">
                                         <i class="fa-solid fa-circle-info"></i>
                                         <span class="tooltip-text">When the goal becomes active. Progress before this does not count.</span>
                                     </span>
                                 </label>
-                                <input type="datetime-local" id="goal_start_date" name="start_date" required>
+                                <div class="goal-datetime-inputs">
+                                    <input type="date" id="goal_start_date" data-goal-start-date required>
+                                    <input type="time" id="goal_start_time" data-goal-start-time required>
+                                </div>
+                                <input type="hidden" name="start_date" data-goal-start-hidden>
                             </div>
                             <div class="form-group">
                                 <label for="goal_end_date">End Date/Time
@@ -1681,7 +1777,11 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                                         <span class="tooltip-text">Deadline. Progress after this does not count.</span>
                                     </span>
                                 </label>
-                                <input type="datetime-local" id="goal_end_date" name="end_date" required>
+                                <div class="goal-datetime-inputs">
+                                    <input type="date" id="goal_end_date" data-goal-end-date required>
+                                    <input type="time" id="goal_end_time" data-goal-end-time required>
+                                </div>
+                                <input type="hidden" name="end_date" data-goal-end-hidden>
                             </div>
                             <div class="form-group">
                                 <label for="goal_type">Goal Type
@@ -1727,7 +1827,7 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                                     <option value="household">Household</option>
                                 </select>
                             </div>
-                            <div class="form-group" data-goal-task>
+                            <div class="form-group stack" data-goal-task>
                                 <label>Specific Tasks (optional)
                                     <span class="tooltip" tabindex="0" aria-label="Optional. If selected, only these tasks count; otherwise any matching tasks count.">
                                         <i class="fa-solid fa-circle-info"></i>
@@ -1737,12 +1837,37 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                                 <div class="goal-task-grid" data-goal-task-grid>
                                     <?php if (!empty($goalTasks)): ?>
                                         <?php foreach ($goalTasks as $task): ?>
-                                            <label class="goal-task-card" data-child-id="<?php echo (int) $task['child_user_id']; ?>">
-                                                <span>
+                                            <?php
+                                                $recurrence = $task['recurrence'] ?? '';
+                                                $recurrenceDays = trim((string) ($task['recurrence_days'] ?? ''));
+                                                $recurrenceLabel = '';
+                                                if ($recurrence === 'daily') {
+                                                    $recurrenceLabel = 'Recurring: Daily';
+                                                } elseif ($recurrence === 'weekly') {
+                                                    $recurrenceLabel = 'Recurring: Weekly';
+                                                    if ($recurrenceDays !== '') {
+                                                        $recurrenceLabel .= ' (' . $recurrenceDays . ')';
+                                                    }
+                                                }
+                                                $dueStamp = !empty($task['due_date']) ? date('Y-m-d H:i:s', strtotime($task['due_date'])) : '';
+                                                $endStamp = !empty($task['end_date']) ? date('Y-m-d', strtotime($task['end_date'])) : '';
+                                            ?>
+                                            <label class="goal-task-card"
+                                                   data-child-id="<?php echo (int) $task['child_user_id']; ?>"
+                                                   data-due-date="<?php echo htmlspecialchars($dueStamp); ?>"
+                                                   data-end-date="<?php echo htmlspecialchars($endStamp); ?>"
+                                                   data-recurrence="<?php echo htmlspecialchars($recurrence); ?>"
+                                                   data-recurrence-days="<?php echo htmlspecialchars($recurrenceDays); ?>">
+                                                <span class="goal-task-main">
                                                     <input type="checkbox" name="task_target_ids[]" value="<?php echo (int) $task['id']; ?>">
-                                                    <?php echo htmlspecialchars($task['title']); ?>
+                                                    <span class="goal-task-title"><?php echo htmlspecialchars($task['title']); ?></span>
                                                 </span>
-                                                <span class="goal-detail-pill"><?php echo htmlspecialchars($task['category'] ?? 'general'); ?></span>
+                                                <span class="goal-task-badges">
+                                                    <span class="goal-detail-pill"><?php echo htmlspecialchars($task['category'] ?? 'general'); ?></span>
+                                                    <?php if ($recurrenceLabel !== ''): ?>
+                                                        <span class="goal-detail-pill"><?php echo htmlspecialchars($recurrenceLabel); ?></span>
+                                                    <?php endif; ?>
+                                                </span>
                                             </label>
                                         <?php endforeach; ?>
                                     <?php else: ?>
@@ -1821,51 +1946,6 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                                     </span>
                                 </label>
                             </div>
-                            <div class="form-group">
-                                <label for="points_awarded">Points Awarded
-                                    <span class="tooltip" tabindex="0" aria-label="Points added when the goal is completed.">
-                                        <i class="fa-solid fa-circle-info"></i>
-                                        <span class="tooltip-text">Points added when the goal is completed.</span>
-                                    </span>
-                                </label>
-                                <input type="number" id="points_awarded" name="points_awarded" min="0" value="0" data-goal-points>
-                            </div>
-                            <div class="form-group">
-                                <label for="award_mode">Award Mode
-                                    <span class="tooltip" tabindex="0" aria-label="Choose points, reward, or both. Required fields change.">
-                                        <i class="fa-solid fa-circle-info"></i>
-                                        <span class="tooltip-text">Choose points, reward, or both. Required fields change.</span>
-                                    </span>
-                                </label>
-                                <select id="award_mode" name="award_mode" data-award-mode>
-                                    <option value="both" selected>Points + Reward</option>
-                                    <option value="points">Points only</option>
-                                    <option value="reward">Reward only</option>
-                                </select>
-                            </div>
-                            <div class="form-group">
-                                <label for="goal_reward_id">Reward (optional)
-                                    <span class="tooltip tooltip-right" tabindex="0" aria-label="Rewards Shop item to grant on completion. Cost/level are ignored for goals. Disabled rewards for the selected child are hidden.">
-                                        <i class="fa-solid fa-circle-info"></i>
-                                        <span class="tooltip-text">Rewards Shop item to grant on completion. Cost/level are ignored for goals. Disabled rewards for the selected child are hidden.</span>
-                                    </span>
-                                </label>
-                                <select id="goal_reward_id" name="reward_id" data-goal-reward>
-                                    <option value="">None</option>
-                                    <?php foreach ($goalRewardTemplates as $template): ?>
-                                        <?php
-                                        $templateId = (int) $template['id'];
-                                        $disabledChildren = $rewardDisabledByTemplate[$templateId] ?? [];
-                                        $disabledAttr = !empty($disabledChildren)
-                                            ? ' data-disabled-children="' . htmlspecialchars(implode(',', $disabledChildren)) . '"'
-                                            : '';
-                                        ?>
-                                        <option value="template:<?php echo $templateId; ?>"<?php echo $disabledAttr; ?>>
-                                            <?php echo htmlspecialchars($template['title']); ?> (<?php echo (int) $template['point_cost']; ?> pts)
-                                        </option>
-                                    <?php endforeach; ?>
-                                </select>
-                            </div>
                             <div class="form-group toggle-field">
                                 <span class="toggle-label">Parent Approval Required
                                     <span class="tooltip" tabindex="0" aria-label="If on, the goal goes to pending approval even when progress is met.">
@@ -1908,7 +1988,7 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                         $rewardDisabledByTemplate = $goalFormData['reward_disabled_by_template'] ?? [];
                         ?>
                         <div class="form-grid">
-                            <div class="form-group">
+                            <div class="form-group stack">
                                 <label>Child
                                     <span class="tooltip tooltip-left" tabindex="0" aria-label="Pick the child this goal is for. This filters routines and tasks.">
                                         <i class="fa-solid fa-circle-info"></i>
@@ -1940,7 +2020,7 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                                 </label>
                                 <input type="text" id="edit_goal_title" name="title" required>
                             </div>
-                            <div class="form-group full-span">
+                            <div class="form-group stack full-span">
                                 <label for="edit_goal_description">Description
                                     <span class="tooltip tooltip-left" tabindex="0" aria-label="Optional details or requirements shown on goal cards and the child dashboard.">
                                         <i class="fa-solid fa-circle-info"></i>
@@ -1950,13 +2030,62 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                                 <textarea id="edit_goal_description" name="description" rows="3" placeholder="Optional details about the goal"></textarea>
                             </div>
                             <div class="form-group">
+                                <label>Points Awarded
+                                    <span class="tooltip" tabindex="0" aria-label="Points added when the goal is completed.">
+                                        <i class="fa-solid fa-circle-info"></i>
+                                        <span class="tooltip-text">Points added when the goal is completed.</span>
+                                    </span>
+                                </label>
+                                <input type="number" id="edit_points_awarded" name="points_awarded" min="0" value="0" data-goal-points>
+                            </div>
+                            <div class="form-group">
+                                <label for="edit_award_mode">Award Mode
+                                    <span class="tooltip" tabindex="0" aria-label="Choose points, reward, or both. Required fields change.">
+                                        <i class="fa-solid fa-circle-info"></i>
+                                        <span class="tooltip-text">Choose points, reward, or both. Required fields change.</span>
+                                    </span>
+                                </label>
+                                <select id="edit_award_mode" name="award_mode" data-award-mode>
+                                    <option value="both">Points + Reward</option>
+                                    <option value="points">Points only</option>
+                                    <option value="reward">Reward only</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="edit_goal_reward_id">Reward (optional)
+                                    <span class="tooltip tooltip-right" tabindex="0" aria-label="Rewards Shop item to grant on completion. Cost/level are ignored for goals. Disabled rewards for the selected child are hidden.">
+                                        <i class="fa-solid fa-circle-info"></i>
+                                        <span class="tooltip-text">Rewards Shop item to grant on completion. Cost/level are ignored for goals. Disabled rewards for the selected child are hidden.</span>
+                                    </span>
+                                </label>
+                                <select id="edit_goal_reward_id" name="reward_id" data-goal-reward>
+                                    <option value="">None</option>
+                                    <?php foreach ($goalRewardTemplates as $template): ?>
+                                        <?php
+                                        $templateId = (int) $template['id'];
+                                        $disabledChildren = $rewardDisabledByTemplate[$templateId] ?? [];
+                                        $disabledAttr = !empty($disabledChildren)
+                                            ? ' data-disabled-children="' . htmlspecialchars(implode(',', $disabledChildren)) . '"'
+                                            : '';
+                                        ?>
+                                        <option value="template:<?php echo $templateId; ?>"<?php echo $disabledAttr; ?>>
+                                            <?php echo htmlspecialchars($template['title']); ?> (<?php echo (int) $template['point_cost']; ?> pts)
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            <div class="form-group">
                                 <label for="edit_goal_start_date">Start Date/Time
                                     <span class="tooltip" tabindex="0" aria-label="When the goal becomes active. Progress before this does not count.">
                                         <i class="fa-solid fa-circle-info"></i>
                                         <span class="tooltip-text">When the goal becomes active. Progress before this does not count.</span>
                                     </span>
                                 </label>
-                                <input type="datetime-local" id="edit_goal_start_date" name="start_date" required>
+                                <div class="goal-datetime-inputs">
+                                    <input type="date" id="edit_goal_start_date" data-goal-start-date required>
+                                    <input type="time" id="edit_goal_start_time" data-goal-start-time required>
+                                </div>
+                                <input type="hidden" name="start_date" data-goal-start-hidden>
                             </div>
                             <div class="form-group">
                                 <label for="edit_goal_end_date">End Date/Time
@@ -1965,7 +2094,11 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                                         <span class="tooltip-text">Deadline. Progress after this does not count.</span>
                                     </span>
                                 </label>
-                                <input type="datetime-local" id="edit_goal_end_date" name="end_date" required>
+                                <div class="goal-datetime-inputs">
+                                    <input type="date" id="edit_goal_end_date" data-goal-end-date required>
+                                    <input type="time" id="edit_goal_end_time" data-goal-end-time required>
+                                </div>
+                                <input type="hidden" name="end_date" data-goal-end-hidden>
                             </div>
                             <div class="form-group">
                                 <label for="edit_goal_type">Goal Type
@@ -2011,7 +2144,7 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                                     <option value="household">Household</option>
                                 </select>
                             </div>
-                            <div class="form-group" data-goal-task>
+                            <div class="form-group stack" data-goal-task>
                                 <label>Specific Tasks (optional)
                                     <span class="tooltip" tabindex="0" aria-label="Optional. If selected, only these tasks count; otherwise any matching tasks count.">
                                         <i class="fa-solid fa-circle-info"></i>
@@ -2021,12 +2154,37 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                                 <div class="goal-task-grid" data-goal-task-grid>
                                     <?php if (!empty($goalTasks)): ?>
                                         <?php foreach ($goalTasks as $task): ?>
-                                            <label class="goal-task-card" data-child-id="<?php echo (int) $task['child_user_id']; ?>">
-                                                <span>
+                                            <?php
+                                                $recurrence = $task['recurrence'] ?? '';
+                                                $recurrenceDays = trim((string) ($task['recurrence_days'] ?? ''));
+                                                $recurrenceLabel = '';
+                                                if ($recurrence === 'daily') {
+                                                    $recurrenceLabel = 'Recurring: Daily';
+                                                } elseif ($recurrence === 'weekly') {
+                                                    $recurrenceLabel = 'Recurring: Weekly';
+                                                    if ($recurrenceDays !== '') {
+                                                        $recurrenceLabel .= ' (' . $recurrenceDays . ')';
+                                                    }
+                                                }
+                                                $dueStamp = !empty($task['due_date']) ? date('Y-m-d H:i:s', strtotime($task['due_date'])) : '';
+                                                $endStamp = !empty($task['end_date']) ? date('Y-m-d', strtotime($task['end_date'])) : '';
+                                            ?>
+                                            <label class="goal-task-card"
+                                                   data-child-id="<?php echo (int) $task['child_user_id']; ?>"
+                                                   data-due-date="<?php echo htmlspecialchars($dueStamp); ?>"
+                                                   data-end-date="<?php echo htmlspecialchars($endStamp); ?>"
+                                                   data-recurrence="<?php echo htmlspecialchars($recurrence); ?>"
+                                                   data-recurrence-days="<?php echo htmlspecialchars($recurrenceDays); ?>">
+                                                <span class="goal-task-main">
                                                     <input type="checkbox" name="task_target_ids[]" value="<?php echo (int) $task['id']; ?>">
-                                                    <?php echo htmlspecialchars($task['title']); ?>
+                                                    <span class="goal-task-title"><?php echo htmlspecialchars($task['title']); ?></span>
                                                 </span>
-                                                <span class="goal-detail-pill"><?php echo htmlspecialchars($task['category'] ?? 'general'); ?></span>
+                                                <span class="goal-task-badges">
+                                                    <span class="goal-detail-pill"><?php echo htmlspecialchars($task['category'] ?? 'general'); ?></span>
+                                                    <?php if ($recurrenceLabel !== ''): ?>
+                                                        <span class="goal-detail-pill"><?php echo htmlspecialchars($recurrenceLabel); ?></span>
+                                                    <?php endif; ?>
+                                                </span>
                                             </label>
                                         <?php endforeach; ?>
                                     <?php else: ?>
@@ -2104,51 +2262,6 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                                         <span class="toggle-slider"></span>
                                     </span>
                                 </label>
-                            </div>
-                            <div class="form-group">
-                                <label for="edit_points_awarded">Points Awarded
-                                    <span class="tooltip" tabindex="0" aria-label="Points added when the goal is completed.">
-                                        <i class="fa-solid fa-circle-info"></i>
-                                        <span class="tooltip-text">Points added when the goal is completed.</span>
-                                    </span>
-                                </label>
-                                <input type="number" id="edit_points_awarded" name="points_awarded" min="0" value="0" data-goal-points>
-                            </div>
-                            <div class="form-group">
-                                <label for="edit_award_mode">Award Mode
-                                    <span class="tooltip" tabindex="0" aria-label="Choose points, reward, or both. Required fields change.">
-                                        <i class="fa-solid fa-circle-info"></i>
-                                        <span class="tooltip-text">Choose points, reward, or both. Required fields change.</span>
-                                    </span>
-                                </label>
-                                <select id="edit_award_mode" name="award_mode" data-award-mode>
-                                    <option value="both">Points + Reward</option>
-                                    <option value="points">Points only</option>
-                                    <option value="reward">Reward only</option>
-                                </select>
-                            </div>
-                            <div class="form-group">
-                                <label for="edit_goal_reward_id">Reward (optional)
-                                    <span class="tooltip tooltip-right" tabindex="0" aria-label="Rewards Shop item to grant on completion. Cost/level are ignored for goals. Disabled rewards for the selected child are hidden.">
-                                        <i class="fa-solid fa-circle-info"></i>
-                                        <span class="tooltip-text">Rewards Shop item to grant on completion. Cost/level are ignored for goals. Disabled rewards for the selected child are hidden.</span>
-                                    </span>
-                                </label>
-                                <select id="edit_goal_reward_id" name="reward_id" data-goal-reward>
-                                    <option value="">None</option>
-                                    <?php foreach ($goalRewardTemplates as $template): ?>
-                                        <?php
-                                        $templateId = (int) $template['id'];
-                                        $disabledChildren = $rewardDisabledByTemplate[$templateId] ?? [];
-                                        $disabledAttr = !empty($disabledChildren)
-                                            ? ' data-disabled-children="' . htmlspecialchars(implode(',', $disabledChildren)) . '"'
-                                            : '';
-                                        ?>
-                                        <option value="template:<?php echo $templateId; ?>"<?php echo $disabledAttr; ?>>
-                                            <?php echo htmlspecialchars($template['title']); ?> (<?php echo (int) $template['point_cost']; ?> pts)
-                                        </option>
-                                    <?php endforeach; ?>
-                                </select>
                             </div>
                             <div class="form-group toggle-field">
                                 <span class="toggle-label">Parent Approval Required
@@ -2239,6 +2352,12 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
           const childInputs = scope.querySelectorAll('input[name="child_user_id"]');
           const routineSelect = scope.querySelector('[data-goal-routine-select]');
           const taskGrid = scope.querySelector('[data-goal-task-grid]');
+          const startDateInput = scope.querySelector('[data-goal-start-date]');
+          const startTimeInput = scope.querySelector('[data-goal-start-time]');
+          const endDateInput = scope.querySelector('[data-goal-end-date]');
+          const endTimeInput = scope.querySelector('[data-goal-end-time]');
+          const startHiddenInput = scope.querySelector('[data-goal-start-hidden]');
+          const endHiddenInput = scope.querySelector('[data-goal-end-hidden]');
 
           const setStepperDisabled = (disabled) => {
               if (!pointsInput) return;
@@ -2255,8 +2374,11 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
               const showTask = type === 'task_quota';
               const showCount = type === 'routine_count' || type === 'task_quota';
               const showStreak = type === 'routine_streak';
-              const showWindow = type === 'routine_count' || type === 'task_quota';
+              const showWindow = type === 'routine_count';
               const allowMultiple = type === 'routine_streak' || type === 'routine_count';
+              if (type === 'task_quota' && goalWindowSelect) {
+                  goalWindowSelect.value = 'fixed';
+              }
               if (routineSelect) {
                   routineSelect.multiple = allowMultiple;
                   if (!allowMultiple) {
@@ -2269,14 +2391,17 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                       }
                   }
               }
-              scope.querySelectorAll('[data-goal-routine]').forEach(el => el.style.display = showRoutine ? 'grid' : 'none');
-              scope.querySelectorAll('[data-goal-task]').forEach(el => el.style.display = showTask ? 'grid' : 'none');
-              scope.querySelectorAll('[data-goal-count]').forEach(el => el.style.display = showCount ? 'grid' : 'none');
-              scope.querySelectorAll('[data-goal-streak]').forEach(el => el.style.display = showStreak ? 'grid' : 'none');
-              scope.querySelectorAll('[data-goal-window]').forEach(el => el.style.display = showWindow ? 'grid' : 'none');
-              scope.querySelectorAll('[data-goal-window-rolling]').forEach(el => el.style.display = showWindow && goalWindowSelect?.value !== 'fixed' ? 'grid' : 'none');
-              scope.querySelectorAll('[data-goal-window-fixed]').forEach(el => el.style.display = showWindow && goalWindowSelect?.value === 'fixed' ? 'grid' : 'none');
-              scope.querySelectorAll('[data-goal-toggle]').forEach(el => el.style.display = (showRoutine || showTask) ? 'flex' : 'none');
+              scope.querySelectorAll('[data-goal-routine]').forEach(el => el.style.display = showRoutine ? '' : 'none');
+              scope.querySelectorAll('[data-goal-task]').forEach(el => el.style.display = showTask ? '' : 'none');
+              scope.querySelectorAll('[data-goal-count]').forEach(el => el.style.display = showCount ? '' : 'none');
+              scope.querySelectorAll('[data-goal-streak]').forEach(el => el.style.display = showStreak ? '' : 'none');
+              scope.querySelectorAll('[data-goal-window]').forEach(el => el.style.display = showWindow ? '' : 'none');
+              scope.querySelectorAll('[data-goal-window-rolling]').forEach(el => el.style.display = showWindow && goalWindowSelect?.value !== 'fixed' ? '' : 'none');
+              scope.querySelectorAll('[data-goal-window-fixed]').forEach(el => el.style.display = showWindow && goalWindowSelect?.value === 'fixed' ? '' : 'none');
+              scope.querySelectorAll('[data-goal-toggle]').forEach(el => el.style.display = (showRoutine || showTask) ? '' : 'none');
+              if (showTask) {
+                  filterTasksByWindow();
+              }
           };
 
           const setAwardModeVisibility = () => {
@@ -2290,6 +2415,69 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                   pointsInput.disabled = mode === 'reward';
                   setStepperDisabled(lockPoints || pointsInput.disabled);
               }
+          };
+
+          const parseInputDateTime = (dateValue, timeValue) => {
+              if (!dateValue || !timeValue) return null;
+              const parsed = new Date(`${dateValue}T${timeValue}`);
+              return Number.isNaN(parsed.getTime()) ? null : parsed;
+          };
+
+          const parseTaskDate = (value, endOfDay = false) => {
+              if (!value) return null;
+              const trimmed = value.trim();
+              if (trimmed === '') return null;
+              const normalized = trimmed.includes('T') ? trimmed : trimmed.replace(' ', 'T');
+              if (normalized.length === 10 && endOfDay) {
+                  return new Date(`${normalized}T23:59:59`);
+              }
+              const parsed = new Date(normalized);
+              return Number.isNaN(parsed.getTime()) ? null : parsed;
+          };
+
+          const syncHiddenDateTime = () => {
+              if (startHiddenInput) {
+                  startHiddenInput.value = startDateInput?.value && startTimeInput?.value
+                      ? `${startDateInput.value}T${startTimeInput.value}`
+                      : '';
+              }
+              if (endHiddenInput) {
+                  endHiddenInput.value = endDateInput?.value && endTimeInput?.value
+                      ? `${endDateInput.value}T${endTimeInput.value}`
+                      : '';
+              }
+          };
+
+          const filterTasksByWindow = (childId = null) => {
+              if (!taskGrid) return;
+              const resolvedChildId = childId === null
+                  ? (Array.from(childInputs).find(input => input.checked)?.value || '')
+                  : childId;
+              const start = parseInputDateTime(startDateInput?.value, startTimeInput?.value);
+              const end = parseInputDateTime(endDateInput?.value, endTimeInput?.value);
+              const cards = taskGrid.querySelectorAll('[data-child-id]');
+              cards.forEach(card => {
+                  const matchesChild = resolvedChildId === '' || card.getAttribute('data-child-id') === resolvedChildId;
+                  let matchesWindow = true;
+                  if (start && end) {
+                      const recurrence = (card.getAttribute('data-recurrence') || '').trim();
+                      const dueDate = parseTaskDate(card.getAttribute('data-due-date') || '');
+                      const endDate = parseTaskDate(card.getAttribute('data-end-date') || '', true);
+                      if (recurrence !== '') {
+                          if (dueDate && dueDate > end) {
+                              matchesWindow = false;
+                          }
+                          if (endDate && endDate < start) {
+                              matchesWindow = false;
+                          }
+                      } else if (dueDate) {
+                          matchesWindow = dueDate >= start && dueDate <= end;
+                      } else {
+                          matchesWindow = false;
+                      }
+                  }
+                  card.style.display = (matchesChild && matchesWindow) ? 'flex' : 'none';
+              });
           };
 
           const filterByChild = () => {
@@ -2313,12 +2501,12 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
               if (taskGrid) {
                   taskGrid.querySelectorAll('[data-child-id]').forEach(card => {
                       const matches = childId === '' || card.getAttribute('data-child-id') === childId;
-                      card.style.display = matches ? 'grid' : 'none';
                       if (!matches) {
                           const box = card.querySelector('input[type="checkbox"]');
                           if (box) box.checked = false;
                       }
                   });
+                  filterTasksByWindow(childId);
               }
               if (rewardSelect) {
                   rewardSelect.querySelectorAll('option[data-disabled-children]').forEach(opt => {
@@ -2349,8 +2537,16 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
           if (childInputs.length) {
               childInputs.forEach(input => input.addEventListener('change', filterByChild));
           }
+          [startDateInput, startTimeInput, endDateInput, endTimeInput].forEach((input) => {
+              if (!input) return;
+              input.addEventListener('change', () => {
+                  syncHiddenDateTime();
+                  filterTasksByWindow();
+              });
+          });
           setGoalTypeVisibility();
           setAwardModeVisibility();
+          syncHiddenDateTime();
           filterByChild();
 
           return {
@@ -2403,8 +2599,31 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
           }
           form.querySelector('[name="title"]').value = payload.title || '';
           form.querySelector('[name="description"]').value = payload.description || '';
-          form.querySelector('[name="start_date"]').value = payload.start_date || '';
-          form.querySelector('[name="end_date"]').value = payload.end_date || '';
+          const setDateTimeFields = (value, dateEl, timeEl, hiddenEl) => {
+              if (!dateEl || !timeEl || !hiddenEl) return;
+              if (!value) {
+                  dateEl.value = '';
+                  timeEl.value = '';
+                  hiddenEl.value = '';
+                  return;
+              }
+              const parts = String(value).split('T');
+              dateEl.value = parts[0] || '';
+              timeEl.value = parts[1] ? parts[1].slice(0, 5) : '';
+              hiddenEl.value = value;
+          };
+          setDateTimeFields(
+              payload.start_date || '',
+              form.querySelector('[data-goal-start-date]'),
+              form.querySelector('[data-goal-start-time]'),
+              form.querySelector('[data-goal-start-hidden]')
+          );
+          setDateTimeFields(
+              payload.end_date || '',
+              form.querySelector('[data-goal-end-date]'),
+              form.querySelector('[data-goal-end-time]'),
+              form.querySelector('[data-goal-end-hidden]')
+          );
           form.querySelector('[name="goal_type"]').value = payload.goal_type || 'manual';
           form.querySelector('[name="task_category"]').value = payload.task_category || '';
           form.querySelector('[name="target_count"]').value = payload.target_count || 0;
@@ -2583,8 +2802,10 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
           scope.querySelectorAll('.input-error').forEach(el => el.classList.remove('input-error'));
 
           const titleInput = scope.querySelector('[name="title"]');
-          const startInput = scope.querySelector('[name="start_date"]');
-          const endInput = scope.querySelector('[name="end_date"]');
+          const startDateInput = scope.querySelector('[data-goal-start-date]');
+          const startTimeInput = scope.querySelector('[data-goal-start-time]');
+          const endDateInput = scope.querySelector('[data-goal-end-date]');
+          const endTimeInput = scope.querySelector('[data-goal-end-time]');
           const goalType = scope.querySelector('[name="goal_type"]')?.value || 'manual';
           const routineSelect = scope.querySelector('[data-goal-routine-select]');
           const targetCountInput = scope.querySelector('[name="target_count"]');
@@ -2596,6 +2817,8 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
           const awardMode = scope.querySelector('[name="award_mode"]')?.value || 'both';
           const rewardSelect = scope.querySelector('[name="reward_id"]');
           const pointsInput = scope.querySelector('[name="points_awarded"]');
+          const startHidden = scope.querySelector('[data-goal-start-hidden]');
+          const endHidden = scope.querySelector('[data-goal-end-hidden]');
 
           const markMissing = (el, label) => {
               missing.push(label);
@@ -2607,8 +2830,14 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
               if (childGrid) childGrid.classList.add('input-error');
           }
           if (!titleInput?.value.trim()) markMissing(titleInput, 'Title');
-          if (!startInput?.value) markMissing(startInput, 'Start date');
-          if (!endInput?.value) markMissing(endInput, 'End date');
+          if (!startDateInput?.value || !startTimeInput?.value) markMissing(startDateInput, 'Start date/time');
+          if (!endDateInput?.value || !endTimeInput?.value) markMissing(endDateInput, 'End date/time');
+          if (startHidden && startDateInput?.value && startTimeInput?.value) {
+              startHidden.value = `${startDateInput.value}T${startTimeInput.value}`;
+          }
+          if (endHidden && endDateInput?.value && endTimeInput?.value) {
+              endHidden.value = `${endDateInput.value}T${endTimeInput.value}`;
+          }
 
           if (goalType === 'routine_streak' || goalType === 'routine_count') {
               const routineSelected = routineSelect ? Array.from(routineSelect.selectedOptions).some(opt => opt.value !== '') : false;
@@ -2624,11 +2853,13 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                   markMissing(targetCountInput, 'Target count');
               }
               const windowType = windowTypeSelect?.value || 'rolling';
-              if (windowType === 'fixed') {
-                  if (!fixedStartInput?.value) markMissing(fixedStartInput, 'Fixed start date');
-                  if (!fixedEndInput?.value) markMissing(fixedEndInput, 'Fixed end date');
-              } else if (!windowDaysInput?.value || parseInt(windowDaysInput.value, 10) <= 0) {
-                  markMissing(windowDaysInput, 'Rolling days');
+              if (goalType === 'routine_count') {
+                  if (windowType === 'fixed') {
+                      if (!fixedStartInput?.value) markMissing(fixedStartInput, 'Fixed start date');
+                      if (!fixedEndInput?.value) markMissing(fixedEndInput, 'Fixed end date');
+                  } else if (!windowDaysInput?.value || parseInt(windowDaysInput.value, 10) <= 0) {
+                      markMissing(windowDaysInput, 'Rolling days');
+                  }
               }
           }
 

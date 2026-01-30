@@ -2675,27 +2675,29 @@ function markGoalIncomplete($goal, $child_id, $reason = null) {
 
 function getGoalWindowRange(array $goal) {
     $type = $goal['time_window_type'] ?? 'rolling';
-    $today = new DateTimeImmutable('today');
+    $now = new DateTimeImmutable();
+    $todayStart = $now->setTime(0, 0, 0);
+    $todayEnd = $now->setTime(23, 59, 59);
     if ($type === 'fixed') {
-        $start = !empty($goal['fixed_window_start']) ? new DateTimeImmutable($goal['fixed_window_start']) : null;
-        $end = !empty($goal['fixed_window_end']) ? new DateTimeImmutable($goal['fixed_window_end']) : null;
+        $start = !empty($goal['fixed_window_start']) ? (new DateTimeImmutable($goal['fixed_window_start']))->setTime(0, 0, 0) : null;
+        $end = !empty($goal['fixed_window_end']) ? (new DateTimeImmutable($goal['fixed_window_end']))->setTime(23, 59, 59) : null;
         if (!$start && !empty($goal['start_date'])) {
-            $start = new DateTimeImmutable(date('Y-m-d', strtotime($goal['start_date'])));
+            $start = new DateTimeImmutable($goal['start_date']);
         }
         if (!$end && !empty($goal['end_date'])) {
-            $end = new DateTimeImmutable(date('Y-m-d', strtotime($goal['end_date'])));
+            $end = new DateTimeImmutable($goal['end_date']);
         }
         if (!$start) {
-            $start = $today;
+            $start = $todayStart;
         }
         if (!$end) {
-            $end = $today;
+            $end = $todayEnd;
         }
         return [$start, $end];
     }
     $days = isset($goal['time_window_days']) && (int) $goal['time_window_days'] > 0 ? (int) $goal['time_window_days'] : 7;
-    $start = $today->modify('-' . ($days - 1) . ' days');
-    return [$start, $today];
+    $start = $todayStart->modify('-' . ($days - 1) . ' days');
+    return [$start, $todayEnd];
 }
 
 function getDueTimestampForTask(array $task, string $dateKey = null) {
@@ -2815,7 +2817,7 @@ function calculateGoalProgress(array $goal, $child_id) {
         $taskTargetIds = getGoalTaskTargetIds((int) ($goal['id'] ?? 0));
         $taskCategory = $goal['task_category'] ?? null;
         $taskFilterSql = '';
-        $params = [(int) $child_id, $start->format('Y-m-d'), $end->format('Y-m-d')];
+        $params = [(int) $child_id, $start->format('Y-m-d H:i:s'), $end->format('Y-m-d H:i:s')];
         if (!empty($taskTargetIds)) {
             $placeholders = implode(',', array_fill(0, count($taskTargetIds), '?'));
             $taskFilterSql = " AND t.id IN ($placeholders)";
@@ -2830,7 +2832,7 @@ function calculateGoalProgress(array $goal, $child_id) {
             FROM tasks t
             WHERE t.child_user_id = ?
               AND (t.recurrence IS NULL OR t.recurrence = '')
-              AND DATE(t.approved_at) BETWEEN ? AND ?
+              AND t.approved_at BETWEEN ? AND ?
               {$taskFilterSql}
         ";
         $stmt = $db->prepare($nonRecurringSql);
@@ -2844,7 +2846,7 @@ function calculateGoalProgress(array $goal, $child_id) {
             WHERE t.child_user_id = ?
               AND (t.recurrence IS NOT NULL AND t.recurrence != '')
               AND ti.status = 'approved'
-              AND DATE(ti.approved_at) BETWEEN ? AND ?
+              AND ti.approved_at BETWEEN ? AND ?
               {$taskFilterSql}
         ";
         $stmt = $db->prepare($recurringSql);
