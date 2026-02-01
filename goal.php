@@ -1114,6 +1114,7 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
             flex: 0 0 auto;
             margin: 0;
         }
+        .goal-type-legacy { display: none; }
         .goal-task-card input { margin: 0; }
         @media (max-width: 720px) {
             .goal-task-card { flex-wrap: wrap; justify-content: flex-start; }
@@ -1352,7 +1353,7 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                                     'manual' => 'Manual',
                                     'routine_streak' => 'Routine streak',
                                     'routine_count' => 'Routine count',
-                                    'task_quota' => 'Task quota'
+                                    'task_quota' => 'Task count'
                                 ][$goalProgress['goal_type']] ?? 'Goal';
                                 $progressValue = $goalProgress['current'] . ' / ' . $goalProgress['target'];
                                 $progressPercent = (int) ($goalProgress['percent'] ?? 0);
@@ -1557,7 +1558,7 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                             'manual' => 'Manual',
                             'routine_streak' => 'Routine streak',
                             'routine_count' => 'Routine count',
-                            'task_quota' => 'Task quota'
+                            'task_quota' => 'Task count'
                         ][$goalProgress['goal_type']] ?? 'Goal';
                         $progressValue = $goalProgress['current'] . ' / ' . $goalProgress['target'];
                         $progressPercent = (int) ($goalProgress['percent'] ?? 0);
@@ -1883,9 +1884,9 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                                 </label>
                                 <select id="goal_type" name="goal_type" data-goal-type>
                                     <option value="manual" selected>Manual (Parent approval)</option>
-                                    <option value="routine_streak">Routine streak</option>
                                     <option value="routine_count">Routine count</option>
-                                    <option value="task_quota">Task quota</option>
+                                    <option value="task_quota">Task count</option>
+                                    <option value="routine_streak" class="goal-type-legacy">Routine streak</option>
                                 </select>
                             </div>
                             <div class="form-group" data-goal-routine>
@@ -1975,15 +1976,7 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                                 </label>
                                 <input type="number" id="target_count" name="target_count" min="1" value="3">
                             </div>
-                            <div class="form-group" data-goal-streak>
-                                <label for="streak_required">Streak Length (days)
-                                    <span class="tooltip" tabindex="0" aria-label="Consecutive days required.">
-                                        <i class="fa-solid fa-circle-info"></i>
-                                        <span class="tooltip-text">Consecutive days required.</span>
-                                    </span>
-                                </label>
-                                <input type="number" id="streak_required" name="streak_required" min="2" value="3">
-                            </div>
+                            <input type="hidden" name="streak_required" value="0">
                             <div class="form-group" data-goal-window>
                                 <label for="time_window_type">Time Window
                                     <span class="tooltip" tabindex="0" aria-label="Rolling counts the last X days. Fixed uses the start/end dates below.">
@@ -2200,9 +2193,9 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                                 </label>
                                 <select id="edit_goal_type" name="goal_type" data-goal-type>
                                     <option value="manual">Manual (Parent approval)</option>
-                                    <option value="routine_streak">Routine streak</option>
                                     <option value="routine_count">Routine count</option>
-                                    <option value="task_quota">Task quota</option>
+                                    <option value="task_quota">Task count</option>
+                                    <option value="routine_streak" class="goal-type-legacy">Routine streak</option>
                                 </select>
                             </div>
                             <div class="form-group" data-goal-routine>
@@ -2292,15 +2285,7 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                                 </label>
                                 <input type="number" id="edit_target_count" name="target_count" min="1" value="3">
                             </div>
-                            <div class="form-group" data-goal-streak>
-                                <label for="edit_streak_required">Streak Length (days)
-                                    <span class="tooltip" tabindex="0" aria-label="Consecutive days required.">
-                                        <i class="fa-solid fa-circle-info"></i>
-                                        <span class="tooltip-text">Consecutive days required.</span>
-                                    </span>
-                                </label>
-                                <input type="number" id="edit_streak_required" name="streak_required" min="2" value="3">
-                            </div>
+                            <input type="hidden" name="streak_required" value="0">
                             <div class="form-group" data-goal-window>
                                 <label for="edit_time_window_type">Time Window
                                     <span class="tooltip" tabindex="0" aria-label="Rolling counts the last X days. Fixed uses the start/end dates below.">
@@ -2497,12 +2482,12 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
 
           const setGoalTypeVisibility = () => {
               const type = goalTypeSelect ? goalTypeSelect.value : 'manual';
-              const showRoutine = type === 'routine_streak' || type === 'routine_count';
+              const showRoutine = type === 'routine_count';
               const showTask = type === 'task_quota';
               const showCount = type === 'routine_count' || type === 'task_quota';
-              const showStreak = type === 'routine_streak';
+              const showStreak = false;
               const showWindow = type === 'routine_count';
-              const allowMultiple = type === 'routine_streak' || type === 'routine_count';
+              const allowMultiple = type === 'routine_count';
               if (type === 'task_quota' && goalWindowSelect) {
                   goalWindowSelect.value = 'fixed';
               }
@@ -2966,14 +2951,9 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
               endHidden.value = `${endDateInput.value}T${endTimeInput.value}`;
           }
 
-          if (goalType === 'routine_streak' || goalType === 'routine_count') {
+          if (goalType === 'routine_count') {
               const routineSelected = routineSelect ? Array.from(routineSelect.selectedOptions).some(opt => opt.value !== '') : false;
               if (!routineSelected) markMissing(routineSelect, 'Routine');
-          }
-          if (goalType === 'routine_streak') {
-              if (!streakInput?.value || parseInt(streakInput.value, 10) <= 0) {
-                  markMissing(streakInput, 'Streak length');
-              }
           }
           if (goalType === 'routine_count' || goalType === 'task_quota') {
               if (!targetCountInput?.value || parseInt(targetCountInput.value, 10) <= 0) {

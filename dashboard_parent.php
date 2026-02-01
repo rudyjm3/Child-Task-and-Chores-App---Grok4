@@ -965,6 +965,68 @@ $formatParentNotificationMessage = static function (array $note): string {
         .child-info-card, .reward-item, .goal-item { background-color: #f5f5f5; padding: 15px; border-radius: 8px; box-shadow: 0 8px 20px rgba(0,0,0,0.08); }
         .child-info-card { width: 100%; display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 20px; align-items: start; min-height: 100%; background-color: #fff; margin: 20px 0;}
         .level-badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; background: #fffbeb; color: #b45309; font-weight: 700; font-size: 0.85rem; border: 1px solid #fde68a; }
+        .streak-badges { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+        .streak-badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; background: #fff7ed; color: #b45309; font-weight: 700; font-size: 0.82rem; border: 1px solid #fed7aa; }
+        .streak-phrase { font-size: 0.78rem; color: #8d6e63; margin: 2px 0 6px; width: 100%; }
+        .streak-inline { font-size: 0.8rem; color: #6d4c41; margin-top: 6px; display: grid; gap: 4px; }
+        .streak-summary { font-size: 0.8rem; color: #5d4037; margin-top: 6px; }
+        .streak-icon {
+            --c: rgb(255 138 46);
+            position: relative;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            border: 1px solid transparent;
+            background: #5f5f5f;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            flex: 0 0 28px;
+            line-height: 1;
+        }
+        .streak-icon.is-blue { --c: #0d47a1; }
+        .streak-icon svg {
+            width: 1.2rem;
+            height: 1.2rem;
+            display: block;
+            z-index: 1;
+        }
+        .streak-icon::before,
+        .streak-icon::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            border-radius: inherit;
+            box-shadow: 0 0 0 0 rgba(255, 138, 46, 0.55);
+            animation: streak-pulse-orange 1.6s ease-out infinite;
+        }
+        .streak-icon.is-blue::before,
+        .streak-icon.is-blue::after {
+            box-shadow: 0 0 0 0 rgba(13, 71, 161, 0.55);
+            animation: streak-pulse-blue 1.6s ease-out infinite;
+        }
+        .streak-icon::after {
+            animation-delay: 0.8s;
+            opacity: 0.75;
+        }
+        .streak-icon.is-blue::after {
+            animation-delay: 0.8s;
+            opacity: 0.75;
+        }
+        @keyframes streak-pulse-orange {
+            0% { box-shadow: 0 0 0 0 rgba(255, 138, 46, 0.55); opacity: 1; }
+            70% { box-shadow: 0 0 0 18px rgba(255, 138, 46, 0); opacity: 0; }
+            100% { opacity: 0; }
+        }
+        @keyframes streak-pulse-blue {
+            0% { box-shadow: 0 0 0 0 rgba(13, 71, 161, 0.55); opacity: 1; }
+            70% { box-shadow: 0 0 0 18px rgba(13, 71, 161, 0); opacity: 0; }
+            100% { opacity: 0; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .streak-icon::before,
+            .streak-icon::after { animation: none; }
+        }
         .child-info-left { display: contents; }
         .child-info-header { display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; }
         .child-info-header img { width: 72px; height: 72px; border-radius: 50%; object-fit: cover; border: 2px solid #ececec; }
@@ -2691,6 +2753,39 @@ $formatParentNotificationMessage = static function (array $note): string {
                                     <i class="fa-solid fa-star"></i>
                                     <span>Level <?php echo (int) ($child['level'] ?? 1); ?></span>
                                 </div>
+                                <div class="streak-debug" style="font-size:0.75rem;color:#78909c;display:flex;align-items:center;gap:6px;">
+                                    <span class="streak-icon is-blue"><svg viewBox="0 0 384 512" aria-hidden="true" focusable="false"><defs><linearGradient id="streak-blue-debug-parent" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#64b5f6"/><stop offset="100%" stop-color="#0d47a1"/></linearGradient></defs><path fill="url(#streak-blue-debug-parent)" d="M153.6 29.9l16-21.3C173.6 3.2 180 0 186.7 0C198.4 0 208 9.6 208 21.3V43.5c0 13.1 5.4 25.7 14.9 34.7L307.6 159C356.4 205.6 384 270.2 384 337.7C384 434 306 512 209.7 512H192C86 512 0 426 0 320v-3.8c0-48.8 19.4-95.6 53.9-130.1l3.5-3.5c4.2-4.2 10-6.6 16-6.6C85.9 176 96 186.1 96 198.6V288c0 35.3 28.7 64 64 64s64-28.7 64-64v-3.9c0-18-7.2-35.3-19.9-48l-38.6-38.6c-24-24-37.5-56.7-37.5-90.7c0-27.7 9-54.8 25.6-76.9z"/></svg></span>
+                                    Debug streaks: routine=<?php echo (int) ($child['routine_streak'] ?? 0); ?>, task=<?php echo (int) ($child['task_streak'] ?? 0); ?>
+                                </div>
+                                <?php
+                                    $routineStreak = (int) ($child['routine_streak'] ?? 0);
+                                    $taskStreak = (int) ($child['task_streak'] ?? 0);
+                                ?>
+                                <?php if (true): ?>
+                                    <div class="streak-badges">
+                                        <?php if ($routineStreak >= 2): ?>
+                                            <span class="streak-badge"><span class="streak-icon is-blue"><svg viewBox="0 0 384 512" aria-hidden="true" focusable="false"><defs><linearGradient id="streak-blue-parent" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#64b5f6"/><stop offset="100%" stop-color="#0d47a1"/></linearGradient></defs><path fill="url(#streak-blue-parent)" d="M153.6 29.9l16-21.3C173.6 3.2 180 0 186.7 0C198.4 0 208 9.6 208 21.3V43.5c0 13.1 5.4 25.7 14.9 34.7L307.6 159C356.4 205.6 384 270.2 384 337.7C384 434 306 512 209.7 512H192C86 512 0 426 0 320v-3.8c0-48.8 19.4-95.6 53.9-130.1l3.5-3.5c4.2-4.2 10-6.6 16-6.6C85.9 176 96 186.1 96 198.6V288c0 35.3 28.7 64 64 64s64-28.7 64-64v-3.9c0-18-7.2-35.3-19.9-48l-38.6-38.6c-24-24-37.5-56.7-37.5-90.7c0-27.7 9-54.8 25.6-76.9z"/></svg></span>Routine Streak <?php echo $routineStreak; ?></span>
+                                            <div class="streak-phrase">Keep the fire going!</div>
+                                        <?php endif; ?>
+                                        <?php if ($taskStreak >= 2): ?>
+                                            <span class="streak-badge"><span class="streak-icon"><svg viewBox="0 0 384 512" aria-hidden="true" focusable="false"><defs><linearGradient id="streak-orange-parent" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#ffb347"/><stop offset="100%" stop-color="#ff6f61"/></linearGradient></defs><path fill="url(#streak-orange-parent)" d="M153.6 29.9l16-21.3C173.6 3.2 180 0 186.7 0C198.4 0 208 9.6 208 21.3V43.5c0 13.1 5.4 25.7 14.9 34.7L307.6 159C356.4 205.6 384 270.2 384 337.7C384 434 306 512 209.7 512H192C86 512 0 426 0 320v-3.8c0-48.8 19.4-95.6 53.9-130.1l3.5-3.5c4.2-4.2 10-6.6 16-6.6C85.9 176 96 186.1 96 198.6V288c0 35.3 28.7 64 64 64s64-28.7 64-64v-3.9c0-18-7.2-35.3-19.9-48l-38.6-38.6c-24-24-37.5-56.7-37.5-90.7c0-27.7 9-54.8 25.6-76.9z"/></svg></span>Task Streak <?php echo $taskStreak; ?></span>
+                                            <div class="streak-phrase">You’re on a roll!</div>
+                                        <?php endif; ?>
+                                    </div>
+                                    <div class="streak-inline">
+                                        <?php if ($routineStreak >= 2): ?>
+                                            <div><span class="streak-icon is-blue"><svg viewBox="0 0 384 512" aria-hidden="true" focusable="false"><defs><linearGradient id="streak-blue-inline-parent" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#64b5f6"/><stop offset="100%" stop-color="#0d47a1"/></linearGradient></defs><path fill="url(#streak-blue-inline-parent)" d="M153.6 29.9l16-21.3C173.6 3.2 180 0 186.7 0C198.4 0 208 9.6 208 21.3V43.5c0 13.1 5.4 25.7 14.9 34.7L307.6 159C356.4 205.6 384 270.2 384 337.7C384 434 306 512 209.7 512H192C86 512 0 426 0 320v-3.8c0-48.8 19.4-95.6 53.9-130.1l3.5-3.5c4.2-4.2 10-6.6 16-6.6C85.9 176 96 186.1 96 198.6V288c0 35.3 28.7 64 64 64s64-28.7 64-64v-3.9c0-18-7.2-35.3-19.9-48l-38.6-38.6c-24-24-37.5-56.7-37.5-90.7c0-27.7 9-54.8 25.6-76.9z"/></svg></span>Routine Streak <?php echo $routineStreak; ?> — Keep it up!</div>
+                                        <?php endif; ?>
+                                        <?php if ($taskStreak >= 2): ?>
+                                            <div><span class="streak-icon"><svg viewBox="0 0 384 512" aria-hidden="true" focusable="false"><defs><linearGradient id="streak-orange-inline-parent" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#ffb347"/><stop offset="100%" stop-color="#ff6f61"/></linearGradient></defs><path fill="url(#streak-orange-inline-parent)" d="M153.6 29.9l16-21.3C173.6 3.2 180 0 186.7 0C198.4 0 208 9.6 208 21.3V43.5c0 13.1 5.4 25.7 14.9 34.7L307.6 159C356.4 205.6 384 270.2 384 337.7C384 434 306 512 209.7 512H192C86 512 0 426 0 320v-3.8c0-48.8 19.4-95.6 53.9-130.1l3.5-3.5c4.2-4.2 10-6.6 16-6.6C85.9 176 96 186.1 96 198.6V288c0 35.3 28.7 64 64 64s64-28.7 64-64v-3.9c0-18-7.2-35.3-19.9-48l-38.6-38.6c-24-24-37.5-56.7-37.5-90.7c0-27.7 9-54.8 25.6-76.9z"/></svg></span>Task Streak <?php echo $taskStreak; ?> — On fire!</div>
+                                        <?php endif; ?>
+                                    </div>
+                                    <div class="streak-summary">
+                                        <span class="streak-icon is-blue"><svg viewBox="0 0 384 512" aria-hidden="true" focusable="false"><defs><linearGradient id="streak-blue-summary-parent" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#64b5f6"/><stop offset="100%" stop-color="#0d47a1"/></linearGradient></defs><path fill="url(#streak-blue-summary-parent)" d="M153.6 29.9l16-21.3C173.6 3.2 180 0 186.7 0C198.4 0 208 9.6 208 21.3V43.5c0 13.1 5.4 25.7 14.9 34.7L307.6 159C356.4 205.6 384 270.2 384 337.7C384 434 306 512 209.7 512H192C86 512 0 426 0 320v-3.8c0-48.8 19.4-95.6 53.9-130.1l3.5-3.5c4.2-4.2 10-6.6 16-6.6C85.9 176 96 186.1 96 198.6V288c0 35.3 28.7 64 64 64s64-28.7 64-64v-3.9c0-18-7.2-35.3-19.9-48l-38.6-38.6c-24-24-37.5-56.7-37.5-90.7c0-27.7 9-54.8 25.6-76.9z"/></svg></span>
+                                        Routine Streak <?php echo $routineStreak; ?> · Task Streak <?php echo $taskStreak; ?><br>
+                                        Great job — keep the streak alive!
+                                    </div>
+                                <?php endif; ?>
                             </div>
                           </div>
                           <div class="points-progress-wrapper">

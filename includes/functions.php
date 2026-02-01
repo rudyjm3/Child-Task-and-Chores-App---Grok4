@@ -810,6 +810,9 @@ function getDashboardData($user_id) {
             $child['goals_assigned'] = $childGoalStats['goal_count'];
             $child['rewards_claimed'] = $rewardsClaimed[$childId] ?? 0;
             $child['point_adjustments'] = $adjustmentsByChild[$childId] ?? [];
+            $streaks = getChildStreaks($childId, (int) $main_parent_id);
+            $child['routine_streak'] = (int) ($streaks['routine_streak'] ?? 0);
+            $child['task_streak'] = (int) ($streaks['task_streak'] ?? 0);
         }
         unset($child);
         $data['max_child_points'] = $maxChildPoints;
@@ -930,6 +933,9 @@ function getDashboardData($user_id) {
             $levelState = getChildLevelState((int) $user_id, (int) $parent_id);
             $data['child_level'] = $levelState['level'] ?? 1;
             $data['level_pending'] = (int) ($levelState['pending'] ?? 0);
+            $streaks = getChildStreaks((int) $user_id, (int) $parent_id);
+            $data['routine_streak'] = (int) ($streaks['routine_streak'] ?? 0);
+            $data['task_streak'] = (int) ($streaks['task_streak'] ?? 0);
             $stmt = $db->prepare("SELECT id, title, description, point_cost
                                   FROM rewards
                                   WHERE parent_user_id = :parent_id
@@ -2698,6 +2704,77 @@ function getGoalWindowRange(array $goal) {
     $days = isset($goal['time_window_days']) && (int) $goal['time_window_days'] > 0 ? (int) $goal['time_window_days'] : 7;
     $start = $todayStart->modify('-' . ($days - 1) . ' days');
     return [$start, $todayEnd];
+}
+
+function calculateConsecutiveStreak(array $dates): int {
+    if (empty($dates)) {
+        return 0;
+    }
+    $dateSet = array_fill_keys(array_unique($dates), true);
+    $today = new DateTimeImmutable('today');
+    $cursor = $today;
+    $todayKey = $today->format('Y-m-d');
+    if (!isset($dateSet[$todayKey])) {
+        $cursor = $today->modify('-1 day');
+        if (!isset($dateSet[$cursor->format('Y-m-d')])) {
+            return 0;
+        }
+    }
+    $count = 0;
+    while (isset($dateSet[$cursor->format('Y-m-d')])) {
+        $count++;
+        $cursor = $cursor->modify('-1 day');
+    }
+    return $count;
+}
+
+function getChildStreaks(int $child_user_id, int $parent_user_id = null): array {
+    global $db;
+    $routineDates = [];
+    $taskDates = [];
+    ensureRoutineCompletionTables();
+
+    $params = [':child_id' => $child_user_id];
+    $parentFilter = '';
+    if ($parent_user_id) {
+        $parentFilter = ' AND rcl.parent_user_id = :parent_id';
+        $params[':parent_id'] = $parent_user_id;
+    }
+    $routineStmt = $db->prepare("
+        SELECT DISTINCT DATE(rcl.completed_at) AS date_key
+        FROM routine_completion_logs rcl
+        WHERE rcl.child_user_id = :child_id
+          AND rcl.completed_at IS NOT NULL
+          {$parentFilter}
+    ");
+    $routineStmt->execute($params);
+    $routineDates = $routineStmt->fetchAll(PDO::FETCH_COLUMN) ?: [];
+
+    $taskStmt = $db->prepare("
+        SELECT DISTINCT DATE(approved_at) AS date_key
+        FROM tasks
+        WHERE child_user_id = :child_id
+          AND approved_at IS NOT NULL
+    ");
+    $taskStmt->execute([':child_id' => $child_user_id]);
+    $taskDates = $taskStmt->fetchAll(PDO::FETCH_COLUMN) ?: [];
+
+    $taskInstanceStmt = $db->prepare("
+        SELECT DISTINCT DATE(ti.approved_at) AS date_key
+        FROM task_instances ti
+        JOIN tasks t ON t.id = ti.task_id
+        WHERE t.child_user_id = :child_id
+          AND ti.approved_at IS NOT NULL
+          AND ti.status = 'approved'
+    ");
+    $taskInstanceStmt->execute([':child_id' => $child_user_id]);
+    $instanceDates = $taskInstanceStmt->fetchAll(PDO::FETCH_COLUMN) ?: [];
+    $taskDates = array_values(array_unique(array_merge($taskDates, $instanceDates)));
+
+    return [
+        'routine_streak' => calculateConsecutiveStreak($routineDates),
+        'task_streak' => calculateConsecutiveStreak($taskDates)
+    ];
 }
 
 function getDueTimestampForTask(array $task, string $dateKey = null) {
