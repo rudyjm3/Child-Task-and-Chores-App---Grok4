@@ -1459,16 +1459,6 @@ $hasRecentMore = $recentTotal > $recentLimit;
 </div>
 <script>
     (function() {
-        const editButtons = document.querySelectorAll('[data-action="edit-template"]');
-        editButtons.forEach(btn => {
-            btn.addEventListener('click', () => {
-                const id = btn.getAttribute('data-template-id');
-                const form = document.querySelector(`[data-template-form="${id}"]`);
-                if (!form) return;
-                openModal('Edit Template', form);
-            });
-        });
-
         const modalBackdrop = document.getElementById('modal-backdrop');
         const modalBody = document.getElementById('modal-body');
         const modalTitle = document.getElementById('modal-title');
@@ -1666,6 +1656,15 @@ $hasRecentMore = $recentTotal > $recentLimit;
             }
         });
 
+        document.addEventListener('click', (e) => {
+            const editBtn = e.target.closest('[data-action="edit-template"]');
+            if (!editBtn) return;
+            const id = editBtn.getAttribute('data-template-id');
+            const form = document.querySelector(`[data-template-form="${id}"]`);
+            if (!form) return;
+            openModal('Edit Template', form);
+        });
+
         function attachRewardListeners(scope) {
             const editButtons = (scope || document).querySelectorAll('[data-action="edit-reward"]');
             editButtons.forEach(btn => {
@@ -1857,8 +1856,6 @@ $hasRecentMore = $recentTotal > $recentLimit;
     })();
 </script>
 </html>
-
-
 
 
 
