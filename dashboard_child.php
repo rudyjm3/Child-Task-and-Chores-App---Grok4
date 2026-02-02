@@ -1384,7 +1384,7 @@ foreach ($taskCountStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
                $routineDayLabel = $routineStreak == 1 ? 'day' : 'days';
                $taskDayLabel = $taskStreak == 1 ? 'day' : 'days';
             ?>
-               <?php if (true): ?>
+               <?php if ($routineStreak >= 2 || $taskStreak >= 2): ?>
                   <div class="streak-concepts">
                      <div class="streak-concept">
                         <div class="streak-concept-label">Streaks</div>
