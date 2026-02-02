@@ -360,7 +360,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 addChildNotification(
                     (int)$child_user_id,
                     $points_delta > 0 ? 'points_added' : 'points_deducted',
-                    ($points_delta > 0 ? 'You received ' : 'You lost ') . abs($points_delta) . ' pts: ' . $point_reason,
+                    ($points_delta > 0 ? 'You received ' : 'You lost ') . abs($points_delta) . ' points: ' . $point_reason,
                     'dashboard_child.php'
                 );
                 $sign = $points_delta > 0 ? 'added' : 'deducted';
@@ -2203,7 +2203,7 @@ function renderStreakCheckSvg($suffix) {
                     info.appendChild(meta);
                     const delta = document.createElement('span');
                     delta.className = 'adjust-history-points' + (item.delta_points < 0 ? ' is-negative' : '');
-                    delta.textContent = (item.delta_points >= 0 ? '+' : '') + item.delta_points + ' pts';
+                    delta.innerHTML = '<i class="fa-solid fa-coins"></i> ' + (item.delta_points >= 0 ? '+' : '') + item.delta_points;
                     li.appendChild(info);
                     li.appendChild(delta);
                     adjustHistoryList.appendChild(li);
@@ -2869,9 +2869,8 @@ function renderStreakCheckSvg($suffix) {
                           <div class="points-progress-wrapper">
                               <div class="points-progress-label">Total points</div>
                               <div class="points-number" data-points="<?php echo (int)($child['points_earned'] ?? 0); ?>">
-                                  <i class="fa-solid fa-star"></i>
+                                  <i class="fa-solid fa-coins"></i>
                                   <span class="points-number-value">0</span>
-                                  <span class="points-number-suffix">pts</span>
                               </div>
                               <?php if (in_array($role_type, ['main_parent', 'secondary_parent'], true)): ?>
                                   <button type="button"
@@ -3113,7 +3112,7 @@ function renderStreakCheckSvg($suffix) {
                                   <img class="child-history-avatar" src="<?php echo htmlspecialchars($child['avatar'] ?? 'images/default-avatar.png'); ?>" alt="<?php echo htmlspecialchars($child['child_name']); ?>">
                                   <div class="child-history-info">
                                       <div class="child-history-name"><?php echo htmlspecialchars($child['child_name']); ?></div>
-                                      <div class="child-history-points"><i class="fa-solid fa-star"></i> <?php echo (int)($child['points_earned'] ?? 0); ?> pts</div>
+                                      <div class="child-history-points"><i class="fa-solid fa-coins"></i> <?php echo (int)($child['points_earned'] ?? 0); ?></div>
                                   </div>
                               </div>
                               <div class="child-history-filters" data-history-filters>
@@ -3133,7 +3132,7 @@ function renderStreakCheckSvg($suffix) {
                                                               <div class="child-history-item-title"><?php echo htmlspecialchars($item['title']); ?></div>
                                                               <div class="child-history-item-meta"><?php echo htmlspecialchars(date('M j, Y, g:i A', strtotime($item['date']))); ?></div>
                                                           </div>
-                                                          <div class="child-history-item-points<?php echo ($item['points'] < 0 ? ' is-negative' : ''); ?>"><?php echo ($item['points'] >= 0 ? '+' : '') . (int)$item['points']; ?> pts</div>
+                                                          <div class="child-history-item-points<?php echo ($item['points'] < 0 ? ' is-negative' : ''); ?>"><i class="fa-solid fa-coins"></i> <?php echo ($item['points'] >= 0 ? '+' : '') . (int)$item['points']; ?></div>
                                                       </li>
                                                   <?php endforeach; ?>
                                               </ul>
@@ -3373,8 +3372,8 @@ function renderStreakCheckSvg($suffix) {
                 <form method="POST" class="adjust-form">
                     <div class="adjust-points-panel">
                         <div class="adjust-current-points">
-                            <i class="fa-solid fa-star"></i>
-                            <span data-role="adjust-current-points">0</span> pts
+                            <i class="fa-solid fa-coins"></i>
+                            <span data-role="adjust-current-points">0</span>
                         </div>
                         <div class="adjust-points-warning" data-role="adjust-points-warning" style="display:none;">
                             Total points can't be less than 0.
@@ -3488,8 +3487,6 @@ function renderStreakCheckSvg($suffix) {
   <script src="js/number-stepper.js" defer></script>
 </body>
 </html>
-
-
 
 
 

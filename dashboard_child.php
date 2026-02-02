@@ -743,7 +743,7 @@ function renderStreakCheckSvg($suffix) {
                         '<div class="week-item-meta">' + item.time_label + '</div>' +
                         '</div>' +
                         '</div>' +
-                        '<div class="week-item-points">' + item.points + ' pts</div>' +
+                        '<div class="week-item-points"><i class="fa-solid fa-coins"></i> ' + item.points + '</div>' +
                         wrapperEnd;
                 };
                 const sectionHtml = sections.map(section => {
@@ -1575,7 +1575,7 @@ foreach ($taskCountStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
                   <img class="child-history-avatar" src="<?php echo htmlspecialchars($childAvatar); ?>" alt="<?php echo htmlspecialchars($childFirstName !== '' ? $childFirstName : 'Child'); ?>">
                   <div class="child-history-info">
                      <div class="child-history-name"><?php echo htmlspecialchars($childFirstName !== '' ? $childFirstName : 'Child'); ?></div>
-                     <div class="child-history-points"><i class="fa-solid fa-star"></i> <?php echo (int)$childTotalPoints; ?> pts</div>
+                     <div class="child-history-points"><i class="fa-solid fa-coins"></i> <?php echo (int)$childTotalPoints; ?></div>
                   </div>
                </div>
                <div class="child-history-filters" data-history-filters>
@@ -1595,7 +1595,7 @@ foreach ($taskCountStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
                                        <div class="child-history-item-title"><?php echo htmlspecialchars($item['title']); ?></div>
                                        <div class="child-history-item-meta"><?php echo htmlspecialchars(date('M j, Y, g:i A', strtotime($item['date']))); ?></div>
                                     </div>
-                                    <div class="child-history-item-points<?php echo ($item['points'] < 0 ? ' is-negative' : ''); ?>"><?php echo ($item['points'] >= 0 ? '+' : '') . (int)$item['points']; ?> pts</div>
+                                    <div class="child-history-item-points<?php echo ($item['points'] < 0 ? ' is-negative' : ''); ?>"><i class="fa-solid fa-coins"></i> <?php echo ($item['points'] >= 0 ? '+' : '') . (int)$item['points']; ?></div>
                                  </li>
                               <?php endforeach; ?>
                            </ul>
@@ -1692,7 +1692,6 @@ foreach ($taskCountStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
   <script src="js/number-stepper.js" defer></script>
 </body>
 </html>
-
 
 
 

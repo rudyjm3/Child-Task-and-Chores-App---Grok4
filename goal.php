@@ -2061,7 +2061,7 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                                             : '';
                                         ?>
                                         <option value="template:<?php echo $templateId; ?>"<?php echo $disabledAttr; ?>>
-                                            <?php echo htmlspecialchars($template['title']); ?> (<?php echo (int) $template['point_cost']; ?> pts)
+                                            <?php echo htmlspecialchars($template['title']); ?> (<?php echo (int) $template['point_cost']; ?>)
                                         </option>
                                     <?php endforeach; ?>
                                 </select>
@@ -2370,7 +2370,7 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                                             : '';
                                         ?>
                                         <option value="template:<?php echo $templateId; ?>"<?php echo $disabledAttr; ?>>
-                                            <?php echo htmlspecialchars($template['title']); ?> (<?php echo (int) $template['point_cost']; ?> pts)
+                                            <?php echo htmlspecialchars($template['title']); ?> (<?php echo (int) $template['point_cost']; ?>)
                                         </option>
                                     <?php endforeach; ?>
                                 </select>
@@ -3065,8 +3065,6 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
 <?php endif; ?>
 </body>
 </html>
-
-
 
 
 
