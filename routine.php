@@ -2036,7 +2036,7 @@ margin-bottom: 20px;}
                                             <article class="library-task-card" data-role="library-item" data-category="<?php echo htmlspecialchars($task['category']); ?>">
                                                 <header>
                                                     <h4><?php echo htmlspecialchars($task['title']); ?></h4>
-                                                    <span class="library-task-points"><?php echo (int) $task['point_value']; ?> pts</span>
+                                                    <span class="library-task-points"><i class="fa-solid fa-coins"></i> <?php echo (int) $task['point_value']; ?></span>
                                                 </header>
                                                 <p class="library-task-description">
                                                     <?php echo $taskDescription !== '' ? htmlspecialchars($taskDescription) : 'No description provided.'; ?>
@@ -5308,7 +5308,6 @@ margin-bottom: 20px;}
 </body>
 </html>
 <?php
-
 
 
 

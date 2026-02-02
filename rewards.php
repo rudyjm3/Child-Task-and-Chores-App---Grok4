@@ -365,7 +365,7 @@ if ($role_type === 'child') {
                             <div>Welcome, <?php echo htmlspecialchars($childDisplayName !== '' ? $childDisplayName : 'Child'); ?>!</div>
                         </div>
                         <div class="shop-meta">
-                            <div class="shop-coins">Available points: <?php echo (int) $childPoints; ?> <i class="fa-solid fa-star"></i></div>
+                            <div class="shop-coins">Available points: <i class="fa-solid fa-coins"></i> <?php echo (int) $childPoints; ?></div>
                             <a class="shop-exit" href="dashboard_child.php">Exit Shop <i class="fa-solid fa-right-from-bracket"></i></a>
                         </div>
                     </div>
@@ -388,7 +388,7 @@ if ($role_type === 'child') {
                                         <span class="shop-icon" style="background: <?php echo htmlspecialchars($iconColor); ?>;">
                                             <i class="<?php echo htmlspecialchars($iconClass); ?>"></i>
                                         </span>
-                                        <span class="shop-price"><?php echo (int) ($template['point_cost'] ?? 0); ?> <i class="fa-solid fa-coins"></i></span>
+                                        <span class="shop-price"><i class="fa-solid fa-coins"></i> <?php echo (int) ($template['point_cost'] ?? 0); ?></span>
                                     </div>
                                     <div class="shop-title"><?php echo htmlspecialchars($template['title'] ?? 'Reward'); ?></div>
                                     <div class="shop-info">
@@ -820,7 +820,7 @@ foreach ($children as $child) {
         .badge { display: inline-block; background: #4caf50; color: #fff; padding: 4px 8px; border-radius: 12px; font-size: 0.85em; font-weight: 600; }
         .level-badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; background: #fffbeb; color: #b45309; font-weight: 700; font-size: 0.85rem; border: 1px solid #fde68a; }
         .points-badge { background: #fffbeb; color: #f59e0b; padding: 4px 10px; border-radius: 999px; font-weight: 700; font-size: 0.85rem; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
-        .points-badge::before { content: '\f005'; font-family: 'Font Awesome 6 Free'; font-weight: 900; }
+        .points-badge::before { content: '\f51e'; font-family: 'Font Awesome 6 Free'; font-weight: 900; }
         .level-pill { background: #eef2ff; color: #4338ca; padding: 4px 10px; border-radius: 999px; font-weight: 700; font-size: 0.85rem; display: inline-flex; align-items: center; }
         [data-child-disabled-list] .badge { background: #4caf50; color: #fff; font-weight: 600; }
         .message { background: #e8f5e9; color: #2e7d32; border: 1px solid #c8e6c9; padding: 10px 12px; border-radius: 6px; margin-bottom: 10px; }
@@ -1164,7 +1164,7 @@ foreach ($children as $child) {
                     <span class="shop-parent-subtitle">Rewards available for the family shop.</span>
                 </div>
                 <div class="shop-parent-meta">
-                    <div class="shop-parent-points">Available points: <?php echo (int) $totalPointsEarned; ?> <i class="fa-solid fa-star"></i></div>
+                    <div class="shop-parent-points">Available points: <i class="fa-solid fa-coins"></i> <?php echo (int) $totalPointsEarned; ?></div>
                     <div class="shop-parent-actions">
                         <button type="button" class="button secondary" data-action="toggle-template-grid" aria-expanded="true">
                             <span data-template-toggle-label>Close Shop</span>
@@ -1857,7 +1857,6 @@ $hasRecentMore = $recentTotal > $recentLimit;
     })();
 </script>
 </html>
-
 
 
 
