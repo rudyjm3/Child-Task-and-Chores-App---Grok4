@@ -1252,7 +1252,6 @@ function renderStreakCheckSvg($suffix) {
         .child-history-item-title { font-weight: 700; color: #3e2723; }
         .child-history-item-meta { color: #6d4c41; font-size: 0.95rem; }
         .child-history-item-points { background: #fffbeb; color: #f59e0b; padding: 4px 10px; border-radius: 999px; font-weight: 700; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
-        .child-history-item-points::before { content: '\f005'; font-family: 'Font Awesome 6 Free'; font-weight: 900; }
         .child-history-item-points.is-negative { background: #ffebee; color: #d32f2f; }
         .adjust-modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.55); display: none; align-items: center; justify-content: center; z-index: 3000; padding: 12px; }
         .adjust-modal-backdrop.open { display: flex; }
@@ -1272,7 +1271,6 @@ function renderStreakCheckSvg($suffix) {
         .adjust-history li { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; font-size: 0.9rem; }
         .adjust-history-item-info { display: grid; gap: 2px; }
         .adjust-history-points { background: #fffbeb; color: #f59e0b; padding: 4px 10px; border-radius: 999px; font-weight: 700; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
-        .adjust-history-points::before { content: '\f005'; font-family: 'Font Awesome 6 Free'; font-weight: 900; }
         .adjust-history-points.is-negative { background: #ffebee; color: #d32f2f; }
         .adjust-history-meta { color: #666; font-size: 0.85rem; }
         .adjust-modal-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 0; }
@@ -1311,7 +1309,6 @@ function renderStreakCheckSvg($suffix) {
         .child-history-day-title { font-weight: 700; color: #8d6e63; }
         .child-history-item { background: #fff; border-radius: 14px; padding: 12px; border: 1px solid #eceff4; display: flex; gap: 12px; align-items: flex-start; justify-content: space-between; }
         .child-history-item-points { background: #fffbeb; color: #f59e0b; padding: 4px 10px; border-radius: 999px; font-weight: 700; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
-        .child-history-item-points::before { content: '\f005'; font-family: 'Font Awesome 6 Free'; font-weight: 900; }
         .child-history-item-points.is-negative { background: #ffebee; color: #d32f2f; }
         .adjust-modal .button { margin: 0; }
 
@@ -2944,8 +2941,11 @@ function renderStreakCheckSvg($suffix) {
                               $historyItems = $historyItems;
                           }
                           try {
-                              $adjStmt = $db->prepare("SELECT delta_points, reason, created_at FROM child_point_adjustments WHERE child_user_id = :child_id");
-                              $adjStmt->execute([':child_id' => $childId]);
+                              $adjStmt = $db->prepare("SELECT delta_points, reason, created_at FROM child_point_adjustments WHERE child_user_id = :child_id AND created_by <> :creator_child_id");
+                              $adjStmt->execute([
+                                  ':child_id' => $childId,
+                                  ':creator_child_id' => $childId
+                              ]);
                               foreach ($adjStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
                                   $historyItems[] = [
                                       'type' => 'Adjustment',
@@ -3118,6 +3118,7 @@ function renderStreakCheckSvg($suffix) {
                               <div class="child-history-filters" data-history-filters>
                                   <button type="button" class="history-filter active" data-history-filter="all">All</button>
                                   <button type="button" class="history-filter" data-history-filter="reward">Rewards Only</button>
+                                  <button type="button" class="history-filter" data-history-filter="adjustment">Point Adjustments</button>
                               </div>
                               <p class="child-history-empty" data-history-empty style="display:none;">No history for this filter.</p>
                           <div class="child-history-timeline">

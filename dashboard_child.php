@@ -543,7 +543,6 @@ function renderStreakCheckSvg($suffix) {
         .child-history-item-title { font-weight: 700; color: #3e2723; }
         .child-history-item-meta { color: #6d4c41; font-size: 0.95rem; }
         .child-history-item-points { background: #fffbeb; color: #f59e0b; padding: 4px 10px; border-radius: 999px; font-weight: 700; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
-        .child-history-item-points::before { content: '\f005'; font-family: 'Font Awesome 6 Free'; font-weight: 900; }
         .child-history-item-points.is-negative { background: #ffebee; color: #d32f2f; }
         .help-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: none; align-items: center; justify-content: center; z-index: 4300; padding: 14px; }
         .help-modal.open { display: flex; }
@@ -1310,8 +1309,11 @@ foreach ($taskCountStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
                     INDEX idx_child_created (child_user_id, created_at)
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
             ");
-            $adjStmt = $db->prepare("SELECT delta_points, reason, created_at FROM child_point_adjustments WHERE child_user_id = :child_id");
-            $adjStmt->execute([':child_id' => $_SESSION['user_id']]);
+            $adjStmt = $db->prepare("SELECT delta_points, reason, created_at FROM child_point_adjustments WHERE child_user_id = :child_id AND created_by <> :creator_child_id");
+            $adjStmt->execute([
+               ':child_id' => $_SESSION['user_id'],
+               ':creator_child_id' => $_SESSION['user_id']
+            ]);
             foreach ($adjStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
                $historyItems[] = [
                   'type' => 'Adjustment',
@@ -1581,6 +1583,7 @@ foreach ($taskCountStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
                <div class="child-history-filters" data-history-filters>
                   <button type="button" class="history-filter active" data-history-filter="all">All</button>
                   <button type="button" class="history-filter" data-history-filter="reward">Rewards Only</button>
+                  <button type="button" class="history-filter" data-history-filter="adjustment">Point Adjustments</button>
                </div>
                <p class="child-history-empty" data-history-empty style="display:none;">No history for this filter.</p>
                <div class="child-history-timeline">
