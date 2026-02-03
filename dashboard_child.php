@@ -1310,8 +1310,11 @@ foreach ($taskCountStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
                     INDEX idx_child_created (child_user_id, created_at)
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
             ");
-            $adjStmt = $db->prepare("SELECT delta_points, reason, created_at FROM child_point_adjustments WHERE child_user_id = :child_id");
-            $adjStmt->execute([':child_id' => $_SESSION['user_id']]);
+            $adjStmt = $db->prepare("SELECT delta_points, reason, created_at FROM child_point_adjustments WHERE child_user_id = :child_id AND created_by <> :creator_child_id");
+            $adjStmt->execute([
+               ':child_id' => $_SESSION['user_id'],
+               ':creator_child_id' => $_SESSION['user_id']
+            ]);
             foreach ($adjStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
                $historyItems[] = [
                   'type' => 'Adjustment',
@@ -1581,6 +1584,7 @@ foreach ($taskCountStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
                <div class="child-history-filters" data-history-filters>
                   <button type="button" class="history-filter active" data-history-filter="all">All</button>
                   <button type="button" class="history-filter" data-history-filter="reward">Rewards Only</button>
+                  <button type="button" class="history-filter" data-history-filter="adjustment">Point Adjustments</button>
                </div>
                <p class="child-history-empty" data-history-empty style="display:none;">No history for this filter.</p>
                <div class="child-history-timeline">

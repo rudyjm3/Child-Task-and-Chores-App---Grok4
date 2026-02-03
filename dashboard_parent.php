@@ -2944,8 +2944,11 @@ function renderStreakCheckSvg($suffix) {
                               $historyItems = $historyItems;
                           }
                           try {
-                              $adjStmt = $db->prepare("SELECT delta_points, reason, created_at FROM child_point_adjustments WHERE child_user_id = :child_id");
-                              $adjStmt->execute([':child_id' => $childId]);
+                              $adjStmt = $db->prepare("SELECT delta_points, reason, created_at FROM child_point_adjustments WHERE child_user_id = :child_id AND created_by <> :creator_child_id");
+                              $adjStmt->execute([
+                                  ':child_id' => $childId,
+                                  ':creator_child_id' => $childId
+                              ]);
                               foreach ($adjStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
                                   $historyItems[] = [
                                       'type' => 'Adjustment',
@@ -3118,6 +3121,7 @@ function renderStreakCheckSvg($suffix) {
                               <div class="child-history-filters" data-history-filters>
                                   <button type="button" class="history-filter active" data-history-filter="all">All</button>
                                   <button type="button" class="history-filter" data-history-filter="reward">Rewards Only</button>
+                                  <button type="button" class="history-filter" data-history-filter="adjustment">Point Adjustments</button>
                               </div>
                               <p class="child-history-empty" data-history-empty style="display:none;">No history for this filter.</p>
                           <div class="child-history-timeline">
