@@ -993,7 +993,11 @@ function renderStreakCheckSvg($suffix) {
         .children-overview-grid { display: grid; grid-template-columns: 1fr; gap: 20px; }
         .child-info-card, .reward-item, .goal-item { background-color: #f5f5f5; padding: 15px; border-radius: 8px; box-shadow: 0 8px 20px rgba(0,0,0,0.08); }
         .child-info-card { width: 100%; display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 20px; align-items: start; min-height: 100%; background-color: #fff; margin: 20px 0;}
-        .level-badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; background: #fffbeb; color: #b45309; font-weight: 700; font-size: 0.85rem; border: 1px solid #fde68a; }
+        .level-badge { display: grid; gap: 6px; width: min(260px, 100%); margin-top: 4px; padding: 6px 10px 8px; border-radius: 12px; background: #fffbeb; border: 1px solid #fde68a; }
+        .level-badge-title { display: inline-flex; align-items: center; gap: 6px; color: #b45309; font-weight: 700; font-size: 0.85rem; }
+        .level-progress-meta { display: flex; justify-content: flex-end; font-size: 0.78rem; color: #6b7280; font-weight: 700; }
+        .level-progress-bar { width: 100%; height: 10px; border-radius: 999px; background: #e5e7eb; overflow: hidden; border: 1px solid #d1d5db; }
+        .level-progress-fill { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #f59e0b 0%, #f97316 100%); }
         .streak-badges { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
         .streak-badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; background: #fff7ed; color: #b45309; font-weight: 700; font-size: 0.82rem; border: 1px solid #fed7aa; }
         .streak-phrase { font-size: 0.78rem; color: #8d6e63; margin: 2px 0 6px; width: 100%; }
@@ -1252,7 +1256,6 @@ function renderStreakCheckSvg($suffix) {
         .child-history-item-title { font-weight: 700; color: #3e2723; }
         .child-history-item-meta { color: #6d4c41; font-size: 0.95rem; }
         .child-history-item-points { background: #fffbeb; color: #f59e0b; padding: 4px 10px; border-radius: 999px; font-weight: 700; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
-        .child-history-item-points::before { content: '\f51e'; font-family: 'Font Awesome 6 Free'; font-weight: 900; }
         .child-history-item-points.is-negative { background: #ffebee; color: #d32f2f; }
         .adjust-modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.55); display: none; align-items: center; justify-content: center; z-index: 3000; padding: 12px; }
         .adjust-modal-backdrop.open { display: flex; }
@@ -1272,7 +1275,6 @@ function renderStreakCheckSvg($suffix) {
         .adjust-history li { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; font-size: 0.9rem; }
         .adjust-history-item-info { display: grid; gap: 2px; }
         .adjust-history-points { background: #fffbeb; color: #f59e0b; padding: 4px 10px; border-radius: 999px; font-weight: 700; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
-        .adjust-history-points::before { content: '\f51e'; font-family: 'Font Awesome 6 Free'; font-weight: 900; }
         .adjust-history-points.is-negative { background: #ffebee; color: #d32f2f; }
         .adjust-history-meta { color: #666; font-size: 0.85rem; }
         .adjust-modal-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 0; }
@@ -1311,7 +1313,6 @@ function renderStreakCheckSvg($suffix) {
         .child-history-day-title { font-weight: 700; color: #8d6e63; }
         .child-history-item { background: #fff; border-radius: 14px; padding: 12px; border: 1px solid #eceff4; display: flex; gap: 12px; align-items: flex-start; justify-content: space-between; }
         .child-history-item-points { background: #fffbeb; color: #f59e0b; padding: 4px 10px; border-radius: 999px; font-weight: 700; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
-        .child-history-item-points::before { content: '\f51e'; font-family: 'Font Awesome 6 Free'; font-weight: 900; }
         .child-history-item-points.is-negative { background: #ffebee; color: #d32f2f; }
         .adjust-modal .button { margin: 0; }
 
@@ -2802,9 +2803,21 @@ function renderStreakCheckSvg($suffix) {
                              <img src="<?php echo htmlspecialchars($child['avatar'] ?? 'default-avatar.png'); ?>" alt="Avatar for <?php echo htmlspecialchars($child['child_name']); ?>">
                              <div class="child-info-header-details">
                                 <p class="child-info-name"><?php echo htmlspecialchars($child['child_name']); ?></p>
+                                <?php
+                                    $childLevel = (int) ($child['level'] ?? 1);
+                                    $starsInLevel = max(0, (int) ($child['stars_in_level'] ?? 0));
+                                    $starsPerLevel = max(1, (int) ($child['stars_per_level'] ?? 10));
+                                    $levelProgressPercent = min(100, max(0, (int) ($child['level_progress_percent'] ?? 0)));
+                                ?>
                                 <div class="level-badge">
-                                    <i class="fa-solid fa-star"></i>
-                                    <span>Level <?php echo (int) ($child['level'] ?? 1); ?></span>
+                                    <div class="level-badge-title">
+                                        <i class="fa-solid fa-star"></i>
+                                        <span>Level <?php echo $childLevel; ?></span>
+                                    </div>
+                                    <div class="level-progress-meta"><?php echo $starsInLevel; ?> / <?php echo $starsPerLevel; ?></div>
+                                    <div class="level-progress-bar" aria-label="Level progress">
+                                        <span class="level-progress-fill" style="width: <?php echo $levelProgressPercent; ?>%;"></span>
+                                    </div>
                                 </div>
                                 <?php
                                     $routineStreak = (int) ($child['routine_streak'] ?? 0);

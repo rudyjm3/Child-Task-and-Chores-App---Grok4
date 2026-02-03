@@ -289,7 +289,11 @@ function renderStreakCheckSvg($suffix) {
     <style>
         .dashboard { padding: 20px; /*max-width: 720px;*/ max-width: 100%; margin: 0 auto; text-align: center; }
         .points-summary { margin: 20px 0; display: flex; align-items: flex-start; gap: 25px; text-align: left; }
-        .level-badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; background: #fffbeb; color: #b45309; font-weight: 700; font-size: 0.85rem; border: 1px solid #fde68a; }
+        .level-badge { display: grid; gap: 6px; width: min(260px, 100%); margin-top: 4px; padding: 6px 10px 8px; border-radius: 12px; background: #fffbeb; border: 1px solid #fde68a; }
+        .level-badge-title { display: inline-flex; align-items: center; gap: 6px; color: #b45309; font-weight: 700; font-size: 0.85rem; }
+        .level-progress-meta { display: flex; justify-content: flex-end; font-size: 0.78rem; color: #6b7280; font-weight: 700; }
+        .level-progress-bar { width: 100%; height: 10px; border-radius: 999px; background: #e5e7eb; overflow: hidden; border: 1px solid #d1d5db; }
+        .level-progress-fill { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #f59e0b 0%, #f97316 100%); }
         .streak-badges { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
         .streak-badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; background: #fff7ed; color: #b45309; font-weight: 700; font-size: 0.82rem; border: 1px solid #fed7aa; }
         .streak-phrase { font-size: 0.78rem; color: #8d6e63; margin: 2px 0 6px; width: 100%; }
@@ -424,7 +428,6 @@ function renderStreakCheckSvg($suffix) {
         .week-item-title { font-weight: 700; color: #3e2723; }
         .week-item-meta { color: #6d4c41; font-size: 0.9rem; }
         .week-item-points { display: inline-flex; align-items: center; gap: 6px; color: #f59e0b; font-size: 0.7rem; font-weight: 700; border-radius: 999px; background-color: #fffbeb; padding: 4px 8px; white-space: nowrap; }
-        .week-item-points::before { content: '\f51e'; font-family: 'Font Awesome 6 Free'; font-weight: 900; }
         .button { padding: 10px 20px; margin: 5px; background-color: #ff9800; color: white; border: none; border-radius: 5px; cursor: pointer; text-decoration: none; display: inline-block; font-size: 16px; min-height: 44px; }
         .redeem-button { background-color: #2196f3; }
         
@@ -543,7 +546,6 @@ function renderStreakCheckSvg($suffix) {
         .child-history-item-title { font-weight: 700; color: #3e2723; }
         .child-history-item-meta { color: #6d4c41; font-size: 0.95rem; }
         .child-history-item-points { background: #fffbeb; color: #f59e0b; padding: 4px 10px; border-radius: 999px; font-weight: 700; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
-        .child-history-item-points::before { content: '\f51e'; font-family: 'Font Awesome 6 Free'; font-weight: 900; }
         .child-history-item-points.is-negative { background: #ffebee; color: #d32f2f; }
         .help-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: none; align-items: center; justify-content: center; z-index: 4300; padding: 14px; }
         .help-modal.open { display: flex; }
@@ -1374,9 +1376,21 @@ foreach ($taskCountStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
                   <img class="child-avatar" src="<?php echo htmlspecialchars($childAvatar); ?>" alt="<?php echo htmlspecialchars($childFirstName !== '' ? $childFirstName : 'Child'); ?>">
                </div>
             <div class="child-first-name"><?php echo htmlspecialchars($childFirstName); ?></div>
+            <?php
+               $childLevel = (int) ($data['child_level'] ?? 1);
+               $starsInLevel = max(0, (int) ($data['stars_in_level'] ?? 0));
+               $starsPerLevel = max(1, (int) ($data['stars_per_level'] ?? 10));
+               $levelProgressPercent = min(100, max(0, (int) ($data['level_progress_percent'] ?? 0)));
+            ?>
             <div class="level-badge">
-                <i class="fa-solid fa-star"></i>
-                <span>Level <?php echo (int) ($data['child_level'] ?? 1); ?></span>
+               <div class="level-badge-title">
+                  <i class="fa-solid fa-star"></i>
+                  <span>Level <?php echo $childLevel; ?></span>
+               </div>
+               <div class="level-progress-meta"><?php echo $starsInLevel; ?> / <?php echo $starsPerLevel; ?></div>
+               <div class="level-progress-bar" aria-label="Level progress">
+                  <span class="level-progress-fill" style="width: <?php echo $levelProgressPercent; ?>%;"></span>
+               </div>
             </div>
             <?php
                $routineStreak = (int) ($data['routine_streak'] ?? 0);

@@ -805,7 +805,10 @@ function getDashboardData($user_id) {
             $child['points_progress_percent'] = $maxChildPoints > 0 ? min(100, (int)round(($childPoints / $maxChildPoints) * 100)) : 0;
             $levelState = getChildLevelState($childId, (int) $main_parent_id);
             $child['level'] = $levelState['level'] ?? 1;
+            $child['stars_per_level'] = max(1, (int) ($levelState['stars_per_level'] ?? 10));
             $child['stars_to_next_level'] = max(0, (int) ($levelState['stars_to_next_level'] ?? 0));
+            $child['stars_in_level'] = max(0, $child['stars_per_level'] - $child['stars_to_next_level']);
+            $child['level_progress_percent'] = min(100, (int) round(($child['stars_in_level'] / $child['stars_per_level']) * 100));
             $childGoalStats = $goalStats[$childId] ?? ['goal_count' => 0];
             $child['goals_assigned'] = $childGoalStats['goal_count'];
             $child['rewards_claimed'] = $rewardsClaimed[$childId] ?? 0;
@@ -932,7 +935,11 @@ function getDashboardData($user_id) {
         if ($parent_id) {
             $levelState = getChildLevelState((int) $user_id, (int) $parent_id);
             $data['child_level'] = $levelState['level'] ?? 1;
+            $data['stars_per_level'] = max(1, (int) ($levelState['stars_per_level'] ?? 10));
             $data['level_pending'] = (int) ($levelState['pending'] ?? 0);
+            $data['stars_to_next_level'] = max(0, (int) ($levelState['stars_to_next_level'] ?? 0));
+            $data['stars_in_level'] = max(0, $data['stars_per_level'] - $data['stars_to_next_level']);
+            $data['level_progress_percent'] = min(100, (int) round(($data['stars_in_level'] / $data['stars_per_level']) * 100));
             $streaks = getChildStreaks((int) $user_id, (int) $parent_id);
             $data['routine_streak'] = (int) ($streaks['routine_streak'] ?? 0);
             $data['task_streak'] = (int) ($streaks['task_streak'] ?? 0);
