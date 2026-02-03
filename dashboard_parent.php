@@ -1150,7 +1150,7 @@ function renderStreakCheckSvg($suffix) {
         .child-schedule-title { font-weight: 600; color: #3e2723; }
         .child-schedule-time { color: #6d4c41; font-size: 0.9rem; }
         .child-schedule-points { background: #fffbeb; color: #f59e0b; border-radius: 999px; padding: 4px 10px; font-size: 0.85rem; font-weight: 700; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
-        .child-schedule-points::before { content: '\f005'; font-family: 'Font Awesome 6 Free'; font-weight: 900; }
+        .child-schedule-points::before { content: '\f51e'; font-family: 'Font Awesome 6 Free'; font-weight: 900; }
         .child-schedule-badge { display: inline-flex; align-items: center; gap: 4px; margin-left: 8px; padding: 2px 8px; border-radius: 999px; font-size: 0.7rem; font-weight: 700; background: #4caf50; color: #fff; text-transform: uppercase; }
         .child-schedule-badge.compact { justify-content: center; margin-left: 6px; width: 20px; height: 20px; padding: 0; border-radius: 50%; font-size: 0.65rem; }
         .child-schedule-badge.overdue { background: #d9534f; }
@@ -1220,7 +1220,7 @@ function renderStreakCheckSvg($suffix) {
         .week-modal .calendar-task-badge-group { display: inline-flex; align-items: center; gap: 5px; }
         .week-modal .calendar-task-title { font-weight: 700; color: #3e2723; }
         .week-modal .calendar-task-points { color: #f59e0b; font-size: 0.7rem; font-weight: 700; border-radius: 999px; background: #fffbeb; padding: 4px 10px; display: inline-flex; align-items: center; gap: 6px; }
-        .week-modal .calendar-task-points::before { content: '\f005'; font-family: 'Font Awesome 6 Free'; font-weight: 900; }
+        .week-modal .calendar-task-points::before { content: '\f51e'; font-family: 'Font Awesome 6 Free'; font-weight: 900; }
         .week-modal .calendar-task-meta { color: #919191; font-size: 0.85rem; }
         .week-modal .calendar-day-empty { color: #9e9e9e; font-size: 0.85rem; text-align: center; padding: 8px 0; }
         .week-modal .calendar-empty { display: none; text-align: center; color: #9e9e9e; font-weight: 600; padding: 18px; }
@@ -1252,6 +1252,7 @@ function renderStreakCheckSvg($suffix) {
         .child-history-item-title { font-weight: 700; color: #3e2723; }
         .child-history-item-meta { color: #6d4c41; font-size: 0.95rem; }
         .child-history-item-points { background: #fffbeb; color: #f59e0b; padding: 4px 10px; border-radius: 999px; font-weight: 700; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
+        .child-history-item-points::before { content: '\f51e'; font-family: 'Font Awesome 6 Free'; font-weight: 900; }
         .child-history-item-points.is-negative { background: #ffebee; color: #d32f2f; }
         .adjust-modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.55); display: none; align-items: center; justify-content: center; z-index: 3000; padding: 12px; }
         .adjust-modal-backdrop.open { display: flex; }
@@ -1271,6 +1272,7 @@ function renderStreakCheckSvg($suffix) {
         .adjust-history li { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; font-size: 0.9rem; }
         .adjust-history-item-info { display: grid; gap: 2px; }
         .adjust-history-points { background: #fffbeb; color: #f59e0b; padding: 4px 10px; border-radius: 999px; font-weight: 700; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
+        .adjust-history-points::before { content: '\f51e'; font-family: 'Font Awesome 6 Free'; font-weight: 900; }
         .adjust-history-points.is-negative { background: #ffebee; color: #d32f2f; }
         .adjust-history-meta { color: #666; font-size: 0.85rem; }
         .adjust-modal-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 0; }
@@ -1309,6 +1311,7 @@ function renderStreakCheckSvg($suffix) {
         .child-history-day-title { font-weight: 700; color: #8d6e63; }
         .child-history-item { background: #fff; border-radius: 14px; padding: 12px; border: 1px solid #eceff4; display: flex; gap: 12px; align-items: flex-start; justify-content: space-between; }
         .child-history-item-points { background: #fffbeb; color: #f59e0b; padding: 4px 10px; border-radius: 999px; font-weight: 700; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
+        .child-history-item-points::before { content: '\f51e'; font-family: 'Font Awesome 6 Free'; font-weight: 900; }
         .child-history-item-points.is-negative { background: #ffebee; color: #d32f2f; }
         .adjust-modal .button { margin: 0; }
 
@@ -3488,7 +3491,6 @@ function renderStreakCheckSvg($suffix) {
   <script src="js/number-stepper.js" defer></script>
 </body>
 </html>
-
 
 
 
