@@ -1316,9 +1316,9 @@ margin-bottom: 20px;}
         .library-task-card h4 { margin: 0; font-size: 1.1rem; }
         .library-task-points { background-color: #4caf50; color: #fff; padding: 2px 8px; border-radius: 50px; font-size: 0.7rem; font-weight: 700; white-space: nowrap; }
         .child-theme .library-task-points { background: #fffbeb; color: #f59e0b; padding: 4px 10px; border-radius: 999px; display: inline-flex; align-items: center; gap: 6px; }
-        .child-theme .library-task-points::before { content: '\f005'; font-family: 'Font Awesome 6 Free'; font-weight: 900; }
+        .child-theme .library-task-points::before { content: '\f51e'; font-family: 'Font Awesome 6 Free'; font-weight: 900; }
         .points-badge { background: #fffbeb; color: #f59e0b; padding: 4px 10px; border-radius: 999px; font-weight: 700; font-size: 0.8rem; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
-        .points-badge::before { content: '\f005'; font-family: 'Font Awesome 6 Free'; font-weight: 900; }
+        .points-badge::before { content: '\f51e'; font-family: 'Font Awesome 6 Free'; font-weight: 900; }
         .points-badge.bonus { background: #e8f5e9; color: #2e7d32; }
         .library-task-description { margin: 0; font-size: 0.9rem; color: #546e7a; }
         .library-task-meta { display: flex; flex-wrap: wrap; gap: 8px; font-size: 0.85rem; color: #37474f; }
@@ -2036,7 +2036,7 @@ margin-bottom: 20px;}
                                             <article class="library-task-card" data-role="library-item" data-category="<?php echo htmlspecialchars($task['category']); ?>">
                                                 <header>
                                                     <h4><?php echo htmlspecialchars($task['title']); ?></h4>
-                                                    <span class="library-task-points"><?php echo (int) $task['point_value']; ?> pts</span>
+                                                    <span class="library-task-points"><i class="fa-solid fa-coins"></i> <?php echo (int) $task['point_value']; ?></span>
                                                 </header>
                                                 <p class="library-task-description">
                                                     <?php echo $taskDescription !== '' ? htmlspecialchars($taskDescription) : 'No description provided.'; ?>
@@ -5308,8 +5308,6 @@ margin-bottom: 20px;}
 </body>
 </html>
 <?php
-
-
 
 
 

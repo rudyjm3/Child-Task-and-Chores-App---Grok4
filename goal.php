@@ -1089,7 +1089,7 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
         .task-card-menu-item:hover { background: #f5f7fb; }
         .task-card-menu-item.danger { color: #d32f2f; }
         .goal-points-badge { background: #fffbeb; color: #f59e0b; padding: 4px 10px; border-radius: 999px; font-weight: 700; font-size: 0.85rem; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
-        .goal-points-badge::before { content: '\f005'; font-family: 'Font Awesome 6 Free'; font-weight: 900; }
+        .goal-points-badge::before { content: '\f51e'; font-family: 'Font Awesome 6 Free'; font-weight: 900; }
         .goal-card-title-text { font-size: 1.2rem; font-weight: 600; text-align: left; margin: 0; }
         .goal-status-badge { color: #f9f9f9; font-weight: 600; font-size: 0.85rem; letter-spacing: 2px; border-radius: 50px; padding: 5px 10px; margin-left: 1%; }
         .goal-status-badge.active { background-color: #1db41d; }
@@ -2061,7 +2061,7 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                                             : '';
                                         ?>
                                         <option value="template:<?php echo $templateId; ?>"<?php echo $disabledAttr; ?>>
-                                            <?php echo htmlspecialchars($template['title']); ?> (<?php echo (int) $template['point_cost']; ?> pts)
+                                            <?php echo htmlspecialchars($template['title']); ?> (<?php echo (int) $template['point_cost']; ?>)
                                         </option>
                                     <?php endforeach; ?>
                                 </select>
@@ -2370,7 +2370,7 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                                             : '';
                                         ?>
                                         <option value="template:<?php echo $templateId; ?>"<?php echo $disabledAttr; ?>>
-                                            <?php echo htmlspecialchars($template['title']); ?> (<?php echo (int) $template['point_cost']; ?> pts)
+                                            <?php echo htmlspecialchars($template['title']); ?> (<?php echo (int) $template['point_cost']; ?>)
                                         </option>
                                     <?php endforeach; ?>
                                 </select>
@@ -3065,9 +3065,6 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
 <?php endif; ?>
 </body>
 </html>
-
-
-
 
 
 

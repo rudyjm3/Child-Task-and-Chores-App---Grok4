@@ -424,7 +424,7 @@ function renderStreakCheckSvg($suffix) {
         .week-item-title { font-weight: 700; color: #3e2723; }
         .week-item-meta { color: #6d4c41; font-size: 0.9rem; }
         .week-item-points { display: inline-flex; align-items: center; gap: 6px; color: #f59e0b; font-size: 0.7rem; font-weight: 700; border-radius: 999px; background-color: #fffbeb; padding: 4px 8px; white-space: nowrap; }
-        .week-item-points::before { content: '\f005'; font-family: 'Font Awesome 6 Free'; font-weight: 900; }
+        .week-item-points::before { content: '\f51e'; font-family: 'Font Awesome 6 Free'; font-weight: 900; }
         .button { padding: 10px 20px; margin: 5px; background-color: #ff9800; color: white; border: none; border-radius: 5px; cursor: pointer; text-decoration: none; display: inline-block; font-size: 16px; min-height: 44px; }
         .redeem-button { background-color: #2196f3; }
         
@@ -543,7 +543,7 @@ function renderStreakCheckSvg($suffix) {
         .child-history-item-title { font-weight: 700; color: #3e2723; }
         .child-history-item-meta { color: #6d4c41; font-size: 0.95rem; }
         .child-history-item-points { background: #fffbeb; color: #f59e0b; padding: 4px 10px; border-radius: 999px; font-weight: 700; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
-        .child-history-item-points::before { content: '\f005'; font-family: 'Font Awesome 6 Free'; font-weight: 900; }
+        .child-history-item-points::before { content: '\f51e'; font-family: 'Font Awesome 6 Free'; font-weight: 900; }
         .child-history-item-points.is-negative { background: #ffebee; color: #d32f2f; }
         .help-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: none; align-items: center; justify-content: center; z-index: 4300; padding: 14px; }
         .help-modal.open { display: flex; }
@@ -743,7 +743,7 @@ function renderStreakCheckSvg($suffix) {
                         '<div class="week-item-meta">' + item.time_label + '</div>' +
                         '</div>' +
                         '</div>' +
-                        '<div class="week-item-points">' + item.points + ' pts</div>' +
+                        '<div class="week-item-points"><i class="fa-solid fa-coins"></i> ' + item.points + '</div>' +
                         wrapperEnd;
                 };
                 const sectionHtml = sections.map(section => {
@@ -1575,7 +1575,7 @@ foreach ($taskCountStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
                   <img class="child-history-avatar" src="<?php echo htmlspecialchars($childAvatar); ?>" alt="<?php echo htmlspecialchars($childFirstName !== '' ? $childFirstName : 'Child'); ?>">
                   <div class="child-history-info">
                      <div class="child-history-name"><?php echo htmlspecialchars($childFirstName !== '' ? $childFirstName : 'Child'); ?></div>
-                     <div class="child-history-points"><i class="fa-solid fa-star"></i> <?php echo (int)$childTotalPoints; ?> pts</div>
+                     <div class="child-history-points"><i class="fa-solid fa-coins"></i> <?php echo (int)$childTotalPoints; ?></div>
                   </div>
                </div>
                <div class="child-history-filters" data-history-filters>
@@ -1595,7 +1595,7 @@ foreach ($taskCountStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
                                        <div class="child-history-item-title"><?php echo htmlspecialchars($item['title']); ?></div>
                                        <div class="child-history-item-meta"><?php echo htmlspecialchars(date('M j, Y, g:i A', strtotime($item['date']))); ?></div>
                                     </div>
-                                    <div class="child-history-item-points<?php echo ($item['points'] < 0 ? ' is-negative' : ''); ?>"><?php echo ($item['points'] >= 0 ? '+' : '') . (int)$item['points']; ?> pts</div>
+                                    <div class="child-history-item-points<?php echo ($item['points'] < 0 ? ' is-negative' : ''); ?>"><i class="fa-solid fa-coins"></i> <?php echo ($item['points'] >= 0 ? '+' : '') . (int)$item['points']; ?></div>
                                  </li>
                               <?php endforeach; ?>
                            </ul>
@@ -1692,8 +1692,6 @@ foreach ($taskCountStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
   <script src="js/number-stepper.js" defer></script>
 </body>
 </html>
-
-
 
 
 

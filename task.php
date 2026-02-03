@@ -821,11 +821,11 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
         .calendar-task-badge-group { display: inline-flex; align-items: center; gap: 5px; }
         .calendar-task-title { font-weight: 700; color: #3e2723; }
         .calendar-task-points { color: #f59e0b; font-size: 0.7rem; font-weight: 700; border-radius: 999px; background: #fffbeb; padding: 4px 10px; display: inline-flex; align-items: center; gap: 6px; }
-        .calendar-task-points::before { content: '\f005'; font-family: 'Font Awesome 6 Free'; font-weight: 900; }
+        .calendar-task-points::before { content: '\f51e'; font-family: 'Font Awesome 6 Free'; font-weight: 900; }
         .child-theme .task-card-points { background: #fffbeb; color: #f59e0b; padding: 4px 10px; border-radius: 999px; }
         .child-theme .task-card-points i { color: #f59e0b; }
         .child-theme .calendar-task-points { background: #fffbeb; color: #f59e0b; padding: 4px 10px; border-radius: 999px; display: inline-flex; align-items: center; gap: 6px; }
-        .child-theme .calendar-task-points::before { content: '\f005'; font-family: 'Font Awesome 6 Free'; font-weight: 900; }
+        .child-theme .calendar-task-points::before { content: '\f51e'; font-family: 'Font Awesome 6 Free'; font-weight: 900; }
         .calendar-task-meta { color: #6d4c41; font-size: 0.85rem; }
         .calendar-task-child { }
         .calendar-day-empty { color: #9e9e9e; font-size: 0.85rem; text-align: center; padding: 8px 0; }
@@ -2693,7 +2693,7 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
             summaryRight.className = 'task-card-summary-right';
             const points = document.createElement('div');
             points.className = 'task-card-points';
-            points.innerHTML = `<i class="fa-solid fa-star"></i> ${task.points || 0}`;
+            points.innerHTML = `<i class="fa-solid fa-coins"></i> ${task.points || 0}`;
             const chevron = document.createElement('span');
             chevron.className = 'task-card-chevron';
             chevron.innerHTML = '<i class="fa-solid fa-chevron-right"></i>';
@@ -3381,7 +3381,7 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                                     </div>
                                 </div>
                                 <div class="task-card-summary-right">
-                                    <div class="task-card-points"><i class="fa-solid fa-star"></i> <?php echo (int)$task['points']; ?></div>
+                                    <div class="task-card-points"><i class="fa-solid fa-coins"></i> <?php echo (int)$task['points']; ?></div>
                                     <span class="task-card-chevron"><i class="fa-solid fa-chevron-right"></i></span>
                                 </div>
                             </summary>
@@ -3573,7 +3573,7 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                                         </div>
                                     </div>
                                     <div class="task-card-summary-right">
-                                        <div class="task-card-points"><i class="fa-solid fa-star"></i> <?php echo (int)$task['points']; ?></div>
+                                        <div class="task-card-points"><i class="fa-solid fa-coins"></i> <?php echo (int)$task['points']; ?></div>
                                         <span class="task-card-chevron"><i class="fa-solid fa-chevron-right"></i></span>
                                     </div>
                                 </summary>
@@ -3738,7 +3738,7 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                                         </div>
                                     </div>
                                     <div class="task-card-summary-right">
-                                        <div class="task-card-points"><i class="fa-solid fa-star"></i> <?php echo (int)$task['points']; ?></div>
+                                        <div class="task-card-points"><i class="fa-solid fa-coins"></i> <?php echo (int)$task['points']; ?></div>
                                         <span class="task-card-chevron"><i class="fa-solid fa-chevron-right"></i></span>
                                     </div>
                                 </summary>
@@ -3833,7 +3833,7 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                                             </div>
                                         </div>
                                         <div class="task-card-summary-right">
-                                            <div class="task-card-points"><i class="fa-solid fa-star"></i> <?php echo (int)$task['points']; ?></div>
+                                            <div class="task-card-points"><i class="fa-solid fa-coins"></i> <?php echo (int)$task['points']; ?></div>
                                             <span class="task-card-chevron"><i class="fa-solid fa-chevron-right"></i></span>
                                         </div>
                                     </summary>
@@ -4311,8 +4311,6 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
 <?php endif; ?>
 </body>
 </html>
-
-
 
 
 
