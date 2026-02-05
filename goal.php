@@ -198,10 +198,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $task_category = filter_input(INPUT_POST, 'task_category', FILTER_SANITIZE_STRING);
         $target_count = filter_input(INPUT_POST, 'target_count', FILTER_VALIDATE_INT);
         $streak_required = filter_input(INPUT_POST, 'streak_required', FILTER_VALIDATE_INT);
-        $time_window_type = filter_input(INPUT_POST, 'time_window_type', FILTER_SANITIZE_STRING) ?: 'rolling';
-        $time_window_days = filter_input(INPUT_POST, 'time_window_days', FILTER_VALIDATE_INT);
-        $fixed_window_start = filter_input(INPUT_POST, 'fixed_window_start', FILTER_SANITIZE_STRING);
-        $fixed_window_end = filter_input(INPUT_POST, 'fixed_window_end', FILTER_SANITIZE_STRING);
         $require_on_time = !empty($_POST['require_on_time']);
         $points_awarded = filter_input(INPUT_POST, 'points_awarded', FILTER_VALIDATE_INT);
         $award_mode = filter_input(INPUT_POST, 'award_mode', FILTER_SANITIZE_STRING) ?: 'both';
@@ -209,18 +205,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $task_target_ids = array_values(array_filter(array_map('intval', $_POST['task_target_ids'] ?? [])));
         $reactivateOnSave = !empty($_POST['reactivate_on_save']);
 
-        if ($goal_type === 'task_quota') {
-            $time_window_type = 'fixed';
-            $time_window_days = 0;
-            $fixed_window_start = null;
-            $fixed_window_end = null;
-        }
-        if ($goal_type === 'task_quota') {
-            $time_window_type = 'fixed';
-            $time_window_days = 0;
-            $fixed_window_start = null;
-            $fixed_window_end = null;
-        }
         if (!in_array($goal_type, ['routine_streak', 'routine_count'], true)) {
             $routine_ids = [];
         }
@@ -233,10 +217,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'task_category' => $task_category,
             'target_count' => max(0, (int) ($target_count ?? 0)),
             'streak_required' => max(0, (int) ($streak_required ?? 0)),
-            'time_window_type' => $time_window_type === 'fixed' ? 'fixed' : 'rolling',
-            'time_window_days' => max(0, (int) ($time_window_days ?? 0)),
-            'fixed_window_start' => $fixed_window_start ?: null,
-            'fixed_window_end' => $fixed_window_end ?: null,
             'require_on_time' => $require_on_time,
             'points_awarded' => max(0, (int) ($points_awarded ?? 0)),
             'award_mode' => in_array($award_mode, ['points', 'reward', 'both'], true) ? $award_mode : 'both',
@@ -271,10 +251,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $task_category = filter_input(INPUT_POST, 'task_category', FILTER_SANITIZE_STRING);
         $target_count = filter_input(INPUT_POST, 'target_count', FILTER_VALIDATE_INT);
         $streak_required = filter_input(INPUT_POST, 'streak_required', FILTER_VALIDATE_INT);
-        $time_window_type = filter_input(INPUT_POST, 'time_window_type', FILTER_SANITIZE_STRING) ?: 'rolling';
-        $time_window_days = filter_input(INPUT_POST, 'time_window_days', FILTER_VALIDATE_INT);
-        $fixed_window_start = filter_input(INPUT_POST, 'fixed_window_start', FILTER_SANITIZE_STRING);
-        $fixed_window_end = filter_input(INPUT_POST, 'fixed_window_end', FILTER_SANITIZE_STRING);
         $require_on_time = !empty($_POST['require_on_time']);
         $points_awarded = filter_input(INPUT_POST, 'points_awarded', FILTER_VALIDATE_INT);
         $award_mode = filter_input(INPUT_POST, 'award_mode', FILTER_SANITIZE_STRING) ?: 'both';
@@ -294,10 +270,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'task_category' => $task_category,
             'target_count' => max(0, (int) ($target_count ?? 0)),
             'streak_required' => max(0, (int) ($streak_required ?? 0)),
-            'time_window_type' => $time_window_type === 'fixed' ? 'fixed' : 'rolling',
-            'time_window_days' => max(0, (int) ($time_window_days ?? 0)),
-            'fixed_window_start' => $fixed_window_start ?: null,
-            'fixed_window_end' => $fixed_window_end ?: null,
             'require_on_time' => $require_on_time,
             'points_awarded' => max(0, (int) ($points_awarded ?? 0)),
             'award_mode' => in_array($award_mode, ['points', 'reward', 'both'], true) ? $award_mode : 'both',
@@ -388,10 +360,6 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                              g.task_category,
                              g.target_count,
                              g.streak_required,
-                             g.time_window_type,
-                             g.time_window_days,
-                             g.fixed_window_start,
-                             g.fixed_window_end,
                              g.require_on_time,
                              g.points_awarded,
                              g.award_mode,
@@ -437,10 +405,6 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                              g.task_category,
                              g.target_count,
                              g.streak_required,
-                             g.time_window_type,
-                             g.time_window_days,
-                             g.fixed_window_start,
-                             g.fixed_window_end,
                              g.require_on_time,
                              g.points_awarded,
                              g.award_mode,
@@ -504,10 +468,6 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                              g.task_category,
                              g.target_count,
                              g.streak_required,
-                             g.time_window_type,
-                             g.time_window_days,
-                             g.fixed_window_start,
-                             g.fixed_window_end,
                              g.require_on_time,
                              g.points_awarded,
                              g.award_mode,
@@ -1400,10 +1360,6 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                                     'task_category' => $goal['task_category'] ?? '',
                                     'target_count' => (int) ($goal['target_count'] ?? 0),
                                     'streak_required' => (int) ($goal['streak_required'] ?? 0),
-                                    'time_window_type' => $goal['time_window_type'] ?? 'rolling',
-                                    'time_window_days' => (int) ($goal['time_window_days'] ?? 0),
-                                    'fixed_window_start' => $goal['fixed_window_start'] ?? '',
-                                    'fixed_window_end' => $goal['fixed_window_end'] ?? '',
                                     'require_on_time' => (int) ($goal['require_on_time'] ?? 0),
                                     'points_awarded' => (int) ($goal['points_awarded'] ?? 0),
                                     'award_mode' => $goal['award_mode'] ?? 'both',
@@ -1603,10 +1559,6 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                             'task_category' => $goal['task_category'] ?? '',
                             'target_count' => (int) ($goal['target_count'] ?? 0),
                             'streak_required' => (int) ($goal['streak_required'] ?? 0),
-                            'time_window_type' => $goal['time_window_type'] ?? 'rolling',
-                            'time_window_days' => (int) ($goal['time_window_days'] ?? 0),
-                            'fixed_window_start' => $goal['fixed_window_start'] ?? '',
-                            'fixed_window_end' => $goal['fixed_window_end'] ?? '',
                             'require_on_time' => (int) ($goal['require_on_time'] ?? 0),
                             'points_awarded' => (int) ($goal['points_awarded'] ?? 0),
                             'award_mode' => $goal['award_mode'] ?? 'both',
@@ -1708,10 +1660,6 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                                         'task_category' => $goal['task_category'] ?? '',
                                         'target_count' => (int) ($goal['target_count'] ?? 0),
                                         'streak_required' => (int) ($goal['streak_required'] ?? 0),
-                                        'time_window_type' => $goal['time_window_type'] ?? 'rolling',
-                                        'time_window_days' => (int) ($goal['time_window_days'] ?? 0),
-                                        'fixed_window_start' => $goal['fixed_window_start'] ?? '',
-                                        'fixed_window_end' => $goal['fixed_window_end'] ?? '',
                                         'require_on_time' => (int) ($goal['require_on_time'] ?? 0),
                                         'points_awarded' => (int) ($goal['points_awarded'] ?? 0),
                                         'award_mode' => $goal['award_mode'] ?? 'both',
@@ -1977,45 +1925,6 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                                 <input type="number" id="target_count" name="target_count" min="1" value="3">
                             </div>
                             <input type="hidden" name="streak_required" value="0">
-                            <div class="form-group" data-goal-window>
-                                <label for="time_window_type">Time Window
-                                    <span class="tooltip" tabindex="0" aria-label="Rolling counts the last X days. Fixed uses the start/end dates below.">
-                                        <i class="fa-solid fa-circle-info"></i>
-                                        <span class="tooltip-text">Rolling counts the last X days. Fixed uses the start/end dates below.</span>
-                                    </span>
-                                </label>
-                                <select id="time_window_type" name="time_window_type" data-goal-window-type>
-                                    <option value="rolling" selected>Rolling window</option>
-                                    <option value="fixed">Fixed dates</option>
-                                </select>
-                            </div>
-                            <div class="form-group" data-goal-window-rolling>
-                                <label for="time_window_days">Rolling Days
-                                    <span class="tooltip" tabindex="0" aria-label="Size of the rolling window in days.">
-                                        <i class="fa-solid fa-circle-info"></i>
-                                        <span class="tooltip-text">Size of the rolling window in days.</span>
-                                    </span>
-                                </label>
-                                <input type="number" id="time_window_days" name="time_window_days" min="1" value="7">
-                            </div>
-                            <div class="form-group" data-goal-window-fixed>
-                                <label for="fixed_window_start">Fixed Start Date
-                                    <span class="tooltip" tabindex="0" aria-label="Start of the fixed counting window.">
-                                        <i class="fa-solid fa-circle-info"></i>
-                                        <span class="tooltip-text">Start of the fixed counting window.</span>
-                                    </span>
-                                </label>
-                                <input type="date" id="fixed_window_start" name="fixed_window_start">
-                            </div>
-                            <div class="form-group" data-goal-window-fixed>
-                                <label for="fixed_window_end">Fixed End Date
-                                    <span class="tooltip" tabindex="0" aria-label="End of the fixed counting window.">
-                                        <i class="fa-solid fa-circle-info"></i>
-                                        <span class="tooltip-text">End of the fixed counting window.</span>
-                                    </span>
-                                </label>
-                                <input type="date" id="fixed_window_end" name="fixed_window_end">
-                            </div>
                             <div class="form-group toggle-field" data-goal-toggle>
                                 <span class="toggle-label">Require On-Time Completion
                                     <span class="tooltip" tabindex="0" aria-label="Only count items finished within their time limits.">
@@ -2286,45 +2195,6 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                                 <input type="number" id="edit_target_count" name="target_count" min="1" value="3">
                             </div>
                             <input type="hidden" name="streak_required" value="0">
-                            <div class="form-group" data-goal-window>
-                                <label for="edit_time_window_type">Time Window
-                                    <span class="tooltip" tabindex="0" aria-label="Rolling counts the last X days. Fixed uses the start/end dates below.">
-                                        <i class="fa-solid fa-circle-info"></i>
-                                        <span class="tooltip-text">Rolling counts the last X days. Fixed uses the start/end dates below.</span>
-                                    </span>
-                                </label>
-                                <select id="edit_time_window_type" name="time_window_type" data-goal-window-type>
-                                    <option value="rolling">Rolling window</option>
-                                    <option value="fixed">Fixed dates</option>
-                                </select>
-                            </div>
-                            <div class="form-group" data-goal-window-rolling>
-                                <label for="edit_time_window_days">Rolling Days
-                                    <span class="tooltip" tabindex="0" aria-label="Size of the rolling window in days.">
-                                        <i class="fa-solid fa-circle-info"></i>
-                                        <span class="tooltip-text">Size of the rolling window in days.</span>
-                                    </span>
-                                </label>
-                                <input type="number" id="edit_time_window_days" name="time_window_days" min="1" value="7">
-                            </div>
-                            <div class="form-group" data-goal-window-fixed>
-                                <label for="edit_fixed_window_start">Fixed Start Date
-                                    <span class="tooltip" tabindex="0" aria-label="Start of the fixed counting window.">
-                                        <i class="fa-solid fa-circle-info"></i>
-                                        <span class="tooltip-text">Start of the fixed counting window.</span>
-                                    </span>
-                                </label>
-                                <input type="date" id="edit_fixed_window_start" name="fixed_window_start">
-                            </div>
-                            <div class="form-group" data-goal-window-fixed>
-                                <label for="edit_fixed_window_end">Fixed End Date
-                                    <span class="tooltip" tabindex="0" aria-label="End of the fixed counting window.">
-                                        <i class="fa-solid fa-circle-info"></i>
-                                        <span class="tooltip-text">End of the fixed counting window.</span>
-                                    </span>
-                                </label>
-                                <input type="date" id="edit_fixed_window_end" name="fixed_window_end">
-                            </div>
                             <div class="form-group toggle-field" data-goal-toggle>
                                 <span class="toggle-label">Require On-Time Completion
                                     <span class="tooltip" tabindex="0" aria-label="Only count items finished within their time limits.">
@@ -2457,7 +2327,6 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
       const setupGoalForm = (scope) => {
           if (!scope) return null;
           const goalTypeSelect = scope.querySelector('[data-goal-type]');
-          const goalWindowSelect = scope.querySelector('[data-goal-window-type]');
           const awardModeSelect = scope.querySelector('[data-award-mode]');
           const rewardSelect = scope.querySelector('[data-goal-reward]');
           const pointsInput = scope.querySelector('[data-goal-points]');
@@ -2486,11 +2355,7 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
               const showTask = type === 'task_quota';
               const showCount = type === 'routine_count' || type === 'task_quota';
               const showStreak = false;
-              const showWindow = type === 'routine_count';
               const allowMultiple = type === 'routine_count';
-              if (type === 'task_quota' && goalWindowSelect) {
-                  goalWindowSelect.value = 'fixed';
-              }
               if (routineSelect) {
                   routineSelect.multiple = allowMultiple;
                   if (!allowMultiple) {
@@ -2507,9 +2372,6 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
               scope.querySelectorAll('[data-goal-task]').forEach(el => el.style.display = showTask ? '' : 'none');
               scope.querySelectorAll('[data-goal-count]').forEach(el => el.style.display = showCount ? '' : 'none');
               scope.querySelectorAll('[data-goal-streak]').forEach(el => el.style.display = showStreak ? '' : 'none');
-              scope.querySelectorAll('[data-goal-window]').forEach(el => el.style.display = showWindow ? '' : 'none');
-              scope.querySelectorAll('[data-goal-window-rolling]').forEach(el => el.style.display = showWindow && goalWindowSelect?.value !== 'fixed' ? '' : 'none');
-              scope.querySelectorAll('[data-goal-window-fixed]').forEach(el => el.style.display = showWindow && goalWindowSelect?.value === 'fixed' ? '' : 'none');
               scope.querySelectorAll('[data-goal-toggle]').forEach(el => el.style.display = (showRoutine || showTask) ? '' : 'none');
               if (showTask) {
                   filterTasksByWindow();
@@ -2640,9 +2502,6 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
           if (goalTypeSelect) {
               goalTypeSelect.addEventListener('change', setGoalTypeVisibility);
           }
-          if (goalWindowSelect) {
-              goalWindowSelect.addEventListener('change', setGoalTypeVisibility);
-          }
           if (awardModeSelect) {
               awardModeSelect.addEventListener('change', setAwardModeVisibility);
           }
@@ -2740,10 +2599,6 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
           form.querySelector('[name="task_category"]').value = payload.task_category || '';
           form.querySelector('[name="target_count"]').value = payload.target_count || 0;
           form.querySelector('[name="streak_required"]').value = payload.streak_required || 0;
-          form.querySelector('[name="time_window_type"]').value = payload.time_window_type || 'rolling';
-          form.querySelector('[name="time_window_days"]').value = payload.time_window_days || 0;
-          form.querySelector('[name="fixed_window_start"]').value = payload.fixed_window_start || '';
-          form.querySelector('[name="fixed_window_end"]').value = payload.fixed_window_end || '';
           form.querySelector('[name="require_on_time"]').checked = !!payload.require_on_time;
           form.querySelector('[name="points_awarded"]').value = payload.points_awarded || 0;
           form.querySelector('[name="award_mode"]').value = payload.award_mode || 'both';
@@ -2922,10 +2777,6 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
           const routineSelect = scope.querySelector('[data-goal-routine-select]');
           const targetCountInput = scope.querySelector('[name="target_count"]');
           const streakInput = scope.querySelector('[name="streak_required"]');
-          const windowTypeSelect = scope.querySelector('[name="time_window_type"]');
-          const windowDaysInput = scope.querySelector('[name="time_window_days"]');
-          const fixedStartInput = scope.querySelector('[name="fixed_window_start"]');
-          const fixedEndInput = scope.querySelector('[name="fixed_window_end"]');
           const awardMode = scope.querySelector('[name="award_mode"]')?.value || 'both';
           const rewardSelect = scope.querySelector('[name="reward_id"]');
           const pointsInput = scope.querySelector('[name="points_awarded"]');
@@ -2958,15 +2809,6 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
           if (goalType === 'routine_count' || goalType === 'task_quota') {
               if (!targetCountInput?.value || parseInt(targetCountInput.value, 10) <= 0) {
                   markMissing(targetCountInput, 'Target count');
-              }
-              const windowType = windowTypeSelect?.value || 'rolling';
-              if (goalType === 'routine_count') {
-                  if (windowType === 'fixed') {
-                      if (!fixedStartInput?.value) markMissing(fixedStartInput, 'Fixed start date');
-                      if (!fixedEndInput?.value) markMissing(fixedEndInput, 'Fixed end date');
-                  } else if (!windowDaysInput?.value || parseInt(windowDaysInput.value, 10) <= 0) {
-                      markMissing(windowDaysInput, 'Rolling days');
-                  }
               }
           }
 

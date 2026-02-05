@@ -941,7 +941,25 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
         .floating-task-timer.active { display: grid; }
         .floating-task-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
         .floating-task-title { font-weight: 700; color: #37474f; }
-        .floating-task-points { color: #6d4c41; font-weight: 700; font-size: 0.9rem; }
+        .floating-task-points {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            width: fit-content;
+            margin-top: 4px;
+            padding: 4px 10px;
+            border-radius: 999px;
+            background: #fffbeb;
+            color: #f59e0b;
+            font-weight: 700;
+            font-size: 0.82rem;
+            white-space: nowrap;
+        }
+        .floating-task-points::before {
+            content: '\f51e';
+            font-family: 'Font Awesome 6 Free';
+            font-weight: 900;
+        }
         .floating-task-header-actions { display: flex; gap: 6px; }
         .floating-task-icon {
             border: none;

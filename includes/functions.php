@@ -2239,10 +2239,6 @@ function createGoal($parent_user_id, $child_user_id, $title, $start_date, $end_d
     $taskCategory = $options['task_category'] ?? null;
     $targetCount = isset($options['target_count']) ? (int) $options['target_count'] : 0;
     $streakRequired = isset($options['streak_required']) ? (int) $options['streak_required'] : 0;
-    $timeWindowType = $options['time_window_type'] ?? 'rolling';
-    $timeWindowDays = isset($options['time_window_days']) ? (int) $options['time_window_days'] : 0;
-    $fixedStart = $options['fixed_window_start'] ?? null;
-    $fixedEnd = $options['fixed_window_end'] ?? null;
     $requireOnTime = !empty($options['require_on_time']) ? 1 : 0;
     $pointsAwarded = isset($options['points_awarded']) ? (int) $options['points_awarded'] : 0;
     $awardMode = $options['award_mode'] ?? 'both';
@@ -2250,8 +2246,8 @@ function createGoal($parent_user_id, $child_user_id, $title, $start_date, $end_d
     $taskTargets = $options['task_target_ids'] ?? [];
     $routineTargets = $options['routine_target_ids'] ?? [];
 
-    $stmt = $db->prepare("INSERT INTO goals (parent_user_id, child_user_id, title, description, target_points, start_date, end_date, reward_id, goal_type, routine_id, task_category, target_count, streak_required, time_window_type, time_window_days, fixed_window_start, fixed_window_end, require_on_time, points_awarded, award_mode, requires_parent_approval, created_by)
-                          VALUES (:parent_id, :child_id, :title, :description, :target_points, :start_date, :end_date, :reward_id, :goal_type, :routine_id, :task_category, :target_count, :streak_required, :time_window_type, :time_window_days, :fixed_window_start, :fixed_window_end, :require_on_time, :points_awarded, :award_mode, :requires_parent_approval, :created_by)");
+    $stmt = $db->prepare("INSERT INTO goals (parent_user_id, child_user_id, title, description, target_points, start_date, end_date, reward_id, goal_type, routine_id, task_category, target_count, streak_required, require_on_time, points_awarded, award_mode, requires_parent_approval, created_by)
+                          VALUES (:parent_id, :child_id, :title, :description, :target_points, :start_date, :end_date, :reward_id, :goal_type, :routine_id, :task_category, :target_count, :streak_required, :require_on_time, :points_awarded, :award_mode, :requires_parent_approval, :created_by)");
     $ok = $stmt->execute([
         ':parent_id' => $parent_user_id,
         ':child_id' => $child_user_id,
@@ -2266,10 +2262,6 @@ function createGoal($parent_user_id, $child_user_id, $title, $start_date, $end_d
         ':task_category' => $taskCategory,
         ':target_count' => $targetCount,
         ':streak_required' => $streakRequired,
-        ':time_window_type' => $timeWindowType,
-        ':time_window_days' => $timeWindowDays,
-        ':fixed_window_start' => $fixedStart,
-        ':fixed_window_end' => $fixedEnd,
         ':require_on_time' => $requireOnTime,
         ':points_awarded' => $pointsAwarded,
         ':award_mode' => $awardMode,
@@ -2309,10 +2301,6 @@ function updateGoal($goal_id, $parent_user_id, $title, $start_date, $end_date, $
     $taskCategory = array_key_exists('task_category', $options) ? ($options['task_category'] ?? null) : ($existing['task_category'] ?? null);
     $targetCount = array_key_exists('target_count', $options) ? (int) $options['target_count'] : (int) ($existing['target_count'] ?? 0);
     $streakRequired = array_key_exists('streak_required', $options) ? (int) $options['streak_required'] : (int) ($existing['streak_required'] ?? 0);
-    $timeWindowType = array_key_exists('time_window_type', $options) ? ($options['time_window_type'] ?? 'rolling') : ($existing['time_window_type'] ?? 'rolling');
-    $timeWindowDays = array_key_exists('time_window_days', $options) ? (int) $options['time_window_days'] : (int) ($existing['time_window_days'] ?? 0);
-    $fixedStart = array_key_exists('fixed_window_start', $options) ? ($options['fixed_window_start'] ?? null) : ($existing['fixed_window_start'] ?? null);
-    $fixedEnd = array_key_exists('fixed_window_end', $options) ? ($options['fixed_window_end'] ?? null) : ($existing['fixed_window_end'] ?? null);
     $requireOnTime = array_key_exists('require_on_time', $options) ? (!empty($options['require_on_time']) ? 1 : 0) : (int) ($existing['require_on_time'] ?? 0);
     $pointsAwarded = array_key_exists('points_awarded', $options) ? (int) $options['points_awarded'] : (int) ($existing['points_awarded'] ?? 0);
     $awardMode = array_key_exists('award_mode', $options) ? ($options['award_mode'] ?? 'both') : ($existing['award_mode'] ?? 'both');
@@ -2324,10 +2312,6 @@ function updateGoal($goal_id, $parent_user_id, $title, $start_date, $end_date, $
         $taskCategory = null;
         $targetCount = 0;
         $streakRequired = 0;
-        $timeWindowType = 'rolling';
-        $timeWindowDays = 0;
-        $fixedStart = null;
-        $fixedEnd = null;
         $requireOnTime = 0;
         $routineTargets = [];
     }
@@ -2349,10 +2333,6 @@ function updateGoal($goal_id, $parent_user_id, $title, $start_date, $end_date, $
                              task_category = :task_category,
                              target_count = :target_count,
                              streak_required = :streak_required,
-                             time_window_type = :time_window_type,
-                             time_window_days = :time_window_days,
-                             fixed_window_start = :fixed_window_start,
-                             fixed_window_end = :fixed_window_end,
                              require_on_time = :require_on_time,
                              points_awarded = :points_awarded,
                              award_mode = :award_mode,
@@ -2373,10 +2353,6 @@ function updateGoal($goal_id, $parent_user_id, $title, $start_date, $end_date, $
         ':task_category' => $taskCategory,
         ':target_count' => $targetCount,
         ':streak_required' => $streakRequired,
-        ':time_window_type' => $timeWindowType,
-        ':time_window_days' => $timeWindowDays,
-        ':fixed_window_start' => $fixedStart,
-        ':fixed_window_end' => $fixedEnd,
         ':require_on_time' => $requireOnTime,
         ':points_awarded' => $pointsAwarded,
         ':award_mode' => $awardMode,
@@ -2687,30 +2663,24 @@ function markGoalIncomplete($goal, $child_id, $reason = null) {
 }
 
 function getGoalWindowRange(array $goal) {
-    $type = $goal['time_window_type'] ?? 'rolling';
     $now = new DateTimeImmutable();
     $todayStart = $now->setTime(0, 0, 0);
     $todayEnd = $now->setTime(23, 59, 59);
-    if ($type === 'fixed') {
-        $start = !empty($goal['fixed_window_start']) ? (new DateTimeImmutable($goal['fixed_window_start']))->setTime(0, 0, 0) : null;
-        $end = !empty($goal['fixed_window_end']) ? (new DateTimeImmutable($goal['fixed_window_end']))->setTime(23, 59, 59) : null;
-        if (!$start && !empty($goal['start_date'])) {
-            $start = new DateTimeImmutable($goal['start_date']);
-        }
-        if (!$end && !empty($goal['end_date'])) {
-            $end = new DateTimeImmutable($goal['end_date']);
-        }
-        if (!$start) {
-            $start = $todayStart;
-        }
-        if (!$end) {
-            $end = $todayEnd;
-        }
-        return [$start, $end];
+    $start = null;
+    $end = null;
+    if (!$start && !empty($goal['start_date'])) {
+        $start = new DateTimeImmutable($goal['start_date']);
     }
-    $days = isset($goal['time_window_days']) && (int) $goal['time_window_days'] > 0 ? (int) $goal['time_window_days'] : 7;
-    $start = $todayStart->modify('-' . ($days - 1) . ' days');
-    return [$start, $todayEnd];
+    if (!$end && !empty($goal['end_date'])) {
+        $end = new DateTimeImmutable($goal['end_date']);
+    }
+    if (!$start) {
+        $start = $todayStart;
+    }
+    if (!$end) {
+        $end = $todayEnd;
+    }
+    return [$start, $end];
 }
 
 function calculateConsecutiveStreak(array $dates): int {
@@ -2888,11 +2858,7 @@ function calculateGoalProgress(array $goal, $child_id) {
             $remaining = max(0, $target - $current);
             if ($remaining > 0) {
                 $routineLabel = count($routineIds) > 1 ? 'all routines' : 'the routine';
-                if (($goal['time_window_type'] ?? 'rolling') === 'fixed') {
-                    $nextHint = "Complete {$routineLabel} {$remaining} more time(s) by " . $end->format('m/d');
-                } else {
-                    $nextHint = "Complete {$routineLabel} {$remaining} more time(s) in the next " . ($goal['time_window_days'] ?: 7) . " days.";
-                }
+                $nextHint = "Complete {$routineLabel} {$remaining} more time(s) by " . $end->format('m/d');
             }
         }
     } elseif ($goalType === 'task_quota') {
@@ -2979,11 +2945,7 @@ function calculateGoalProgress(array $goal, $child_id) {
         $lastProgressDate = $lastDate;
         $remaining = max(0, $target - $current);
         if ($remaining > 0) {
-            if (($goal['time_window_type'] ?? 'rolling') === 'fixed') {
-                $nextHint = "Complete {$remaining} more task(s) by " . $end->format('m/d') . ".";
-            } else {
-                $nextHint = "Complete {$remaining} more task(s) in the next " . ($goal['time_window_days'] ?: 7) . " days.";
-            }
+            $nextHint = "Complete {$remaining} more task(s) by " . $end->format('m/d') . ".";
         }
     } else {
         $target = 1;
@@ -4124,10 +4086,6 @@ try {
       task_category VARCHAR(50) DEFAULT NULL,
       target_count INT NOT NULL DEFAULT 0,
       streak_required INT NOT NULL DEFAULT 0,
-      time_window_type VARCHAR(16) DEFAULT 'rolling',
-      time_window_days INT NOT NULL DEFAULT 0,
-      fixed_window_start DATE DEFAULT NULL,
-      fixed_window_end DATE DEFAULT NULL,
       require_on_time TINYINT(1) NOT NULL DEFAULT 0,
       points_awarded INT NOT NULL DEFAULT 0,
       award_mode VARCHAR(12) DEFAULT 'both',
@@ -4155,14 +4113,14 @@ try {
   $db->exec("ALTER TABLE goals ADD COLUMN IF NOT EXISTS task_category VARCHAR(50) DEFAULT NULL");
   $db->exec("ALTER TABLE goals ADD COLUMN IF NOT EXISTS target_count INT NOT NULL DEFAULT 0");
   $db->exec("ALTER TABLE goals ADD COLUMN IF NOT EXISTS streak_required INT NOT NULL DEFAULT 0");
-  $db->exec("ALTER TABLE goals ADD COLUMN IF NOT EXISTS time_window_type VARCHAR(16) DEFAULT 'rolling'");
-  $db->exec("ALTER TABLE goals ADD COLUMN IF NOT EXISTS time_window_days INT NOT NULL DEFAULT 0");
-  $db->exec("ALTER TABLE goals ADD COLUMN IF NOT EXISTS fixed_window_start DATE DEFAULT NULL");
-  $db->exec("ALTER TABLE goals ADD COLUMN IF NOT EXISTS fixed_window_end DATE DEFAULT NULL");
   $db->exec("ALTER TABLE goals ADD COLUMN IF NOT EXISTS require_on_time TINYINT(1) NOT NULL DEFAULT 0");
   $db->exec("ALTER TABLE goals ADD COLUMN IF NOT EXISTS points_awarded INT NOT NULL DEFAULT 0");
   $db->exec("ALTER TABLE goals ADD COLUMN IF NOT EXISTS award_mode VARCHAR(12) DEFAULT 'both'");
   $db->exec("ALTER TABLE goals ADD COLUMN IF NOT EXISTS requires_parent_approval TINYINT(1) NOT NULL DEFAULT 1");
+  $db->exec("ALTER TABLE goals DROP COLUMN IF EXISTS time_window_type");
+  $db->exec("ALTER TABLE goals DROP COLUMN IF EXISTS time_window_days");
+  $db->exec("ALTER TABLE goals DROP COLUMN IF EXISTS fixed_window_start");
+  $db->exec("ALTER TABLE goals DROP COLUMN IF EXISTS fixed_window_end");
   error_log("Added/verified goal criteria columns in goals");
 
   $sql = "CREATE TABLE IF NOT EXISTS goal_progress (
