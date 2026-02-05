@@ -766,18 +766,6 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
         .calendar-view-toggle { display: inline-flex; align-items: center; gap: 6px; padding: 4px; border-radius: 999px; border: 1px solid #d5def0; background: #f5f7fb; }
         .calendar-view-button { width: 36px; height: 36px; border: none; border-radius: 50%; background: transparent; color: #607d8b; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
         .calendar-view-button.active { background: #0d47a1; color: #fff; box-shadow: 0 4px 10px rgba(13, 71, 161, 0.2); }
-        .calendar-filters { display: grid; gap: 12px; }
-        .calendar-filter-header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
-        .calendar-filter-title { font-weight: 700; color: #37474f; }
-        .calendar-select-all { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; color: #37474f; }
-        .calendar-select-all input { width: 18px; height: 18px; }
-        .calendar-child-grid { display: flex; flex-wrap: wrap; gap: 14px; }
-        .calendar-child-card { border: none; border-radius: 50%; padding: 0; background: transparent; display: grid; justify-items: center; gap: 6px; cursor: pointer; position: relative; }
-        .calendar-child-card input[type="checkbox"] { position: absolute; opacity: 0; width: 0; height: 0; pointer-events: none; }
-        .calendar-child-card img { width: 56px; height: 56px; border-radius: 50%; object-fit: cover; box-shadow: 0 2px 6px rgba(0,0,0,0.15); transition: box-shadow 150ms ease, transform 150ms ease; }
-        .calendar-child-card span { font-size: 13px; text-align: center; transition: color 150ms ease, text-shadow 150ms ease; }
-        .calendar-child-card input[type="checkbox"]:checked + img { box-shadow: 0 0 0 4px rgba(100,181,246,0.8), 0 0 14px rgba(100,181,246,0.8); transform: translateY(-2px); }
-        .calendar-child-card input[type="checkbox"]:checked + img + span { color: #0d47a1; text-shadow: 0 1px 8px rgba(100,181,246,0.8); }
         .task-week-calendar { border: 1px solid #d5def0; border-radius: 12px; background: #fff; overflow: hidden; position: relative; }
         .task-week-scroll { overflow-x: auto; }
         .week-days { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
@@ -1955,8 +1943,6 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
             const previewModal = document.querySelector('[data-task-preview-modal]');
             const previewBody = previewModal ? previewModal.querySelector('[data-task-preview-body]') : null;
             const previewCloses = previewModal ? previewModal.querySelectorAll('[data-task-preview-close]') : [];
-            const childFilters = Array.from(document.querySelectorAll('[data-calendar-child]'));
-            const selectAll = document.querySelector('[data-calendar-select-all]');
             const taskById = new Map();
             let currentView = 'calendar';
 
@@ -1981,34 +1967,6 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                     renderWeek();
                 });
             });
-
-            const updateSelectAllState = () => {
-                if (!selectAll || !childFilters.length) return;
-                const allChecked = childFilters.every((input) => input.checked);
-                const anyChecked = childFilters.some((input) => input.checked);
-                selectAll.checked = allChecked;
-                selectAll.indeterminate = !allChecked && anyChecked;
-            };
-
-            if (childFilters.length) {
-                childFilters.forEach((input) => {
-                    input.addEventListener('change', () => {
-                        updateSelectAllState();
-                        renderWeek();
-                    });
-                });
-                if (selectAll) {
-                    selectAll.addEventListener('change', () => {
-                        const checked = selectAll.checked;
-                        childFilters.forEach((input) => {
-                            input.checked = checked;
-                        });
-                        updateSelectAllState();
-                        renderWeek();
-                    });
-                    updateSelectAllState();
-                }
-            }
 
             const closePreview = () => {
                 if (!previewModal) return;
@@ -2165,14 +2123,6 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                 });
                 setView(currentView);
             }
-
-            const getSelectedChildIds = () => {
-                if (!childFilters.length) return null;
-                return childFilters
-                    .filter((input) => input.checked)
-                    .map((input) => parseInt(input.value, 10))
-                    .filter((value) => !Number.isNaN(value));
-            };
 
             const buildTaskItem = (task, dateKey, timeInfo, useTextDual = false) => {
                 const item = document.createElement('button');
@@ -2368,11 +2318,7 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                     weekRangeEl.textContent = formatWeekRange(currentWeekStart);
                 }
 
-                const selectedChildIds = getSelectedChildIds();
-                const filteredTasks = (Array.isArray(taskCalendarData) ? taskCalendarData : []).filter((task) => {
-                    if (!selectedChildIds) return true;
-                    return selectedChildIds.includes(parseInt(task.child_user_id, 10));
-                });
+                const filteredTasks = Array.isArray(taskCalendarData) ? taskCalendarData : [];
 
                 let totalItems = 0;
 
@@ -3891,7 +3837,7 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                     <div>
                         <h2>Weekly Calendar</h2>
                         <?php if (canCreateContent($_SESSION['user_id'])): ?>
-                            <p class="calendar-subtitle">Tap children to filter tasks in the week view.</p>
+                            <p class="calendar-subtitle">Weekly schedule view for current task filters.</p>
                         <?php endif; ?>
                     </div>
                     <div class="calendar-nav">
@@ -3911,26 +3857,6 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
                         <?php endif; ?>
                     </div>
                 </div>
-                <?php if (canCreateContent($_SESSION['user_id'])): ?>
-                    <div class="calendar-filters">
-                        <div class="calendar-filter-header">
-                            <span class="calendar-filter-title">Filter by child</span>
-                            <label class="calendar-select-all">
-                                <input type="checkbox" data-calendar-select-all <?php echo !empty($children) ? 'checked' : ''; ?>>
-                                Select all
-                            </label>
-                        </div>
-                        <div class="calendar-child-grid">
-                            <?php foreach ($children as $child): ?>
-                                <label class="calendar-child-card">
-                                    <input type="checkbox" data-calendar-child value="<?php echo (int) $child['child_user_id']; ?>" checked>
-                                    <img src="<?php echo htmlspecialchars($child['avatar']); ?>" alt="<?php echo htmlspecialchars($child['first_name'] ?? $child['child_name']); ?>">
-                                    <span><?php echo htmlspecialchars($child['first_name'] ?? $child['child_name']); ?></span>
-                                </label>
-                            <?php endforeach; ?>
-                        </div>
-                    </div>
-                <?php endif; ?>
                 <div class="task-week-calendar" data-task-calendar>
                     <div class="task-week-scroll">
                         <div class="week-days week-days-header" data-week-days></div>
