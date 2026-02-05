@@ -1943,6 +1943,8 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
         function initTaskCalendar() {
             const calendar = document.querySelector('[data-task-calendar]');
             if (!calendar) return;
+            const taskWeekCountEl = document.querySelector('[data-task-week-count]');
+            const taskWeekLabelEl = document.querySelector('[data-task-week-label]');
             const weekDaysEl = calendar.querySelector('[data-week-days]');
             const weekGridEl = calendar.querySelector('[data-week-grid]');
             const weekRangeEl = document.querySelector('[data-week-range]');
@@ -2433,6 +2435,12 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
 
                 if (emptyEl) {
                     emptyEl.classList.toggle('active', totalItems === 0);
+                }
+                if (taskWeekCountEl) {
+                    taskWeekCountEl.textContent = String(totalItems);
+                }
+                if (taskWeekLabelEl) {
+                    taskWeekLabelEl.textContent = totalItems === 1 ? 'task' : 'tasks';
                 }
                 renderList(weekDates, filteredTasks);
             };
@@ -3196,9 +3204,9 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
         <?php if (isset($message)) echo "<p>$message</p>"; ?>
         <div class="task-list">
             <div class="task-list-header">
-                <h2 class="task-list-title">Task Inventory</h2>
+                <h2 class="task-list-title"></h2>
                 <?php if (canCreateContent($_SESSION['user_id'])): ?>
-                    <p class="task-list-subtitle">Managing <strong><?php echo (int) $tasksCount; ?> tasks</strong> across the family</p>
+                    <p class="task-list-subtitle" data-task-list-subtitle>Managing <strong data-task-week-count><?php echo (int) $tasksCount; ?></strong> <span data-task-week-label><?php echo ((int) $tasksCount) === 1 ? 'task' : 'tasks'; ?></span> this week</p>
                 <?php endif; ?>
                 <?php if (canCreateContent($_SESSION['user_id'])): ?>
                     <div class="task-create-fab">
