@@ -2215,7 +2215,7 @@ function renderStreakCheckSvg($suffix) {
                 btn.addEventListener('click', () => {
                     const childId = btn.dataset.childId || '';
                     const childName = btn.dataset.childName || 'Child';
-                    const childAvatar = btn.dataset.childAvatar || 'images/default-avatar.png';
+                    const childAvatar = btn.dataset.childAvatar || 'images/avatar_images/default-avatar.png';
                     const childPoints = btn.dataset.childPoints || '0';
                     const historyRaw = btn.dataset.history || '[]';
                     let history = [];
@@ -2800,7 +2800,7 @@ function renderStreakCheckSvg($suffix) {
                   <div class="child-info-card">
                       <div class="child-info-left">
                           <div class="child-info-header">
-                             <img src="<?php echo htmlspecialchars($child['avatar'] ?? 'default-avatar.png'); ?>" alt="Avatar for <?php echo htmlspecialchars($child['child_name']); ?>">
+                             <img src="<?php echo htmlspecialchars($child['avatar'] ?? 'images/avatar_images/default-avatar.png'); ?>" alt="Avatar for <?php echo htmlspecialchars($child['child_name']); ?>">
                              <div class="child-info-header-details">
                                 <p class="child-info-name"><?php echo htmlspecialchars($child['child_name']); ?></p>
                                 <?php
@@ -2891,7 +2891,7 @@ function renderStreakCheckSvg($suffix) {
                                       data-role="open-adjust-modal"
                                       data-child-id="<?php echo (int)$child['child_user_id']; ?>"
                                       data-child-name="<?php echo htmlspecialchars($child['child_name']); ?>"
-                                      data-child-avatar="<?php echo htmlspecialchars($child['avatar'] ?? 'images/default-avatar.png'); ?>"
+                                      data-child-avatar="<?php echo htmlspecialchars($child['avatar'] ?? 'images/avatar_images/default-avatar.png'); ?>"
                                       data-child-points="<?php echo (int)($child['points_earned'] ?? 0); ?>"
                                       data-history='<?php echo htmlspecialchars(json_encode($child['point_adjustments'] ?? [], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT)); ?>'>
                                       <i class="fa-solid fa-plus"></i>
@@ -3125,7 +3125,7 @@ function renderStreakCheckSvg($suffix) {
                           </header>
                           <div class="child-history-body">
                               <div class="child-history-hero">
-                                  <img class="child-history-avatar" src="<?php echo htmlspecialchars($child['avatar'] ?? 'images/default-avatar.png'); ?>" alt="<?php echo htmlspecialchars($child['child_name']); ?>">
+                                  <img class="child-history-avatar" src="<?php echo htmlspecialchars($child['avatar'] ?? 'images/avatar_images/default-avatar.png'); ?>" alt="<?php echo htmlspecialchars($child['child_name']); ?>">
                                   <div class="child-history-info">
                                       <div class="child-history-name"><?php echo htmlspecialchars($child['child_name']); ?></div>
                                       <div class="child-history-points"><i class="fa-solid fa-coins"></i> <?php echo (int)($child['points_earned'] ?? 0); ?></div>
@@ -3381,7 +3381,7 @@ function renderStreakCheckSvg($suffix) {
             </header>
             <div class="adjust-modal-body">
                 <div class="adjust-child-card">
-                    <img class="adjust-child-avatar" data-role="adjust-child-avatar" src="images/default-avatar.png" alt="Child avatar">
+                    <img class="adjust-child-avatar" data-role="adjust-child-avatar" src="images/avatar_images/default-avatar.png" alt="Child avatar">
                     <div class="adjust-child-info">
                         <div class="adjust-child-name" data-role="adjust-child-name">Child</div>
                     </div>
