@@ -306,7 +306,7 @@ function renderStreakCheckSvg($suffix) {
         .streak-mini-card { border: 1px solid #f1f5f9; border-radius: 12px; padding: 8px; background: #fdfdfd; display: grid; gap: 6px; }
         .streak-mini-header { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; color: #37474f; }
         .streak-mini-value { font-size: 1.6rem; font-weight: 800; color: #263238; }
-        .streak-mini-value span { font-size: 0.75rem; font-weight: 600; color: #78909c; margin-left: 4px; }
+        .streak-mini-value span { font-size: 0.5em; font-weight: 600; color: #78909c; margin-left: 4px; text-transform: capitalize; }
         .streak-week-row { display: flex; gap: 4px; flex-wrap: wrap; }
         .streak-dot { width: 18px; height: 18px; border-radius: 50%; background: #eceff1; display: inline-flex; align-items: center; justify-content: center; font-size: 0.6rem; color: #607d8b; }
         .streak-dot.is-routine { background: rgba(13, 71, 161, 0.18); color: #0d47a1; }
@@ -316,6 +316,7 @@ function renderStreakCheckSvg($suffix) {
         .streak-row-left { display: inline-flex; align-items: center; gap: 8px; }
         .streak-row-title { font-weight: 700; color: #37474f; }
         .streak-row-sub { font-size: 0.85rem; font-weight: 600; color: #78909c; }
+        .streak-row-sub.streak-scope { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: #94a3b8; }
         .streak-hero { display: flex; align-items: center; gap: 10px; }
         .streak-hero-number { font-size: 2rem; font-weight: 800; color: #263238; }
         .streak-hero-label { font-size: 0.8rem; color: #78909c; }
@@ -366,6 +367,19 @@ function renderStreakCheckSvg($suffix) {
             animation-delay: 0.8s;
             opacity: 0.75;
         }
+        .streak-celebration-icon.streak-icon::before,
+        .streak-celebration-icon.streak-icon::after {
+            animation-duration: 1.6s;
+            animation-name: streak-pulse-orange;
+            animation-iteration-count: infinite;
+        }
+        .streak-celebration-icon.streak-icon::after {
+            animation-delay: 0.8s;
+        }
+        .streak-celebration-icon.streak-icon.is-blue::before,
+        .streak-celebration-icon.streak-icon.is-blue::after {
+            animation-name: streak-pulse-blue;
+        }
         @keyframes streak-pulse-orange {
             0% { box-shadow: 0 0 0 0 rgba(255, 138, 46, 0.55); opacity: 1; }
             70% { box-shadow: 0 0 0 18px rgba(255, 138, 46, 0); opacity: 0; }
@@ -376,9 +390,91 @@ function renderStreakCheckSvg($suffix) {
             70% { box-shadow: 0 0 0 18px rgba(13, 71, 161, 0); opacity: 0; }
             100% { opacity: 0; }
         }
+        @keyframes streak-pulse-orange-double {
+            0% { box-shadow: 0 0 0 0 rgba(255, 138, 46, 0.55); opacity: 1; }
+            14% { box-shadow: 0 0 0 18px rgba(255, 138, 46, 0); opacity: 0; }
+            20% { box-shadow: 0 0 0 0 rgba(255, 138, 46, 0.55); opacity: 1; }
+            34% { box-shadow: 0 0 0 18px rgba(255, 138, 46, 0); opacity: 0; }
+            100% { opacity: 0; }
+        }
+        @keyframes streak-pulse-blue-double {
+            0% { box-shadow: 0 0 0 0 rgba(13, 71, 161, 0.55); opacity: 1; }
+            14% { box-shadow: 0 0 0 18px rgba(13, 71, 161, 0); opacity: 0; }
+            20% { box-shadow: 0 0 0 0 rgba(13, 71, 161, 0.55); opacity: 1; }
+            34% { box-shadow: 0 0 0 18px rgba(13, 71, 161, 0); opacity: 0; }
+            100% { opacity: 0; }
+        }
         @media (prefers-reduced-motion: reduce) {
             .streak-icon::before,
             .streak-icon::after { animation: none; }
+        }
+        .streak-celebration {
+            position: fixed;
+            inset: 0;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            background: rgba(15, 23, 42, 0.45);
+            z-index: 9999;
+            overflow: hidden;
+        }
+        .streak-celebration.is-active { display: flex; }
+        .streak-confetti {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+        .streak-celebration-card {
+            position: relative;
+            z-index: 2;
+            width: min(360px, 92vw);
+            background: #fff;
+            border-radius: 26px;
+            padding: 26px 22px 20px;
+            text-align: center;
+            box-shadow: 0 24px 70px rgba(15, 23, 42, 0.3);
+            display: grid;
+            gap: 10px;
+        }
+        .streak-celebration-card.is-routine { border: 1px solid rgba(13, 71, 161, 0.2); }
+        .streak-celebration-card.is-task { border: 1px solid rgba(255, 138, 46, 0.25); }
+        .streak-celebration-icon {
+            width: 86px;
+            height: 86px;
+            border-radius: 50%;
+            margin: 0 auto;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(255, 138, 46, 0.12);
+            color: #ff8a2e;
+        }
+        .streak-celebration-card.is-routine .streak-celebration-icon {
+            background: rgba(13, 71, 161, 0.12);
+            color: #0d47a1;
+        }
+        .streak-celebration-icon svg { width: 44px; height: 44px; }
+        .streak-celebration-count { font-size: 3.2rem; font-weight: 800; color: #1f2937; line-height: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+        .streak-celebration-count-label { font-size: 0.5em; font-weight: 700; color: #94a3b8; text-transform: capitalize; }
+        .streak-celebration-title { font-size: 1.1rem; font-weight: 700; color: #1f2937; }
+        .streak-celebration-sub { font-size: 0.92rem; color: #6b7280; }
+        .streak-celebration-message { font-size: 1.05rem; font-weight: 700; color: #0f172a; }
+        .streak-celebration-close {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            border: none;
+            background: #f3f4f6;
+            color: #6b7280;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
         }
         .points-left { display: contents; }
         .child-identity { display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 120px; }
@@ -1395,18 +1491,39 @@ foreach ($taskCountStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
             <?php
                $routineStreak = (int) ($data['routine_streak'] ?? 0);
                $taskStreak = (int) ($data['task_streak'] ?? 0);
-               $streakDayLabels = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
-               $routineWeekCount = min(7, max(0, $routineStreak));
-               $taskWeekCount = min(7, max(0, $taskStreak));
-               $routineDayLabel = $routineStreak == 1 ? 'day' : 'days';
-               $taskDayLabel = $taskStreak == 1 ? 'day' : 'days';
+               $streakDayLabels = [];
+               $streakDates = [];
+               $streakStart = (new DateTimeImmutable('today'))->modify('-6 days');
+               for ($i = 0; $i < 7; $i++) {
+                   $dateKey = $streakStart->modify('+' . $i . ' days')->format('Y-m-d');
+                   $streakDates[] = $dateKey;
+                   $streakDayLabels[] = strtoupper(substr(date('D', strtotime($dateKey)), 0, 1));
+               }
+               $routineWeekDates = array_values(array_unique(array_filter($data['routine_week_dates'] ?? [])));
+               $taskWeekDates = array_values(array_unique(array_filter($data['task_week_dates'] ?? [])));
+               $routineWeekSet = array_fill_keys($routineWeekDates, true);
+               $taskWeekSet = array_fill_keys($taskWeekDates, true);
+               $weeklyTaskCompletedCount = (int) ($data['weekly_task_completed_count'] ?? 0);
+               $showCompletedCount = $weeklyTaskCompletedCount >= 5;
+               $routineOnTimeRate = (int) ($data['routine_on_time_rate'] ?? 0);
+               $taskOnTimeRate = (int) ($data['task_on_time_rate'] ?? 0);
+               $routineBestStreak = (int) ($data['routine_best_streak'] ?? 0);
+               $taskBestStreak = (int) ($data['task_best_streak'] ?? 0);
+               $routineDayLabel = 'Days';
+               $taskDayLabel = 'Days';
             ?>
-               <?php if ($routineStreak >= 2 || $taskStreak >= 2): ?>
+               <?php if ($routineStreak >= 2 || $taskStreak >= 2 || $showCompletedCount): ?>
                   <div class="streak-concepts">
                      <div class="streak-concept">
                         <div class="streak-concept-label">Streaks</div>
                         <div class="streak-concept-grid">
-                           <div class="streak-mini-card">
+                           <?php if ($routineStreak >= 2): ?>
+                           <div class="streak-mini-card"
+                                data-streak-celebration-trigger
+                                data-streak-type="routine"
+                                data-streak-value="<?php echo $routineStreak; ?>"
+                                data-child-id="<?php echo (int) $_SESSION['user_id']; ?>"
+                                data-child-name="<?php echo htmlspecialchars($childFirstName !== '' ? $childFirstName : ''); ?>">
                               <div class="streak-mini-header">
                                  <span class="streak-icon is-blue"><?php echo renderStreakFlameSvg('blue', 'child-a-routine'); ?></span>
                                  Routine streak
@@ -1414,7 +1531,10 @@ foreach ($taskCountStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
                               <div class="streak-mini-value"><?php echo $routineStreak; ?><span><?php echo $routineDayLabel; ?></span></div>
                               <div class="streak-week-row">
                                  <?php foreach ($streakDayLabels as $index => $label): ?>
-                                    <?php $filled = $index < $routineWeekCount; ?>
+                                    <?php
+                                       $weekDateKey = $streakDates[$index] ?? null;
+                                       $filled = $weekDateKey ? !empty($routineWeekSet[$weekDateKey]) : false;
+                                    ?>
                                     <span class="streak-dot<?php echo $filled ? ' is-routine' : ''; ?>">
                                        <?php if ($filled): ?>
                                           <?php echo renderStreakCheckSvg('child-routine-' . $index); ?>
@@ -1425,8 +1545,16 @@ foreach ($taskCountStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
                                  <?php endforeach; ?>
                               </div>
                               <div class="streak-row-sub">Keep routines steady and strong.</div>
+                              <div class="streak-row-sub">Best: <?php echo $routineBestStreak; ?> Days &bull; On-time (7d): <?php echo $routineOnTimeRate; ?>%</div>
                            </div>
-                           <div class="streak-mini-card">
+                           <?php endif; ?>
+                           <?php if ($taskStreak >= 2): ?>
+                           <div class="streak-mini-card"
+                                data-streak-celebration-trigger
+                                data-streak-type="task"
+                                data-streak-value="<?php echo $taskStreak; ?>"
+                                data-child-id="<?php echo (int) $_SESSION['user_id']; ?>"
+                                data-child-name="<?php echo htmlspecialchars($childFirstName !== '' ? $childFirstName : ''); ?>">
                               <div class="streak-mini-header">
                                  <span class="streak-icon"><?php echo renderStreakFlameSvg('orange', 'child-a-task'); ?></span>
                                  Task streak
@@ -1434,7 +1562,10 @@ foreach ($taskCountStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
                               <div class="streak-mini-value"><?php echo $taskStreak; ?><span><?php echo $taskDayLabel; ?></span></div>
                               <div class="streak-week-row">
                                  <?php foreach ($streakDayLabels as $index => $label): ?>
-                                    <?php $filled = $index < $taskWeekCount; ?>
+                                    <?php
+                                       $weekDateKey = $streakDates[$index] ?? null;
+                                       $filled = $weekDateKey ? !empty($taskWeekSet[$weekDateKey]) : false;
+                                    ?>
                                     <span class="streak-dot<?php echo $filled ? ' is-task' : ''; ?>">
                                        <?php if ($filled): ?>
                                           <?php echo renderStreakCheckSvg('child-task-' . $index); ?>
@@ -1445,7 +1576,19 @@ foreach ($taskCountStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
                                  <?php endforeach; ?>
                               </div>
                               <div class="streak-row-sub">Tasks completed, streak on.</div>
+                              <div class="streak-row-sub">Best: <?php echo $taskBestStreak; ?> Days &bull; On-time (7d): <?php echo $taskOnTimeRate; ?>%</div>
                            </div>
+                           <?php endif; ?>
+                           <?php if ($showCompletedCount): ?>
+                           <div class="streak-mini-card">
+                              <div class="streak-mini-header">
+                                 <span class="streak-icon"><?php echo renderStreakFlameSvg('orange', 'child-a-completed'); ?></span>
+                                 Tasks completed
+                              </div>
+                              <div class="streak-mini-value"><?php echo $weeklyTaskCompletedCount; ?><span>this week</span></div>
+                              <div class="streak-row-sub">Great momentum this week.</div>
+                           </div>
+                           <?php endif; ?>
                         </div>
                      </div>
                   </div>
@@ -1707,7 +1850,203 @@ foreach ($taskCountStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
    <footer>
    <p>Child Task and Chore App - Ver 3.26.0</p>
 </footer>
+<div class="streak-celebration" data-streak-celebration aria-hidden="true">
+   <canvas class="streak-confetti" data-streak-confetti></canvas>
+   <div class="streak-celebration-card" role="dialog" aria-modal="true" aria-labelledby="streak-celebration-title">
+      <button type="button" class="streak-celebration-close" data-streak-celebration-close aria-label="Close celebration">
+         <i class="fa-solid fa-xmark"></i>
+      </button>
+      <div class="streak-celebration-icon streak-icon" data-streak-celebration-icon>
+         <?php echo renderStreakFlameSvg('orange', 'child-celebration'); ?>
+      </div>
+      <div class="streak-celebration-count">
+         <span class="streak-celebration-count-number" data-streak-celebration-count>2</span>
+         <span class="streak-celebration-count-label">Days</span>
+      </div>
+      <div class="streak-celebration-title" id="streak-celebration-title" data-streak-celebration-title>Week Streak</div>
+      <div class="streak-celebration-sub" data-streak-celebration-sub>You're doing great!</div>
+      <div class="streak-celebration-message" data-streak-celebration-message>Awesome job!</div>
+   </div>
+</div>
   <script src="js/number-stepper.js" defer></script>
+  <script>
+      (function () {
+          const celebrationRoot = document.querySelector('[data-streak-celebration]');
+          if (!celebrationRoot) {
+              return;
+          }
+          const confettiCanvas = celebrationRoot.querySelector('[data-streak-confetti]');
+          const closeBtn = celebrationRoot.querySelector('[data-streak-celebration-close]');
+          const iconWrap = celebrationRoot.querySelector('[data-streak-celebration-icon]');
+          const countEl = celebrationRoot.querySelector('[data-streak-celebration-count]');
+          const titleEl = celebrationRoot.querySelector('[data-streak-celebration-title]');
+          const subEl = celebrationRoot.querySelector('[data-streak-celebration-sub]');
+          const messageEl = celebrationRoot.querySelector('[data-streak-celebration-message]');
+
+          const positiveMessages = [
+              'Awesome job!',
+              'Way to go!',
+              'You did it!',
+              'Keep it up!',
+              'Fantastic work!'
+          ];
+
+          const allowRepeatCelebration = window.location.hostname === 'localhost';
+          const candidates = [];
+          const triggers = document.querySelectorAll('[data-streak-celebration-trigger]');
+          triggers.forEach((el, index) => {
+              const streakValue = parseInt(el.dataset.streakValue || '0', 10);
+              if (Number.isNaN(streakValue) || streakValue < 2) {
+                  return;
+              }
+              const childId = el.dataset.childId || 'child';
+              const childName = el.dataset.childName || 'Champion';
+              const streakType = el.dataset.streakType || 'task';
+              const key = `streakCelebrate:${childId}:${streakType}`;
+              let lastValue = parseInt(window.localStorage.getItem(key) || '0', 10);
+              if (streakValue < lastValue) {
+                  window.localStorage.setItem(key, '0');
+                  lastValue = 0;
+              }
+              if (allowRepeatCelebration) {
+                  lastValue = 0;
+              }
+              if (streakValue > lastValue) {
+                  candidates.push({ el, index, streakValue, childId, childName, streakType, key });
+              }
+          });
+
+          if (!candidates.length) {
+              return;
+          }
+
+          candidates.sort((a, b) => {
+              if (a.index !== b.index) {
+                  return a.index - b.index;
+              }
+              return b.streakValue - a.streakValue;
+          });
+
+          const pick = candidates[0];
+          const isRoutine = pick.streakType === 'routine';
+          const streakLabel = isRoutine ? 'Routine streak' : 'Task streak';
+
+          celebrationRoot.classList.add('is-active');
+          celebrationRoot.setAttribute('aria-hidden', 'false');
+          const card = celebrationRoot.querySelector('.streak-celebration-card');
+          card.classList.toggle('is-routine', isRoutine);
+          card.classList.toggle('is-task', !isRoutine);
+          if (iconWrap) {
+              iconWrap.classList.toggle('is-blue', isRoutine);
+              iconWrap.innerHTML = isRoutine
+                  ? '<?php echo addslashes(renderStreakFlameSvg('blue', 'child-celebration-routine')); ?>'
+                  : '<?php echo addslashes(renderStreakFlameSvg('orange', 'child-celebration-task')); ?>';
+          }
+          if (countEl) {
+              countEl.textContent = pick.streakValue;
+          }
+          if (titleEl) {
+              titleEl.textContent = streakLabel;
+          }
+          if (subEl) {
+              subEl.textContent = `You're doing really great, ${pick.childName}!`;
+          }
+          if (messageEl) {
+              messageEl.textContent = positiveMessages[Math.floor(Math.random() * positiveMessages.length)];
+          }
+
+          window.localStorage.setItem(pick.key, String(pick.streakValue));
+
+          let confettiActive = true;
+          let spawnDone = false;
+          const ctx = confettiCanvas ? confettiCanvas.getContext('2d') : null;
+          const particles = [];
+          const colors = ['#ff8a2e', '#0d47a1', '#fbbf24', '#22c55e', '#f97316'];
+
+          function resizeCanvas() {
+              if (!confettiCanvas) return;
+              confettiCanvas.width = window.innerWidth;
+              confettiCanvas.height = window.innerHeight;
+          }
+          resizeCanvas();
+          window.addEventListener('resize', resizeCanvas);
+
+          function spawnParticles() {
+              if (!confettiCanvas) return;
+              const count = 120;
+              for (let i = 0; i < count; i++) {
+                  particles.push({
+                      x: Math.random() * confettiCanvas.width,
+                      y: -20 - Math.random() * 200,
+                      size: 6 + Math.random() * 6,
+                      color: colors[Math.floor(Math.random() * colors.length)],
+                      speed: 2 + Math.random() * 3,
+                      drift: (Math.random() - 0.5) * 1.5,
+                      rotation: Math.random() * Math.PI
+                  });
+              }
+          }
+
+          function renderConfetti() {
+              if (!ctx || !confettiActive) return;
+              ctx.clearRect(0, 0, confettiCanvas.width, confettiCanvas.height);
+              particles.forEach(p => {
+                  p.y += p.speed;
+                  p.x += p.drift;
+                  p.rotation += 0.04;
+                  ctx.save();
+                  ctx.translate(p.x, p.y);
+                  ctx.rotate(p.rotation);
+                  ctx.fillStyle = p.color;
+                  ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size);
+                  ctx.restore();
+              });
+              for (let i = particles.length - 1; i >= 0; i--) {
+                  if (particles[i].y > confettiCanvas.height + 40) {
+                      particles.splice(i, 1);
+                  }
+              }
+              if (spawnDone && particles.length === 0) {
+                  confettiActive = false;
+                  return;
+              }
+              if (confettiActive) {
+                  requestAnimationFrame(renderConfetti);
+              }
+          }
+
+          spawnParticles();
+          renderConfetti();
+
+          function closeCelebration() {
+              celebrationRoot.classList.remove('is-active');
+              celebrationRoot.setAttribute('aria-hidden', 'true');
+              confettiActive = false;
+              if (ctx) {
+                  ctx.clearRect(0, 0, confettiCanvas.width, confettiCanvas.height);
+              }
+          }
+
+          if (closeBtn) {
+              closeBtn.addEventListener('click', closeCelebration);
+          }
+          celebrationRoot.addEventListener('click', (event) => {
+              if (event.target === celebrationRoot) {
+                  closeCelebration();
+              }
+          });
+
+          let spawnCount = 1;
+          const spawnInterval = setInterval(() => {
+              spawnParticles();
+              spawnCount += 1;
+              if (spawnCount >= 3) {
+                  clearInterval(spawnInterval);
+                  spawnDone = true;
+              }
+          }, 350);
+      })();
+  </script>
 </body>
 </html>
 

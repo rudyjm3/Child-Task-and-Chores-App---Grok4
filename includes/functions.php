@@ -816,6 +816,13 @@ function getDashboardData($user_id) {
             $streaks = getChildStreaks($childId, (int) $main_parent_id);
             $child['routine_streak'] = (int) ($streaks['routine_streak'] ?? 0);
             $child['task_streak'] = (int) ($streaks['task_streak'] ?? 0);
+            $child['routine_week_dates'] = array_values($streaks['routine_week_dates'] ?? []);
+            $child['task_week_dates'] = array_values($streaks['task_week_dates'] ?? []);
+            $child['weekly_task_completed_count'] = (int) ($streaks['weekly_task_completed_count'] ?? 0);
+            $child['routine_on_time_rate'] = (int) ($streaks['routine_on_time_rate'] ?? 0);
+            $child['task_on_time_rate'] = (int) ($streaks['task_on_time_rate'] ?? 0);
+            $child['routine_best_streak'] = (int) ($streaks['routine_best_streak'] ?? 0);
+            $child['task_best_streak'] = (int) ($streaks['task_best_streak'] ?? 0);
         }
         unset($child);
         $data['max_child_points'] = $maxChildPoints;
@@ -943,6 +950,13 @@ function getDashboardData($user_id) {
             $streaks = getChildStreaks((int) $user_id, (int) $parent_id);
             $data['routine_streak'] = (int) ($streaks['routine_streak'] ?? 0);
             $data['task_streak'] = (int) ($streaks['task_streak'] ?? 0);
+            $data['routine_week_dates'] = array_values($streaks['routine_week_dates'] ?? []);
+            $data['task_week_dates'] = array_values($streaks['task_week_dates'] ?? []);
+            $data['weekly_task_completed_count'] = (int) ($streaks['weekly_task_completed_count'] ?? 0);
+            $data['routine_on_time_rate'] = (int) ($streaks['routine_on_time_rate'] ?? 0);
+            $data['task_on_time_rate'] = (int) ($streaks['task_on_time_rate'] ?? 0);
+            $data['routine_best_streak'] = (int) ($streaks['routine_best_streak'] ?? 0);
+            $data['task_best_streak'] = (int) ($streaks['task_best_streak'] ?? 0);
             $stmt = $db->prepare("SELECT id, title, description, point_cost
                                   FROM rewards
                                   WHERE parent_user_id = :parent_id
@@ -2683,6 +2697,34 @@ function getGoalWindowRange(array $goal) {
     return [$start, $end];
 }
 
+function ensureChildStreaksTable() {
+    global $db;
+    $db->exec("
+        CREATE TABLE IF NOT EXISTS child_streak_records (
+            child_user_id INT NOT NULL PRIMARY KEY,
+            routine_best_streak INT NOT NULL DEFAULT 0,
+            task_best_streak INT NOT NULL DEFAULT 0,
+            updated_at DATETIME NOT NULL,
+            INDEX idx_child_streak_updated (updated_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    ");
+    try {
+        $db->exec("ALTER TABLE child_streak_records ADD COLUMN routine_best_streak INT NOT NULL DEFAULT 0");
+    } catch (PDOException $e) {
+        // ignore if it already exists
+    }
+    try {
+        $db->exec("ALTER TABLE child_streak_records ADD COLUMN task_best_streak INT NOT NULL DEFAULT 0");
+    } catch (PDOException $e) {
+        // ignore if it already exists
+    }
+    try {
+        $db->exec("ALTER TABLE child_streak_records ADD COLUMN updated_at DATETIME NOT NULL");
+    } catch (PDOException $e) {
+        // ignore if it already exists
+    }
+}
+
 function calculateConsecutiveStreak(array $dates): int {
     if (empty($dates)) {
         return 0;
@@ -2709,7 +2751,10 @@ function getChildStreaks(int $child_user_id, int $parent_user_id = null): array 
     global $db;
     $routineDates = [];
     $taskDates = [];
+    $routineWeekDates = [];
+    $taskWeekDates = [];
     ensureRoutineCompletionTables();
+    ensureChildStreaksTable();
 
     $params = [':child_id' => $child_user_id];
     $parentFilter = '';
@@ -2726,31 +2771,248 @@ function getChildStreaks(int $child_user_id, int $parent_user_id = null): array 
     ");
     $routineStmt->execute($params);
     $routineDates = $routineStmt->fetchAll(PDO::FETCH_COLUMN) ?: [];
+    $routineDates = array_values(array_unique(array_filter($routineDates)));
+    $routineCompletionSet = array_fill_keys($routineDates, true);
 
-    $taskStmt = $db->prepare("
-        SELECT DISTINCT DATE(approved_at) AS date_key
+    $routineDefStmt = $db->prepare("
+        SELECT id, recurrence, recurrence_days, routine_date, created_at
+        FROM routines
+        WHERE child_user_id = :child_id
+    ");
+    $routineDefStmt->execute([':child_id' => $child_user_id]);
+    $routineDefs = $routineDefStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+    $taskDefStmt = $db->prepare("
+        SELECT id, due_date, end_date, recurrence, recurrence_days
         FROM tasks
         WHERE child_user_id = :child_id
-          AND approved_at IS NOT NULL
+          AND recurrence IS NOT NULL
+          AND recurrence != ''
+          AND due_date IS NOT NULL
     ");
-    $taskStmt->execute([':child_id' => $child_user_id]);
-    $taskDates = $taskStmt->fetchAll(PDO::FETCH_COLUMN) ?: [];
+    $taskDefStmt->execute([':child_id' => $child_user_id]);
+    $taskDefs = $taskDefStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+    $normalizeDays = static function ($raw): array {
+        return array_values(array_filter(array_map('trim', explode(',', (string) $raw))));
+    };
+
+    $isRoutineScheduled = static function (string $dateKey) use ($routineDefs, $normalizeDays): bool {
+        $dayShort = date('D', strtotime($dateKey));
+        foreach ($routineDefs as $routine) {
+            $recurrence = $routine['recurrence'] ?? '';
+            if ($recurrence === '') {
+                $routineDate = $routine['routine_date'] ?? null;
+                if ($routineDate && $routineDate === $dateKey) {
+                    return true;
+                }
+                continue;
+            }
+            $startKey = !empty($routine['created_at']) ? date('Y-m-d', strtotime($routine['created_at'])) : $dateKey;
+            if ($dateKey < $startKey) {
+                continue;
+            }
+            if ($recurrence === 'daily') {
+                return true;
+            }
+            if ($recurrence === 'weekly') {
+                $days = $normalizeDays($routine['recurrence_days'] ?? '');
+                if (empty($days) || in_array($dayShort, $days, true)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    };
+
+    $isTaskScheduled = static function (string $dateKey) use ($taskDefs, $normalizeDays): bool {
+        $dayShort = date('D', strtotime($dateKey));
+        foreach ($taskDefs as $task) {
+            $startKey = !empty($task['due_date']) ? date('Y-m-d', strtotime($task['due_date'])) : null;
+            if ($startKey && $dateKey < $startKey) {
+                continue;
+            }
+            $endKey = !empty($task['end_date']) ? $task['end_date'] : null;
+            if ($endKey && $dateKey > $endKey) {
+                continue;
+            }
+            $recurrence = $task['recurrence'] ?? '';
+            if ($recurrence === 'daily') {
+                return true;
+            }
+            if ($recurrence === 'weekly') {
+                $days = $normalizeDays($task['recurrence_days'] ?? '');
+                if (empty($days) || in_array($dayShort, $days, true)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    };
 
     $taskInstanceStmt = $db->prepare("
-        SELECT DISTINCT DATE(ti.approved_at) AS date_key
+        SELECT ti.date_key, ti.completed_at
         FROM task_instances ti
         JOIN tasks t ON t.id = ti.task_id
         WHERE t.child_user_id = :child_id
-          AND ti.approved_at IS NOT NULL
-          AND ti.status = 'approved'
+          AND t.recurrence IS NOT NULL
+          AND t.recurrence != ''
+          AND ti.completed_at IS NOT NULL
+          AND (ti.status IS NULL OR ti.status != 'rejected')
     ");
     $taskInstanceStmt->execute([':child_id' => $child_user_id]);
-    $instanceDates = $taskInstanceStmt->fetchAll(PDO::FETCH_COLUMN) ?: [];
-    $taskDates = array_values(array_unique(array_merge($taskDates, $instanceDates)));
+    $recurringTaskRows = $taskInstanceStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    foreach ($recurringTaskRows as $row) {
+        $dateKey = $row['date_key'] ?? '';
+        if ($dateKey === '' || empty($row['completed_at'])) {
+            continue;
+        }
+        $completedKey = date('Y-m-d', strtotime((string) $row['completed_at']));
+        if ($completedKey !== $dateKey) {
+            continue;
+        }
+        $taskDates[] = $dateKey;
+    }
+    $taskDates = array_values(array_unique(array_filter($taskDates)));
+    $taskCompletionSet = array_fill_keys($taskDates, true);
+
+    $calcScheduledStreak = static function (callable $isScheduled, array $completionSet): int {
+        $cursor = new DateTimeImmutable('today');
+        $streak = 0;
+        for ($i = 0; $i < 365; $i++) {
+            $dateKey = $cursor->format('Y-m-d');
+            if ($isScheduled($dateKey)) {
+                if (!empty($completionSet[$dateKey])) {
+                    $streak++;
+                } else {
+                    break;
+                }
+            }
+            $cursor = $cursor->modify('-1 day');
+        }
+        return $streak;
+    };
+
+    $routineStreak = $calcScheduledStreak($isRoutineScheduled, $routineCompletionSet);
+    $taskStreak = $calcScheduledStreak($isTaskScheduled, $taskCompletionSet);
+
+    $weekStart = new DateTimeImmutable('monday this week');
+    $weekEnd = $weekStart->modify('+6 days');
+    $rollingStart = new DateTimeImmutable('today -6 days');
+    $rollingEnd = new DateTimeImmutable('today');
+    $weekCursor = $rollingStart;
+    $routineScheduledCount = 0;
+    $routineCompletedCount = 0;
+    $taskScheduledCount = 0;
+    $taskCompletedCount = 0;
+    while ($weekCursor <= $rollingEnd) {
+        $dateKey = $weekCursor->format('Y-m-d');
+        if ($isRoutineScheduled($dateKey)) {
+            $routineScheduledCount++;
+            if (!empty($routineCompletionSet[$dateKey])) {
+                $routineCompletedCount++;
+                $routineWeekDates[] = $dateKey;
+            }
+        }
+        if ($isTaskScheduled($dateKey)) {
+            $taskScheduledCount++;
+            if (!empty($taskCompletionSet[$dateKey])) {
+                $taskCompletedCount++;
+                $taskWeekDates[] = $dateKey;
+            }
+        }
+        $weekCursor = $weekCursor->modify('+1 day');
+    }
+    $routineWeekDates = array_values(array_unique($routineWeekDates));
+    $taskWeekDates = array_values(array_unique($taskWeekDates));
+    $routineOnTimeRate = $routineScheduledCount > 0 ? (int) round(($routineCompletedCount / $routineScheduledCount) * 100) : 0;
+    $taskOnTimeRate = $taskScheduledCount > 0 ? (int) round(($taskCompletedCount / $taskScheduledCount) * 100) : 0;
+
+    $weekStartStamp = $weekStart->setTime(0, 0, 0)->format('Y-m-d H:i:s');
+    $weekEndStamp = $weekEnd->setTime(23, 59, 59)->format('Y-m-d H:i:s');
+    $nonRecurringCount = 0;
+    $recurringCount = 0;
+    $nonRecurringStmt = $db->prepare("
+        SELECT COUNT(*)
+        FROM tasks
+        WHERE child_user_id = :child_id
+          AND (recurrence IS NULL OR recurrence = '')
+          AND COALESCE(approved_at, completed_at) IS NOT NULL
+          AND COALESCE(approved_at, completed_at) BETWEEN :week_start AND :week_end
+    ");
+    $nonRecurringStmt->execute([
+        ':child_id' => $child_user_id,
+        ':week_start' => $weekStartStamp,
+        ':week_end' => $weekEndStamp
+    ]);
+    $nonRecurringCount = (int) ($nonRecurringStmt->fetchColumn() ?: 0);
+
+    $recurringStmt = $db->prepare("
+        SELECT COUNT(*)
+        FROM task_instances ti
+        JOIN tasks t ON t.id = ti.task_id
+        WHERE t.child_user_id = :child_id
+          AND t.recurrence IS NOT NULL
+          AND t.recurrence != ''
+          AND COALESCE(ti.approved_at, ti.completed_at) IS NOT NULL
+          AND COALESCE(ti.approved_at, ti.completed_at) BETWEEN :week_start AND :week_end
+          AND (ti.status IS NULL OR ti.status != 'rejected')
+    ");
+    $recurringStmt->execute([
+        ':child_id' => $child_user_id,
+        ':week_start' => $weekStartStamp,
+        ':week_end' => $weekEndStamp
+    ]);
+    $recurringCount = (int) ($recurringStmt->fetchColumn() ?: 0);
+    $weeklyTaskCompletedCount = $nonRecurringCount + $recurringCount;
+
+    $bestRoutineStreak = 0;
+    $bestTaskStreak = 0;
+    $bestStmt = $db->prepare("SELECT routine_best_streak, task_best_streak FROM child_streak_records WHERE child_user_id = :child_id LIMIT 1");
+    $bestStmt->execute([':child_id' => $child_user_id]);
+    $bestRow = $bestStmt->fetch(PDO::FETCH_ASSOC);
+    if ($bestRow) {
+        $bestRoutineStreak = (int) ($bestRow['routine_best_streak'] ?? 0);
+        $bestTaskStreak = (int) ($bestRow['task_best_streak'] ?? 0);
+    }
+    if ($routineStreak > $bestRoutineStreak || $taskStreak > $bestTaskStreak) {
+        $bestRoutineStreak = max($bestRoutineStreak, $routineStreak);
+        $bestTaskStreak = max($bestTaskStreak, $taskStreak);
+        $db->prepare("
+            INSERT INTO child_streak_records (child_user_id, routine_best_streak, task_best_streak, updated_at)
+            VALUES (:child_id, :routine_best, :task_best, NOW())
+            ON DUPLICATE KEY UPDATE
+                routine_best_streak = VALUES(routine_best_streak),
+                task_best_streak = VALUES(task_best_streak),
+                updated_at = NOW()
+        ")->execute([
+            ':child_id' => $child_user_id,
+            ':routine_best' => $bestRoutineStreak,
+            ':task_best' => $bestTaskStreak
+        ]);
+    } elseif (!$bestRow) {
+        $db->prepare("
+            INSERT INTO child_streak_records (child_user_id, routine_best_streak, task_best_streak, updated_at)
+            VALUES (:child_id, :routine_best, :task_best, NOW())
+        ")->execute([
+            ':child_id' => $child_user_id,
+            ':routine_best' => $routineStreak,
+            ':task_best' => $taskStreak
+        ]);
+        $bestRoutineStreak = $routineStreak;
+        $bestTaskStreak = $taskStreak;
+    }
 
     return [
-        'routine_streak' => calculateConsecutiveStreak($routineDates),
-        'task_streak' => calculateConsecutiveStreak($taskDates)
+        'routine_streak' => $routineStreak,
+        'task_streak' => $taskStreak,
+        'routine_week_dates' => $routineWeekDates,
+        'task_week_dates' => $taskWeekDates,
+        'weekly_task_completed_count' => $weeklyTaskCompletedCount,
+        'routine_on_time_rate' => $routineOnTimeRate,
+        'task_on_time_rate' => $taskOnTimeRate,
+        'routine_best_streak' => $bestRoutineStreak,
+        'task_best_streak' => $bestTaskStreak
     ];
 }
 
@@ -4337,6 +4599,17 @@ try {
     )";
     $db->exec($sql);
     error_log("Created/verified child_points table successfully");
+
+    // Create child_streak_records table if not exists
+    $sql = "CREATE TABLE IF NOT EXISTS child_streak_records (
+        child_user_id INT PRIMARY KEY,
+        routine_best_streak INT NOT NULL DEFAULT 0,
+        task_best_streak INT NOT NULL DEFAULT 0,
+        updated_at DATETIME NOT NULL,
+        FOREIGN KEY (child_user_id) REFERENCES users(id) ON DELETE CASCADE
+    )";
+    $db->exec($sql);
+    error_log("Created/verified child_streak_records table successfully");
 
             // Note: Pre-population of default Routine Tasks skipped to avoid foreign key constraint violation with parent_user_id = 0.
     // Parents can create initial tasks via the UI.
