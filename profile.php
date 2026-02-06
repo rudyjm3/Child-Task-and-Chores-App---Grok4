@@ -20,6 +20,13 @@ $role = $_SESSION['role'];
 $current_user_id = $_SESSION['user_id'];
 // Resolve precise role type for permission checks
 $current_role_type = getEffectiveRole($current_user_id);
+$welcome_role_label = getUserRoleLabel($current_user_id);
+if (!$welcome_role_label) {
+    $fallback_role = $current_role_type ?: $role;
+    if ($fallback_role) {
+        $welcome_role_label = ucfirst(str_replace('_', ' ', $fallback_role));
+    }
+}
 
 // Determine the family root (main account owner) for relationship checks
 $family_root_id = $current_user_id;
@@ -476,7 +483,11 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
         <div class="page-header-top">
             <div class="page-header-title">
                 <h1>Profile</h1>
-                <p class="page-header-meta">Welcome back, <?php echo htmlspecialchars($_SESSION['name'] ?? $_SESSION['username'] ?? 'User'); ?></p>
+                <p class="page-header-meta">Welcome back, <?php echo htmlspecialchars($_SESSION['name'] ?? $_SESSION['username'] ?? 'User'); ?>
+                    <?php if ($welcome_role_label): ?>
+                        <span class="role-badge"><?php echo htmlspecialchars($welcome_role_label); ?></span>
+                    <?php endif; ?>
+                </p>
             </div>
             <div class="page-header-actions">
                 <?php if (!empty($isParentNotificationUser)): ?>
@@ -486,7 +497,7 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
                             <span class="parent-notification-badge"><?php echo (int) $parentNotificationCount; ?></span>
                         <?php endif; ?>
                     </button>
-                    <a class="page-header-action" href="dashboard_parent.php#manage-family" aria-label="Family settings">
+                    <a class="nav-family-button page-header-action" href="dashboard_parent.php#manage-family" aria-label="Family settings">
                         <i class="fa-solid fa-gear"></i>
                     </a>
                 <?php elseif (!empty($isChildNotificationUser)): ?>
@@ -521,7 +532,7 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
             </a>
             <a class="nav-link<?php echo $rewardsActive ? ' is-active' : ''; ?>" href="rewards.php"<?php echo $rewardsActive ? ' aria-current="page"' : ''; ?>>
                 <i class="fa-solid fa-gift"></i>
-                <span>Rewards</span>
+                <span>Rewards Shop</span>
             </a>
             <a class="nav-link<?php echo $profileActive ? ' is-active' : ''; ?>" href="profile.php?self=1"<?php echo $profileActive ? ' aria-current="page"' : ''; ?>>
                 <i class="fa-solid fa-user"></i>
@@ -797,7 +808,6 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
 <?php endif; ?>
 </body>
 </html>
-
 
 
 

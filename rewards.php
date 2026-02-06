@@ -9,6 +9,13 @@ if (!isset($_SESSION['user_id'])) {
 $role_type = getEffectiveRole($_SESSION['user_id']);
 $child_id = (int) $_SESSION['user_id'];
 $main_parent_id = getFamilyRootId($_SESSION['user_id']);
+$welcome_role_label = getUserRoleLabel($_SESSION['user_id']);
+if (!$welcome_role_label) {
+    $fallback_role = $role_type ?: ($_SESSION['role'] ?? null);
+    if ($fallback_role) {
+        $welcome_role_label = ucfirst(str_replace('_', ' ', $fallback_role));
+    }
+}
 
 if ($role_type === 'child') {
     $parent_id = $main_parent_id;
@@ -942,7 +949,11 @@ foreach ($children as $child) {
         <div class="page-header-top">
             <div class="page-header-title">
                 <h1>Rewards Shop</h1>
-                <p class="page-header-meta">Welcome back, <?php echo htmlspecialchars($_SESSION['name'] ?? $_SESSION['username'] ?? 'User'); ?></p>
+                <p class="page-header-meta">Welcome back, <?php echo htmlspecialchars($_SESSION['name'] ?? $_SESSION['username'] ?? 'User'); ?>
+                    <?php if ($welcome_role_label): ?>
+                        <span class="role-badge"><?php echo htmlspecialchars($welcome_role_label); ?></span>
+                    <?php endif; ?>
+                </p>
             </div>
             <div class="page-header-actions">
                 <?php if (!empty($isParentNotificationUser)): ?>
@@ -952,7 +963,7 @@ foreach ($children as $child) {
                             <span class="parent-notification-badge"><?php echo (int) $parentNotificationCount; ?></span>
                         <?php endif; ?>
                     </button>
-                    <a class="page-header-action" href="dashboard_parent.php#manage-family" aria-label="Family settings">
+                    <a class="nav-family-button page-header-action" href="dashboard_parent.php#manage-family" aria-label="Family settings">
                         <i class="fa-solid fa-gear"></i>
                     </a>
                 <?php elseif (!empty($isChildNotificationUser)): ?>
@@ -1856,7 +1867,6 @@ $hasRecentMore = $recentTotal > $recentLimit;
     })();
 </script>
 </html>
-
 
 
 
