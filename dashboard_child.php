@@ -1891,7 +1891,6 @@ foreach ($taskCountStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
               'Fantastic work!'
           ];
 
-          const allowRepeatCelebration = window.location.hostname === 'localhost';
           const candidates = [];
           const triggers = document.querySelectorAll('[data-streak-celebration-trigger]');
           triggers.forEach((el, index) => {
@@ -1906,9 +1905,6 @@ foreach ($taskCountStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
               let lastValue = parseInt(window.localStorage.getItem(key) || '0', 10);
               if (streakValue < lastValue) {
                   window.localStorage.setItem(key, '0');
-                  lastValue = 0;
-              }
-              if (allowRepeatCelebration) {
                   lastValue = 0;
               }
               if (streakValue > lastValue) {
