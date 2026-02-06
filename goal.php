@@ -1245,7 +1245,7 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                             <span class="parent-notification-badge"><?php echo (int) $parentNotificationCount; ?></span>
                         <?php endif; ?>
                     </button>
-                    <a class="page-header-action" href="dashboard_parent.php#manage-family" aria-label="Family settings">
+                    <a class="nav-family-button page-header-action" href="dashboard_parent.php#manage-family" aria-label="Family settings">
                         <i class="fa-solid fa-gear"></i>
                     </a>
                 <?php elseif (!empty($isChildNotificationUser)): ?>
@@ -2959,6 +2959,5 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
 <?php endif; ?>
 </body>
 </html>
-
 
 

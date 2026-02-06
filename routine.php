@@ -1723,7 +1723,7 @@ margin-bottom: 20px;}
                             <span class="parent-notification-badge"><?php echo (int) $parentNotificationCount; ?></span>
                         <?php endif; ?>
                     </button>
-                    <a class="page-header-action" href="dashboard_parent.php#manage-family" aria-label="Family settings">
+                    <a class="nav-family-button page-header-action" href="dashboard_parent.php#manage-family" aria-label="Family settings">
                         <i class="fa-solid fa-gear"></i>
                     </a>
                 <?php elseif (!empty($isChildNotificationUser)): ?>
@@ -1758,7 +1758,7 @@ margin-bottom: 20px;}
             </a>
             <a class="nav-link<?php echo $rewardsActive ? ' is-active' : ''; ?>" href="rewards.php"<?php echo $rewardsActive ? ' aria-current="page"' : ''; ?>>
                 <i class="fa-solid fa-gift"></i>
-                <span>Rewards</span>
+                <span>Rewards Shop</span>
             </a>
             <a class="nav-link<?php echo $profileActive ? ' is-active' : ''; ?>" href="profile.php?self=1"<?php echo $profileActive ? ' aria-current="page"' : ''; ?>>
                 <i class="fa-solid fa-user"></i>
@@ -5308,7 +5308,6 @@ margin-bottom: 20px;}
 </body>
 </html>
 <?php
-
 
 
 
