@@ -794,10 +794,8 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
         .calendar-task-item { border: 1px solid #ffd28a; background: #fff7e6; border-radius: 10px; padding: 8px; text-align: left; cursor: pointer; display: grid; gap: 4px; font-size: 0.9rem; }
         .calendar-task-item:hover { background: #ffe9c6; }
         .child-theme .calendar-task-item { font-family: inherit; }
-        .calendar-task-header { display: flex; align-items: center; justify-content: space-between; gap: 6px; flex-wrap: wrap; }
+        .calendar-task-header { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
         .task-week-list .calendar-task-header { flex-direction: row; align-items: center; flex-wrap: wrap; }
-        .calendar-task-title-wrap { flex: 1; min-width: 0; }
-        .calendar-task-points { margin-left: auto; }
         .calendar-task-title-wrap { display: inline-flex; align-items: center; gap: 6px; flex: 1; min-width: 0; }
         .calendar-task-badge { display: inline-flex; align-items: center; gap: 4px; width: fit-content; padding: 2px 8px; border-radius: 999px; font-size: 0.7rem; font-weight: 700; letter-spacing: 0.02em; text-transform: uppercase; }
         .calendar-task-badge.overdue { background: #d9534f; color: #fff; }
@@ -811,7 +809,7 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
         .child-theme .task-card-points i { color: #f59e0b; }
         .child-theme .calendar-task-points { background: #fffbeb; color: #f59e0b; padding: 4px 10px; border-radius: 999px; display: inline-flex; align-items: center; gap: 6px; }
         .child-theme .calendar-task-points::before { content: '\f51e'; font-family: 'Font Awesome 6 Free'; font-weight: 900; }
-        .calendar-task-meta { color: #6d4c41; font-size: 0.85rem; }
+        .calendar-task-meta { color: #919191; font-size: 0.85rem; }
         .calendar-task-child { }
         .calendar-day-empty { color: #9e9e9e; font-size: 0.85rem; text-align: center; padding: 8px 0; }
         .calendar-empty { display: none; text-align: center; color: #9e9e9e; font-weight: 600; padding: 18px; }
