@@ -187,6 +187,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         $start_date = filter_input(INPUT_POST, 'start_date', FILTER_SANITIZE_STRING);
         $end_date = filter_input(INPUT_POST, 'end_date', FILTER_SANITIZE_STRING);
+        $start_offset = filter_input(INPUT_POST, 'start_tz_offset', FILTER_VALIDATE_INT);
+        $end_offset = filter_input(INPUT_POST, 'end_tz_offset', FILTER_VALIDATE_INT);
+        $start_date = normalizeGoalDateTimeInput($start_date, $start_offset);
+        $end_date = normalizeGoalDateTimeInput($end_date, $end_offset);
         $reward_selection = $_POST['reward_id'] ?? '';
         $reward_id = resolveGoalRewardId($family_root_id, $child_user_id, $reward_selection);
         $goal_type = filter_input(INPUT_POST, 'goal_type', FILTER_SANITIZE_STRING) ?: 'manual';
@@ -240,6 +244,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $reactivateOnSave = !empty($_POST['reactivate_on_save']);
         $start_date = filter_input(INPUT_POST, 'start_date', FILTER_SANITIZE_STRING);
         $end_date = filter_input(INPUT_POST, 'end_date', FILTER_SANITIZE_STRING);
+        $start_offset = filter_input(INPUT_POST, 'start_tz_offset', FILTER_VALIDATE_INT);
+        $end_offset = filter_input(INPUT_POST, 'end_tz_offset', FILTER_VALIDATE_INT);
+        $start_date = normalizeGoalDateTimeInput($start_date, $start_offset);
+        $end_date = normalizeGoalDateTimeInput($end_date, $end_offset);
         $reward_selection = $_POST['reward_id'] ?? '';
         $reward_id = resolveGoalRewardId($family_root_id, $child_user_id, $reward_selection);
         $goal_type = filter_input(INPUT_POST, 'goal_type', FILTER_SANITIZE_STRING) ?: 'manual';
@@ -1323,6 +1331,19 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                                     $displayStatus = !empty($goal['requires_parent_approval']) ? 'pending_approval' : 'completed';
                                 }
                                 $goalType = $goalProgress['goal_type'] ?? '';
+                                $goalWindowDays = null;
+                                $startStamp = !empty($goal['start_date']) ? strtotime($goal['start_date']) : false;
+                                $endStamp = !empty($goal['end_date']) ? strtotime($goal['end_date']) : false;
+                                if ($startStamp && $endStamp) {
+                                    $startDay = (new DateTimeImmutable())->setTimestamp($startStamp)->setTime(0, 0, 0);
+                                    $endDay = (new DateTimeImmutable())->setTimestamp($endStamp)->setTime(0, 0, 0);
+                                    if ($endDay < $startDay) {
+                                        $tmp = $startDay;
+                                        $startDay = $endDay;
+                                        $endDay = $tmp;
+                                    }
+                                    $goalWindowDays = (int) $startDay->diff($endDay)->days + 1;
+                                }
                                 $routineTargets = $goal['routine_targets'] ?? [];
                                 if (count($routineTargets) > 1 && in_array($goalType, ['routine_streak', 'routine_count'], true)) {
                                     $routineCounts = $goalProgress['routine_counts'] ?? [];
@@ -1438,7 +1459,11 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                                             <?php if (($goalProgress['goal_type'] ?? '') === 'routine_streak'): ?>
                                                 <span class="goal-detail-pill">Streak: <?php echo (int) ($goal['streak_required'] ?? 0); ?> days</span>
                                             <?php elseif (in_array(($goalProgress['goal_type'] ?? ''), ['routine_count', 'task_quota'], true)): ?>
-                                                <span class="goal-detail-pill">Target days: <?php echo (int) ($goal['target_count'] ?? 0); ?></span>
+                                                <?php if ($goalWindowDays !== null): ?>
+                                                    <span class="goal-detail-pill">Target days: <?php echo (int) $goalWindowDays; ?></span>
+                                                <?php else: ?>
+                                                    <span class="goal-detail-pill">Target count: <?php echo (int) ($goal['target_count'] ?? 0); ?></span>
+                                                <?php endif; ?>
                                             <?php endif; ?>
                                             <?php if (($goal['award_mode'] ?? 'both') === 'reward' && empty($goal['points_awarded']) && !empty($goal['reward_title'])): ?>
                                                 <span class="goal-detail-pill">Reward: <?php echo htmlspecialchars($goal['reward_title']); ?></span>
@@ -1809,6 +1834,7 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                                     <input type="time" id="goal_start_time" data-goal-start-time required>
                                 </div>
                                 <input type="hidden" name="start_date" data-goal-start-hidden>
+                                <input type="hidden" name="start_tz_offset" data-goal-start-offset>
                             </div>
                             <div class="form-group">
                                 <label for="goal_end_date">End Date/Time
@@ -1822,6 +1848,7 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                                     <input type="time" id="goal_end_time" data-goal-end-time required>
                                 </div>
                                 <input type="hidden" name="end_date" data-goal-end-hidden>
+                                <input type="hidden" name="end_tz_offset" data-goal-end-offset>
                             </div>
                             <div class="form-group">
                                 <label for="goal_type">Goal Type
@@ -2079,6 +2106,7 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                                     <input type="time" id="edit_goal_start_time" data-goal-start-time required>
                                 </div>
                                 <input type="hidden" name="start_date" data-goal-start-hidden>
+                                <input type="hidden" name="start_tz_offset" data-goal-start-offset>
                             </div>
                             <div class="form-group">
                                 <label for="edit_goal_end_date">End Date/Time
@@ -2092,6 +2120,7 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
                                     <input type="time" id="edit_goal_end_time" data-goal-end-time required>
                                 </div>
                                 <input type="hidden" name="end_date" data-goal-end-hidden>
+                                <input type="hidden" name="end_tz_offset" data-goal-end-offset>
                             </div>
                             <div class="form-group">
                                 <label for="edit_goal_type">Goal Type
@@ -2339,6 +2368,8 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
           const endTimeInput = scope.querySelector('[data-goal-end-time]');
           const startHiddenInput = scope.querySelector('[data-goal-start-hidden]');
           const endHiddenInput = scope.querySelector('[data-goal-end-hidden]');
+          const startOffsetInput = scope.querySelector('[data-goal-start-offset]');
+          const endOffsetInput = scope.querySelector('[data-goal-end-offset]');
 
           const setStepperDisabled = (disabled) => {
               if (!pointsInput) return;
@@ -2410,15 +2441,27 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
           };
 
           const syncHiddenDateTime = () => {
+              const startDate = startDateInput?.value && startTimeInput?.value
+                  ? parseInputDateTime(startDateInput.value, startTimeInput.value)
+                  : null;
+              const endDate = endDateInput?.value && endTimeInput?.value
+                  ? parseInputDateTime(endDateInput.value, endTimeInput.value)
+                  : null;
               if (startHiddenInput) {
-                  startHiddenInput.value = startDateInput?.value && startTimeInput?.value
+                  startHiddenInput.value = startDate
                       ? `${startDateInput.value}T${startTimeInput.value}`
                       : '';
               }
               if (endHiddenInput) {
-                  endHiddenInput.value = endDateInput?.value && endTimeInput?.value
+                  endHiddenInput.value = endDate
                       ? `${endDateInput.value}T${endTimeInput.value}`
                       : '';
+              }
+              if (startOffsetInput) {
+                  startOffsetInput.value = startDate ? String(startDate.getTimezoneOffset()) : '';
+              }
+              if (endOffsetInput) {
+                  endOffsetInput.value = endDate ? String(endDate.getTimezoneOffset()) : '';
               }
           };
 
@@ -2570,30 +2613,39 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
           }
           form.querySelector('[name="title"]').value = payload.title || '';
           form.querySelector('[name="description"]').value = payload.description || '';
-          const setDateTimeFields = (value, dateEl, timeEl, hiddenEl) => {
+          const setDateTimeFields = (value, dateEl, timeEl, hiddenEl, offsetEl) => {
               if (!dateEl || !timeEl || !hiddenEl) return;
               if (!value) {
                   dateEl.value = '';
                   timeEl.value = '';
                   hiddenEl.value = '';
+                  if (offsetEl) {
+                      offsetEl.value = '';
+                  }
                   return;
               }
               const parts = String(value).split('T');
               dateEl.value = parts[0] || '';
               timeEl.value = parts[1] ? parts[1].slice(0, 5) : '';
               hiddenEl.value = value;
+              if (offsetEl && dateEl.value && timeEl.value) {
+                  const parsed = new Date(`${dateEl.value}T${timeEl.value}`);
+                  offsetEl.value = Number.isNaN(parsed.getTime()) ? '' : String(parsed.getTimezoneOffset());
+              }
           };
           setDateTimeFields(
               payload.start_date || '',
               form.querySelector('[data-goal-start-date]'),
               form.querySelector('[data-goal-start-time]'),
-              form.querySelector('[data-goal-start-hidden]')
+              form.querySelector('[data-goal-start-hidden]'),
+              form.querySelector('[data-goal-start-offset]')
           );
           setDateTimeFields(
               payload.end_date || '',
               form.querySelector('[data-goal-end-date]'),
               form.querySelector('[data-goal-end-time]'),
-              form.querySelector('[data-goal-end-hidden]')
+              form.querySelector('[data-goal-end-hidden]'),
+              form.querySelector('[data-goal-end-offset]')
           );
           form.querySelector('[name="goal_type"]').value = payload.goal_type || 'manual';
           form.querySelector('[name="task_category"]').value = payload.task_category || '';

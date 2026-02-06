@@ -7,9 +7,6 @@
 
 session_start(); // Ensure session is started to load existing session
 
-// Set timezone to avoid mismatches
-date_default_timezone_set('America/New_York'); // Adjust to your server's timezone
-
 require_once __DIR__ . '/includes/functions.php';
 
 if (!isset($_SESSION['user_id'])) {

@@ -2242,6 +2242,38 @@ function denyReward($reward_id, $parent_user_id, $actor_user_id, $note = null) {
 }
 
 // Create goal
+function normalizeGoalDateTimeInput($value, $offsetMinutes = null) {
+    $raw = trim((string) $value);
+    if ($raw === '') {
+        return null;
+    }
+    $serverTz = new DateTimeZone(defined('APP_TIMEZONE') ? APP_TIMEZONE : date_default_timezone_get());
+    $offset = filter_var($offsetMinutes, FILTER_VALIDATE_INT, ['options' => ['default' => null]]);
+    if ($offset === null) {
+        try {
+            $parsed = new DateTimeImmutable($raw, $serverTz);
+            return $parsed->format('Y-m-d H:i:s');
+        } catch (Exception $e) {
+            return $raw;
+        }
+    }
+    $offset = (int) $offset;
+    $sign = $offset > 0 ? '-' : '+';
+    $abs = abs($offset);
+    $hours = intdiv($abs, 60);
+    $minutes = $abs % 60;
+    $offsetTz = new DateTimeZone(sprintf('%s%02d:%02d', $sign, $hours, $minutes));
+    $parsed = DateTimeImmutable::createFromFormat('Y-m-d\\TH:i', $raw, $offsetTz);
+    if (!$parsed) {
+        try {
+            $parsed = new DateTimeImmutable($raw, $offsetTz);
+        } catch (Exception $e) {
+            return $raw;
+        }
+    }
+    return $parsed->setTimezone($serverTz)->format('Y-m-d H:i:s');
+}
+
 function createGoal($parent_user_id, $child_user_id, $title, $start_date, $end_date, $reward_id = null, $creator_user_id = null, array $options = []) {
     global $db;
     $description = isset($options['description']) ? trim((string) $options['description']) : null;
@@ -3144,7 +3176,9 @@ function calculateGoalProgress(array $goal, $child_id) {
             FROM tasks t
             WHERE t.child_user_id = ?
               AND (t.recurrence IS NULL OR t.recurrence = '')
-              AND t.approved_at BETWEEN ? AND ?
+              AND t.status IN ('completed', 'approved')
+              AND COALESCE(t.completed_at, t.approved_at) IS NOT NULL
+              AND COALESCE(t.completed_at, t.approved_at) BETWEEN ? AND ?
               {$taskFilterSql}
         ";
         $stmt = $db->prepare($nonRecurringSql);
@@ -3157,8 +3191,9 @@ function calculateGoalProgress(array $goal, $child_id) {
             JOIN tasks t ON t.id = ti.task_id
             WHERE t.child_user_id = ?
               AND (t.recurrence IS NOT NULL AND t.recurrence != '')
-              AND ti.status = 'approved'
-              AND ti.approved_at BETWEEN ? AND ?
+              AND ti.status IN ('completed', 'approved')
+              AND COALESCE(ti.completed_at, ti.approved_at) IS NOT NULL
+              AND COALESCE(ti.completed_at, ti.approved_at) BETWEEN ? AND ?
               {$taskFilterSql}
         ";
         $stmt = $db->prepare($recurringSql);
