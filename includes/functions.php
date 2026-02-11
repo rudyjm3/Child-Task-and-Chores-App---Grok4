@@ -1753,15 +1753,17 @@ function deleteReward($parent_user_id, $reward_id) {
 }
 
 // Reward library helpers
-function createRewardTemplate($parent_user_id, $title, $description, $point_cost, $level_required = 1, $creator_user_id = null) {
+function createRewardTemplate($parent_user_id, $title, $description, $point_cost, $level_required = 1, $creator_user_id = null, $icon_class = null, $icon_color = null) {
     global $db;
-    $stmt = $db->prepare("INSERT INTO reward_templates (parent_user_id, title, description, point_cost, level_required, created_by) VALUES (:parent_id, :title, :description, :point_cost, :level_required, :created_by)");
+    $stmt = $db->prepare("INSERT INTO reward_templates (parent_user_id, title, description, point_cost, level_required, icon_class, icon_color, created_by) VALUES (:parent_id, :title, :description, :point_cost, :level_required, :icon_class, :icon_color, :created_by)");
     $success = $stmt->execute([
         ':parent_id' => $parent_user_id,
         ':title' => trim((string)$title),
         ':description' => trim((string)$description),
         ':point_cost' => max(1, (int)$point_cost),
         ':level_required' => max(1, (int)$level_required),
+        ':icon_class' => $icon_class,
+        ':icon_color' => $icon_color,
         ':created_by' => $creator_user_id ?: $parent_user_id
     ]);
     return $success ? (int) $db->lastInsertId() : false;
@@ -1777,7 +1779,7 @@ function deleteRewardTemplate($parent_user_id, $template_id) {
     return $stmt->rowCount() > 0;
 }
 
-function updateRewardTemplate($parent_user_id, $template_id, $title, $description, $point_cost, $level_required = 1) {
+function updateRewardTemplate($parent_user_id, $template_id, $title, $description, $point_cost, $level_required = 1, $icon_class = null, $icon_color = null) {
     global $db;
     $title = trim((string)$title);
     $description = trim((string)$description);
@@ -1787,13 +1789,17 @@ function updateRewardTemplate($parent_user_id, $template_id, $title, $descriptio
                           SET title = :title,
                               description = :description,
                               point_cost = :point_cost,
-                              level_required = :level_required
+                              level_required = :level_required,
+                              icon_class = :icon_class,
+                              icon_color = :icon_color
                           WHERE id = :template_id AND parent_user_id = :parent_id");
     $stmt->execute([
         ':title' => $title,
         ':description' => $description,
         ':point_cost' => $point_cost,
         ':level_required' => $level_required,
+        ':icon_class' => $icon_class,
+        ':icon_color' => $icon_color,
         ':template_id' => $template_id,
         ':parent_id' => $parent_user_id
     ]);
@@ -1807,7 +1813,7 @@ function duplicateRewardTemplate($parent_user_id, $template_id, $creator_user_id
         return 0;
     }
 
-    $fetch = $db->prepare("SELECT title, description, point_cost, level_required
+    $fetch = $db->prepare("SELECT title, description, point_cost, level_required, icon_class, icon_color
                            FROM reward_templates
                            WHERE id = :template_id AND parent_user_id = :parent_id");
     $fetch->execute([
@@ -1820,14 +1826,16 @@ function duplicateRewardTemplate($parent_user_id, $template_id, $creator_user_id
     }
 
     $newTitle = 'Copy of ' . ($template['title'] ?? 'Reward');
-    $insert = $db->prepare("INSERT INTO reward_templates (parent_user_id, title, description, point_cost, level_required, created_by)
-                            VALUES (:parent_id, :title, :description, :point_cost, :level_required, :created_by)");
+    $insert = $db->prepare("INSERT INTO reward_templates (parent_user_id, title, description, point_cost, level_required, icon_class, icon_color, created_by)
+                            VALUES (:parent_id, :title, :description, :point_cost, :level_required, :icon_class, :icon_color, :created_by)");
     $ok = $insert->execute([
         ':parent_id' => (int) $parent_user_id,
         ':title' => $newTitle,
         ':description' => $template['description'] ?? '',
         ':point_cost' => (int) ($template['point_cost'] ?? 1),
         ':level_required' => max(1, (int) ($template['level_required'] ?? 1)),
+        ':icon_class' => $template['icon_class'] ?? null,
+        ':icon_color' => $template['icon_color'] ?? null,
         ':created_by' => $creator_user_id ?? $parent_user_id
     ]);
     if (!$ok) {
@@ -1856,7 +1864,7 @@ function duplicateRewardTemplate($parent_user_id, $template_id, $creator_user_id
 
 function getRewardTemplates($parent_user_id) {
     global $db;
-    $stmt = $db->prepare("SELECT id, title, description, point_cost, level_required, created_at FROM reward_templates WHERE parent_user_id = :parent_id ORDER BY created_at DESC");
+    $stmt = $db->prepare("SELECT id, title, description, point_cost, level_required, icon_class, icon_color, created_at FROM reward_templates WHERE parent_user_id = :parent_id ORDER BY created_at DESC");
     $stmt->execute([':parent_id' => $parent_user_id]);
     return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 }
@@ -4219,6 +4227,7 @@ try {
    // Add soft-delete tracking columns for children
    $db->exec("ALTER TABLE child_profiles ADD COLUMN IF NOT EXISTS deleted_at DATETIME DEFAULT NULL");
    $db->exec("ALTER TABLE child_profiles ADD COLUMN IF NOT EXISTS deleted_by INT DEFAULT NULL");
+   $db->exec("ALTER TABLE child_profiles ADD COLUMN IF NOT EXISTS rewards_shop_open TINYINT(1) NOT NULL DEFAULT 1");
    try {
        $db->exec("CREATE INDEX IF NOT EXISTS idx_child_profiles_deleted ON child_profiles(parent_user_id, deleted_at)");
    } catch (PDOException $e) {
@@ -4310,6 +4319,8 @@ try {
       description TEXT,
       point_cost INT NOT NULL,
       level_required INT NOT NULL DEFAULT 1,
+      icon_class VARCHAR(64) DEFAULT NULL,
+      icon_color VARCHAR(16) DEFAULT NULL,
       created_by INT NULL,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (parent_user_id) REFERENCES users(id) ON DELETE CASCADE,
@@ -4318,6 +4329,8 @@ try {
    $db->exec($sql);
    error_log("Created/verified reward_templates table successfully");
    $db->exec("ALTER TABLE reward_templates ADD COLUMN IF NOT EXISTS level_required INT NOT NULL DEFAULT 1");
+   $db->exec("ALTER TABLE reward_templates ADD COLUMN IF NOT EXISTS icon_class VARCHAR(64) NULL");
+   $db->exec("ALTER TABLE reward_templates ADD COLUMN IF NOT EXISTS icon_color VARCHAR(16) NULL");
 
    // Create rewards table if not exists (added created_by)
    $sql = "CREATE TABLE IF NOT EXISTS rewards (

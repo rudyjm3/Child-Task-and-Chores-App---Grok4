@@ -16,11 +16,34 @@ if (!$welcome_role_label) {
         $welcome_role_label = ucfirst(str_replace('_', ' ', $fallback_role));
     }
 }
+$defaultRewardIcon = 'fa-solid fa-gift';
+$defaultRewardColor = '#48bfe3';
+$rewardIconOptions = [
+    ['label' => 'Gift', 'class' => 'fa-solid fa-gift'],
+    ['label' => 'Star', 'class' => 'fa-solid fa-star'],
+    ['label' => 'Book', 'class' => 'fa-solid fa-book'],
+    ['label' => 'Gamepad', 'class' => 'fa-solid fa-gamepad'],
+    ['label' => 'Smile', 'class' => 'fa-solid fa-smile'],
+    ['label' => 'Puzzle', 'class' => 'fa-solid fa-puzzle-piece']
+];
+$rewardIconClasses = array_values(array_unique(array_filter(array_map(
+    static fn($item) => $item['class'] ?? null,
+    $rewardIconOptions
+))));
 
 if ($role_type === 'child') {
     $parent_id = $main_parent_id;
     $messages = [];
+    $shopOpenStmt = $db->prepare("SELECT rewards_shop_open FROM child_profiles WHERE child_user_id = :child_id AND parent_user_id = :parent_id AND deleted_at IS NULL LIMIT 1");
+    $shopOpenStmt->execute([':child_id' => $child_id, ':parent_id' => $parent_id]);
+    $shopOpenRow = $shopOpenStmt->fetch(PDO::FETCH_ASSOC) ?: [];
+    $isShopOpen = ((int) ($shopOpenRow['rewards_shop_open'] ?? 1)) === 1;
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['purchase_template'])) {
+        if (!$isShopOpen) {
+            $_SESSION['flash_message'] = "The Rewards Shop is closed at the moment.";
+            header("Location: rewards.php");
+            exit;
+        }
         $template_id = filter_input(INPUT_POST, 'template_id', FILTER_VALIDATE_INT);
         $purchaseError = null;
         $reward_id = ($template_id && $parent_id)
@@ -91,15 +114,6 @@ if ($role_type === 'child') {
         unset($_SESSION['flash_message']);
     }
 
-    $iconPalette = [
-        ['color' => '#48bfe3', 'icon' => 'fa-solid fa-gift'],
-        ['color' => '#f8961e', 'icon' => 'fa-solid fa-star'],
-        ['color' => '#43aa8b', 'icon' => 'fa-solid fa-book'],
-        ['color' => '#f94144', 'icon' => 'fa-solid fa-gamepad'],
-        ['color' => '#f9c74f', 'icon' => 'fa-solid fa-smile'],
-        ['color' => '#577590', 'icon' => 'fa-solid fa-puzzle-piece']
-    ];
-    $iconCount = count($iconPalette);
     ?>
     <!DOCTYPE html>
     <html lang="en">
@@ -377,7 +391,9 @@ if ($role_type === 'child') {
                             <a class="shop-exit" href="dashboard_child.php">Exit Shop <i class="fa-solid fa-right-from-bracket"></i></a>
                         </div>
                     </div>
-                    <?php if (!empty($templates)): ?>
+                    <?php if (!$isShopOpen): ?>
+                        <div class="shop-empty">The Rewards Shop is closed at the moment.</div>
+                    <?php elseif (!empty($templates)): ?>
                         <div class="shop-grid">
                             <?php foreach ($templates as $index => $template): ?>
                                 <?php
@@ -386,9 +402,14 @@ if ($role_type === 'child') {
                                     $isDisabled = in_array($templateId, $disabledTemplates, true);
                                     $isLocked = $childLevel < $requiredLevel;
                                     $isMuted = $isDisabled || $isLocked;
-                                    $palette = $iconPalette[$iconCount > 0 ? ($index % $iconCount) : 0];
-                                    $iconColor = $palette['color'] ?? '#48bfe3';
-                                    $iconClass = $palette['icon'] ?? 'fa-solid fa-gift';
+                                    $iconClass = trim((string) ($template['icon_class'] ?? ''));
+                                    $iconColor = trim((string) ($template['icon_color'] ?? ''));
+                                    if (!in_array($iconClass, $rewardIconClasses, true)) {
+                                        $iconClass = $defaultRewardIcon;
+                                    }
+                                    if (!preg_match('/^#[0-9a-fA-F]{6}$/', $iconColor)) {
+                                        $iconColor = $defaultRewardColor;
+                                    }
                                     $purchasedCount = $purchasedToday[$templateId] ?? 0;
                                 ?>
                                 <article class="shop-card<?php echo $isMuted ? ' is-muted' : ''; ?>">
@@ -447,12 +468,33 @@ $messages = [];
 require_once __DIR__ . '/includes/notifications_bootstrap.php';
 
 // Load children for this family
-$childStmt = $db->prepare("SELECT child_user_id, child_name, avatar FROM child_profiles WHERE parent_user_id = :parent_id AND deleted_at IS NULL ORDER BY child_name");
+$childStmt = $db->prepare("SELECT child_user_id, child_name, avatar, rewards_shop_open FROM child_profiles WHERE parent_user_id = :parent_id AND deleted_at IS NULL ORDER BY child_name");
 $childStmt->execute([':parent_id' => $main_parent_id]);
 $children = $childStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    if (isset($_POST['update_reward'])) {
+    if (isset($_POST['toggle_shop_access'])) {
+        $child_id = filter_input(INPUT_POST, 'child_id', FILTER_VALIDATE_INT);
+        $shop_open = filter_input(INPUT_POST, 'shop_open', FILTER_VALIDATE_INT);
+        $shop_open = $shop_open ? 1 : 0;
+        if ($child_id) {
+            $updateShop = $db->prepare("UPDATE child_profiles
+                                        SET rewards_shop_open = :shop_open
+                                        WHERE child_user_id = :child_id
+                                          AND parent_user_id = :parent_id
+                                          AND deleted_at IS NULL");
+            $updateShop->execute([
+                ':shop_open' => $shop_open,
+                ':child_id' => $child_id,
+                ':parent_id' => $main_parent_id
+            ]);
+            $messages[] = $updateShop->rowCount() > 0
+                ? "Rewards shop updated for child."
+                : "Unable to update rewards shop for this child.";
+        } else {
+            $messages[] = "Invalid child selected for shop update.";
+        }
+    } elseif (isset($_POST['update_reward'])) {
         $reward_id = filter_input(INPUT_POST, 'reward_id', FILTER_VALIDATE_INT);
         $title = trim((string)filter_input(INPUT_POST, 'reward_title', FILTER_SANITIZE_STRING));
         $description = trim((string)filter_input(INPUT_POST, 'reward_description', FILTER_SANITIZE_STRING));
@@ -546,13 +588,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $description = trim((string)filter_input(INPUT_POST, 'template_description', FILTER_SANITIZE_STRING));
         $point_cost = filter_input(INPUT_POST, 'template_point_cost', FILTER_VALIDATE_INT);
         $level_required = filter_input(INPUT_POST, 'template_level_required', FILTER_VALIDATE_INT);
+        $icon_class = trim((string)filter_input(INPUT_POST, 'template_icon_class', FILTER_SANITIZE_STRING));
+        $icon_color = trim((string)filter_input(INPUT_POST, 'template_icon_color', FILTER_SANITIZE_STRING));
+        if (!in_array($icon_class, $rewardIconClasses, true)) {
+            $icon_class = $defaultRewardIcon;
+        }
+        if (!preg_match('/^#[0-9a-fA-F]{6}$/', $icon_color)) {
+            $icon_color = $defaultRewardColor;
+        }
         $disabled_children = array_map('intval', $_POST['disabled_child_ids'] ?? []);
         $disable_all = !empty($_POST['disable_all_children']);
         if ($disable_all) {
             $disabled_children = array_column($children, 'child_user_id');
         }
         if ($title !== '' && $point_cost !== false && $point_cost !== null && $point_cost > 0) {
-            $templateId = createRewardTemplate($main_parent_id, $title, $description, $point_cost, (int) ($level_required ?: 1), $_SESSION['user_id']);
+            $templateId = createRewardTemplate($main_parent_id, $title, $description, $point_cost, (int) ($level_required ?: 1), $_SESSION['user_id'], $icon_class, $icon_color);
             if ($templateId) {
                 setRewardTemplateDisabledChildren($main_parent_id, $templateId, $disabled_children);
                 $messages[] = "Template created.";
@@ -568,13 +618,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $description = trim((string)filter_input(INPUT_POST, 'template_description', FILTER_SANITIZE_STRING));
         $point_cost = filter_input(INPUT_POST, 'template_point_cost', FILTER_VALIDATE_INT);
         $level_required = filter_input(INPUT_POST, 'template_level_required', FILTER_VALIDATE_INT);
+        $icon_class = trim((string)filter_input(INPUT_POST, 'template_icon_class', FILTER_SANITIZE_STRING));
+        $icon_color = trim((string)filter_input(INPUT_POST, 'template_icon_color', FILTER_SANITIZE_STRING));
+        if (!in_array($icon_class, $rewardIconClasses, true)) {
+            $icon_class = $defaultRewardIcon;
+        }
+        if (!preg_match('/^#[0-9a-fA-F]{6}$/', $icon_color)) {
+            $icon_color = $defaultRewardColor;
+        }
         $disabled_children = array_map('intval', $_POST['disabled_child_ids'] ?? []);
         $disable_all = !empty($_POST['disable_all_children']);
         if ($disable_all) {
             $disabled_children = array_column($children, 'child_user_id');
         }
         if ($template_id && $title !== '' && $point_cost !== false && $point_cost !== null && $point_cost > 0) {
-            $updated = updateRewardTemplate($main_parent_id, $template_id, $title, $description, $point_cost, (int) ($level_required ?: 1));
+            $updated = updateRewardTemplate($main_parent_id, $template_id, $title, $description, $point_cost, (int) ($level_required ?: 1), $icon_class, $icon_color);
             $disabledUpdated = setRewardTemplateDisabledChildren($main_parent_id, $template_id, $disabled_children);
             $messages[] = ($updated || $disabledUpdated)
                 ? "Template updated."
@@ -607,6 +665,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 }
+
+$childStmt->execute([':parent_id' => $main_parent_id]);
+$children = $childStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
 $starsPerLevel = getFamilyStarsPerLevel($main_parent_id);
 $templates = getRewardTemplates($main_parent_id);
@@ -648,16 +709,6 @@ if (!empty($templateIds)) {
         $templatePurchaseCounts[(int) ($row['template_id'] ?? 0)] = (int) ($row['purchase_count'] ?? 0);
     }
 }
-
-$shopIconPalette = [
-    ['color' => '#48bfe3', 'icon' => 'fa-solid fa-gift'],
-    ['color' => '#f8961e', 'icon' => 'fa-solid fa-star'],
-    ['color' => '#43aa8b', 'icon' => 'fa-solid fa-book'],
-    ['color' => '#f94144', 'icon' => 'fa-solid fa-gamepad'],
-    ['color' => '#f9c74f', 'icon' => 'fa-solid fa-smile'],
-    ['color' => '#577590', 'icon' => 'fa-solid fa-puzzle-piece']
-];
-$shopIconCount = count($shopIconPalette);
 
 $activeRewardStmt = $db->prepare("
     SELECT 
@@ -764,6 +815,7 @@ foreach ($children as $child) {
         'name' => $first,
         'avatar' => $avatar,
         'level' => $childLevelMap[$cid] ?? 1,
+        'rewards_shop_open' => ((int) ($child['rewards_shop_open'] ?? 1)) === 1,
         'rewards' => []
     ];
 }
@@ -810,6 +862,13 @@ foreach ($children as $child) {
         .shop-template-card { border: none; border-radius: 18px; padding: 14px; background: #fff; box-shadow: 0 8px 18px rgba(0,0,0,0.08); display: flex; flex-direction: column; gap: 10px; max-width: none; }
         .shop-template-header { display: grid; grid-template-columns: auto 1fr; gap: 12px; align-items: center; }
         .shop-template-icon { width: 52px; height: 52px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; color: #fff; font-size: 1.4rem; flex-shrink: 0; }
+        .icon-picker { display: flex; flex-wrap: wrap; gap: 8px; }
+        .icon-option { position: relative; }
+        .icon-option input { position: absolute; opacity: 0; pointer-events: none; }
+        .icon-option span { width: 42px; height: 42px; border-radius: 12px; border: 1px solid #e0e4ee; background: #f9fafb; color: #6b7280; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; transition: border-color 150ms ease, box-shadow 150ms ease, background 150ms ease, color 150ms ease; }
+        .icon-option input:checked + span { border-color: #f59e0b; box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.2); background: #fff7ed; color: #111827; }
+        .icon-option span i { font-size: 1rem; }
+        .icon-color-input { width: 100%; max-width: 160px; height: 40px; border-radius: 10px; border: 1px solid #e0e4ee; padding: 4px; background: #fff; }
         .shop-template-title-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
         .shop-template-title-row strong { font-size: 1.05rem; color: #111827; }
         .shop-template-content { display: grid; gap: 6px; }
@@ -848,6 +907,13 @@ foreach ($children as $child) {
         .hidden { display: none !important; }
         .child-reward-grid { display: flex; justify-content: flex-start; gap: 12px; flex-wrap: wrap; margin-top: 12px; }
         .child-reward-card { border: 1px solid #e0e4ee; border-radius: 12px; padding: 14px; background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.06); display: grid; gap: 12px; max-width: fit-content; }
+        .shop-toggle-form { display: inline-flex; }
+        .shop-toggle-button { border: 1px solid #e0e4ee; background: #f8fafc; color: #374151; padding: 6px 10px; border-radius: 999px; display: inline-flex; align-items: center; gap: 8px; font-weight: 700; cursor: pointer; }
+        .shop-toggle-button.is-closed { background: #fef2f2; border-color: #fecaca; color: #991b1b; }
+        .shop-toggle-indicator { width: 30px; height: 16px; border-radius: 999px; background: #cbd5f5; position: relative; display: inline-flex; align-items: center; }
+        .shop-toggle-indicator::after { content: ""; width: 12px; height: 12px; border-radius: 50%; background: #fff; position: absolute; left: 2px; top: 2px; transition: transform 150ms ease; box-shadow: 0 1px 2px rgba(0,0,0,0.2); }
+        .shop-toggle-button.is-closed .shop-toggle-indicator { background: #fca5a5; }
+        .shop-toggle-button.is-closed .shop-toggle-indicator::after { transform: translateX(14px); }
         .child-header { display: flex; align-items: center; gap: 12px; }
         .child-header img { width: 64px; height: 64px; border-radius: 50%; object-fit: cover; box-shadow: 0 2px 8px rgba(0,0,0,0.15); }
         .child-meta { display: flex; gap: 10px; flex-wrap: wrap; width: 185px; margin-bottom: 10px; font-weight: 700; color: #2c3e50; }
@@ -1044,6 +1110,14 @@ foreach ($children as $child) {
                                         <p class="reward-badge-title-header">Rewards Status</p> 
                                             <button type="button" class="badge badge-link" data-action="show-disabled-modal" data-child-id="<?php echo $cid; ?>"><?php echo $disabledCount; ?> disabled</button>
                                             <button type="button" class="badge badge-link" data-action="show-purchased-modal" data-child-id="<?php echo $cid; ?>"><?php echo $purchasedCount; ?> purchased</button>
+                                            <form method="POST" action="rewards.php" class="shop-toggle-form">
+                                                <input type="hidden" name="child_id" value="<?php echo $cid; ?>">
+                                                <input type="hidden" name="shop_open" value="<?php echo $childCard['rewards_shop_open'] ? 0 : 1; ?>">
+                                                <button type="submit" name="toggle_shop_access" class="shop-toggle-button<?php echo $childCard['rewards_shop_open'] ? '' : ' is-closed'; ?>">
+                                                    <span class="shop-toggle-indicator" aria-hidden="true"></span>
+                                                    <span><?php echo $childCard['rewards_shop_open'] ? 'Shop Open' : 'Shop Closed'; ?></span>
+                                                </button>
+                                            </form>
                                         </div>
                                         <?php $pendingFulfill = $pendingFulfillmentByChild[$cid] ?? 0; ?>
                                 <?php if ($pendingFulfill > 0): ?>
@@ -1199,9 +1273,14 @@ foreach ($children as $child) {
                                     && empty(array_diff($childIds, $disabledChildren))
                                     && !empty($disabledChildren);
                                 $purchaseCount = $templatePurchaseCounts[$templateId] ?? 0;
-                                $palette = $shopIconPalette[$shopIconCount > 0 ? ($index % $shopIconCount) : 0] ?? [];
-                                $iconColor = $palette['color'] ?? '#48bfe3';
-                                $iconClass = $palette['icon'] ?? 'fa-solid fa-gift';
+                                $iconClass = trim((string) ($template['icon_class'] ?? ''));
+                                $iconColor = trim((string) ($template['icon_color'] ?? ''));
+                                if (!in_array($iconClass, $rewardIconClasses, true)) {
+                                    $iconClass = $defaultRewardIcon;
+                                }
+                                if (!preg_match('/^#[0-9a-fA-F]{6}$/', $iconColor)) {
+                                    $iconColor = $defaultRewardColor;
+                                }
                                 ?>
                                 <div class="template-card shop-template-card" data-template-card="<?php echo $templateId; ?>">
                                     <div class="shop-template-header">
@@ -1260,6 +1339,28 @@ foreach ($children as $child) {
                                 <div class="form-group">
                                     <label for="template_title_<?php echo $templateId; ?>">Title</label>
                                     <input type="text" id="template_title_<?php echo $templateId; ?>" name="template_title" value="<?php echo htmlspecialchars($template['title']); ?>" required>
+                                </div>
+                                <div class="form-group">
+                                    <label>Reward Icon</label>
+                                    <div class="icon-picker">
+                                        <?php foreach ($rewardIconOptions as $iconOption): ?>
+                                            <?php
+                                                $iconValue = $iconOption['class'] ?? '';
+                                                if ($iconValue === '') {
+                                                    continue;
+                                                }
+                                                $isChecked = $iconClass === $iconValue;
+                                            ?>
+                                            <label class="icon-option" title="<?php echo htmlspecialchars($iconOption['label'] ?? 'Icon'); ?>">
+                                                <input type="radio" name="template_icon_class" value="<?php echo htmlspecialchars($iconValue); ?>" <?php echo $isChecked ? 'checked' : ''; ?>>
+                                                <span><i class="<?php echo htmlspecialchars($iconValue); ?>"></i></span>
+                                            </label>
+                                        <?php endforeach; ?>
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label for="template_icon_color_<?php echo $templateId; ?>">Icon Background Color</label>
+                                    <input type="color" id="template_icon_color_<?php echo $templateId; ?>" name="template_icon_color" class="icon-color-input" value="<?php echo htmlspecialchars($iconColor); ?>">
                                 </div>
                                 <div class="form-group">
                                     <label for="template_description_<?php echo $templateId; ?>">Description</label>
@@ -1365,6 +1466,28 @@ $hasRecentMore = $recentTotal > $recentLimit;
                 <div class="form-group">
                     <label for="template_title_modal">Title</label>
                     <input type="text" id="template_title_modal" name="template_title" required>
+                </div>
+                <div class="form-group">
+                    <label>Reward Icon</label>
+                    <div class="icon-picker">
+                        <?php foreach ($rewardIconOptions as $iconOption): ?>
+                            <?php
+                                $iconValue = $iconOption['class'] ?? '';
+                                if ($iconValue === '') {
+                                    continue;
+                                }
+                                $isChecked = $iconValue === $defaultRewardIcon;
+                            ?>
+                            <label class="icon-option" title="<?php echo htmlspecialchars($iconOption['label'] ?? 'Icon'); ?>">
+                                <input type="radio" name="template_icon_class" value="<?php echo htmlspecialchars($iconValue); ?>" <?php echo $isChecked ? 'checked' : ''; ?>>
+                                <span><i class="<?php echo htmlspecialchars($iconValue); ?>"></i></span>
+                            </label>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="template_icon_color_modal">Icon Background Color</label>
+                    <input type="color" id="template_icon_color_modal" name="template_icon_color" class="icon-color-input" value="<?php echo htmlspecialchars($defaultRewardColor); ?>">
                 </div>
                 <div class="form-group">
                     <label for="template_description_modal">Description</label>
