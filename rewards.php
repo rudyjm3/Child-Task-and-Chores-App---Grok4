@@ -132,6 +132,7 @@ if ($role_type === 'child') {
             }
             .shop-hero h1 {
                 margin: 0;
+                text-align: center;
                 font-size: clamp(2rem, 4vw, 3.4rem);
                 line-height: 1.1;
             }
@@ -358,7 +359,7 @@ if ($role_type === 'child') {
     </head>
     <body class="child-theme rewards-shop-body">
         <header class="shop-hero">
-            <h1>Buy rewards from the shop!</h1>
+            <h1><span class="shop-title-icon"><i class="fa-solid fa-gift"></i></span> Rewards Shop</h1>
         </header>
         <main class="shop-main">
             <section class="shop-shell">
@@ -907,7 +908,7 @@ foreach ($children as $child) {
         .page-header-action:hover { color: #4caf50; border-color: #c8e6c9; }
         .nav-links { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: center; padding: 10px 12px; border-radius: 18px; background: #fff; border: 1px solid #eceff4; box-shadow: 0 8px 18px rgba(0,0,0,0.06); }
         .nav-link,
-        .nav-mobile-link { flex: 1 1 90px; display: grid; justify-items: center; gap: 4px; text-decoration: none; color: #6d6d6d; font-weight: 600; font-size: 0.75rem; border-radius: 12px; padding: 6px 4px; }
+        .nav-mobile-link { flex: 1 1 90px; display: grid; justify-items: center; text-align: center; gap: 4px; text-decoration: none; color: #6d6d6d; font-weight: 600; font-size: 0.75rem; border-radius: 12px; padding: 6px 4px; }
         .nav-link i,
         .nav-mobile-link i { font-size: 1.2rem; }
         .nav-link.is-active,

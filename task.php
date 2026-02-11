@@ -624,7 +624,7 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
             color: #fff;
             padding: 0px;
         }
-        .role-badge {
+        /* .role-badge {
             background: #4caf50;
             color: #fff;
             padding: 2px 8px;
@@ -632,7 +632,7 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
             font-size: 0.9em;
             margin-left: 8px;
             display: inline-block;
-        }
+        } */
         .button {
             padding: 10px 20px;
             margin: 5px;
@@ -997,7 +997,7 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
     .page-header-action:hover { color: #4caf50; border-color: #c8e6c9; }
     .nav-links { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: center; padding: 10px 12px; border-radius: 18px; background: #fff; border: 1px solid #eceff4; box-shadow: 0 8px 18px rgba(0,0,0,0.06); }
     .nav-link,
-    .nav-mobile-link { flex: 1 1 90px; display: grid; justify-items: center; gap: 4px; text-decoration: none; color: #6d6d6d; font-weight: 600; font-size: 0.75rem; border-radius: 12px; padding: 6px 4px; }
+    .nav-mobile-link { flex: 1 1 90px; display: grid; justify-items: center; text-align: center;  gap: 4px; text-decoration: none; color: #6d6d6d; font-weight: 600; font-size: 0.75rem; border-radius: 12px; padding: 6px 4px; }
     .nav-link i,
     .nav-mobile-link i { font-size: 1.2rem; }
     .nav-link.is-active,
@@ -4243,7 +4243,7 @@ $calendarPremium = !empty($_SESSION['subscription_active']) || !empty($_SESSION[
         </a>
         <a class="nav-mobile-link<?php echo $rewardsActive ? ' is-active' : ''; ?>" href="rewards.php"<?php echo $rewardsActive ? ' aria-current="page"' : ''; ?>>
             <i class="fa-solid fa-gift"></i>
-            <span>Rewards</span>
+            <span>Rewards Shop</span>
         </a>
     </nav>
     <footer>

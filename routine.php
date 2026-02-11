@@ -1220,7 +1220,7 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
         .page-alert.success { background: #e8f5e9; color: #2e7d32; border: 1px solid #c8e6c9; }
         .page-alert.error { background: #ffebee; color: #c62828; border: 1px solid #ffcdd2; }
         .page-alert.info { background: #e3f2fd; color: #1565c0; border: 1px solid #bbdefb; }
-        .role-badge { margin-left: 8px; padding: 2px 8px; border-radius: 999px; background: #4caf50; color: #fff; font-size: 0.82rem; }
+        /* .role-badge { margin-left: 8px; padding: 2px 8px; border-radius: 999px; background: #4caf50; color: #fff; font-size: 0.82rem; } */
         .routine-layout { max-width: 1080px; margin: 0 auto; padding: 0 16px 40px; }
         .routine-section { background: #fff; border-radius: 10px; box-shadow: 0 2px 6px rgba(0,0,0,0.08); padding: 20px; margin-bottom: 24px; }
         /* .routine-section-header { background: linear-gradient(135deg, #333333ff, #5e6164ff); padding: 16px 20px; margin: -20px -20px 16px; border-radius: 10px 10px 0px 0px; color: #f5f7fa; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; box-shadow: 0 8px 20px rgba(0,0,0,0.18); } */
@@ -1645,7 +1645,7 @@ margin-bottom: 20px;}
         .page-header-action:hover { color: #4caf50; border-color: #c8e6c9; }
         .nav-links { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: center; padding: 10px 12px; border-radius: 18px; background: #fff; border: 1px solid #eceff4; box-shadow: 0 8px 18px rgba(0,0,0,0.06); }
         .nav-link,
-        .nav-mobile-link { flex: 1 1 90px; display: grid; justify-items: center; gap: 4px; text-decoration: none; color: #6d6d6d; font-weight: 600; font-size: 0.75rem; border-radius: 12px; padding: 6px 4px; }
+        .nav-mobile-link { flex: 1 1 90px; display: grid; justify-items: center; text-align: center; gap: 4px; text-decoration: none; color: #6d6d6d; font-weight: 600; font-size: 0.75rem; border-radius: 12px; padding: 6px 4px; }
         .nav-link i,
         .nav-mobile-link i { font-size: 1.2rem; }
         .nav-link.is-active,
@@ -2713,7 +2713,7 @@ margin-bottom: 20px;}
         </a>
         <a class="nav-mobile-link<?php echo $rewardsActive ? ' is-active' : ''; ?>" href="rewards.php"<?php echo $rewardsActive ? ' aria-current="page"' : ''; ?>>
             <i class="fa-solid fa-gift"></i>
-            <span>Rewards</span>
+            <span>Rewards Shop</span>
         </a>
     </nav>
     <footer>

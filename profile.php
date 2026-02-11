@@ -357,7 +357,7 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
         .avatar-options { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-bottom: 15px;}
         .avatar-option { width: 60px; height: 60px; border-radius: 50%; cursor: pointer; border: 2px solid #ddd; }
         .avatar-option.selected { border-color: #4caf50; }
-        .role-badge {
+        /* .role-badge {
             background: #4caf50;
             color: #fff;
             padding: 2px 8px;
@@ -365,7 +365,7 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
             font-size: 0.9em;
             margin-left: 8px;
             display: inline-block;
-        }
+        } */
         .child-profile { 
             background: linear-gradient(135deg, #e3f2fd, #f3e5f5);
             border-radius: 10px;

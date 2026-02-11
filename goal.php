@@ -1150,7 +1150,7 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
             border-radius: 5px;
             cursor: pointer;
         }
-        .role-badge {
+        /* .role-badge {
             background: #4caf50;
             color: #fff;
             padding: 2px 8px;
@@ -1158,7 +1158,7 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
             font-size: 0.9em;
             margin-left: 8px;
             display: inline-block;
-        }
+        } */
         .edit-delete a {
             margin-right: 10px;
             color: #007bff;
