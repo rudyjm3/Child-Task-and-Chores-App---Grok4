@@ -8,12 +8,15 @@ require_once __DIR__ . '/includes/functions.php';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $username = filter_input(INPUT_POST, 'username', FILTER_SANITIZE_STRING);
     $password = filter_input(INPUT_POST, 'password', FILTER_SANITIZE_STRING);
+    $confirm_password = filter_input(INPUT_POST, 'confirm_password', FILTER_SANITIZE_STRING);
     $first_name = filter_input(INPUT_POST, 'first_name', FILTER_SANITIZE_STRING);
     $last_name = filter_input(INPUT_POST, 'last_name', FILTER_SANITIZE_STRING);
     $gender = filter_input(INPUT_POST, 'gender', FILTER_SANITIZE_STRING);
     $role = 'main_parent'; // primary account creator
 
-    if (registerUser($username, $password, $role, $first_name, $last_name, $gender)) {
+    if ($password !== $confirm_password) {
+        $error = "Passwords do not match.";
+    } elseif (registerUser($username, $password, $role, $first_name, $last_name, $gender)) {
         // Auto-login after registration
         $_SESSION['user_id'] = $db->lastInsertId();
         $_SESSION['role'] = 'parent'; // UI-level
@@ -220,9 +223,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         <section class="auth-card auth-logo-card">
             <div class="auth-logo">
-                <img src="images/favicon.svg" alt="DoMore logo">
+                <img src="images/favicon.svg" alt="Child Chore App logo">
             </div>
-            <h2>Join DoMore!</h2>
+            <h2>Join Child Chore App</h2>
             <span>Create your family account</span>
         </section>
 
@@ -263,6 +266,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <label class="input-row" for="password">
                         <span class="input-icon">P</span>
                         <input type="password" id="password" name="password" placeholder="Password" required>
+                    </label>
+                </div>
+                <div class="form-group">
+                    <label class="input-row" for="confirm_password">
+                        <span class="input-icon">CP</span>
+                        <input type="password" id="confirm_password" name="confirm_password" placeholder="Confirm Password" required>
                     </label>
                 </div>
                 <button type="submit" class="auth-button">Sign Up</button>

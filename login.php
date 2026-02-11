@@ -218,15 +218,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <p>Ready to start your family's journey?</p>
             </div>
             <div class="auth-logo">
-                <img src="images/favicon.svg" alt="DoMore logo">
+                <img src="images/favicon.svg" alt="Child Chore App logo">
             </div>
         </section>
 
         <section class="auth-card auth-logo-card">
             <div class="auth-logo">
-                <img src="images/favicon.svg" alt="DoMore logo">
+                <img src="images/favicon.svg" alt="Child Chore App logo">
             </div>
-            <h2>DoMore!</h2>
+            <h2>Child Chore App</h2>
             <span>It's not a chore!</span>
         </section>
 
