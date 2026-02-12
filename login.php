@@ -35,16 +35,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 ?>
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="auth-root">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Login - Child Task and Chore App</title>
-    <link rel="stylesheet" href="css/main.css?v=3.26.0">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
     <style>
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+        }
         :root {
             --auth-bg-top: #d8c4ff;
             --auth-bg-mid: #efe1ff;
@@ -57,17 +61,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             --auth-accent: #7dd3fc;
             --auth-shadow: 0 18px 36px rgba(50, 30, 90, 0.18);
         }
-        body {
+        html.auth-root,
+        body.auth-page {
+            width: 100%;
+            min-height: 100%;
+            margin: 0;
+            padding: 0;
+        }
+        body.auth-page {
             margin: 0;
             font-family: 'Poppins', 'Trebuchet MS', 'Segoe UI', sans-serif;
             background: linear-gradient(180deg, var(--auth-bg-top) 0%, var(--auth-bg-mid) 45%, var(--auth-bg-bottom) 100%);
             color: var(--auth-text);
             min-height: 100vh;
+            overflow-x: hidden;
+            overflow-y: auto;
+            max-width: none;
+            width: 100%;
+            padding: 0;
+            display: block !important;
         }
-        .auth-shell {
-            width: min(980px, 92vw);
+        main.auth-shell {
+            width: 100%;
+            max-width: 980px;
             margin: 0 auto;
-            padding: 32px 0 48px;
+            padding: 32px 12px 48px;
             display: grid;
             gap: 20px;
         }
@@ -80,9 +98,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         .auth-hero {
             display: grid;
-            grid-template-columns: 1fr auto;
+            grid-template-columns: 1fr;
             gap: 16px;
             align-items: center;
+            max-width: 560px;
+            width: 100%;
+            margin: 0 auto;
+            text-align: center;
         }
         .auth-hero h1 {
             margin: 0 0 6px;
@@ -97,6 +119,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             text-align: center;
             display: grid;
             gap: 10px;
+            max-width: 560px;
+            width: 100%;
+            margin: 0 auto;
         }
         .auth-logo {
             width: 76px;
@@ -169,6 +194,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             background: transparent;
             font-size: 1rem;
             color: var(--auth-text);
+            min-width: 0;
+            width: 100%;
         }
         .auth-button {
             width: 100%;
@@ -179,18 +206,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             font-weight: 700;
             color: #fff;
             background: linear-gradient(135deg, var(--auth-primary) 0%, var(--auth-primary-dark) 100%);
-            box-shadow: 0 14px 30px rgba(31, 110, 212, 0.28);
+            box-shadow: 0 5px 15px rgba(31, 110, 212, 0.28);
             cursor: pointer;
         }
         .auth-footer {
             text-align: center;
             color: var(--auth-muted);
             font-size: 0.95rem;
+            max-width: 560px;
+            width: 100%;
+            margin: 0 auto;
         }
         .auth-footer a {
             color: var(--auth-primary);
             font-weight: 600;
             text-decoration: none;
+        }
+        @media (min-width: 700px) {
+            .auth-hero {
+                grid-template-columns: 1fr auto;
+                text-align: left;
+            }
         }
         @media (min-width: 900px) {
             .auth-shell {
@@ -208,9 +244,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 height: 64px;
             }
         }
+        @media (max-width: 520px) {
+            .auth-card {
+                padding: 16px;
+                border-radius: 20px;
+            }
+        }
     </style>
 </head>
-<body>
+<body class="auth-page">
     <main class="auth-shell">
         <section class="auth-card auth-hero">
             <div>
@@ -256,5 +298,4 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             Don't have an account? <a href="register.php">Sign Up</a>
         </div>
     </main>
-</body>
 </html>

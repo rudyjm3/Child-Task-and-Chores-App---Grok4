@@ -11,16 +11,20 @@ if (isset($_SESSION['user_id'])) {
 }
 ?>
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="landing-root">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Child Chore App</title>
-    <link rel="stylesheet" href="css/main.css?v=3.26.0">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&family=Quicksand:wght@600;700&display=swap" rel="stylesheet">
     <style>
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+        }
         :root {
             --brand-ink: #2f3340;
             --brand-muted: #6b7280;
@@ -31,17 +35,31 @@ if (isset($_SESSION['user_id'])) {
             --brand-card: #ffffff;
             --brand-shadow: 0 18px 40px rgba(55, 35, 95, 0.18);
         }
-        body {
+        html.landing-root,
+        body.landing-page {
+            width: 100%;
+            min-height: 100%;
+            margin: 0;
+            padding: 0;
+        }
+        body.landing-page {
             margin: 0;
             font-family: 'Poppins', 'Trebuchet MS', sans-serif;
             background: radial-gradient(circle at top, #e7d6ff 0%, #f1e6ff 35%, #f6efe4 70%, #f8f2e9 100%);
             color: var(--brand-ink);
             min-height: 100vh;
+            overflow-x: hidden;
+            overflow-y: auto;
+            max-width: none;
+            width: 100%;
+            padding: 0;
+            display: block !important;
         }
-        .landing-shell {
-            width: min(1100px, 92vw);
+        main.landing-shell {
+            width: 100%;
+            max-width: 1100px;
             margin: 0 auto;
-            padding: 40px 0 64px;
+            padding: 40px 12px 64px;
             display: grid;
             gap: 22px;
         }
@@ -49,7 +67,7 @@ if (isset($_SESSION['user_id'])) {
             display: grid;
             gap: 18px;
             align-items: center;
-            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            grid-template-columns: 1fr;
         }
         .hero-card {
             background: var(--brand-card);
@@ -91,7 +109,7 @@ if (isset($_SESSION['user_id'])) {
         .cta-row {
             display: grid;
             gap: 12px;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            grid-template-columns: 1fr;
         }
         .cta-button {
             border: none;
@@ -104,16 +122,16 @@ if (isset($_SESSION['user_id'])) {
             text-align: center;
             color: #fff;
             background: linear-gradient(135deg, var(--brand-primary) 0%, var(--brand-primary-dark) 100%);
-            box-shadow: 0 14px 30px rgba(31, 110, 212, 0.3);
+            box-shadow: 0 5px 15px rgba(31, 110, 212, 0.3);
         }
         .cta-button.secondary {
             background: linear-gradient(135deg, #f59e0b 0%, #f97316 100%);
-            box-shadow: 0 14px 30px rgba(245, 158, 11, 0.3);
+            box-shadow: 0 5px 15px rgba(245, 158, 11, 0.3);
         }
         .feature-grid {
             display: grid;
             gap: 16px;
-            grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+            grid-template-columns: 1fr;
         }
         .feature-card {
             background: var(--brand-card);
@@ -134,7 +152,7 @@ if (isset($_SESSION['user_id'])) {
         .benefits {
             display: grid;
             gap: 16px;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            grid-template-columns: 1fr;
         }
         .benefit-list {
             background: var(--brand-card);
@@ -166,7 +184,7 @@ if (isset($_SESSION['user_id'])) {
         .pricing {
             display: grid;
             gap: 16px;
-            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            grid-template-columns: 1fr;
         }
         .pricing-card {
             background: var(--brand-card);
@@ -204,7 +222,7 @@ if (isset($_SESSION['user_id'])) {
         .plan-compare {
             display: grid;
             gap: 16px;
-            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            grid-template-columns: 1fr;
         }
         .plan-card {
             background: var(--brand-card);
@@ -270,9 +288,60 @@ if (isset($_SESSION['user_id'])) {
             from { opacity: 0; transform: translateY(14px); }
             to { opacity: 1; transform: translateY(0); }
         }
+        @media (min-width: 640px) {
+            .cta-row {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+            .benefits {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+            .pricing {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+        }
+        @media (min-width: 768px) {
+            .hero {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+            .feature-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+            .plan-compare {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+        }
+        @media (min-width: 1024px) {
+            .feature-grid {
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+            }
+        }
+        html.force-desktop .hero {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+        html.force-desktop .cta-row {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+        html.force-desktop .feature-grid {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+        html.force-desktop .benefits,
+        html.force-desktop .pricing,
+        html.force-desktop .plan-compare {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+        @media (max-width: 520px) {
+            .hero-card,
+            .feature-card,
+            .benefit-list,
+            .pricing-card,
+            .plan-card {
+                padding: 16px;
+                border-radius: 18px;
+            }
+        }
     </style>
 </head>
-<body>
+<body class="landing-page">
     <main class="landing-shell">
         <section class="hero">
             <div class="hero-card reveal">
@@ -363,5 +432,17 @@ if (isset($_SESSION['user_id'])) {
             Questions? Start with a free family account and explore the demo experience.
         </div>
     </main>
+<script>
+(() => {
+    const updateDesktopView = () => {
+        const width = window.innerWidth || document.documentElement.clientWidth || 0;
+        document.documentElement.classList.toggle('force-desktop', width >= 768);
+    };
+    updateDesktopView();
+    window.addEventListener('resize', updateDesktopView);
+    window.addEventListener('pageshow', updateDesktopView);
+    window.addEventListener('load', () => requestAnimationFrame(updateDesktopView), { once: true });
+})();
+</script>
 </body>
 </html>
