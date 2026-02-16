@@ -367,6 +367,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $message = ucfirst($sign) . " " . abs($points_delta) . " points. Reason: " . htmlspecialchars($point_reason);
             }
         }
+    } elseif (isset($_POST['adjust_child_stars'])) {
+        if (!in_array($role_type, ['main_parent', 'secondary_parent'], true)) {
+            $message = "You do not have permission to adjust stars.";
+        } else {
+            $child_user_id = filter_input(INPUT_POST, 'child_user_id', FILTER_VALIDATE_INT);
+            $stars_delta_raw = filter_input(INPUT_POST, 'stars_delta', FILTER_VALIDATE_INT);
+            $star_reason = trim(filter_input(INPUT_POST, 'star_reason', FILTER_SANITIZE_STRING) ?? '');
+            if (!$child_user_id || $stars_delta_raw === false || $stars_delta_raw === null || $stars_delta_raw == 0) {
+                $message = "Enter a non-zero star amount.";
+            } else {
+                $star_reason = $star_reason !== '' ? substr($star_reason, 0, 255) : 'Manual star adjustment';
+                $stars_delta = (int) $stars_delta_raw;
+                ensureChildStarAdjustmentsTable();
+                $stmt = $db->prepare("INSERT INTO child_star_adjustments (child_user_id, delta_stars, reason, created_by, created_at) VALUES (:child_id, :delta, :reason, :created_by, NOW())");
+                $stmt->execute([
+                    ':child_id' => $child_user_id,
+                    ':delta' => $stars_delta,
+                    ':reason' => $star_reason,
+                    ':created_by' => $_SESSION['user_id']
+                ]);
+                $levelState = getChildLevelState((int) $child_user_id, (int) $main_parent_id);
+                addChildNotification(
+                    (int)$child_user_id,
+                    $stars_delta > 0 ? 'stars_added' : 'stars_deducted',
+                    ($stars_delta > 0 ? 'You received ' : 'You lost ') . abs($stars_delta) . ' stars: ' . $star_reason,
+                    'dashboard_child.php'
+                );
+                $sign = $stars_delta > 0 ? 'added' : 'deducted';
+                $message = ucfirst($sign) . " " . abs($stars_delta) . " stars. Reason: " . htmlspecialchars($star_reason)
+                    . " Current level: " . (int) ($levelState['level'] ?? 1) . ".";
+            }
+        }
     } elseif (isset($_POST['approve_goal']) || isset($_POST['reject_goal'])) {
         $goal_id = filter_input(INPUT_POST, 'goal_id', FILTER_VALIDATE_INT);
         $action = isset($_POST['approve_goal']) ? 'approve' : 'reject';
@@ -998,6 +1030,9 @@ function renderStreakCheckSvg($suffix) {
         .level-progress-meta { display: flex; justify-content: flex-end; font-size: 0.78rem; color: #6b7280; font-weight: 700; }
         .level-progress-bar { width: 100%; height: 10px; border-radius: 999px; background: #e5e7eb; overflow: hidden; border: 1px solid #d1d5db; }
         .level-progress-fill { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #f59e0b 0%, #f97316 100%); }
+        .level-actions { display: flex; align-items: center; gap: 8px; width: min(260px, 100%); margin-top: 8px; }
+        .level-adjust-button { flex: 1; margin: 0; }
+        .level-history-button { width: 42px; min-width: 42px; height: 42px; border-radius: 12px; margin: 0; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
         .streak-badges { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
         .streak-badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; background: #fff7ed; color: #b45309; font-weight: 700; font-size: 0.82rem; border: 1px solid #fed7aa; }
         .streak-phrase { font-size: 0.78rem; color: #8d6e63; margin: 2px 0 6px; width: 100%; }
@@ -1829,6 +1864,85 @@ function renderStreakCheckSvg($suffix) {
                 });
             });
 
+            const starHistoryButtons = document.querySelectorAll('[data-star-history-open]');
+            const starHistoryModals = document.querySelectorAll('[data-star-history-modal]');
+            const applyStarHistoryFilter = (modal, filter) => {
+                const items = Array.from(modal.querySelectorAll('[data-star-history-item]'));
+                const groups = Array.from(modal.querySelectorAll('[data-star-history-day]'));
+                if (!items.length) {
+                    const empty = modal.querySelector('[data-star-history-empty]');
+                    if (empty) {
+                        empty.style.display = 'none';
+                    }
+                    return;
+                }
+                let anyVisible = false;
+                items.forEach(item => {
+                    const type = (item.dataset.starHistoryType || '').toLowerCase();
+                    const show = filter === 'all' ? true : type === filter;
+                    item.style.display = show ? '' : 'none';
+                    item.dataset.hidden = show ? '0' : '1';
+                    if (show) {
+                        anyVisible = true;
+                    }
+                });
+                groups.forEach(group => {
+                    const groupItems = Array.from(group.querySelectorAll('[data-star-history-item]'));
+                    const hasVisible = groupItems.some(item => item.dataset.hidden !== '1');
+                    group.style.display = hasVisible ? '' : 'none';
+                });
+                const empty = modal.querySelector('[data-star-history-empty]');
+                if (empty) {
+                    empty.style.display = anyVisible ? 'none' : 'block';
+                }
+            };
+            starHistoryButtons.forEach((btn) => {
+                btn.addEventListener('click', () => {
+                    const childId = btn.dataset.starHistoryId;
+                    const modal = document.querySelector(`[data-star-history-modal][data-star-history-id="${childId}"]`);
+                    if (!modal) return;
+                    modal.classList.add('open');
+                    document.body.classList.add('no-scroll');
+                    document.body.classList.add('show-mobile-nav');
+                    const filterButtons = Array.from(modal.querySelectorAll('[data-star-history-filter]'));
+                    filterButtons.forEach(button => {
+                        button.classList.toggle('active', (button.dataset.starHistoryFilter || 'all') === 'all');
+                    });
+                    applyStarHistoryFilter(modal, 'all');
+                });
+            });
+            starHistoryModals.forEach((modal) => {
+                const closeButtons = modal.querySelectorAll('[data-star-history-close]');
+                const filterButtons = Array.from(modal.querySelectorAll('[data-star-history-filter]'));
+                const closeModal = () => {
+                    modal.classList.remove('open');
+                    document.body.classList.remove('no-scroll');
+                    document.body.classList.remove('show-mobile-nav');
+                };
+                closeButtons.forEach(btn => btn.addEventListener('click', closeModal));
+                modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
+                if (filterButtons.length) {
+                    filterButtons.forEach((button) => {
+                        button.addEventListener('click', () => {
+                            filterButtons.forEach(btn => btn.classList.toggle('active', btn === button));
+                            const filter = button.dataset.starHistoryFilter || 'all';
+                            applyStarHistoryFilter(modal, filter);
+                        });
+                    });
+                    applyStarHistoryFilter(modal, 'all');
+                }
+            });
+            document.addEventListener('keydown', (e) => {
+                if (e.key !== 'Escape') return;
+                starHistoryModals.forEach((modal) => {
+                    if (modal.classList.contains('open')) {
+                        modal.classList.remove('open');
+                        document.body.classList.remove('no-scroll');
+                        document.body.classList.remove('show-mobile-nav');
+                    }
+                });
+            });
+
             const weekModal = document.querySelector('[data-week-modal]');
             const weekModalBody = weekModal ? weekModal.querySelector('[data-week-modal-body]') : null;
             const weekModalTitle = weekModal ? weekModal.querySelector('#week-modal-title') : null;
@@ -2363,6 +2477,112 @@ function renderStreakCheckSvg($suffix) {
                 }
                 if (pointsInput) {
                     pointsInput.addEventListener('input', updateAdjustTotal);
+                }
+            }
+
+            const adjustStarsModal = document.querySelector('[data-role="adjust-stars-modal"]');
+            const adjustStarsTitle = adjustStarsModal ? adjustStarsModal.querySelector('[data-role="adjust-stars-title"]') : null;
+            const adjustStarsChildIdInput = adjustStarsModal ? adjustStarsModal.querySelector('[data-role="adjust-stars-child-id"]') : null;
+            const adjustStarsHistoryList = adjustStarsModal ? adjustStarsModal.querySelector('[data-role="adjust-stars-history-list"]') : null;
+            const adjustStarsChildName = adjustStarsModal ? adjustStarsModal.querySelector('[data-role="adjust-stars-child-name"]') : null;
+            const adjustStarsChildAvatar = adjustStarsModal ? adjustStarsModal.querySelector('[data-role="adjust-stars-child-avatar"]') : null;
+            const adjustCurrentStars = adjustStarsModal ? adjustStarsModal.querySelector('[data-role="adjust-current-stars"]') : null;
+            const starsInput = adjustStarsModal ? adjustStarsModal.querySelector('#adjust_stars_input') : null;
+            const starReasonInput = adjustStarsModal ? adjustStarsModal.querySelector('#adjust_star_reason_input') : null;
+            let adjustBaseStars = 0;
+
+            const updateAdjustStarsTotal = () => {
+                if (!adjustCurrentStars || !starsInput) return;
+                const delta = parseInt(starsInput.value || '0', 10) || 0;
+                const total = adjustBaseStars + delta;
+                adjustCurrentStars.textContent = total;
+            };
+
+            const renderStarHistory = (history) => {
+                if (!adjustStarsHistoryList) return;
+                adjustStarsHistoryList.innerHTML = '';
+                if (!history || !history.length) {
+                    const li = document.createElement('li');
+                    li.textContent = 'No recent star adjustments.';
+                    adjustStarsHistoryList.appendChild(li);
+                    return;
+                }
+                history.forEach(item => {
+                    const li = document.createElement('li');
+                    const info = document.createElement('div');
+                    info.className = 'adjust-history-item-info';
+                    const reason = document.createElement('span');
+                    reason.textContent = item.reason || 'No reason';
+                    const meta = document.createElement('span');
+                    const when = item.created_at ? new Date(item.created_at) : null;
+                    meta.textContent = when ? when.toLocaleString() : '';
+                    info.appendChild(reason);
+                    info.appendChild(meta);
+                    const delta = document.createElement('span');
+                    delta.className = 'adjust-history-points' + ((item.delta_stars || 0) < 0 ? ' is-negative' : '');
+                    delta.innerHTML = '<i class="fa-solid fa-star"></i> ' + ((item.delta_stars || 0) >= 0 ? '+' : '') + (item.delta_stars || 0);
+                    li.appendChild(info);
+                    li.appendChild(delta);
+                    adjustStarsHistoryList.appendChild(li);
+                });
+            };
+
+            document.querySelectorAll('[data-role="open-adjust-stars-modal"]').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const childId = btn.dataset.childId || '';
+                    const childName = btn.dataset.childName || 'Child';
+                    const childAvatar = btn.dataset.childAvatar || 'images/avatar_images/default-avatar.png';
+                    const childStars = btn.dataset.childStars || '0';
+                    const historyRaw = btn.dataset.history || '[]';
+                    let history = [];
+                    try { history = JSON.parse(historyRaw); } catch (e) { history = []; }
+                    if (adjustStarsTitle) { adjustStarsTitle.textContent = 'Adjust Stars'; }
+                    if (adjustStarsChildName) { adjustStarsChildName.textContent = childName; }
+                    if (adjustStarsChildAvatar) { adjustStarsChildAvatar.src = childAvatar; adjustStarsChildAvatar.alt = childName; }
+                    adjustBaseStars = parseInt(childStars, 10) || 0;
+                    if (adjustCurrentStars) { adjustCurrentStars.textContent = adjustBaseStars; }
+                    if (adjustStarsChildIdInput) { adjustStarsChildIdInput.value = childId; }
+                    if (starsInput) { starsInput.value = 1; }
+                    if (starReasonInput) { starReasonInput.value = ''; }
+                    renderStarHistory(history);
+                    updateAdjustStarsTotal();
+                    if (adjustStarsModal) {
+                        adjustStarsModal.classList.add('open');
+                        setBodyScrollLocked(true);
+                    }
+                });
+            });
+
+            if (adjustStarsModal) {
+                const closeButtons = adjustStarsModal.querySelectorAll('[data-action="close-adjust-stars"]');
+                closeButtons.forEach(btn => btn.addEventListener('click', () => {
+                    adjustStarsModal.classList.remove('open');
+                    setBodyScrollLocked(false);
+                }));
+                adjustStarsModal.addEventListener('click', (e) => {
+                    if (e.target === adjustStarsModal) {
+                        adjustStarsModal.classList.remove('open');
+                        setBodyScrollLocked(false);
+                    }
+                });
+                const decBtn = adjustStarsModal.querySelector('[data-action="decrement-stars"]');
+                const incBtn = adjustStarsModal.querySelector('[data-action="increment-stars"]');
+                if (decBtn && starsInput) {
+                    decBtn.addEventListener('click', () => {
+                        const current = parseInt(starsInput.value || '0', 10) || 0;
+                        starsInput.value = current - 1;
+                        updateAdjustStarsTotal();
+                    });
+                }
+                if (incBtn && starsInput) {
+                    incBtn.addEventListener('click', () => {
+                        const current = parseInt(starsInput.value || '0', 10) || 0;
+                        starsInput.value = current + 1;
+                        updateAdjustStarsTotal();
+                    });
+                }
+                if (starsInput) {
+                    starsInput.addEventListener('input', updateAdjustStarsTotal);
                 }
             }
 
@@ -2915,6 +3135,27 @@ function renderStreakCheckSvg($suffix) {
                                         <span class="level-progress-fill" style="width: <?php echo $levelProgressPercent; ?>%;"></span>
                                     </div>
                                 </div>
+                                <?php if (in_array($role_type, ['main_parent', 'secondary_parent'], true)): ?>
+                                    <div class="level-actions">
+                                        <button type="button"
+                                                class="button adjust-button level-adjust-button"
+                                                data-role="open-adjust-stars-modal"
+                                                data-child-id="<?php echo (int)$child['child_user_id']; ?>"
+                                                data-child-name="<?php echo htmlspecialchars($child['child_name']); ?>"
+                                                data-child-avatar="<?php echo htmlspecialchars($child['avatar'] ?? 'images/avatar_images/default-avatar.png'); ?>"
+                                                data-child-stars="<?php echo $starsInLevel; ?>"
+                                                data-history='<?php echo htmlspecialchars(json_encode($child['star_adjustments'] ?? [], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT)); ?>'>
+                                            <i class="fa-solid fa-star-half-stroke"></i>
+                                            <span class="label">Adjust Stars</span>
+                                        </button>
+                                        <button type="button"
+                                                class="button secondary history-button level-history-button"
+                                                data-star-history-open
+                                                data-star-history-id="<?php echo (int)$child['child_user_id']; ?>">
+                                            <i class="fa-solid fa-clock-rotate-left"></i>
+                                        </button>
+                                    </div>
+                                <?php endif; ?>
                                 <?php
                                     $routineStreak = (int) ($child['routine_streak'] ?? 0);
                                     $taskStreak = (int) ($child['task_streak'] ?? 0);
@@ -3152,6 +3393,81 @@ function renderStreakCheckSvg($suffix) {
                               }
                               $historyByDay[$dayKey][] = $item;
                           }
+
+                          $starHistoryItems = [];
+                          try {
+                              ensureRoutineCompletionTables();
+                              $routineStarHistoryStmt = $db->prepare("
+                                  SELECT rct.stars_awarded, rct.completed_at, r.title AS routine_title, rt.title AS task_title
+                                  FROM routine_completion_tasks rct
+                                  JOIN routine_completion_logs rcl ON rct.completion_log_id = rcl.id
+                                  LEFT JOIN routines r ON rcl.routine_id = r.id
+                                  LEFT JOIN routine_tasks rt ON rct.routine_task_id = rt.id
+                                  WHERE rcl.child_user_id = :child_id
+                                    AND rcl.parent_user_id = :parent_id
+                                  ORDER BY rct.completed_at DESC
+                              ");
+                              $routineStarHistoryStmt->execute([
+                                  ':child_id' => $childId,
+                                  ':parent_id' => $main_parent_id
+                              ]);
+                              foreach ($routineStarHistoryStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                                  if (empty($row['completed_at'])) {
+                                      continue;
+                                  }
+                                  $routineTitle = trim((string) ($row['routine_title'] ?? 'Routine'));
+                                  $taskTitle = trim((string) ($row['task_title'] ?? 'Task'));
+                                  $starHistoryItems[] = [
+                                      'type' => 'Routine',
+                                      'title' => $routineTitle . ' · ' . $taskTitle,
+                                      'stars' => (int) ($row['stars_awarded'] ?? 0),
+                                      'date' => $row['completed_at']
+                                  ];
+                              }
+                          } catch (Exception $e) {
+                              $starHistoryItems = $starHistoryItems;
+                          }
+                          try {
+                              ensureChildStarAdjustmentsTable();
+                              $starAdjHistoryStmt = $db->prepare("
+                                  SELECT delta_stars, reason, created_at
+                                  FROM child_star_adjustments
+                                  WHERE child_user_id = :child_id
+                                    AND created_by <> :creator_child_id
+                                  ORDER BY created_at DESC
+                              ");
+                              $starAdjHistoryStmt->execute([
+                                  ':child_id' => $childId,
+                                  ':creator_child_id' => $childId
+                              ]);
+                              foreach ($starAdjHistoryStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                                  if (empty($row['created_at'])) {
+                                      continue;
+                                  }
+                                  $starHistoryItems[] = [
+                                      'type' => 'Adjustment',
+                                      'title' => $row['reason'] ?: 'Manual star adjustment',
+                                      'stars' => (int) ($row['delta_stars'] ?? 0),
+                                      'date' => $row['created_at']
+                                  ];
+                              }
+                          } catch (Exception $e) {
+                              $starHistoryItems = $starHistoryItems;
+                          }
+                          usort($starHistoryItems, static function ($a, $b) {
+                              return strtotime($b['date']) <=> strtotime($a['date']);
+                          });
+                          $starHistoryByDay = [];
+                          foreach ($starHistoryItems as $item) {
+                              if (empty($item['date'])) {
+                                  continue;
+                              }
+                              $dayKey = date('Y-m-d', strtotime($item['date']));
+                              if (!isset($starHistoryByDay[$dayKey])) {
+                                  $starHistoryByDay[$dayKey] = [];
+                              }
+                              $starHistoryByDay[$dayKey][] = $item;
+                          }
                       ?>
                       <div class="child-info-body">
                          <div class="child-stats-grid">
@@ -3300,6 +3616,54 @@ function renderStreakCheckSvg($suffix) {
                                       <?php endforeach; ?>
                                   <?php else: ?>
                                       <p>No points history yet.</p>
+                                  <?php endif; ?>
+                              </div>
+                          </div>
+                      </div>
+                  </div>
+                  <div class="child-history-modal" data-star-history-modal data-star-history-id="<?php echo (int)$childId; ?>">
+                      <div class="child-history-card" role="dialog" aria-modal="true" aria-labelledby="star-history-title-<?php echo (int)$childId; ?>">
+                          <header class="child-history-header">
+                              <button type="button" class="child-history-back" aria-label="Close star history" data-star-history-close>
+                                  <i class="fa-solid fa-arrow-left"></i>
+                              </button>
+                              <h2 id="star-history-title-<?php echo (int)$childId; ?>">Star History</h2>
+                              <button type="button" class="child-history-close" aria-label="Close star history" data-star-history-close>&times;</button>
+                          </header>
+                          <div class="child-history-body">
+                              <div class="child-history-hero">
+                                  <img class="child-history-avatar" src="<?php echo htmlspecialchars($child['avatar'] ?? 'images/avatar_images/default-avatar.png'); ?>" alt="<?php echo htmlspecialchars($child['child_name']); ?>">
+                                  <div class="child-history-info">
+                                      <div class="child-history-name"><?php echo htmlspecialchars($child['child_name']); ?></div>
+                                      <div class="child-history-points"><i class="fa-solid fa-star"></i> <?php echo $starsInLevel; ?> / <?php echo $starsPerLevel; ?></div>
+                                  </div>
+                              </div>
+                              <div class="child-history-filters" data-star-history-filters>
+                                  <button type="button" class="history-filter active" data-star-history-filter="all">All</button>
+                                  <button type="button" class="history-filter" data-star-history-filter="routine">Routine Stars</button>
+                                  <button type="button" class="history-filter" data-star-history-filter="adjustment">Star Adjustments</button>
+                              </div>
+                              <p class="child-history-empty" data-star-history-empty style="display:none;">No star history for this filter.</p>
+                              <div class="child-history-timeline">
+                                  <?php if (!empty($starHistoryByDay)): ?>
+                                      <?php foreach ($starHistoryByDay as $day => $items): ?>
+                                          <div class="child-history-day" data-star-history-day>
+                                              <div class="child-history-day-title"><?php echo htmlspecialchars(date('M j, Y', strtotime($day))); ?></div>
+                                              <ul class="child-history-list">
+                                                  <?php foreach ($items as $item): ?>
+                                                      <li class="child-history-item" data-star-history-item data-star-history-type="<?php echo htmlspecialchars(strtolower($item['type'])); ?>">
+                                                          <div>
+                                                              <div class="child-history-item-title"><?php echo htmlspecialchars($item['title']); ?></div>
+                                                              <div class="child-history-item-meta"><?php echo htmlspecialchars(date('M j, Y, g:i A', strtotime($item['date']))); ?></div>
+                                                          </div>
+                                                          <div class="child-history-item-points<?php echo ($item['stars'] < 0 ? ' is-negative' : ''); ?>"><i class="fa-solid fa-star"></i> <?php echo ($item['stars'] >= 0 ? '+' : '') . (int)$item['stars']; ?></div>
+                                                      </li>
+                                                  <?php endforeach; ?>
+                                              </ul>
+                                          </div>
+                                      <?php endforeach; ?>
+                                  <?php else: ?>
+                                      <p>No star history yet.</p>
                                   <?php endif; ?>
                               </div>
                           </div>
@@ -3559,6 +3923,55 @@ function renderStreakCheckSvg($suffix) {
                 <div class="adjust-history" data-role="adjust-history">
                     <h4>Recent adjustments</h4>
                     <ul data-role="adjust-history-list"></ul>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="adjust-modal-backdrop" data-role="adjust-stars-modal">
+        <div class="adjust-modal">
+            <header class="adjust-modal-header">
+                <button type="button" class="adjust-modal-back" data-action="close-adjust-stars" aria-label="Close adjust stars">
+                    <i class="fa-solid fa-arrow-left"></i>
+                </button>
+                <h3 data-role="adjust-stars-title">Adjust Stars</h3>
+                <button type="button" class="adjust-modal-close" data-action="close-adjust-stars" aria-label="Close adjust stars">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </header>
+            <div class="adjust-modal-body">
+                <div class="adjust-child-card">
+                    <img class="adjust-child-avatar" data-role="adjust-stars-child-avatar" src="images/avatar_images/default-avatar.png" alt="Child avatar">
+                    <div class="adjust-child-info">
+                        <div class="adjust-child-name" data-role="adjust-stars-child-name">Child</div>
+                    </div>
+                </div>
+                <form method="POST" class="adjust-form">
+                    <div class="adjust-points-panel">
+                        <div class="adjust-current-points">
+                            <i class="fa-solid fa-star"></i>
+                            <span data-role="adjust-current-stars">0</span>
+                        </div>
+                        <label for="adjust_stars_input" class="sr-only">Stars adjustment</label>
+                        <div class="adjust-control">
+                            <button type="button" class="adjust-step adjust-step-minus" data-action="decrement-stars">-</button>
+                            <input id="adjust_stars_input" type="number" name="stars_delta" step="1" value="1" required data-stepper="false">
+                            <button type="button" class="adjust-step adjust-step-plus" data-action="increment-stars">+</button>
+                        </div>
+                    </div>
+                    <div class="form-group adjust-reason">
+                        <label for="adjust_star_reason_input">Reason</label>
+                        <input id="adjust_star_reason_input" type="text" name="star_reason" maxlength="255" placeholder="Optional">
+                    </div>
+                    <input type="hidden" name="child_user_id" data-role="adjust-stars-child-id">
+                    <input type="hidden" name="adjust_child_stars" value="1">
+                    <div class="points-adjust-actions">
+                        <button type="submit" class="button approve-button adjust-confirm">Confirm</button>
+                        <button type="button" class="adjust-cancel" data-action="close-adjust-stars">Cancel</button>
+                    </div>
+                </form>
+                <div class="adjust-history" data-role="adjust-stars-history">
+                    <h4>Recent adjustments</h4>
+                    <ul data-role="adjust-stars-history-list"></ul>
                 </div>
             </div>
         </div>
