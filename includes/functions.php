@@ -792,6 +792,30 @@ function getDashboardData($user_id) {
                 error_log("Failed to load point adjustments: " . $e->getMessage());
                 $adjustmentsByChild = [];
             }
+
+            // Star adjustments history (latest 10 per child)
+            try {
+                ensureChildStarAdjustmentsTable();
+                $starAdjStmt = $db->prepare("\n                    SELECT child_user_id, delta_stars, reason, created_at\n                    FROM child_star_adjustments\n                    WHERE child_user_id IN ($placeholders)\n                    ORDER BY created_at DESC\n                ");
+                $starAdjStmt->execute($childIds);
+                $starAdjustmentsByChild = [];
+                while ($row = $starAdjStmt->fetch(PDO::FETCH_ASSOC)) {
+                    $cid = (int)$row['child_user_id'];
+                    if (!isset($starAdjustmentsByChild[$cid])) {
+                        $starAdjustmentsByChild[$cid] = [];
+                    }
+                    if (count($starAdjustmentsByChild[$cid]) < 10) {
+                        $starAdjustmentsByChild[$cid][] = [
+                            'delta_stars' => (int)$row['delta_stars'],
+                            'reason' => $row['reason'],
+                            'created_at' => $row['created_at']
+                        ];
+                    }
+                }
+            } catch (Exception $e) {
+                error_log("Failed to load star adjustments: " . $e->getMessage());
+                $starAdjustmentsByChild = [];
+            }
         }
 
         $maxChildPoints = max(100, $maxChildPoints);
@@ -813,6 +837,7 @@ function getDashboardData($user_id) {
             $child['goals_assigned'] = $childGoalStats['goal_count'];
             $child['rewards_claimed'] = $rewardsClaimed[$childId] ?? 0;
             $child['point_adjustments'] = $adjustmentsByChild[$childId] ?? [];
+            $child['star_adjustments'] = $starAdjustmentsByChild[$childId] ?? [];
             $streaks = getChildStreaks($childId, (int) $main_parent_id);
             $child['routine_streak'] = (int) ($streaks['routine_streak'] ?? 0);
             $child['task_streak'] = (int) ($streaks['task_streak'] ?? 0);
@@ -1388,9 +1413,27 @@ function calculateRoutineTaskStars(int $scheduledSeconds, int $actualSeconds): i
     return 1;
 }
 
+
+
+function ensureChildStarAdjustmentsTable(): void {
+    global $db;
+    $db->exec("
+        CREATE TABLE IF NOT EXISTS child_star_adjustments (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            child_user_id INT NOT NULL,
+            delta_stars INT NOT NULL,
+            reason VARCHAR(255) NOT NULL,
+            created_by INT NOT NULL,
+            created_at DATETIME NOT NULL,
+            INDEX idx_child_created (child_user_id, created_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    ");
+}
+
 function getChildRollingStarsAverage(int $child_user_id, int $parent_user_id, int $weeks = 4): float {
     global $db;
     ensureRoutineCompletionTables();
+    ensureChildStarAdjustmentsTable();
     $weeks = max(1, $weeks);
     $today = new DateTimeImmutable('today');
     $startOfWeek = $today->modify('monday this week');
@@ -1406,6 +1449,13 @@ function getChildRollingStarsAverage(int $child_user_id, int $parent_user_id, in
           AND rcl.completed_at >= :week_start
           AND rcl.completed_at <= :week_end
     ");
+    $adjustmentStmt = $db->prepare("
+        SELECT SUM(delta_stars)
+        FROM child_star_adjustments
+        WHERE child_user_id = :child_id
+          AND created_at >= :week_start
+          AND created_at <= :week_end
+    ");
 
     for ($i = 0; $i < $weeks; $i++) {
         $weekStart = $startOfWeek->modify("-{$i} week");
@@ -1417,6 +1467,12 @@ function getChildRollingStarsAverage(int $child_user_id, int $parent_user_id, in
             ':week_end' => $weekEnd->format('Y-m-d H:i:s')
         ]);
         $stars = (int) ($stmt->fetchColumn() ?: 0);
+        $adjustmentStmt->execute([
+            ':child_id' => $child_user_id,
+            ':week_start' => $weekStart->format('Y-m-d H:i:s'),
+            ':week_end' => $weekEnd->format('Y-m-d H:i:s')
+        ]);
+        $stars += (int) ($adjustmentStmt->fetchColumn() ?: 0);
         $totalStars += $stars;
         $weekCount++;
     }
@@ -4693,7 +4749,6 @@ $sql = "ALTER TABLE child_profiles
 $db->exec($sql);
 
 ?>
-
 
 
 
