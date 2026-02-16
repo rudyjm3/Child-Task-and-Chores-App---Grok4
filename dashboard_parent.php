@@ -1085,9 +1085,9 @@ function renderStreakCheckSvg($suffix) {
         .level-progress-meta { display: flex; justify-content: flex-end; font-size: 0.78rem; color: #6b7280; font-weight: 700; }
         .level-progress-bar { width: 100%; height: 10px; border-radius: 999px; background: #e5e7eb; overflow: hidden; border: 1px solid #d1d5db; }
         .level-progress-fill { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #f59e0b 0%, #f97316 100%); }
-        .level-actions { display: flex; align-items: center; gap: 8px; width: min(260px, 100%); margin-top: 8px; }
-        .level-adjust-button { flex: 1; margin: 0; }
-        .level-history-button { width: 42px; min-width: 42px; height: 42px; border-radius: 12px; margin: 0; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
+        .level-actions { display: grid; grid-template-columns: 1fr; gap: 8px; width: min(260px, 100%); margin-top: 8px; }
+        .level-adjust-button { width: 100%; margin: 0; }
+        .level-history-button { width: 100%; min-width: 0; height: 42px; border-radius: 12px; margin: 0; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
         .streak-badges { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
         .streak-badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; background: #fff7ed; color: #b45309; font-weight: 700; font-size: 0.82rem; border: 1px solid #fed7aa; }
         .streak-phrase { font-size: 0.78rem; color: #8d6e63; margin: 2px 0 6px; width: 100%; }
@@ -3202,9 +3202,10 @@ function renderStreakCheckSvg($suffix) {
                                                 data-child-name="<?php echo htmlspecialchars($child['child_name']); ?>"
                                                 data-child-avatar="<?php echo htmlspecialchars($child['avatar'] ?? 'images/avatar_images/default-avatar.png'); ?>"
                                                 data-child-stars="<?php echo $starsInLevel; ?>"
+                                                aria-label="Adjust Stars"
                                                 data-history='<?php echo htmlspecialchars(json_encode($child['star_adjustments'] ?? [], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT)); ?>'>
                                             <i class="fa-solid fa-star-half-stroke"></i>
-                                            <span class="label">Adjust Stars</span>
+                                            <span class="label"><i class="fa-solid fa-plus"></i> / <i class="fa-solid fa-minus"></i></span>
                                         </button>
                                         <button type="button"
                                                 class="button secondary history-button level-history-button"
@@ -3456,14 +3457,25 @@ function renderStreakCheckSvg($suffix) {
                           try {
                               ensureRoutineCompletionTables();
                               $routineStarHistoryStmt = $db->prepare("
-                                  SELECT rct.stars_awarded, rct.completed_at, r.title AS routine_title, rt.title AS task_title
-                                  FROM routine_completion_tasks rct
-                                  JOIN routine_completion_logs rcl ON rct.completion_log_id = rcl.id
+                                  SELECT
+                                      rcl.id AS completion_log_id,
+                                      rcl.completed_at,
+                                      rcl.routine_id,
+                                      r.title AS routine_title,
+                                      COUNT(rct.id) AS tasks_completed,
+                                      COALESCE(SUM(rct.stars_awarded), 0) AS total_task_stars,
+                                      (
+                                          SELECT COUNT(*)
+                                          FROM routines_routine_tasks rrt
+                                          WHERE rrt.routine_id = rcl.routine_id
+                                      ) AS total_tasks_in_routine
+                                  FROM routine_completion_logs rcl
+                                  LEFT JOIN routine_completion_tasks rct ON rct.completion_log_id = rcl.id
                                   LEFT JOIN routines r ON rcl.routine_id = r.id
-                                  LEFT JOIN routine_tasks rt ON rct.routine_task_id = rt.id
                                   WHERE rcl.child_user_id = :child_id
                                     AND rcl.parent_user_id = :parent_id
-                                  ORDER BY rct.completed_at DESC
+                                  GROUP BY rcl.id, rcl.completed_at, rcl.routine_id, r.title
+                                  ORDER BY rcl.completed_at DESC
                               ");
                               $routineStarHistoryStmt->execute([
                                   ':child_id' => $childId,
@@ -3474,11 +3486,20 @@ function renderStreakCheckSvg($suffix) {
                                       continue;
                                   }
                                   $routineTitle = trim((string) ($row['routine_title'] ?? 'Routine'));
-                                  $taskTitle = trim((string) ($row['task_title'] ?? 'Task'));
+                                  $tasksCompleted = max(0, (int) ($row['tasks_completed'] ?? 0));
+                                  $totalTasksInRoutine = max(0, (int) ($row['total_tasks_in_routine'] ?? 0));
+                                  $totalTaskStars = max(0, (int) ($row['total_task_stars'] ?? 0));
+                                  $levelStarsAwarded = (int) floor($totalTaskStars / 4);
                                   $starHistoryItems[] = [
                                       'type' => 'Routine',
-                                      'title' => $routineTitle . ' · ' . $taskTitle,
-                                      'stars' => (int) ($row['stars_awarded'] ?? 0),
+                                      'title' => sprintf(
+                                          '%s - Tasks completed %d out of %d - Stars %d',
+                                          $routineTitle !== '' ? $routineTitle : 'Routine',
+                                          $tasksCompleted,
+                                          $totalTasksInRoutine,
+                                          $totalTaskStars
+                                      ),
+                                      'stars' => $levelStarsAwarded,
                                       'date' => $row['completed_at']
                                   ];
                               }
@@ -3748,15 +3769,16 @@ function renderStreakCheckSvg($suffix) {
                          $completedAt = !empty($session['completed_at']) ? date('m/d/Y g:i A', strtotime($session['completed_at'])) : '--';
                          $completedBy = ($session['completed_by'] ?? '') === 'parent' ? 'parent' : 'child';
                         $badgeLabel = $completedBy === 'parent' ? 'Parent Managed' : 'Child';
-                        $totalStarsAwarded = 0;
+                        $totalTaskStarsAwarded = 0;
                         $totalActualTaskSeconds = 0;
                         foreach ($tasks as $taskRow) {
-                            $totalStarsAwarded += max(0, (int) ($taskRow['stars_awarded'] ?? 0));
+                            $totalTaskStarsAwarded += max(0, (int) ($taskRow['stars_awarded'] ?? 0));
                             $taskActualSeconds = $taskRow['actual_seconds'] ?? null;
                             if ($taskActualSeconds !== null) {
                                 $totalActualTaskSeconds += max(0, (int) $taskActualSeconds);
                             }
                         }
+                        $levelStarsAwarded = (int) floor($totalTaskStarsAwarded / 4);
                         $hasPointsData = $session['awarded_task_points'] !== null || $session['awarded_bonus_points'] !== null;
                         $awardedTaskPoints = $session['awarded_task_points'] !== null ? (int) $session['awarded_task_points'] : null;
                         $awardedBonusPoints = $session['awarded_bonus_points'] !== null ? (int) $session['awarded_bonus_points'] : null;
@@ -3793,7 +3815,7 @@ function renderStreakCheckSvg($suffix) {
                                  <div class="completion-quick-stats">
                                      <span><strong>Points:</strong> <?php echo htmlspecialchars($pointsLabel); ?></span>
                                      <span><strong>Bonus:</strong> <?php echo htmlspecialchars($bonusLabel); ?></span>
-                                     <span><strong>Stars:</strong> <?php echo (int) $totalStarsAwarded; ?> <i class="fa-solid fa-star"></i></span>
+                                     <span><strong>Stars:</strong> <?php echo (int) $levelStarsAwarded; ?> <i class="fa-solid fa-star"></i></span>
                                      <span><strong>Task Time:</strong> <?php echo htmlspecialchars($taskTimeTakenLabel); ?></span>
                                      <span><strong>Routine Window:</strong> <?php echo htmlspecialchars($routineWindowLabel); ?></span>
                                  </div>
@@ -3834,7 +3856,6 @@ function renderStreakCheckSvg($suffix) {
                                                      <span><strong>Actual:</strong> <?php echo htmlspecialchars($actualLabel); ?></span>
                                                      <span><strong>Status screen:</strong> <?php echo $formatDuration($statusSeconds); ?></span>
                                                  <?php endif; ?>
-                                                 <span><strong>Stars:</strong> <?php echo (int) ($taskRow['stars_awarded'] ?? 0); ?> <i class="fa-solid fa-star"></i></span>
                                              </div>
                                          </div>
                                      <?php endforeach; ?>

@@ -778,6 +778,26 @@ function renderStreakCheckSvg($suffix) {
                 applyHistoryFilter('all');
             }
 
+            const starHistoryOpen = document.querySelector('[data-star-history-open]');
+            const starHistoryModal = document.querySelector('[data-star-history-modal]');
+            const starHistoryCloseButtons = starHistoryModal ? starHistoryModal.querySelectorAll('[data-star-history-close]') : [];
+            const openStarHistoryModal = () => {
+                if (!starHistoryModal) return;
+                starHistoryModal.classList.add('open');
+                document.body.classList.add('no-scroll');
+            };
+            const closeStarHistoryModal = () => {
+                if (!starHistoryModal) return;
+                starHistoryModal.classList.remove('open');
+                document.body.classList.remove('no-scroll');
+            };
+            if (starHistoryOpen && starHistoryModal) {
+                starHistoryOpen.addEventListener('click', openStarHistoryModal);
+                starHistoryCloseButtons.forEach(btn => btn.addEventListener('click', closeStarHistoryModal));
+                starHistoryModal.addEventListener('click', (e) => { if (e.target === starHistoryModal) closeStarHistoryModal(); });
+                document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeStarHistoryModal(); });
+            }
+
             const helpOpen = document.querySelector('[data-help-open]');
             const helpModal = document.querySelector('[data-help-modal]');
             const helpClose = helpModal ? helpModal.querySelector('[data-help-close]') : null;
@@ -1460,6 +1480,103 @@ foreach ($taskCountStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
             }
             $historyByDay[$dayKey][] = $item;
          }
+
+         $starHistoryItems = [];
+         try {
+            ensureRoutineCompletionTables();
+            $starParentId = getFamilyRootId((int) $_SESSION['user_id']);
+            $starHistorySql = "
+                SELECT
+                    rcl.id AS completion_log_id,
+                    rcl.completed_at,
+                    r.title AS routine_title,
+                    COUNT(rct.id) AS tasks_completed,
+                    COALESCE(SUM(rct.stars_awarded), 0) AS total_task_stars,
+                    (
+                        SELECT COUNT(*)
+                        FROM routines_routine_tasks rrt
+                        WHERE rrt.routine_id = rcl.routine_id
+                    ) AS total_tasks_in_routine
+                FROM routine_completion_logs rcl
+                LEFT JOIN routine_completion_tasks rct ON rct.completion_log_id = rcl.id
+                LEFT JOIN routines r ON rcl.routine_id = r.id
+                WHERE rcl.child_user_id = :child_id
+            ";
+            $starHistoryParams = [':child_id' => (int) $_SESSION['user_id']];
+            if ($starParentId) {
+               $starHistorySql .= " AND rcl.parent_user_id = :parent_id";
+               $starHistoryParams[':parent_id'] = (int) $starParentId;
+            }
+            $starHistorySql .= "
+                GROUP BY rcl.id, rcl.completed_at, r.title
+                ORDER BY rcl.completed_at DESC
+            ";
+            $routineStarHistoryStmt = $db->prepare($starHistorySql);
+            $routineStarHistoryStmt->execute($starHistoryParams);
+            foreach ($routineStarHistoryStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+               if (empty($row['completed_at'])) {
+                  continue;
+               }
+               $routineTitle = trim((string) ($row['routine_title'] ?? 'Routine'));
+               $tasksCompleted = max(0, (int) ($row['tasks_completed'] ?? 0));
+               $totalTasksInRoutine = max(0, (int) ($row['total_tasks_in_routine'] ?? 0));
+               $levelStarsAwarded = (int) floor(max(0, (int) ($row['total_task_stars'] ?? 0)) / 4);
+               $starHistoryItems[] = [
+                  'type' => 'Routine',
+                  'title' => sprintf(
+                     '%s - Tasks completed %d out of %d',
+                     $routineTitle !== '' ? $routineTitle : 'Routine',
+                     $tasksCompleted,
+                     $totalTasksInRoutine
+                  ),
+                  'stars' => $levelStarsAwarded,
+                  'date' => $row['completed_at']
+               ];
+            }
+         } catch (Exception $e) {
+            $starHistoryItems = $starHistoryItems;
+         }
+         try {
+            ensureChildStarAdjustmentsTable();
+            $starAdjHistoryStmt = $db->prepare("
+                SELECT delta_stars, reason, created_at
+                FROM child_star_adjustments
+                WHERE child_user_id = :child_id
+                  AND created_by <> :creator_child_id
+                ORDER BY created_at DESC
+            ");
+            $starAdjHistoryStmt->execute([
+               ':child_id' => (int) $_SESSION['user_id'],
+               ':creator_child_id' => (int) $_SESSION['user_id']
+            ]);
+            foreach ($starAdjHistoryStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+               if (empty($row['created_at'])) {
+                  continue;
+               }
+               $starHistoryItems[] = [
+                  'type' => 'Adjustment',
+                  'title' => $row['reason'] ?: 'Manual star adjustment',
+                  'stars' => (int) ($row['delta_stars'] ?? 0),
+                  'date' => $row['created_at']
+               ];
+            }
+         } catch (Exception $e) {
+            $starHistoryItems = $starHistoryItems;
+         }
+         usort($starHistoryItems, static function ($a, $b) {
+            return strtotime($b['date']) <=> strtotime($a['date']);
+         });
+         $starHistoryByDay = [];
+         foreach ($starHistoryItems as $item) {
+            if (empty($item['date'])) {
+               continue;
+            }
+            $dayKey = date('Y-m-d', strtotime($item['date']));
+            if (!isset($starHistoryByDay[$dayKey])) {
+               $starHistoryByDay[$dayKey] = [];
+            }
+            $starHistoryByDay[$dayKey][] = $item;
+         }
       ?>
       <script>
          window.weekScheduleData = <?php echo json_encode($scheduleByDay, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
@@ -1599,6 +1716,9 @@ foreach ($taskCountStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
                <span class="points-total-value"><?php echo $childTotalPoints; ?></span>
                <button type="button" class="points-history-button" data-points-history-open aria-haspopup="dialog" aria-controls="points-history-modal">
                   <i class="fa-solid fa-clock-rotate-left"></i>History
+               </button>
+               <button type="button" class="points-history-button" data-star-history-open aria-haspopup="dialog" aria-controls="star-history-modal">
+                  <i class="fa-solid fa-star"></i>Star History
                </button>
             </div>
          </div>
@@ -1764,6 +1884,48 @@ foreach ($taskCountStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
                      <?php endforeach; ?>
                   <?php else: ?>
                      <p class="child-history-empty">No points history yet.</p>
+                  <?php endif; ?>
+               </div>
+            </div>
+         </div>
+      </div>
+      <div class="child-history-modal" data-star-history-modal id="star-history-modal">
+         <div class="child-history-card" role="dialog" aria-modal="true" aria-labelledby="star-history-title">
+            <header class="child-history-header">
+               <button type="button" class="child-history-back" aria-label="Close star history" data-star-history-close>
+                  <i class="fa-solid fa-arrow-left"></i>
+               </button>
+               <h2 id="star-history-title" class="points-history-title">Star History</h2>
+               <button type="button" class="child-history-close" aria-label="Close star history" data-star-history-close>&times;</button>
+            </header>
+            <div class="child-history-body">
+               <div class="child-history-hero">
+                  <img class="child-history-avatar" src="<?php echo htmlspecialchars($childAvatar); ?>" alt="<?php echo htmlspecialchars($childFirstName !== '' ? $childFirstName : 'Child'); ?>">
+                  <div class="child-history-info">
+                     <div class="child-history-name"><?php echo htmlspecialchars($childFirstName !== '' ? $childFirstName : 'Child'); ?></div>
+                     <div class="child-history-points"><i class="fa-solid fa-star"></i> <?php echo (int) $starsInLevel; ?> / <?php echo (int) $starsPerLevel; ?></div>
+                  </div>
+               </div>
+               <div class="child-history-timeline">
+                  <?php if (!empty($starHistoryByDay)): ?>
+                     <?php foreach ($starHistoryByDay as $day => $items): ?>
+                        <div class="child-history-day">
+                           <div class="child-history-day-title"><?php echo htmlspecialchars(date('M j, Y', strtotime($day))); ?></div>
+                           <ul class="child-history-list">
+                              <?php foreach ($items as $item): ?>
+                                 <li class="child-history-item">
+                                    <div>
+                                       <div class="child-history-item-title"><?php echo htmlspecialchars($item['title']); ?></div>
+                                       <div class="child-history-item-meta"><?php echo htmlspecialchars(date('M j, Y, g:i A', strtotime($item['date']))); ?></div>
+                                    </div>
+                                    <div class="child-history-item-points<?php echo (($item['stars'] ?? 0) < 0 ? ' is-negative' : ''); ?>"><i class="fa-solid fa-star"></i> <?php echo (($item['stars'] ?? 0) >= 0 ? '+' : '') . (int) ($item['stars'] ?? 0); ?></div>
+                                 </li>
+                              <?php endforeach; ?>
+                           </ul>
+                        </div>
+                     <?php endforeach; ?>
+                  <?php else: ?>
+                     <p class="child-history-empty">No star history yet.</p>
                   <?php endif; ?>
                </div>
             </div>
