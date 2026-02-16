@@ -505,6 +505,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             updateChildLevelState($childId, $parentIdForLog, true);
         }
 
+        $totalTaskStars = 0;
+        foreach ($completionTasks as $taskCompletion) {
+            $totalTaskStars += max(0, (int) ($taskCompletion['stars_awarded'] ?? 0));
+        }
+        $routineStarsAwarded = (int) floor($totalTaskStars / 4);
+
         if (!empty($routine['parent_user_id'])) {
             $parentIdForNote = (int) $routine['parent_user_id'];
             $endTsLocal = time();
@@ -514,14 +520,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 ? "Bonus {$bonusAwarded} unlocked"
                 : "Bonus {$bonusAwarded}/{$bonusPossible}. Bonus Criteria Not Met";
             $message = sprintf(
-                '%s completed %s. Points %d/%d. %s. Overtime tasks: %d. Total earned: %d.',
+                '%s completed %s. Points %d/%d. %s. Overtime tasks: %d. Total earned: %d. Stars awarded: %d.',
                 substr((string) $childName, 0, 30),
                 substr((string) ($routine['title'] ?? 'Routine'), 0, 40),
                 $taskPointsAwarded,
                 $maxRoutinePoints,
                 $bonusNote,
                 max($overtimeCountInput, $overtimeCount),
-                $totalEarned
+                $totalEarned,
+                $routineStarsAwarded
             );
             $link = 'dashboard_parent.php?overtime_routine=' . $routineId . '#overtime';
             addParentNotification($parentIdForNote, 'routine_completed', $message, $link);
@@ -534,6 +541,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             'bonus_possible' => $bonusPossible,
             'bonus_eligible' => $grantBonus,
             'new_total_points' => $newTotal,
+            'routine_stars_awarded' => $routineStarsAwarded,
             'task_results' => $awards,
             'all_within_limits' => $allWithinLimits
         ]);
@@ -5308,7 +5316,6 @@ margin-bottom: 20px;}
 </body>
 </html>
 <?php
-
 
 
 
