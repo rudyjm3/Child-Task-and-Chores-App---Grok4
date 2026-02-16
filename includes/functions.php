@@ -1480,7 +1480,9 @@ function getChildRollingStarsAverage(int $child_user_id, int $parent_user_id, in
     if ($weekCount === 0) {
         return 0.0;
     }
-    return $totalStars / $weekCount;
+    // Levels should reflect the actual stars earned/adjusted in the window,
+    // not a per-week average that dilutes each star adjustment.
+    return (float) $totalStars;
 }
 
 function updateChildLevelState(int $child_user_id, int $parent_user_id, bool $triggerCelebration = false): array {
