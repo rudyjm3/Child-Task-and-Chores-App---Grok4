@@ -29,6 +29,7 @@ $editRoutineStates = [];
 $createFormHasErrors = false;
 $editFormErrors = [];
 $editFieldOverrides = [];
+$parentGrantBonusCheckedByRoutine = [];
 
 function routineChildBelongsToFamily(int $child_user_id, int $family_root_id): bool {
     global $db;
@@ -908,6 +909,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $routine_id = filter_input(INPUT_POST, 'routine_id', FILTER_VALIDATE_INT);
         $completedRaw = $_POST['parent_completed'] ?? [];
         $completedAtRaw = $_POST['parent_completed_at'] ?? '';
+        $parentGrantBonus = !empty($_POST['parent_grant_bonus']);
+        if ($routine_id) {
+            $parentGrantBonusCheckedByRoutine[(int) $routine_id] = $parentGrantBonus;
+        }
         $selected = [];
         if (is_array($completedRaw)) {
             foreach ($completedRaw as $value) {
@@ -1005,12 +1010,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
                 $awardCount = count($selected);
                 $allSelected = !empty($tasks) && $awardCount === count($tasks);
-                $grantBonus = $pendingBefore > 0 && $allSelected;
+                $grantBonus = $parentGrantBonus;
                 $bonusAwarded = 0;
                 if ($childId > 0) {
                     $bonusAwarded = completeRoutine($routine_id, $childId, $grantBonus);
                 }
-                $shouldLogCompletion = $childId > 0 && $allSelected && $pendingBefore > 0;
+                $shouldLogCompletion = $childId > 0 && ($awardedPoints > 0 || $bonusAwarded > 0);
                 if ($childId > 0 && ($awardedPoints > 0 || $bonusAwarded > 0 || $shouldLogCompletion)) {
                     logRoutinePointsAward($routine_id, $childId, $awardedPoints, $bonusAwarded);
                 }
@@ -1035,6 +1040,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $completionTasks = [];
                         foreach ($tasks as $task) {
                             $taskId = (int) ($task['id'] ?? 0);
+                            if (!in_array($taskId, $selected, true)) {
+                                continue;
+                            }
                             $completionTasks[] = [
                                 'routine_task_id' => $taskId,
                                 'sequence_order' => (int) ($task['sequence_order'] ?? 0),
@@ -1042,7 +1050,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 'scheduled_seconds' => null,
                                 'actual_seconds' => null,
                                 'status_screen_seconds' => 0,
-                                'stars_awarded' => 3
+                                'stars_awarded' => 0
                             ];
                         }
                         logRoutineCompletionSession($routine_id, $childId, $parentIdForLog, 'parent', $parentStartedAt, $parentCompletedAt, $completionTasks);
@@ -1058,7 +1066,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 } elseif ($grantBonus && $bonusAwarded === 0 && (int) ($routineData['bonus_points'] ?? 0) > 0) {
                     $summaryParts[] = 'Bonus points not available outside the routine window';
                 } elseif (!$grantBonus && (int) ($routineData['bonus_points'] ?? 0) > 0) {
-                    $summaryParts[] = 'Bonus points withheld (not all tasks checked)';
+                    $summaryParts[] = 'Bonus points not granted';
                 }
                 if (empty($summaryParts)) {
                     $summaryParts[] = 'No points were awarded';
@@ -1072,6 +1080,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 $routine_tasks = $isParentContext ? getRoutineTasks($family_root_id) : [];
 $routines = getRoutines($_SESSION['user_id']);
+$routineBonusGrantedTodayById = [];
+if ($isParentContext) {
+    ensureRoutinePointsLogsTable();
+    $todayDate = date('Y-m-d');
+    $routineIds = array_values(array_filter(array_map(static function ($row) {
+        return (int) ($row['id'] ?? 0);
+    }, $routines)));
+    if (!empty($routineIds)) {
+        $placeholders = implode(',', array_fill(0, count($routineIds), '?'));
+        $bonusStmt = $db->prepare("
+            SELECT routine_id, MAX(CASE WHEN bonus_points > 0 THEN 1 ELSE 0 END) AS bonus_granted
+            FROM routine_points_logs
+            WHERE DATE(created_at) = ?
+              AND routine_id IN ($placeholders)
+            GROUP BY routine_id
+        ");
+        $params = array_merge([$todayDate], $routineIds);
+        $bonusStmt->execute($params);
+        foreach ($bonusStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $routineId = (int) ($row['routine_id'] ?? 0);
+            if ($routineId > 0) {
+                $routineBonusGrantedTodayById[$routineId] = ((int) ($row['bonus_granted'] ?? 0)) > 0;
+            }
+        }
+    }
+}
 $routineCompletionMap = [];
 if (getEffectiveRole($_SESSION['user_id']) === 'child') {
     ensureRoutinePointsLogsTable();
@@ -1399,6 +1433,7 @@ margin-bottom: 20px;}
         .task-list li { display: flex; align-items: flex-start; gap: 12px; }
         .task-checkbox { display: inline-flex; align-items: center; margin-top: 4px; }
         .task-checkbox input { width: 18px; height: 18px; }
+        .parent-bonus-toggle { gap: 12px; }
         .parent-complete-form { margin-top: 16px; display: flex; flex-direction: column; gap: 8px; }
         .parent-complete-form .button { align-self: flex-start; }
         .parent-complete-note { font-size: 0.85rem; color: #546e7a; margin: 0; }
@@ -2399,7 +2434,18 @@ margin-bottom: 20px;}
                             <form method="POST" action="routine.php" class="parent-complete-form" id="parent-complete-form-<?php echo (int) $routine['id']; ?>">
                                 <input type="hidden" name="routine_id" value="<?php echo (int) $routine['id']; ?>">
                                 <input type="hidden" name="parent_completed_at" value="{}" data-role="parent-completed-at">
-                                <p class="parent-complete-note">Check the tasks completed to award points. Bonus points apply only when all tasks are checked.</p>
+                                <?php if ((int) ($routine['bonus_points'] ?? 0) > 0): ?>
+                                    <?php
+                                        $routineId = (int) ($routine['id'] ?? 0);
+                                        $bonusChecked = !empty($parentGrantBonusCheckedByRoutine[$routineId])
+                                            || !empty($routineBonusGrantedTodayById[$routineId]);
+                                    ?>
+                                    <label class="task-checkbox parent-bonus-toggle">
+                                        <input type="checkbox" name="parent_grant_bonus" value="1"<?php echo $bonusChecked ? ' checked' : ''; ?>>
+                                        <span>Grant bonus points (+<?php echo (int) ($routine['bonus_points'] ?? 0); ?>)</span>
+                                    </label>
+                                <?php endif; ?>
+                                <p class="parent-complete-note">Check completed tasks to award routine task points. Bonus points are granted only when selected above.</p>
                             </form>
                         <?php endif; ?>
                         <?php if ($isChildView): ?>

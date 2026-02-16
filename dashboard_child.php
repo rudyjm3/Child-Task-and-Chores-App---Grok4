@@ -1405,10 +1405,18 @@ foreach ($taskCountStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
             ");
             $routineHistoryStmt->execute([':child_id' => $_SESSION['user_id']]);
             foreach ($routineHistoryStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
-               $totalPoints = (int)($row['task_points'] ?? 0) + (int)($row['bonus_points'] ?? 0);
+               $taskPoints = (int) ($row['task_points'] ?? 0);
+               $bonusPoints = (int) ($row['bonus_points'] ?? 0);
+               $totalPoints = $taskPoints + $bonusPoints;
+               $routineTitle = trim((string) ($row['title'] ?? ''));
                $historyItems[] = [
                   'type' => 'Routine',
-                  'title' => $row['title'] ?: 'Routine',
+                  'title' => sprintf(
+                     '%s - Task Points: %d + Bonus points: %d',
+                     $routineTitle !== '' ? $routineTitle : 'Routine',
+                     $taskPoints,
+                     $bonusPoints
+                  ),
                   'points' => $totalPoints,
                   'date' => $row['created_at']
                ];

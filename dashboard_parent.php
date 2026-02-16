@@ -3388,10 +3388,18 @@ function renderStreakCheckSvg($suffix) {
                               ");
                               $routineHistoryStmt->execute([':child_id' => $childId]);
                               foreach ($routineHistoryStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
-                                  $totalPoints = (int)($row['task_points'] ?? 0) + (int)($row['bonus_points'] ?? 0);
+                                  $taskPoints = (int) ($row['task_points'] ?? 0);
+                                  $bonusPoints = (int) ($row['bonus_points'] ?? 0);
+                                  $totalPoints = $taskPoints + $bonusPoints;
+                                  $routineTitle = trim((string) ($row['title'] ?? ''));
                                   $historyItems[] = [
                                       'type' => 'Routine',
-                                      'title' => $row['title'] ?: 'Routine',
+                                      'title' => sprintf(
+                                          '%s - Task Points: %d + Bonus points: %d',
+                                          $routineTitle !== '' ? $routineTitle : 'Routine',
+                                          $taskPoints,
+                                          $bonusPoints
+                                      ),
                                       'points' => $totalPoints,
                                       'date' => $row['created_at']
                                   ];
@@ -3793,9 +3801,9 @@ function renderStreakCheckSvg($suffix) {
                             ? $formatDurationOrDash($totalActualTaskSeconds > 0 ? $totalActualTaskSeconds : null)
                             : '--:--';
                         $routineWindowLabel = $routineWindowMinutes !== null ? $formatMinutesLabel($routineWindowMinutes) : '--';
-                        $pointsLabel = $totalPointsAwarded !== null
-                            ? sprintf('%d / %d', $totalPointsAwarded, $totalRoutineWorth)
-                            : sprintf('-- / %d', $totalRoutineWorth);
+                        $taskPointsLabel = $awardedTaskPoints !== null
+                            ? sprintf('%d / %d', max(0, (int) $awardedTaskPoints), $routineTaskPointsWorth)
+                            : sprintf('-- / %d', $routineTaskPointsWorth);
                         $bonusLabel = sprintf(
                             '%s / %d',
                             $awardedBonusPoints !== null ? (string) max(0, $awardedBonusPoints) : '--',
@@ -3813,8 +3821,8 @@ function renderStreakCheckSvg($suffix) {
                                  <span>Ended: <?php echo htmlspecialchars($completedAt); ?></span>
                                  <span class="completion-badge <?php echo $completedBy; ?>"><?php echo $badgeLabel; ?></span>
                                  <div class="completion-quick-stats">
-                                     <span><strong>Points:</strong> <?php echo htmlspecialchars($pointsLabel); ?></span>
-                                     <span><strong>Bonus:</strong> <?php echo htmlspecialchars($bonusLabel); ?></span>
+                                     <span><strong>Task Points:</strong> <?php echo htmlspecialchars($taskPointsLabel); ?></span>
+                                     <span><strong>Bonus points:</strong> <?php echo htmlspecialchars($bonusLabel); ?></span>
                                      <span><strong>Stars:</strong> <?php echo (int) $levelStarsAwarded; ?> <i class="fa-solid fa-star"></i></span>
                                      <span><strong>Task Time:</strong> <?php echo htmlspecialchars($taskTimeTakenLabel); ?></span>
                                      <span><strong>Routine Window:</strong> <?php echo htmlspecialchars($routineWindowLabel); ?></span>
