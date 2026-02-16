@@ -101,6 +101,36 @@ $formatDurationOrDash = function($seconds) use ($formatDuration) {
     }
     return $formatDuration($seconds);
 };
+$formatMinutesLabel = function($totalMinutes) {
+    $totalMinutes = max(0, (int) $totalMinutes);
+    if ($totalMinutes <= 0) {
+        return '0m';
+    }
+    $hours = intdiv($totalMinutes, 60);
+    $minutes = $totalMinutes % 60;
+    if ($hours > 0 && $minutes > 0) {
+        return sprintf('%dh %dm', $hours, $minutes);
+    }
+    if ($hours > 0) {
+        return sprintf('%dh', $hours);
+    }
+    return sprintf('%dm', $minutes);
+};
+$calculateRoutineWindowMinutes = static function($startTime, $endTime) {
+    if (empty($startTime) || empty($endTime)) {
+        return null;
+    }
+    $start = DateTimeImmutable::createFromFormat('H:i:s', $startTime);
+    $end = DateTimeImmutable::createFromFormat('H:i:s', $endTime);
+    if (!$start || !$end) {
+        return null;
+    }
+    if ($end <= $start) {
+        $end = $end->modify('+1 day');
+    }
+    $seconds = $end->getTimestamp() - $start->getTimestamp();
+    return (int) round($seconds / 60);
+};
 $routineCompletionSessions = [];
 $routineCompletionTasks = [];
 try {
@@ -114,6 +144,31 @@ try {
             rcl.started_at,
             rcl.completed_at,
             r.title AS routine_title,
+            r.start_time AS routine_start_time,
+            r.end_time AS routine_end_time,
+            COALESCE(r.bonus_points, 0) AS routine_bonus_points_worth,
+            (
+                SELECT COALESCE(SUM(COALESCE(rt2.point_value, 0)), 0)
+                FROM routines_routine_tasks rrt2
+                LEFT JOIN routine_tasks rt2 ON rrt2.routine_task_id = rt2.id
+                WHERE rrt2.routine_id = r.id
+            ) AS routine_task_points_worth,
+            (
+                SELECT rpl.task_points
+                FROM routine_points_logs rpl
+                WHERE rpl.routine_id = rcl.routine_id
+                    AND rpl.child_user_id = rcl.child_user_id
+                ORDER BY ABS(TIMESTAMPDIFF(SECOND, rpl.created_at, rcl.completed_at)) ASC
+                LIMIT 1
+            ) AS awarded_task_points,
+            (
+                SELECT rpl.bonus_points
+                FROM routine_points_logs rpl
+                WHERE rpl.routine_id = rcl.routine_id
+                    AND rpl.child_user_id = rcl.child_user_id
+                ORDER BY ABS(TIMESTAMPDIFF(SECOND, rpl.created_at, rcl.completed_at)) ASC
+                LIMIT 1
+            ) AS awarded_bonus_points,
             COALESCE(
                 NULLIF(TRIM(CONCAT(COALESCE(u.first_name, ''), ' ', COALESCE(u.last_name, ''))), ''),
                 NULLIF(u.name, ''),
@@ -1472,6 +1527,8 @@ function renderStreakCheckSvg($suffix) {
         .completion-title { font-weight: 700; color: #0d47a1; }
         .completion-child { color: #455a64; font-size: 0.9rem; }
         .completion-meta { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; color: #546e7a; font-size: 0.9rem; }
+        .completion-quick-stats { width: 100%; display: grid; grid-template-columns: repeat(2, minmax(150px, 1fr)); gap: 6px 14px; margin-top: 4px; font-size: 0.86rem; color: #37474f; }
+        .completion-quick-stats strong { color: #263238; }
         .completion-badge { padding: 2px 8px; border-radius: 999px; font-size: 0.75rem; font-weight: 700; }
         .completion-badge.child { background: #e3f2fd; color: #0d47a1; }
         .completion-badge.parent { background: #ffe0b2; color: #bf360c; }
@@ -1534,6 +1591,7 @@ function renderStreakCheckSvg($suffix) {
             .overtime-date > summary, .overtime-routine > summary { padding: 12px; }
             .ot-row-header { flex-direction: column; align-items: flex-start; }
             .routine-completion-card > summary { flex-direction: column; align-items: flex-start; }
+            .completion-quick-stats { grid-template-columns: 1fr; }
             .completion-task-header { flex-direction: column; align-items: flex-start; }
         }
         @media (max-width: 768px) {
@@ -3326,6 +3384,37 @@ function renderStreakCheckSvg($suffix) {
                          $completedAt = !empty($session['completed_at']) ? date('m/d/Y g:i A', strtotime($session['completed_at'])) : '--';
                          $completedBy = ($session['completed_by'] ?? '') === 'parent' ? 'parent' : 'child';
                         $badgeLabel = $completedBy === 'parent' ? 'Parent Managed' : 'Child';
+                        $totalStarsAwarded = 0;
+                        $totalActualTaskSeconds = 0;
+                        foreach ($tasks as $taskRow) {
+                            $totalStarsAwarded += max(0, (int) ($taskRow['stars_awarded'] ?? 0));
+                            $taskActualSeconds = $taskRow['actual_seconds'] ?? null;
+                            if ($taskActualSeconds !== null) {
+                                $totalActualTaskSeconds += max(0, (int) $taskActualSeconds);
+                            }
+                        }
+                        $hasPointsData = $session['awarded_task_points'] !== null || $session['awarded_bonus_points'] !== null;
+                        $awardedTaskPoints = $session['awarded_task_points'] !== null ? (int) $session['awarded_task_points'] : null;
+                        $awardedBonusPoints = $session['awarded_bonus_points'] !== null ? (int) $session['awarded_bonus_points'] : null;
+                        $routineTaskPointsWorth = (int) ($session['routine_task_points_worth'] ?? 0);
+                        $routineBonusPointsWorth = max(0, (int) ($session['routine_bonus_points_worth'] ?? 0));
+                        $totalRoutineWorth = $routineTaskPointsWorth + $routineBonusPointsWorth;
+                        $totalPointsAwarded = $hasPointsData
+                            ? max(0, (int) ($awardedTaskPoints ?? 0) + (int) ($awardedBonusPoints ?? 0))
+                            : null;
+                        $routineWindowMinutes = $calculateRoutineWindowMinutes($session['routine_start_time'] ?? null, $session['routine_end_time'] ?? null);
+                        $taskTimeTakenLabel = $completedBy === 'child'
+                            ? $formatDurationOrDash($totalActualTaskSeconds > 0 ? $totalActualTaskSeconds : null)
+                            : '--:--';
+                        $routineWindowLabel = $routineWindowMinutes !== null ? $formatMinutesLabel($routineWindowMinutes) : '--';
+                        $pointsLabel = $totalPointsAwarded !== null
+                            ? sprintf('%d / %d', $totalPointsAwarded, $totalRoutineWorth)
+                            : sprintf('-- / %d', $totalRoutineWorth);
+                        $bonusLabel = sprintf(
+                            '%s / %d',
+                            $awardedBonusPoints !== null ? (string) max(0, $awardedBonusPoints) : '--',
+                            $routineBonusPointsWorth
+                        );
                          $openAttr = $index === 0 ? ' open' : '';
                      ?>
                      <details class="routine-completion-card"<?php echo $openAttr; ?>>
@@ -3337,6 +3426,13 @@ function renderStreakCheckSvg($suffix) {
                              <div class="completion-meta">
                                  <span>Ended: <?php echo htmlspecialchars($completedAt); ?></span>
                                  <span class="completion-badge <?php echo $completedBy; ?>"><?php echo $badgeLabel; ?></span>
+                                 <div class="completion-quick-stats">
+                                     <span><strong>Points:</strong> <?php echo htmlspecialchars($pointsLabel); ?></span>
+                                     <span><strong>Bonus:</strong> <?php echo htmlspecialchars($bonusLabel); ?></span>
+                                     <span><strong>Stars:</strong> <?php echo (int) $totalStarsAwarded; ?> <i class="fa-solid fa-star"></i></span>
+                                     <span><strong>Task Time:</strong> <?php echo htmlspecialchars($taskTimeTakenLabel); ?></span>
+                                     <span><strong>Routine Window:</strong> <?php echo htmlspecialchars($routineWindowLabel); ?></span>
+                                 </div>
                              </div>
                          </summary>
                          <div class="completion-body">
@@ -3839,10 +3935,3 @@ function renderStreakCheckSvg($suffix) {
   </script>
 </body>
 </html>
-
-
-
-
-
-
-
