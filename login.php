@@ -43,6 +43,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
     <style>
         *,
         *::before,
@@ -91,7 +92,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         .auth-card {
             background: var(--auth-card);
-            border-radius: 26px;
+            border-radius: 10px;
             padding: 20px 24px;
             box-shadow: var(--auth-shadow);
             border: 1px solid rgba(255, 255, 255, 0.8);
@@ -173,7 +174,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             align-items: center;
             background: #f8fafc;
             border: 1px solid #e5e7eb;
-            border-radius: 16px;
+            border-radius: 8px;
             padding: 10px 12px;
         }
         .input-icon {
@@ -182,11 +183,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             border-radius: 12px;
             background: #e0f2fe;
             color: #0369a1;
-            font-weight: 700;
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            font-size: 0.9rem;
+            font-size: 1rem;
+            flex-shrink: 0;
+        }
+        .input-row--pw {
+            grid-template-columns: 46px 1fr auto;
+        }
+        .toggle-pw {
+            background: none;
+            border: none;
+            cursor: pointer;
+            color: var(--auth-muted);
+            padding: 4px 2px;
+            display: inline-flex;
+            align-items: center;
+            font-size: 1rem;
+            line-height: 1;
+        }
+        .toggle-pw:hover {
+            color: var(--auth-primary);
         }
         .input-row input {
             border: none;
@@ -196,11 +214,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             color: var(--auth-text);
             min-width: 0;
             width: 100%;
+            height: 45px;
+            border-radius: 8px;
+            padding: 0 8px;
         }
         .auth-button {
             width: 100%;
             border: none;
-            border-radius: 18px;
+            border-radius: 8px;
             padding: 14px 16px;
             font-size: 1.05rem;
             font-weight: 700;
@@ -247,7 +268,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         @media (max-width: 520px) {
             .auth-card {
                 padding: 16px;
-                border-radius: 20px;
+                border-radius: 10px;
             }
         }
     </style>
@@ -280,14 +301,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <form method="POST">
                 <div class="form-group">
                     <label class="input-row" for="username">
-                        <span class="input-icon">U</span>
+                        <span class="input-icon"><i class="fa-solid fa-circle-user"></i></span>
                         <input type="text" id="username" name="username" placeholder="Username" required>
                     </label>
                 </div>
                 <div class="form-group">
-                    <label class="input-row" for="password">
-                        <span class="input-icon">P</span>
+                    <label class="input-row input-row--pw" for="password">
+                        <span class="input-icon"><i class="fa-solid fa-lock"></i></span>
                         <input type="password" id="password" name="password" placeholder="Password" required>
+                        <button type="button" class="toggle-pw" aria-label="Toggle password visibility" data-target="password">
+                            <i class="fa-solid fa-eye"></i>
+                        </button>
                     </label>
                 </div>
                 <button type="submit" class="auth-button">Login</button>
@@ -298,4 +322,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             Don't have an account? <a href="register.php">Sign Up</a>
         </div>
     </main>
+<script>
+document.querySelectorAll('.toggle-pw').forEach(btn => {
+    btn.addEventListener('click', () => {
+        const input = document.getElementById(btn.dataset.target);
+        const icon = btn.querySelector('i');
+        if (input.type === 'password') {
+            input.type = 'text';
+            icon.classList.replace('fa-eye', 'fa-eye-slash');
+        } else {
+            input.type = 'password';
+            icon.classList.replace('fa-eye-slash', 'fa-eye');
+        }
+    });
+});
+</script>
 </html>

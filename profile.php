@@ -401,7 +401,7 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
         .page-header-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
         .page-header-title { display: grid; gap: 6px; }
         .page-header-title h1 { margin: 0; font-size: 1.2rem; color: #2c2c2c; }
-        .page-header-meta { margin: 0; color: #616161; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 0.8rem; }
+        .page-header-meta { margin: 0; color: #616161; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 0.8rem; font-weight: 600; }
         .page-header-actions { display: flex; gap: 10px; align-items: center; }
         .page-header-action { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 50%; border: 1px solid #dfe8df; background: #fff; color: #6d6d6d; box-shadow: 0 6px 14px rgba(0,0,0,0.08); cursor: pointer; }
         .page-header-action i { font-size: 1.1rem; }
@@ -483,8 +483,8 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'child') {
         <div class="page-header-top">
             <div class="page-header-title">
                 <h1>Profile</h1>
-                <p class="page-header-meta">Welcome back, <?php echo htmlspecialchars($_SESSION['name'] ?? $_SESSION['username'] ?? 'User'); ?>
-                    <?php if ($welcome_role_label): ?>
+                <p class="page-header-meta"><?php $hour=(int)date('G'); echo $hour<12?'Good morning,':($hour<18?'Good afternoon,':'Good evening,'); ?> <?php echo htmlspecialchars($_SESSION['name'] ?? $_SESSION['username'] ?? 'User'); ?>
+                    <?php if (false): // role-badge hidden ?>
                         <span class="role-badge"><?php echo htmlspecialchars($welcome_role_label); ?></span>
                     <?php endif; ?>
                 </p>
