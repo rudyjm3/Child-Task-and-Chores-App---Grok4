@@ -1103,7 +1103,7 @@ if (isset($_SESSION['user_id']) && canCreateContent($_SESSION['user_id'])) {
             --goal-progress-tick-width: 1px;
             --goal-progress-tick-color: #ffb74d;
         }
-        .child-theme .goal-progress-bar span { background: linear-gradient(90deg, #ff6f61, #ffd54f, #4caf50); background-size: 200% 100%; animation: goal-spark 2.4s linear infinite; box-shadow: 0 0 8px rgba(255, 111, 97, 0.35); }
+        .child-theme .goal-progress-bar span { background: linear-gradient(90deg, #a5d6a7, #66bb6a, #388e3c); background-size: 200% 100%; animation: goal-spark 2.4s linear 1 forwards; box-shadow: 0 0 8px rgba(76, 175, 80, 0.35); }
         .child-theme .goal-progress-bar.complete span { background: #4caf50; animation: none; box-shadow: none; }
         @keyframes goal-fill {
             from { transform: scaleX(0); }

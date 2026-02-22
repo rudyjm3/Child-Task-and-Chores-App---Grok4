@@ -15,12 +15,6 @@ define('DB_PASS', '');     // Update with your MySQL password
 define('DB_NAME', 'child_chore_app'); // Database name
 
 
-// Live server database
-// define('DB_HOST', 'localhost');
-// define('DB_USER', 'u207292155_rudyjm333');
-// define('DB_PASS', 'Matrix_1645');
-// define('DB_NAME', 'u207292155_child_chore_ap');
-
 // App timezone (keep PHP and MySQL aligned across environments)
 define('APP_TIMEZONE', 'America/New_York');
 date_default_timezone_set(APP_TIMEZONE);
