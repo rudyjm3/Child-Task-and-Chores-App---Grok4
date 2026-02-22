@@ -1354,9 +1354,10 @@ margin-bottom: 20px;}
             .library-card-list { grid-template-columns: repeat(4, minmax(0, 1fr)); }
         }
         .library-task-card { background: #fff; border: 1px solid #e0e0e0; border-radius: 10px; padding: 16px; display: flex; flex-direction: column; gap: 10px; box-shadow: 0 2px 6px rgba(0,0,0,0.05); }
-        .library-task-card header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+        .library-task-card header { display: flex; align-items: center; justify-content: space-between; padding: 12px 0px !important; gap: 12px; }
         .library-task-card h4 { margin: 0; font-size: 1.1rem; }
-        .library-task-points { background-color: #4caf50; color: #fff; padding: 2px 8px; border-radius: 50px; font-size: 0.7rem; font-weight: 700; white-space: nowrap; }
+        /* .library-task-points { background-color: #4caf50; color: #fff; padding: 2px 8px; border-radius: 50px; font-size: 0.7rem; font-weight: 700; white-space: nowrap; } */
+        .library-task-points {background: #fffbeb; color: #f59e0b; padding: 4px 10px; border-radius: 999px; font-weight: 700; font-size: 0.8rem; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;}
         .child-theme .library-task-points { background: #fffbeb; color: #f59e0b; padding: 4px 10px; border-radius: 999px; display: inline-flex; align-items: center; gap: 6px; }
         .child-theme .library-task-points::before { content: '\f51e'; font-family: 'Font Awesome 6 Free'; font-weight: 900; }
         .points-badge { background: #fffbeb; color: #f59e0b; padding: 4px 10px; border-radius: 999px; font-weight: 700; font-size: 0.8rem; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
@@ -1417,7 +1418,7 @@ margin-bottom: 20px;}
         .timer-warning { color: #c62828; font-weight: 600; margin-top: 6px; }
         .sub-timer-label { font-size: 0.80rem; font-weight: 600; color: #ef6c00; margin-top: 0px; }
         .warning-active .timer-widget { border-color: #e53935; box-shadow: 0 0 12px rgba(229,57,53,0.25); }
-        .library-table-wrap { margin-top: 12px; }
+
         .no-data { font-style: italic; color: #757575; }
         footer { text-align: center; padding: 24px 0; color: #607d8b; }
         .routine-task-edit { margin-top: 8px; }
@@ -1627,12 +1628,7 @@ margin-bottom: 20px;}
         .library-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }
         .library-filters { display: inline-flex; align-items: center; gap: 10px; font-weight: 600; color: #37474f; }
         .library-filters select { border: 1px solid #c5cae9; border-radius: 10px; padding: 8px 12px; font-size: 0.9rem; }
-        .library-collapse { border: 1px solid rgba(13, 71, 161, 0.1); border-radius: 12px; padding: 0 0 6px; background: rgba(236, 245, 255, 0.55); }
-        .library-toggle { cursor: pointer; font-weight: 700; padding: 12px 16px; position: relative; display: flex; align-items: center; gap: 10px; color: #1565c0; }
-        .library-toggle::after { content: '\25BC'; font-size: 0.95rem; transition: transform 200ms ease; }
-        .library-collapse[open] .library-toggle::after { transform: rotate(180deg); }
-        .library-table-wrap { overflow: hidden; max-height: 0; opacity: 0; transform: translateY(-6px); transition: max-height 260ms ease, opacity 220ms ease, transform 220ms ease; padding: 0 12px; }
-        .library-collapse[open] .library-table-wrap { max-height: 2000px; opacity: 1; transform: translateY(0); padding: 0 12px 12px; overflow: auto; }
+        .library-table-wrap { padding: 0 12px 12px; }
         .library-table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
         .library-table thead th { text-align: left; padding: 10px 8px; background: rgba(21,101,192,0.15); color: #0d47a1; font-weight: 700; }
         .library-table tbody tr { border-bottom: 1px solid rgba(96,125,139,0.18); transition: background 140ms ease; }
@@ -2055,10 +2051,8 @@ margin-bottom: 20px;}
                                 <?php if (empty($routine_tasks)): ?>
                                     <p class="no-data">No routine tasks available yet. Add a task to start building routines.</p>
                                 <?php else: ?>
-                                    <details class="library-collapse">
-                                        <summary class="library-toggle">View Saved Library Tasks</summary>
-                                        <div class="library-table-wrap">
-                                            <div class="library-card-list">
+                                    <div class="library-table-wrap">
+                                        <div class="library-card-list">
                                                 <?php foreach ($routine_tasks as $task): ?>
                                                     <?php
                                                         $taskMinSeconds = isset($task['minimum_seconds']) ? (int) $task['minimum_seconds'] : 0;
@@ -2129,8 +2123,7 @@ margin-bottom: 20px;}
                                             </article>
                                                 <?php endforeach; ?>
                                             </div>
-                                        </div>
-                                    </details>
+                                    </div>
                                 <?php endif; ?>
                             </div>
                         </div>
