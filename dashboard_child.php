@@ -575,28 +575,33 @@ function renderStreakCheckSvg($suffix) {
             body { padding-bottom: 72px; }
         }
         .no-scroll { overflow: hidden; }
-        .goal-celebration { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(255, 248, 225, 0.92); z-index: 5000; }
+        .goal-celebration { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(255, 248, 225, 0.95); z-index: 5000; }
         .goal-celebration.active { display: flex; }
-        .goal-celebration-card { background: #fff; border-radius: 18px; padding: 24px 26px; text-align: center; box-shadow: 0 18px 40px rgba(0,0,0,0.25); position: relative; animation: pop-in 300ms ease; }
-        .goal-celebration-close { position: absolute; top: 10px; right: 10px; width: 34px; height: 34px; border: none; border-radius: 50%; background: #f5f5f5; color: #37474f; cursor: pointer; }
+        .goal-confetti-canvas { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 5001; }
+        .goal-celebration-card { background: #fff; border-radius: 24px; padding: 40px 36px 36px; text-align: center; box-shadow: 0 24px 60px rgba(0,0,0,0.25), 0 0 0 4px rgba(255, 152, 0, 0.15); position: relative; z-index: 5002; animation: goal-pop-in 400ms cubic-bezier(0.175, 0.885, 0.32, 1.275); max-width: 340px; width: 90%; }
+        .goal-celebration-close { position: absolute; top: 12px; right: 12px; width: 38px; height: 38px; border: none; border-radius: 50%; background: #f5f5f5; color: #37474f; cursor: pointer; font-size: 1.1rem; z-index: 5003; display: flex; align-items: center; justify-content: center; transition: background 0.15s; }
         .goal-celebration-close:hover { background: #e0e0e0; }
-        .goal-celebration-icon { font-size: 2.2rem; color: #ff9800; margin-bottom: 8px; }
-        .goal-celebration-title { font-weight: 800; color: #4caf50; margin: 0 0 6px; }
-        .goal-celebration-goal { margin: 0; color: #37474f; font-weight: 700; }
-        .goal-confetti { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
-        .goal-confetti span { position: absolute; width: 10px; height: 16px; border-radius: 4px; opacity: 0.9; animation: confetti-fall 1400ms ease-in-out forwards; }
-        @keyframes goal-spark {
-            0% { background-position: 200% 50%; }
-            100% { background-position: 0% 50%; }
-        }
-        @keyframes confetti-fall {
-            0% { transform: translateY(-20px) rotate(0deg); opacity: 0; }
-            10% { opacity: 1; }
-            100% { transform: translateY(260px) rotate(160deg); opacity: 0; }
-        }
-        @keyframes pop-in {
-            0% { transform: scale(0.9); opacity: 0; }
+        .goal-celebration-icon { font-size: 4rem; margin-bottom: 12px; animation: goal-icon-bounce 1.2s ease infinite; }
+        .goal-celebration-icon i { background: linear-gradient(135deg, #ff9800, #ffb74d, #ffd54f); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; filter: drop-shadow(0 3px 8px rgba(255, 152, 0, 0.4)); }
+        .goal-celebration-icon.is-level i { background: linear-gradient(135deg, #7c4dff, #b388ff, #ea80fc); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; filter: drop-shadow(0 3px 8px rgba(124, 77, 255, 0.4)); }
+        .goal-celebration-title { font-weight: 900; font-size: 1.6rem; color: #4caf50; margin: 0 0 8px; letter-spacing: -0.01em; }
+        .goal-celebration-title.is-level { color: #7c4dff; }
+        .goal-celebration-goal { margin: 0; color: #37474f; font-weight: 700; font-size: 1.15rem; }
+        .goal-celebration-sparkle { font-size: 1rem; color: #ffd54f; margin-top: 10px; letter-spacing: 6px; animation: goal-sparkle-pulse 1.5s ease-in-out infinite; }
+        @keyframes goal-pop-in {
+            0% { transform: scale(0.5); opacity: 0; }
+            60% { transform: scale(1.05); }
             100% { transform: scale(1); opacity: 1; }
+        }
+        @keyframes goal-icon-bounce {
+            0%, 100% { transform: scale(1) rotate(0deg); }
+            25% { transform: scale(1.15) rotate(-5deg); }
+            50% { transform: scale(1) rotate(0deg); }
+            75% { transform: scale(1.1) rotate(5deg); }
+        }
+        @keyframes goal-sparkle-pulse {
+            0%, 100% { opacity: 0.7; transform: scale(1); }
+            50% { opacity: 1; transform: scale(1.1); }
         }
 
         .rewards-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: none; align-items: center; justify-content: center; z-index: 4100; padding: 14px; }
@@ -891,28 +896,103 @@ function renderStreakCheckSvg($suffix) {
               if (typeof celebrationQueue !== 'undefined' && celebrationQueue.length) {
                   const celebrationModal = document.querySelector('[data-goal-celebration]');
                   const celebrationTitle = document.querySelector('[data-goal-celebration-title]');
-                  const celebrationHeading = celebrationModal ? celebrationModal.querySelector('.goal-celebration-title') : null;
-                  const celebrationIcon = celebrationModal ? celebrationModal.querySelector('.goal-celebration-icon i') : null;
-                  const confettiHost = document.querySelector('[data-goal-confetti]');
+                  const celebrationHeading = document.querySelector('[data-goal-celebration-heading]');
+                  const celebrationIconWrap = document.querySelector('[data-goal-celebration-icon]');
+                  const celebrationIcon = celebrationIconWrap ? celebrationIconWrap.querySelector('i') : null;
+                  const confettiCanvas = document.querySelector('[data-goal-confetti-canvas]');
                   const celebrationClose = document.querySelector('[data-goal-celebration-close]');
-                  const colors = ['#ff7043', '#ffd54f', '#4caf50', '#29b6f6', '#ab47bc'];
-  
-                  const closeCelebration = () => {
-                      if (!celebrationModal) return;
-                      celebrationModal.classList.remove('active');
-                      setTimeout(showNextCelebration, 300);
+                  const ctx = confettiCanvas ? confettiCanvas.getContext('2d') : null;
+                  const confettiColors = ['#ff7043', '#ffd54f', '#4caf50', '#29b6f6', '#ab47bc', '#ff4081', '#7c4dff', '#00e5ff', '#ff6d00', '#76ff03'];
+                  const shapes = ['rect', 'circle', 'strip'];
+                  let particles = [];
+                  let confettiActive = false;
+                  let animFrame = null;
+                  let spawnTimer = null;
+
+                  const resizeCanvas = () => {
+                      if (!confettiCanvas) return;
+                      confettiCanvas.width = window.innerWidth;
+                      confettiCanvas.height = window.innerHeight;
                   };
 
-                  const dropConfetti = () => {
-                      if (!confettiHost) return;
-                      confettiHost.innerHTML = '';
-                      for (let i = 0; i < 18; i += 1) {
-                          const piece = document.createElement('span');
-                          piece.style.left = `${Math.random() * 100}%`;
-                          piece.style.background = colors[i % colors.length];
-                          piece.style.animationDelay = `${Math.random() * 0.4}s`;
-                          confettiHost.appendChild(piece);
+                  const spawnBurst = (count) => {
+                      if (!confettiCanvas) return;
+                      for (let i = 0; i < count; i++) {
+                          particles.push({
+                              x: Math.random() * confettiCanvas.width,
+                              y: -10 - Math.random() * confettiCanvas.height * 0.4,
+                              w: 6 + Math.random() * 10,
+                              h: 8 + Math.random() * 14,
+                              color: confettiColors[Math.floor(Math.random() * confettiColors.length)],
+                              shape: shapes[Math.floor(Math.random() * shapes.length)],
+                              vy: 1.5 + Math.random() * 3,
+                              vx: (Math.random() - 0.5) * 3,
+                              rot: Math.random() * 360,
+                              rotSpeed: (Math.random() - 0.5) * 8,
+                              opacity: 0.85 + Math.random() * 0.15,
+                              wobble: Math.random() * Math.PI * 2,
+                              wobbleSpeed: 0.03 + Math.random() * 0.05
+                          });
                       }
+                  };
+
+                  const drawConfetti = () => {
+                      if (!ctx || !confettiCanvas) return;
+                      ctx.clearRect(0, 0, confettiCanvas.width, confettiCanvas.height);
+                      for (let i = particles.length - 1; i >= 0; i--) {
+                          const p = particles[i];
+                          p.x += p.vx + Math.sin(p.wobble) * 0.8;
+                          p.y += p.vy;
+                          p.rot += p.rotSpeed;
+                          p.wobble += p.wobbleSpeed;
+                          if (p.y > confettiCanvas.height + 40) { particles.splice(i, 1); continue; }
+                          ctx.save();
+                          ctx.translate(p.x, p.y);
+                          ctx.rotate(p.rot * Math.PI / 180);
+                          ctx.globalAlpha = p.opacity;
+                          ctx.fillStyle = p.color;
+                          if (p.shape === 'circle') {
+                              ctx.beginPath();
+                              ctx.arc(0, 0, p.w / 2, 0, Math.PI * 2);
+                              ctx.fill();
+                          } else if (p.shape === 'strip') {
+                              ctx.fillRect(-p.w / 2, -p.h / 2, p.w * 0.4, p.h);
+                          } else {
+                              ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+                          }
+                          ctx.restore();
+                      }
+                      if (confettiActive) {
+                          animFrame = requestAnimationFrame(drawConfetti);
+                      }
+                  };
+
+                  const startConfetti = () => {
+                      resizeCanvas();
+                      particles = [];
+                      confettiActive = true;
+                      spawnBurst(60);
+                      spawnTimer = setInterval(() => {
+                          if (confettiActive) spawnBurst(25);
+                      }, 700);
+                      drawConfetti();
+                  };
+
+                  const stopConfetti = () => {
+                      confettiActive = false;
+                      if (animFrame) { cancelAnimationFrame(animFrame); animFrame = null; }
+                      if (spawnTimer) { clearInterval(spawnTimer); spawnTimer = null; }
+                      particles = [];
+                      if (ctx && confettiCanvas) ctx.clearRect(0, 0, confettiCanvas.width, confettiCanvas.height);
+                  };
+
+                  window.addEventListener('resize', () => { if (confettiActive) resizeCanvas(); });
+
+                  const closeCelebration = () => {
+                      if (!celebrationModal) return;
+                      stopConfetti();
+                      celebrationModal.classList.remove('active');
+                      setTimeout(showNextCelebration, 300);
                   };
 
                   const showNextCelebration = () => {
@@ -921,6 +1001,7 @@ function renderStreakCheckSvg($suffix) {
                       if (next.type === 'level') {
                           if (celebrationHeading) {
                               celebrationHeading.textContent = 'Level Up!';
+                              celebrationHeading.classList.add('is-level');
                           }
                           if (celebrationTitle) {
                               celebrationTitle.textContent = 'Level ' + (next.level || 1);
@@ -928,9 +1009,13 @@ function renderStreakCheckSvg($suffix) {
                           if (celebrationIcon) {
                               celebrationIcon.className = 'fa-solid fa-star';
                           }
+                          if (celebrationIconWrap) {
+                              celebrationIconWrap.classList.add('is-level');
+                          }
                       } else {
                           if (celebrationHeading) {
                               celebrationHeading.textContent = 'Goal Achieved!';
+                              celebrationHeading.classList.remove('is-level');
                           }
                           if (celebrationTitle) {
                               celebrationTitle.textContent = next.title || 'Goal achieved!';
@@ -938,14 +1023,20 @@ function renderStreakCheckSvg($suffix) {
                           if (celebrationIcon) {
                               celebrationIcon.className = 'fa-solid fa-trophy';
                           }
+                          if (celebrationIconWrap) {
+                              celebrationIconWrap.classList.remove('is-level');
+                          }
                       }
-                      dropConfetti();
+                      startConfetti();
                       celebrationModal.classList.add('active');
                   };
 
                   if (celebrationClose) {
                       celebrationClose.addEventListener('click', closeCelebration);
                   }
+                  celebrationModal && celebrationModal.addEventListener('click', (e) => {
+                      if (e.target === celebrationModal) closeCelebration();
+                  });
                   showNextCelebration();
               }
         });
@@ -1981,14 +2072,15 @@ foreach ($taskCountStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
    ?>
    <?php if (!empty($celebrationQueue)): ?>
       <div class="goal-celebration" data-goal-celebration>
+         <canvas class="goal-confetti-canvas" data-goal-confetti-canvas></canvas>
          <div class="goal-celebration-card">
-            <div class="goal-confetti" data-goal-confetti></div>
             <button type="button" class="goal-celebration-close" data-goal-celebration-close aria-label="Close celebration">
                <i class="fa-solid fa-xmark"></i>
             </button>
-            <div class="goal-celebration-icon"><i class="fa-solid fa-trophy"></i></div>
-            <h3 class="goal-celebration-title">Celebration!</h3>
+            <div class="goal-celebration-icon" data-goal-celebration-icon><i class="fa-solid fa-trophy"></i></div>
+            <h3 class="goal-celebration-title" data-goal-celebration-heading>Celebration!</h3>
             <p class="goal-celebration-goal" data-goal-celebration-title></p>
+            <div class="goal-celebration-sparkle">&#10022; &#10022; &#10022;</div>
          </div>
       </div>
       <script>
